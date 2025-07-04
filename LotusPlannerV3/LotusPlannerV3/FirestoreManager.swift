@@ -48,23 +48,7 @@ class FirestoreManager: ObservableObject {
             .collection("entries")
     }
     
-    private func getRecurringTasksCollectionRef(for accountKind: GoogleAuthManager.AccountKind) -> CollectionReference {
-        let userId = getUserId(for: accountKind)
-        return db.collection("users")
-            .document(userId)
-            .collection(accountKind.rawValue)
-            .document("tasks")
-            .collection("recurring")
-    }
-    
-    private func getRecurringTaskInstancesCollectionRef(for accountKind: GoogleAuthManager.AccountKind) -> CollectionReference {
-        let userId = getUserId(for: accountKind)
-        return db.collection("users")
-            .document(userId)
-            .collection(accountKind.rawValue)
-            .document("tasks")
-            .collection("instances")
-    }
+
     
     private func getUserId(for accountKind: GoogleAuthManager.AccountKind) -> String {
         let email = authManager.getEmail(for: accountKind)
@@ -196,86 +180,7 @@ class FirestoreManager: ObservableObject {
         return entries
     }
     
-    // MARK: - Recurring Tasks
-    func addRecurringTask(_ task: RecurringTask, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getRecurringTasksCollectionRef(for: accountKind)
-        print("💾 Saving recurring task to path: \(collection.path)/\(task.id)")
-        try await collection.document(task.id).setData(task.firestoreData)
-        print("✅ Recurring task saved successfully to Firestore")
-    }
-    
-    func updateRecurringTask(_ task: RecurringTask, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getRecurringTasksCollectionRef(for: accountKind)
-        try await collection.document(task.id).updateData(task.firestoreData)
-        print("✅ Recurring task updated successfully")
-    }
-    
-    func deleteRecurringTask(_ taskId: String, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getRecurringTasksCollectionRef(for: accountKind)
-        try await collection.document(taskId).delete()
-        print("✅ Recurring task deleted successfully")
-    }
-    
-    func getRecurringTasks(for accountKind: GoogleAuthManager.AccountKind) async throws -> [RecurringTask] {
-        let collection = getRecurringTasksCollectionRef(for: accountKind)
-        let currentUserId = getUserId(for: accountKind)
-        
-        print("🔍 Loading recurring tasks from: \(collection.path) for user: \(currentUserId)")
-        
-        let snapshot = try await collection
-            .whereField("isActive", isEqualTo: true)
-            .getDocuments()
-        
-        let tasks = snapshot.documents.compactMap { RecurringTask(document: $0) }
-        print("📊 Found \(tasks.count) recurring tasks for user: \(currentUserId)")
-        return tasks
-    }
-    
-    func getRecurringTask(by id: String, for accountKind: GoogleAuthManager.AccountKind) async throws -> RecurringTask? {
-        let collection = getRecurringTasksCollectionRef(for: accountKind)
-        let document = try await collection.document(id).getDocument()
-        return RecurringTask(document: document)
-    }
-    
-    // MARK: - Recurring Task Instances
-    func addRecurringTaskInstance(_ instance: RecurringTaskInstance, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getRecurringTaskInstancesCollectionRef(for: accountKind)
-        print("💾 Saving recurring task instance to path: \(collection.path)/\(instance.id)")
-        try await collection.document(instance.id).setData(instance.firestoreData)
-        print("✅ Recurring task instance saved successfully to Firestore")
-    }
-    
-    func updateRecurringTaskInstance(_ instance: RecurringTaskInstance, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getRecurringTaskInstancesCollectionRef(for: accountKind)
-        try await collection.document(instance.id).updateData(instance.firestoreData)
-        print("✅ Recurring task instance updated successfully")
-    }
-    
-    func getRecurringTaskInstances(for recurringTaskId: String, accountKind: GoogleAuthManager.AccountKind) async throws -> [RecurringTaskInstance] {
-        let collection = getRecurringTaskInstancesCollectionRef(for: accountKind)
-        let currentUserId = getUserId(for: accountKind)
-        
-        print("🔍 Loading recurring task instances from: \(collection.path) for recurring task: \(recurringTaskId), user: \(currentUserId)")
-        
-        let snapshot = try await collection
-            .whereField("recurringTaskId", isEqualTo: recurringTaskId)
-            .getDocuments()
-        
-        let instances = snapshot.documents.compactMap { RecurringTaskInstance(document: $0) }
-        print("📊 Found \(instances.count) instances for recurring task: \(recurringTaskId)")
-        return instances
-    }
-    
-    func getRecurringTaskInstanceByGoogleTaskId(_ googleTaskId: String, for accountKind: GoogleAuthManager.AccountKind) async throws -> RecurringTaskInstance? {
-        let collection = getRecurringTaskInstancesCollectionRef(for: accountKind)
-        
-        let snapshot = try await collection
-            .whereField("googleTaskId", isEqualTo: googleTaskId)
-            .limit(to: 1)
-            .getDocuments()
-        
-        return snapshot.documents.compactMap { RecurringTaskInstance(document: $0) }.first
-    }
+
     
     // MARK: - Scrapbook Entries (TEMPORARILY DISABLED)
     func getScrapbookEntries(for date: Date, accountKind: GoogleAuthManager.AccountKind) async throws -> [ScrapbookEntry] {

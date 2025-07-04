@@ -145,13 +145,6 @@ struct PersonalTaskRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 
-                // Recurring task indicator
-                if task.isRecurringInstance {
-                    Image(systemName: "repeat")
-                        .font(.caption2)
-                        .foregroundColor(accentColor)
-                }
-                
                 Spacer()
                 
                 if let dueDate = task.dueDate {

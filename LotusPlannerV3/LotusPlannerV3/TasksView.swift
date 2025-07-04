@@ -10,105 +10,30 @@ struct GoogleTaskList: Identifiable, Codable {
 
 struct GoogleTask: Identifiable, Codable, Equatable {
     let id: String
-    let title: String
-    let notes: String?
-    var status: String // "needsAction" or "completed"
-    let due: String? // RFC3339 timestamp
-    let updated: String?
-    
-    // Local recurring task metadata (not sent to Google Tasks API)
-    var recurringTaskId: String? // Links to RecurringTask in Firestore
-    var isRecurringInstance: Bool = false // Whether this task was generated from a recurring pattern
+    var title: String
+    var notes: String?
+    var status: String
+    var due: String?
+    var completed: String?
+    var updated: String?
     
     var isCompleted: Bool {
-        status == "completed"
+        return status == "completed"
     }
     
     var dueDate: Date? {
         guard let due = due else { return nil }
-        
-        // For ISO 8601 dates from Google Tasks, we need to extract just the date part
-        // and create a date in the local timezone to preserve the intended date
-        if due.contains("T") {
-            // Extract just the date part (YYYY-MM-DD) from ISO format
-            let datePart = String(due.prefix(10)) // Get first 10 characters: YYYY-MM-DD
-            
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.timeZone = TimeZone.current // Use local timezone
-            
-            if let date = formatter.date(from: datePart) {
-                // Set to noon in local timezone to avoid edge cases
-                let calendar = Calendar.current
-                let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
-                
-                if let noonDate = calendar.date(from: DateComponents(
-                    year: dateComponents.year,
-                    month: dateComponents.month,
-                    day: dateComponents.day,
-                    hour: 12,
-                    minute: 0,
-                    second: 0
-                )) {
-                    return noonDate
-                }
-            }
-        } else {
-            // Handle simple YYYY-MM-DD format
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.timeZone = TimeZone.current
-            
-            if let date = formatter.date(from: due) {
-                // Set to noon in local timezone
-                let calendar = Calendar.current
-                let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
-                
-                if let noonDate = calendar.date(from: DateComponents(
-                    year: dateComponents.year,
-                    month: dateComponents.month,
-                    day: dateComponents.day,
-                    hour: 12,
-                    minute: 0,
-                    second: 0
-                )) {
-                    return noonDate
-                }
-            }
-        }
-        return nil
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        return formatter.date(from: due)
     }
     
     var completionDate: Date? {
-        guard isCompleted, let updated = updated else { return nil }
-        
-        // Parse the updated field to get the completion date
+        guard let completed = completed else { return nil }
         let formatter = DateFormatter()
-        
-        // Try RFC 3339 format first (with milliseconds)
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        if let date = formatter.date(from: updated) {
-            return date
-        }
-        
-        // Try RFC 3339 format without milliseconds
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-        if let date = formatter.date(from: updated) {
-            return date
-        }
-        
-        // Try simple date format
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
-        if let date = formatter.date(from: updated) {
-            return date
-        }
-        
-        return nil
+        return formatter.date(from: completed)
     }
-    
-
 }
 
 struct GoogleTasksResponse: Codable {
@@ -130,7 +55,6 @@ class TasksViewModel: ObservableObject {
     @Published var errorMessage = ""
     
     private let authManager = GoogleAuthManager.shared
-    private let recurringTaskManager = RecurringTaskManager.shared
     
     func loadTasks() async {
         isLoading = true
@@ -139,32 +63,61 @@ class TasksViewModel: ObservableObject {
         // Load tasks and recurring tasks for both account types
         await withTaskGroup(of: Void.self) { group in
             if authManager.isLinked(kind: .personal) {
-                print("🔵 Adding personal task loading to task group")
                 group.addTask {
-                    await self.loadTasksForAccount(.personal)
+                    do {
+                        let taskLists = try await self.fetchTaskLists(for: .personal)
+                        
+                        await MainActor.run {
+                            self.personalTaskLists = taskLists
+                        }
+                        
+                        // Load tasks for each task list
+                        for taskList in taskLists {
+                            let tasks = try await self.fetchTasks(for: .personal, taskListId: taskList.id)
+                            
+                            await MainActor.run {
+                                self.personalTasks[taskList.id] = tasks
+                            }
+                        }
+                        
+                    } catch {
+                        await MainActor.run {
+                            self.errorMessage = "Failed to load personal tasks: \(error.localizedDescription)"
+                        }
+                    }
                 }
             }
             
             if authManager.isLinked(kind: .professional) {
-                print("🟠 Adding professional task loading to task group")
                 group.addTask {
-                    await self.loadTasksForAccount(.professional)
+                    do {
+                        let taskLists = try await self.fetchTaskLists(for: .professional)
+                        
+                        await MainActor.run {
+                            self.professionalTaskLists = taskLists
+                        }
+                        
+                        // Load tasks for each task list
+                        for taskList in taskLists {
+                            let tasks = try await self.fetchTasks(for: .professional, taskListId: taskList.id)
+                            
+                            await MainActor.run {
+                                self.professionalTasks[taskList.id] = tasks
+                            }
+                        }
+                        
+                    } catch {
+                        await MainActor.run {
+                            self.errorMessage = "Failed to load professional tasks: \(error.localizedDescription)"
+                        }
+                    }
                 }
-            }
-            
-            // Load recurring tasks
-            group.addTask {
-                await self.loadRecurringTasks()
             }
         }
         
-        isLoading = false
-        print("✅ === TASK LOAD COMPLETED ===")
-        print("  Final personal task lists: \(personalTaskLists.count)")
-        print("  Final professional task lists: \(professionalTaskLists.count)")
-        print("  Final personal tasks: \(personalTasks.keys.count) lists, \(personalTasks.values.flatMap { $0 }.count) total tasks")
-        print("  Final professional tasks: \(professionalTasks.keys.count) lists, \(professionalTasks.values.flatMap { $0 }.count) total tasks")
-        print("  Final error message: '\(errorMessage)'")
+        await MainActor.run {
+            self.isLoading = false
+        }
     }
     
     private func loadTasksForAccount(_ kind: GoogleAuthManager.AccountKind) async {
@@ -243,8 +196,21 @@ class TasksViewModel: ObservableObject {
             throw TasksError.apiError(httpResponse.statusCode)
         }
         
-        let tasksResponse = try JSONDecoder().decode(GoogleTaskListsResponse.self, from: data)
-        return tasksResponse.items ?? []
+        // Log raw API response
+        if let rawResponse = String(data: data, encoding: .utf8) {
+            print("📋 RAW TASK LISTS API RESPONSE for \(kind):")
+            print(rawResponse)
+            print("--- END RAW RESPONSE ---")
+        }
+        
+        let decoder = JSONDecoder()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        decoder.dateDecodingStrategy = .formatted(dateFormatter)
+        
+        let taskListsResponse = try decoder.decode(GoogleTaskListsResponse.self, from: data)
+        
+        return taskListsResponse.items ?? []
     }
     
     private func fetchTasks(for kind: GoogleAuthManager.AccountKind, taskListId: String) async throws -> [GoogleTask] {
@@ -266,13 +232,28 @@ class TasksViewModel: ObservableObject {
             throw TasksError.apiError(httpResponse.statusCode)
         }
         
-        let tasksResponse = try JSONDecoder().decode(GoogleTasksResponse.self, from: data)
-        return tasksResponse.items ?? []
+        // Log raw API response
+        if let rawResponse = String(data: data, encoding: .utf8) {
+            print("📝 RAW TASKS API RESPONSE for \(kind) list \(taskListId):")
+            print(rawResponse)
+            print("--- END RAW RESPONSE ---")
+        }
+        
+        let decoder = JSONDecoder()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        decoder.dateDecodingStrategy = .formatted(dateFormatter)
+        
+        let tasksResponse = try decoder.decode(GoogleTasksResponse.self, from: data)
+        let tasks = tasksResponse.items ?? []
+        
+        return tasks
     }
     
     private func getAccessTokenThrows(for kind: GoogleAuthManager.AccountKind) async throws -> String? {
         do {
-            return try await authManager.getAccessToken(for: kind)
+            let token = try await authManager.getAccessToken(for: kind)
+            return token
         } catch {
             throw TasksError.authError(error.localizedDescription)
         }
@@ -286,18 +267,14 @@ class TasksViewModel: ObservableObject {
             notes: task.notes,
             status: newStatus,
             due: task.due,
-            updated: task.updated,
-            recurringTaskId: task.recurringTaskId,
-            isRecurringInstance: task.isRecurringInstance
+            completed: task.completed,
+            updated: task.updated
         )
         
         // Update the task first
         await updateTask(updatedTask, in: listId, for: kind)
         
-        // Handle recurring task logic if the task was just completed
-        if !task.isCompleted && newStatus == "completed" && task.isRecurringInstance {
-            await handleRecurringTaskCompletion(updatedTask, in: listId, for: kind)
-        }
+
     }
     
     func updateTask(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
@@ -581,114 +558,6 @@ class TasksViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Recurring Task Methods
-    
-    private func handleRecurringTaskCompletion(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
-        do {
-            if let newRecurringTask = try await recurringTaskManager.handleTaskCompletion(task, taskListId: listId, accountKind: kind) {
-                // Create the new recurring task on the server
-                try await createTaskOnServer(newRecurringTask, in: listId, for: kind)
-                
-                // Add the new task to local state
-                await MainActor.run {
-                    switch kind {
-                    case .personal:
-                        if self.personalTasks[listId] != nil {
-                            self.personalTasks[listId]?.append(newRecurringTask)
-                        } else {
-                            self.personalTasks[listId] = [newRecurringTask]
-                        }
-                    case .professional:
-                        if self.professionalTasks[listId] != nil {
-                            self.professionalTasks[listId]?.append(newRecurringTask)
-                        } else {
-                            self.professionalTasks[listId] = [newRecurringTask]
-                        }
-                    }
-                }
-                
-                print("✅ Successfully created new recurring task instance")
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to handle recurring task: \(error.localizedDescription)"
-            }
-        }
-    }
-    
-    func createRecurringTask(
-        from task: GoogleTask,
-        taskListId: String,
-        accountKind: GoogleAuthManager.AccountKind,
-        frequency: RecurringFrequency,
-        interval: Int = 1,
-        startDate: Date,
-        endDate: Date? = nil,
-        customDays: [Int]? = nil,
-        customDayOfMonth: Int? = nil,
-        customMonthOfYear: Int? = nil
-    ) async throws {
-        let recurringTask = try await recurringTaskManager.createRecurringTask(
-            from: task,
-            taskListId: taskListId,
-            accountKind: accountKind,
-            frequency: frequency,
-            interval: interval,
-            startDate: startDate,
-            endDate: endDate,
-            customDays: customDays,
-            customDayOfMonth: customDayOfMonth,
-            customMonthOfYear: customMonthOfYear
-        )
-        
-        // Update the original task to mark it as a recurring instance
-        let updatedTask = GoogleTask(
-            id: task.id,
-            title: task.title,
-            notes: task.notes,
-            status: task.status,
-            due: task.due,
-            updated: task.updated,
-            recurringTaskId: recurringTask.id,
-            isRecurringInstance: true
-        )
-        
-        await updateTask(updatedTask, in: taskListId, for: accountKind)
-    }
-    
-    func removeRecurringPattern(from task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind) async throws {
-        guard let recurringTaskId = task.recurringTaskId else { return }
-        
-        // Delete the recurring task pattern
-        try await recurringTaskManager.deleteRecurringTask(recurringTaskId, for: accountKind)
-        
-        // Update the task to remove recurring metadata
-        let updatedTask = GoogleTask(
-            id: task.id,
-            title: task.title,
-            notes: task.notes,
-            status: task.status,
-            due: task.due,
-            updated: task.updated,
-            recurringTaskId: nil,
-            isRecurringInstance: false
-        )
-        
-        await updateTask(updatedTask, in: taskListId, for: accountKind)
-    }
-    
-    func isTaskRecurring(_ task: GoogleTask) -> Bool {
-        return recurringTaskManager.isTaskRecurring(task)
-    }
-    
-    func getRecurringTask(for task: GoogleTask, accountKind: GoogleAuthManager.AccountKind) async throws -> RecurringTask? {
-        return try await recurringTaskManager.getRecurringTask(for: task, accountKind: accountKind)
-    }
-    
-    func loadRecurringTasks() async {
-        await recurringTaskManager.loadRecurringTasks()
-    }
-    
     func createTask(title: String, notes: String?, dueDate: Date?, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
         let dueDateString: String?
         if let dueDate = dueDate {
@@ -705,9 +574,8 @@ class TasksViewModel: ObservableObject {
             notes: notes,
             status: "needsAction",
             due: dueDateString,
-            updated: nil,
-            recurringTaskId: nil,
-            isRecurringInstance: false
+            completed: nil,
+            updated: nil
         )
         
         do {
@@ -787,7 +655,7 @@ struct TasksView: View {
                         TasksSectionView(
                             title: "Personal",
                             icon: "person.circle.fill",
-                            accentColor: .purple,
+                            accentColor: appPrefs.personalColor,
                             isLinked: authManager.isLinked(kind: .personal),
                             taskLists: viewModel.personalTaskLists,
                             tasksDict: filteredTasks(viewModel.personalTasks),
@@ -814,7 +682,7 @@ struct TasksView: View {
                         TasksSectionView(
                             title: "Professional",
                             icon: "briefcase.circle.fill",
-                            accentColor: .blue,
+                            accentColor: appPrefs.professionalColor,
                             isLinked: authManager.isLinked(kind: .professional),
                             taskLists: viewModel.professionalTaskLists,
                             tasksDict: filteredTasks(viewModel.professionalTasks),
@@ -911,31 +779,40 @@ struct TasksView: View {
                     task: task,
                     taskListId: listId,
                     accountKind: accountKind,
-                    onTaskUpdate: { updatedTask in
+                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    personalTaskLists: viewModel.personalTaskLists,
+                    professionalTaskLists: viewModel.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: viewModel,
+                    onSave: { updatedTask in
                         Task {
                             await viewModel.updateTask(updatedTask, in: listId, for: accountKind)
                         }
                     },
-                    onTaskDelete: { deletedTask in
+                    onDelete: {
                         Task {
-                            await viewModel.deleteTask(deletedTask, in: listId, for: accountKind)
+                            await viewModel.deleteTask(task, from: listId, for: accountKind)
+                        }
+                    },
+                    onMove: { updatedTask, targetListId in
+                        Task {
+                            await viewModel.moveTask(updatedTask, from: listId, to: targetListId, for: accountKind)
+                        }
+                    },
+                    onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                        Task {
+                            await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, listId), to: (targetAccountKind, targetListId))
                         }
                     }
                 )
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            if let accountKind = selectedAccountKind {
-                NewTaskView(
-                    accountKind: accountKind,
-                    taskLists: accountKind == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists,
-                    onTaskCreate: { task, listId in
-                        Task {
-                            await viewModel.createTask(task, in: listId, for: accountKind)
-                        }
-                    }
-                )
-            }
+            NewTaskView(
+                viewModel: viewModel,
+                authManager: authManager,
+                appPrefs: appPrefs
+            )
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -1324,12 +1201,7 @@ struct TaskRow: View {
                         .foregroundColor(task.isCompleted ? .secondary : .primary)
                         .strikethrough(task.isCompleted)
                     
-                    // Recurring task indicator
-                    if task.isRecurringInstance {
-                        Image(systemName: "repeat")
-                            .font(.caption)
-                            .foregroundColor(accentColor)
-                    }
+
                     
                     Spacer()
                 }
@@ -1396,16 +1268,6 @@ struct TaskDetailsView: View {
     @State private var showingDatePicker = false
     @State private var showingDeleteAlert = false
     @State private var isSaving = false
-    @State private var showingRecurringOptions = false
-    @State private var selectedFrequency: RecurringFrequency = .daily
-    @State private var selectedInterval: Int = 1
-    @State private var recurringStartDate: Date = Date()
-    @State private var recurringEndDate: Date?
-    @State private var hasRecurringEndDate = false
-    @State private var customDays: [Int] = []
-    @State private var customDayOfMonth: Int = 1
-    @State private var customMonthOfYear: Int = 1
-    @State private var currentRecurringTask: RecurringTask?
     
     private let dueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -1603,62 +1465,6 @@ struct TaskDetailsView: View {
                     }
                 }
                 
-                Section("Repeat") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Current recurring status
-                        HStack {
-                            Image(systemName: task.isRecurringInstance ? "repeat.circle.fill" : "repeat")
-                                .foregroundColor(task.isRecurringInstance ? accentColor : .secondary)
-                            
-                            if task.isRecurringInstance {
-                                Text("This is a recurring task")
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("Not repeating")
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if task.isRecurringInstance {
-                                Button("Remove") {
-                                    removeRecurringPattern()
-                                }
-                                .foregroundColor(.red)
-                                .font(.caption)
-                            } else {
-                                Button("Set Repeat") {
-                                    showingRecurringOptions = true
-                                }
-                                .foregroundColor(accentColor)
-                                .font(.caption)
-                            }
-                        }
-                        
-                        // Show current recurring pattern if it exists
-                        if let recurringTask = currentRecurringTask {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Repeats \(recurringTask.frequency.displayName)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                
-                                if recurringTask.interval > 1 {
-                                    Text("Every \(recurringTask.interval) \(recurringTask.frequency.rawValue)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                if let endDate = recurringTask.endDate {
-                                    Text("Until \(endDate, formatter: dueDateFormatter)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .padding(.leading, 28)
-                        }
-                    }
-                }
-                
                 Section("Task Status") {
                     HStack {
                         Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
@@ -1731,29 +1537,6 @@ struct TaskDetailsView: View {
         } message: {
             Text("Are you sure you want to delete '\(task.title)'? This action cannot be undone.")
         }
-        .sheet(isPresented: $showingRecurringOptions) {
-            RecurringOptionsView(
-                frequency: $selectedFrequency,
-                interval: $selectedInterval,
-                startDate: $recurringStartDate,
-                endDate: $recurringEndDate,
-                hasEndDate: $hasRecurringEndDate,
-                customDays: $customDays,
-                customDayOfMonth: $customDayOfMonth,
-                customMonthOfYear: $customMonthOfYear,
-                accentColor: accentColor,
-                onSave: { 
-                    createRecurringPattern()
-                    showingRecurringOptions = false
-                },
-                onCancel: {
-                    showingRecurringOptions = false
-                }
-            )
-        }
-        .task {
-            await loadCurrentRecurringTask()
-        }
     }
     
     private func saveTask() {
@@ -1796,9 +1579,8 @@ struct TaskDetailsView: View {
                     notes: editedNotes.isEmpty ? nil : editedNotes,
                     status: task.status,
                     due: dueDateString,
-                    updated: task.updated,
-                    recurringTaskId: task.recurringTaskId,
-                    isRecurringInstance: task.isRecurringInstance
+                    completed: task.completed,
+                    updated: task.updated
                 )
                 
                 await MainActor.run {
@@ -1825,66 +1607,6 @@ struct TaskDetailsView: View {
             }
         }
     }
-    
-    private func loadCurrentRecurringTask() async {
-        if task.isRecurringInstance {
-            do {
-                let recurringTask = try await viewModel.getRecurringTask(for: task, accountKind: accountKind)
-                await MainActor.run {
-                    self.currentRecurringTask = recurringTask
-                }
-            } catch {
-                print("Failed to load recurring task: \(error)")
-            }
-        }
-    }
-    
-    private func createRecurringPattern() {
-        Task {
-            do {
-                let endDate = hasRecurringEndDate ? recurringEndDate : nil
-                
-                try await viewModel.createRecurringTask(
-                    from: task,
-                    taskListId: taskListId,
-                    accountKind: accountKind,
-                    frequency: selectedFrequency,
-                    interval: selectedInterval,
-                    startDate: recurringStartDate,
-                    endDate: endDate,
-                    customDays: customDays.isEmpty ? nil : customDays,
-                    customDayOfMonth: selectedFrequency == .monthly || selectedFrequency == .yearly ? customDayOfMonth : nil,
-                    customMonthOfYear: selectedFrequency == .yearly ? customMonthOfYear : nil
-                )
-                
-                await MainActor.run {
-                    // Update the task to reflect it's now recurring
-                    // This will be handled by the createRecurringTask method
-                }
-            } catch {
-                await MainActor.run {
-                    print("Failed to create recurring task: \(error)")
-                    // Could show an alert here
-                }
-            }
-        }
-    }
-    
-    private func removeRecurringPattern() {
-        Task {
-            do {
-                try await viewModel.removeRecurringPattern(from: task, taskListId: taskListId, accountKind: accountKind)
-                await MainActor.run {
-                    currentRecurringTask = nil
-                }
-            } catch {
-                await MainActor.run {
-                    print("Failed to remove recurring pattern: \(error)")
-                    // Could show an alert here
-                }
-            }
-        }
-    }
 }
 
 // MARK: - New Task View
@@ -1903,16 +1625,6 @@ struct NewTaskView: View {
     @State private var dueDate: Date?
     @State private var showingDatePicker = false
     @State private var isCreating = false
-    @State private var isRecurring = false
-    @State private var showingRecurringOptions = false
-    @State private var selectedFrequency: RecurringFrequency = .daily
-    @State private var selectedInterval: Int = 1
-    @State private var recurringStartDate: Date = Date()
-    @State private var recurringEndDate: Date?
-    @State private var hasRecurringEndDate = false
-    @State private var customDays: [Int] = []
-    @State private var customDayOfMonth: Int = 1
-    @State private var customMonthOfYear: Int = 1
     
     private var availableTaskLists: [GoogleTaskList] {
         selectedAccountKind == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
@@ -1930,91 +1642,80 @@ struct NewTaskView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 Section("Task Details") {
                     TextField("Task title", text: $title)
+                        .textFieldStyle(.plain)
+                    
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
+                        .textFieldStyle(.plain)
                         .lineLimit(3...6)
                 }
                 
                 Section("Account") {
-                    Picker("Account", selection: $selectedAccountKind) {
-                        if authManager.isLinked(kind: .personal) {
-                            HStack {
-                                Image(systemName: "person.circle.fill")
-                                    .foregroundColor(appPrefs.personalColor)
-                                Text("Personal")
-                            }.tag(GoogleAuthManager.AccountKind.personal)
+                    HStack {
+                        Text("Account")
+                        Spacer()
+                        Picker("Account", selection: $selectedAccountKind) {
+                            if authManager.isLinked(kind: .personal) {
+                                Text("Personal").tag(GoogleAuthManager.AccountKind.personal)
+                            }
+                            if authManager.isLinked(kind: .professional) {
+                                Text("Professional").tag(GoogleAuthManager.AccountKind.professional)
+                            }
                         }
-                        
-                        if authManager.isLinked(kind: .professional) {
-                            HStack {
-                                Image(systemName: "briefcase.circle.fill")
-                                    .foregroundColor(appPrefs.professionalColor)
-                                Text("Professional")
-                            }.tag(GoogleAuthManager.AccountKind.professional)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: selectedAccountKind) { _, _ in
-                        // Reset list selection when account changes
-                        selectedListId = availableTaskLists.first?.id ?? ""
-                        isCreatingNewList = false
-                        newListName = ""
+                        .pickerStyle(.menu)
                     }
                 }
                 
-                Section("Task List") {
-                    VStack(spacing: 8) {
-                        // Create New List Option
-                        HStack {
-                            Button(action: {
-                                isCreatingNewList.toggle()
-                                if isCreatingNewList {
-                                    selectedListId = ""
-                                }
-                            }) {
-                                HStack {
-                                    Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(isCreatingNewList ? currentAccentColor : .secondary)
-                                    Text("Create new list")
-                                }
+                Section("List") {
+                    HStack {
+                        Button(action: {
+                            isCreatingNewList.toggle()
+                            if !isCreatingNewList && !availableTaskLists.isEmpty {
+                                selectedListId = availableTaskLists.first?.id ?? ""
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            Spacer()
+                        }) {
+                            HStack {
+                                Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(isCreatingNewList ? currentAccentColor : .secondary)
+                                Text("Create new list")
+                            }
                         }
-                        
-                        if isCreatingNewList {
-                            TextField("New list name", text: $newListName)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.leading, 28)
-                        }
-                        
-                        // Existing Lists
-                        if !isCreatingNewList && !availableTaskLists.isEmpty {
-                            ForEach(availableTaskLists) { taskList in
-                                HStack {
-                                    Button(action: {
-                                        selectedListId = taskList.id
-                                    }) {
-                                        HStack {
-                                            Image(systemName: selectedListId == taskList.id ? "checkmark.circle.fill" : "circle")
-                                                .foregroundColor(selectedListId == taskList.id ? currentAccentColor : .secondary)
-                                            Text(taskList.title)
-                                        }
+                        .buttonStyle(PlainButtonStyle())
+                        Spacer()
+                    }
+                    
+                    if isCreatingNewList {
+                        TextField("List name", text: $newListName)
+                            .textFieldStyle(.plain)
+                            .padding(.leading, 28)
+                    }
+                    
+                    // Existing Lists
+                    if !isCreatingNewList && !availableTaskLists.isEmpty {
+                        ForEach(availableTaskLists) { taskList in
+                            HStack {
+                                Button(action: {
+                                    selectedListId = taskList.id
+                                }) {
+                                    HStack {
+                                        Image(systemName: selectedListId == taskList.id ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(selectedListId == taskList.id ? currentAccentColor : .secondary)
+                                        Text(taskList.title)
                                     }
-                                    .buttonStyle(PlainButtonStyle())
-                                    Spacer()
                                 }
+                                .buttonStyle(PlainButtonStyle())
+                                Spacer()
                             }
                         }
-                        
-                        if !isCreatingNewList && availableTaskLists.isEmpty {
-                            Text("No lists available. Create a new list above.")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                                .padding(.leading, 28)
-                        }
+                    }
+                    
+                    if !isCreatingNewList && availableTaskLists.isEmpty {
+                        Text("No lists available. Create a new list above.")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                            .padding(.leading, 28)
                     }
                 }
                 
@@ -2042,48 +1743,6 @@ struct NewTaskView: View {
                             dueDate = nil
                         }
                         .foregroundColor(.red)
-                    }
-                }
-                
-                Section("Repeat") {
-                    HStack {
-                        Text("Repeat")
-                        Spacer()
-                        Toggle("", isOn: $isRecurring)
-                            .toggleStyle(SwitchToggleStyle(tint: currentAccentColor))
-                    }
-                    
-                    if isRecurring {
-                        HStack {
-                            Text("Frequency")
-                            Spacer()
-                            Text(selectedFrequency.displayName)
-                                .foregroundColor(.secondary)
-                            Button(action: {
-                                showingRecurringOptions = true
-                            }) {
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            showingRecurringOptions = true
-                        }
-                        
-                        // Show a summary of the recurring pattern
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(generateRecurringSummary())
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            if hasRecurringEndDate, let endDate = recurringEndDate {
-                                Text("Until \(endDate, style: .date)")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
@@ -2152,59 +1811,6 @@ struct NewTaskView: View {
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $showingRecurringOptions) {
-            RecurringOptionsView(
-                frequency: $selectedFrequency,
-                interval: $selectedInterval,
-                startDate: $recurringStartDate,
-                endDate: $recurringEndDate,
-                hasEndDate: $hasRecurringEndDate,
-                customDays: $customDays,
-                customDayOfMonth: $customDayOfMonth,
-                customMonthOfYear: $customMonthOfYear,
-                accentColor: currentAccentColor,
-                onSave: { 
-                    showingRecurringOptions = false
-                },
-                onCancel: {
-                    showingRecurringOptions = false
-                }
-            )
-        }
-    }
-    
-    private func generateRecurringSummary() -> String {
-        let intervalText = selectedInterval > 1 ? "every \(selectedInterval) " : ""
-        let weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-        let monthNames = ["January", "February", "March", "April", "May", "June",
-                         "July", "August", "September", "October", "November", "December"]
-        
-        switch selectedFrequency {
-        case .daily:
-            return "Repeats \(intervalText)\(selectedInterval == 1 ? "day" : "days")"
-            
-        case .weekly:
-            if customDays.isEmpty {
-                return "Repeats \(intervalText)\(selectedInterval == 1 ? "week" : "weeks")"
-            } else {
-                let dayNames = customDays.map { weekdayNames[$0] }
-                return "Repeats \(intervalText)\(selectedInterval == 1 ? "week" : "weeks") on \(dayNames.joined(separator: ", "))"
-            }
-            
-        case .monthly:
-            return "Repeats \(intervalText)\(selectedInterval == 1 ? "month" : "months") on day \(customDayOfMonth)"
-            
-        case .yearly:
-            return "Repeats \(intervalText)\(selectedInterval == 1 ? "year" : "years") on \(monthNames[customMonthOfYear - 1]) \(customDayOfMonth)"
-            
-        case .custom:
-            if !customDays.isEmpty {
-                let dayNames = customDays.map { weekdayNames[$0] }
-                return "Repeats weekly on \(dayNames.joined(separator: ", "))"
-            } else {
-                return "Custom pattern"
-            }
-        }
     }
     
     private func createTask() {
@@ -2247,32 +1853,17 @@ struct NewTaskView: View {
                     notes: notes.isEmpty ? nil : notes,
                     status: "needsAction",
                     due: dueDateString,
-                    updated: nil,
-                    recurringTaskId: nil,
-                    isRecurringInstance: false
+                    completed: nil,
+                    updated: nil
                 )
                 
-                try await viewModel.createTaskOnServer(newTask, in: targetListId, for: selectedAccountKind)
-                
-                // If the task should be recurring, create the recurring pattern
-                if isRecurring {
-                    let endDate = hasRecurringEndDate ? recurringEndDate : nil
-                    
-                    try await viewModel.createRecurringTask(
-                        from: newTask,
-                        taskListId: targetListId,
-                        accountKind: selectedAccountKind,
-                        frequency: selectedFrequency,
-                        interval: selectedInterval,
-                        startDate: recurringStartDate,
-                        endDate: endDate,
-                        customDays: customDays.isEmpty ? nil : customDays,
-                        customDayOfMonth: selectedFrequency == .monthly || selectedFrequency == .yearly ? customDayOfMonth : nil,
-                        customMonthOfYear: selectedFrequency == .yearly ? customMonthOfYear : nil
-                    )
-                }
-                
-                await viewModel.loadTasks()
+                await viewModel.createTask(
+                    title: newTask.title,
+                    notes: newTask.notes,
+                    dueDate: newTask.dueDate,
+                    in: targetListId,
+                    for: selectedAccountKind
+                )
                 
                 await MainActor.run {
                     dismiss()

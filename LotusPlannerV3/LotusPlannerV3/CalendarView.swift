@@ -2729,17 +2729,17 @@ struct CalendarView: View {
             }
             
             // Then filter tasks based on date logic
-            filteredTasks = filteredTasks.filter { task in
+            filteredTasks = filteredTasks.compactMap { task in
                 // For completed tasks, only show them on their completion date
                 if task.isCompleted {
-                    guard let completionDate = task.completionDate else { return false }
-                    return calendar.isDate(completionDate, inSameDayAs: date)
+                    guard let completionDate = task.completionDate else { return nil }
+                    return calendar.isDate(completionDate, inSameDayAs: date) ? task : nil
                 } else {
                     // For incomplete tasks, only show them on their exact due date
-                    guard let dueDate = task.dueDate else { return false }
+                    guard let dueDate = task.dueDate else { return nil }
                     
                     // Only show tasks on their exact due date (not on future dates)
-                    return calendar.isDate(dueDate, inSameDayAs: date)
+                    return calendar.isDate(dueDate, inSameDayAs: date) ? task : nil
                 }
             }
             
@@ -2763,17 +2763,17 @@ struct CalendarView: View {
             }
             
             // Then filter tasks based on week date logic
-            filteredTasks = filteredTasks.filter { task in
+            filteredTasks = filteredTasks.compactMap { task in
                 // For completed tasks, only show them on their completion date
                 if task.isCompleted {
-                    guard let completionDate = task.completionDate else { return false }
-                    return completionDate >= weekStart && completionDate < weekEnd
+                    guard let completionDate = task.completionDate else { return nil }
+                    return completionDate >= weekStart && completionDate < weekEnd ? task : nil
                 } else {
                     // For incomplete tasks, only show them if their due date is within the week
-                    guard let dueDate = task.dueDate else { return false }
+                    guard let dueDate = task.dueDate else { return nil }
                     
                     // Only include tasks with due dates within the week (no overdue tasks from previous weeks)
-                    return dueDate >= weekStart && dueDate < weekEnd
+                    return dueDate >= weekStart && dueDate < weekEnd ? task : nil
                 }
             }
             
@@ -2797,17 +2797,17 @@ struct CalendarView: View {
             }
             
             // Then filter tasks based on month date logic
-            filteredTasks = filteredTasks.filter { task in
+            filteredTasks = filteredTasks.compactMap { task in
                 // For completed tasks, only show them on their completion date
                 if task.isCompleted {
-                    guard let completionDate = task.completionDate else { return false }
-                    return completionDate >= monthStart && completionDate < monthEnd
+                    guard let completionDate = task.completionDate else { return nil }
+                    return completionDate >= monthStart && completionDate < monthEnd ? task : nil
                 } else {
                     // For incomplete tasks, only show them if their due date is within the month
-                    guard let dueDate = task.dueDate else { return false }
+                    guard let dueDate = task.dueDate else { return nil }
                     
                     // Only include tasks with due dates within the month (no overdue tasks from previous months)
-                    return dueDate >= monthStart && dueDate < monthEnd
+                    return dueDate >= monthStart && dueDate < monthEnd ? task : nil
                 }
             }
             
