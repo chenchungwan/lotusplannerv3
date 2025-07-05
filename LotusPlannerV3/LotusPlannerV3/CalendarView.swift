@@ -539,6 +539,9 @@ struct CalendarView: View {
     @State private var dayLeftSectionWidth: CGFloat = UIScreen.main.bounds.width * 0.25 // Default 1/4 width
     @State private var isDayVerticalDividerDragging = false
     
+    @State private var selectedCalendarEvent: GoogleCalendarEvent?
+    @State private var showingEventDetails = false
+    
     var body: some View {
         GeometryReader { geometry in
             splitScreenContent(geometry: geometry)
@@ -1017,25 +1020,14 @@ struct CalendarView: View {
     
     private var weekCalendarSection: some View {
         Group {
-            if appPrefs.useWeek2Layout {
-                Week2TimelineComponent(
-                    currentDate: currentDate,
-                    weekEvents: getWeekEventsGroupedByDate(),
-                    personalEvents: calendarViewModel.personalEvents,
-                    professionalEvents: calendarViewModel.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor
-                )
-            } else {
-                WeekTimelineComponent(
-                    currentDate: currentDate,
-                    weekEvents: getWeekEventsGroupedByDate(),
-                    personalEvents: calendarViewModel.personalEvents,
-                    professionalEvents: calendarViewModel.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor
-                )
-            }
+            WeekTimelineComponent(
+                currentDate: currentDate,
+                weekEvents: getWeekEventsGroupedByDate(),
+                personalEvents: calendarViewModel.personalEvents,
+                professionalEvents: calendarViewModel.professionalEvents,
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor
+            )
         }
         .task {
             await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
@@ -1141,6 +1133,9 @@ struct CalendarView: View {
                 appPrefs: appPrefs
             )
         }
+        .sheet(isPresented: $showingEventDetails) {
+            eventDetailsSheet
+        }
     }
     
     @ViewBuilder
@@ -1192,6 +1187,17 @@ struct CalendarView: View {
                     }
                 }
             )
+        }
+    }
+    
+    @ViewBuilder
+    private var eventDetailsSheet: some View {
+        if let ev = selectedCalendarEvent {
+            CalendarEventDetailsView(event: ev) {
+                // Delete action placeholder: remove from local arrays
+                calendarViewModel.personalEvents.removeAll { $0.id == ev.id }
+                calendarViewModel.professionalEvents.removeAll { $0.id == ev.id }
+            }
         }
     }
     
@@ -1387,7 +1393,7 @@ struct CalendarView: View {
     }
     
     private var leftBottomSection: some View {
-        LogsComponent(currentDate: currentDate, accountKind: .personal)
+        LogsComponent(currentDate: currentDate)
     }
     
     private var timelineWithEvents: some View {
@@ -1537,6 +1543,7 @@ struct CalendarView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(color, lineWidth: 1)
             )
+            // No long-press action for placeholder string events
     }
     
     
@@ -1803,6 +1810,7 @@ struct CalendarView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(color, lineWidth: 1.5)
             )
+            // No long-press action for placeholder string events
     }
     
     private func formatEventTime(_ event: GoogleCalendarEvent) -> String {
@@ -2333,6 +2341,7 @@ struct CalendarView: View {
                 )
                 .offset(y: topOffset)
                 .padding(.horizontal, 2)
+                // No long-press action for placeholder string events
         )
     }
     

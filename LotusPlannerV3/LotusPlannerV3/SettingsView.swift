@@ -67,12 +67,6 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var useWeek2Layout: Bool {
-        didSet {
-            UserDefaults.standard.set(useWeek2Layout, forKey: "useWeek2Layout")
-        }
-    }
-    
     @Published var hideRecurringEventsInMonth: Bool {
         didSet {
             UserDefaults.standard.set(hideRecurringEventsInMonth, forKey: "hideRecurringEventsInMonth")
@@ -82,7 +76,6 @@ class AppPreferences: ObservableObject {
     private init() {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
-        self.useWeek2Layout = UserDefaults.standard.bool(forKey: "useWeek2Layout")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
         
         // Load colors from UserDefaults or use defaults
@@ -107,10 +100,6 @@ class AppPreferences: ObservableObject {
     
     func updateProfessionalColor(_ color: Color) {
         professionalColor = color
-    }
-    
-    func updateUseWeek2Layout(_ value: Bool) {
-        useWeek2Layout = value
     }
     
     func updateHideRecurringEventsInMonth(_ value: Bool) {
@@ -175,27 +164,6 @@ struct SettingsView: View {
                 
                 Section("Calendar Management") {
                     HStack {
-                        Image(systemName: "calendar.badge.plus")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Week View Layout")
-                                .font(.body)
-                            Text("Use vertical sidebar for tasks in week view")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: Binding(
-                            get: { appPrefs.useWeek2Layout },
-                            set: { appPrefs.updateUseWeek2Layout($0) }
-                        ))
-                    }
-                    
-                    HStack {
                         Image(systemName: "repeat")
                             .foregroundColor(.secondary)
                             .font(.title2)
@@ -217,7 +185,6 @@ struct SettingsView: View {
                     }
                 }
                 
-
                 Section("App Preferences") {
                     HStack {
                         Image(systemName: "moon.fill")
@@ -391,7 +358,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(kind)
                     .font(.body)
-                Text(isLinked ? auth.getEmail(for: kindEnum) : "Not Linked")
+                Text(isLinked ? (auth.getEmail(for: kindEnum).isEmpty ? "Linked" : auth.getEmail(for: kindEnum)) : "Not Linked")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

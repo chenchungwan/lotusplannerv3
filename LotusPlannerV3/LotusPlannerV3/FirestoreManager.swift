@@ -30,67 +30,63 @@ class FirestoreManager: ObservableObject {
     }
     
     // MARK: - Collection References
-    private func getCollectionRef(for type: LogType, accountKind: GoogleAuthManager.AccountKind) -> CollectionReference {
-        let userId = getUserId(for: accountKind)
+    private func getCollectionRef(for type: LogType) -> CollectionReference {
+        let userId = getUserId()
         return db.collection("users")
             .document(userId)
-            .collection(accountKind.rawValue)
+            .collection("personal")
             .document("logs")
             .collection(type.rawValue)
     }
     
-    private func getScrapbookCollectionRef(for accountKind: GoogleAuthManager.AccountKind) -> CollectionReference {
-        let userId = getUserId(for: accountKind)
+    private func getScrapbookCollectionRef() -> CollectionReference {
+        let userId = getUserId()
         return db.collection("users")
             .document(userId)
-            .collection(accountKind.rawValue)
+            .collection("personal")
             .document("scrapbook")
             .collection("entries")
     }
     
-
-    
-    private func getUserId(for accountKind: GoogleAuthManager.AccountKind) -> String {
-        let email = authManager.getEmail(for: accountKind)
+    private func getUserId() -> String {
+        let email = authManager.getEmail(for: .personal)
         let userId = email.isEmpty ? "anonymous" : email
-        print("🔍 FirestoreManager getUserId for \(accountKind): \(userId)")
+        print("🔍 FirestoreManager getUserId: \(userId)")
         return userId
     }
     
     // MARK: - Weight Logs
-    func addWeightEntry(_ entry: WeightLogEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .weight, accountKind: accountKind)
+    func addWeightEntry(_ entry: WeightLogEntry) async throws {
+        let collection = getCollectionRef(for: .weight)
         print("💾 Saving weight entry to path: \(collection.path)/\(entry.id)")
         try await collection.document(entry.id).setData(entry.firestoreData)
         print("✅ Weight entry saved successfully to Firestore")
     }
     
-    func updateWeightEntry(_ entry: WeightLogEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .weight, accountKind: accountKind)
+    func updateWeightEntry(_ entry: WeightLogEntry) async throws {
+        let collection = getCollectionRef(for: .weight)
         try await collection.document(entry.id).updateData(entry.firestoreData)
     }
     
-    func deleteWeightEntry(_ entryId: String, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .weight, accountKind: accountKind)
+    func deleteWeightEntry(_ entryId: String) async throws {
+        let collection = getCollectionRef(for: .weight)
         try await collection.document(entryId).delete()
     }
     
-    func getWeightEntries(for date: Date, accountKind: GoogleAuthManager.AccountKind) async throws -> [WeightLogEntry] {
+    func getWeightEntries(for date: Date) async throws -> [WeightLogEntry] {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        let currentUserId = getUserId(for: accountKind)
+        let currentUserId = getUserId()
         
-        let collection = getCollectionRef(for: .weight, accountKind: accountKind)
+        let collection = getCollectionRef(for: .weight)
         print("🔍 Loading weight entries from: \(collection.path) for user: \(currentUserId), date range: \(startOfDay) to \(endOfDay)")
         
-        // Remove userId filter since collection path is already user-specific
         let snapshot = try await collection
             .whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: startOfDay))
             .whereField("timestamp", isLessThan: Timestamp(date: endOfDay))
             .getDocuments()
         
-        // Sort in memory to avoid compound index requirement
         let entries = snapshot.documents.compactMap { WeightLogEntry(document: $0) }
             .sorted { $0.timestamp < $1.timestamp }
         
@@ -99,39 +95,37 @@ class FirestoreManager: ObservableObject {
     }
     
     // MARK: - Workout Logs
-    func addWorkoutEntry(_ entry: WorkoutLogEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .workout, accountKind: accountKind)
+    func addWorkoutEntry(_ entry: WorkoutLogEntry) async throws {
+        let collection = getCollectionRef(for: .workout)
         print("💾 Saving workout entry to path: \(collection.path)/\(entry.id) for user: \(entry.userId)")
         try await collection.document(entry.id).setData(entry.firestoreData)
         print("✅ Workout entry saved successfully to Firestore")
     }
     
-    func updateWorkoutEntry(_ entry: WorkoutLogEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .workout, accountKind: accountKind)
+    func updateWorkoutEntry(_ entry: WorkoutLogEntry) async throws {
+        let collection = getCollectionRef(for: .workout)
         try await collection.document(entry.id).updateData(entry.firestoreData)
     }
     
-    func deleteWorkoutEntry(_ entryId: String, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .workout, accountKind: accountKind)
+    func deleteWorkoutEntry(_ entryId: String) async throws {
+        let collection = getCollectionRef(for: .workout)
         try await collection.document(entryId).delete()
     }
     
-    func getWorkoutEntries(for date: Date, accountKind: GoogleAuthManager.AccountKind) async throws -> [WorkoutLogEntry] {
+    func getWorkoutEntries(for date: Date) async throws -> [WorkoutLogEntry] {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        let currentUserId = getUserId(for: accountKind)
+        let currentUserId = getUserId()
         
-        let collection = getCollectionRef(for: .workout, accountKind: accountKind)
+        let collection = getCollectionRef(for: .workout)
         print("🔍 Loading workout entries from: \(collection.path) for user: \(currentUserId), date range: \(startOfDay) to \(endOfDay)")
         
-        // Remove userId filter since collection path is already user-specific
         let snapshot = try await collection
             .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: startOfDay))
             .whereField("date", isLessThan: Timestamp(date: endOfDay))
             .getDocuments()
         
-        // Sort in memory to avoid compound index requirement
         let entries = snapshot.documents.compactMap { WorkoutLogEntry(document: $0) }
             .sorted { $0.date < $1.date }
         
@@ -140,39 +134,37 @@ class FirestoreManager: ObservableObject {
     }
     
     // MARK: - Food Logs
-    func addFoodEntry(_ entry: FoodLogEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .food, accountKind: accountKind)
+    func addFoodEntry(_ entry: FoodLogEntry) async throws {
+        let collection = getCollectionRef(for: .food)
         print("💾 Saving food entry to path: \(collection.path)/\(entry.id) for user: \(entry.userId)")
         try await collection.document(entry.id).setData(entry.firestoreData)
         print("✅ Food entry saved successfully to Firestore")
     }
     
-    func updateFoodEntry(_ entry: FoodLogEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .food, accountKind: accountKind)
+    func updateFoodEntry(_ entry: FoodLogEntry) async throws {
+        let collection = getCollectionRef(for: .food)
         try await collection.document(entry.id).updateData(entry.firestoreData)
     }
     
-    func deleteFoodEntry(_ entryId: String, for accountKind: GoogleAuthManager.AccountKind) async throws {
-        let collection = getCollectionRef(for: .food, accountKind: accountKind)
+    func deleteFoodEntry(_ entryId: String) async throws {
+        let collection = getCollectionRef(for: .food)
         try await collection.document(entryId).delete()
     }
     
-    func getFoodEntries(for date: Date, accountKind: GoogleAuthManager.AccountKind) async throws -> [FoodLogEntry] {
+    func getFoodEntries(for date: Date) async throws -> [FoodLogEntry] {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        let currentUserId = getUserId(for: accountKind)
+        let currentUserId = getUserId()
         
-        let collection = getCollectionRef(for: .food, accountKind: accountKind)
+        let collection = getCollectionRef(for: .food)
         print("🔍 Loading food entries from: \(collection.path) for user: \(currentUserId), date range: \(startOfDay) to \(endOfDay)")
         
-        // Remove userId filter since collection path is already user-specific
         let snapshot = try await collection
             .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: startOfDay))
             .whereField("date", isLessThan: Timestamp(date: endOfDay))
             .getDocuments()
         
-        // Sort in memory to avoid compound index requirement
         let entries = snapshot.documents.compactMap { FoodLogEntry(document: $0) }
             .sorted { $0.date < $1.date }
         
@@ -180,137 +172,113 @@ class FirestoreManager: ObservableObject {
         return entries
     }
     
-
-    
     // MARK: - Scrapbook Entries (TEMPORARILY DISABLED)
-    func getScrapbookEntries(for date: Date, accountKind: GoogleAuthManager.AccountKind) async throws -> [ScrapbookEntry] {
+    func getScrapbookEntries(for date: Date) async throws -> [ScrapbookEntry] {
         print("📖 Scrapbook operations temporarily disabled - returning empty array")
         return []
     }
     
-    func addScrapbookEntry(_ entry: ScrapbookEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
+    func addScrapbookEntry(_ entry: ScrapbookEntry) async throws {
         print("📖 Scrapbook operations temporarily disabled - skipping add operation")
     }
     
-    func updateScrapbookEntry(_ entry: ScrapbookEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
+    func updateScrapbookEntry(_ entry: ScrapbookEntry) async throws {
         print("📖 Scrapbook operations temporarily disabled - skipping update operation")
     }
     
-    func deleteScrapbookEntry(_ entry: ScrapbookEntry, for accountKind: GoogleAuthManager.AccountKind) async throws {
+    func deleteScrapbookEntry(_ entry: ScrapbookEntry) async throws {
         print("📖 Scrapbook operations temporarily disabled - skipping delete operation")
     }
     
-    func uploadPDFToStorage(_ pdfData: Data, fileName: String, for accountKind: GoogleAuthManager.AccountKind) async throws -> String {
+    func uploadPDFToStorage(_ pdfData: Data, fileName: String) async throws -> String {
         print("📖 Scrapbook operations temporarily disabled - returning dummy URL")
         return "disabled://scrapbook-temporarily-disabled"
     }
     
-    func deletePDFFromStorage(url: String, for accountKind: GoogleAuthManager.AccountKind) async throws {
+    func deletePDFFromStorage(url: String) async throws {
         print("📖 Scrapbook operations temporarily disabled - skipping storage delete")
     }
     
-    // MARK: - Real-time Listeners
-    func startListening(for date: Date, accountKind: GoogleAuthManager.AccountKind) {
+    // MARK: - Real-time Updates
+    func startListening(for date: Date) {
+        print("🎧 Starting real-time listeners for date: \(date)")
         removeAllListeners()
         
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        let currentUserId = getUserId(for: accountKind)
         
-        print("🎧 Starting real-time listeners for date: \(date), account: \(accountKind), user: \(currentUserId)")
-        
-        // Weight entries listener - removed userId filter since collection path is already user-specific
-        let weightListener = getCollectionRef(for: .weight, accountKind: accountKind)
+        // Weight entries listener
+        let weightListener = getCollectionRef(for: .weight)
             .whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: startOfDay))
             .whereField("timestamp", isLessThan: Timestamp(date: endOfDay))
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self, let snapshot = snapshot else {
-                    if let error = error {
-                        print("❌ Weight listener error: \(error)")
-                        self?.errorMessage = error.localizedDescription
-                    }
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("❌ Error listening to weight entries: \(error)")
                     return
                 }
                 
-                let newEntries = snapshot.documents.compactMap { WeightLogEntry(document: $0) }
+                guard let snapshot = snapshot else { return }
                 
-                // Merge with existing entries, avoiding duplicates
-                var mergedEntries = self.weightEntries.filter { existing in
-                    !newEntries.contains { new in new.id == existing.id }
+                let entries = snapshot.documents.compactMap { WeightLogEntry(document: $0) }
+                    .sorted { $0.timestamp < $1.timestamp }
+                
+                Task { @MainActor in
+                    self.weightEntries = entries
                 }
-                mergedEntries.append(contentsOf: newEntries)
-                // Sort in memory to avoid compound index requirement
-                mergedEntries.sort { $0.timestamp < $1.timestamp }
-                
-                self.weightEntries = mergedEntries
-                print("🔄 Weight entries updated: \(mergedEntries.count) total for user: \(currentUserId)")
             }
         
-        // Workout entries listener - removed userId filter since collection path is already user-specific
-        let workoutListener = getCollectionRef(for: .workout, accountKind: accountKind)
+        // Workout entries listener
+        let workoutListener = getCollectionRef(for: .workout)
             .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: startOfDay))
             .whereField("date", isLessThan: Timestamp(date: endOfDay))
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self, let snapshot = snapshot else {
-                    if let error = error {
-                        print("❌ Workout listener error: \(error)")
-                        self?.errorMessage = error.localizedDescription
-                    }
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("❌ Error listening to workout entries: \(error)")
                     return
                 }
                 
-                let newEntries = snapshot.documents.compactMap { WorkoutLogEntry(document: $0) }
+                guard let snapshot = snapshot else { return }
                 
-                // Merge with existing entries, avoiding duplicates
-                var mergedEntries = self.workoutEntries.filter { existing in
-                    !newEntries.contains { new in new.id == existing.id }
+                let entries = snapshot.documents.compactMap { WorkoutLogEntry(document: $0) }
+                    .sorted { $0.date < $1.date }
+                
+                Task { @MainActor in
+                    self.workoutEntries = entries
                 }
-                mergedEntries.append(contentsOf: newEntries)
-                // Sort in memory to avoid compound index requirement
-                mergedEntries.sort { $0.date < $1.date }
-                
-                self.workoutEntries = mergedEntries
-                print("🔄 Workout entries updated: \(mergedEntries.count) total for user: \(currentUserId)")
             }
         
-        // Food entries listener - removed userId filter since collection path is already user-specific
-        let foodListener = getCollectionRef(for: .food, accountKind: accountKind)
+        // Food entries listener
+        let foodListener = getCollectionRef(for: .food)
             .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: startOfDay))
             .whereField("date", isLessThan: Timestamp(date: endOfDay))
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self = self, let snapshot = snapshot else {
-                    if let error = error {
-                        print("❌ Food listener error: \(error)")
-                        self?.errorMessage = error.localizedDescription
-                    }
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("❌ Error listening to food entries: \(error)")
                     return
                 }
                 
-                let newEntries = snapshot.documents.compactMap { FoodLogEntry(document: $0) }
+                guard let snapshot = snapshot else { return }
                 
-                // Merge with existing entries, avoiding duplicates
-                var mergedEntries = self.foodEntries.filter { existing in
-                    !newEntries.contains { new in new.id == existing.id }
+                let entries = snapshot.documents.compactMap { FoodLogEntry(document: $0) }
+                    .sorted { $0.date < $1.date }
+                
+                Task { @MainActor in
+                    self.foodEntries = entries
                 }
-                mergedEntries.append(contentsOf: newEntries)
-                // Sort in memory to avoid compound index requirement
-                mergedEntries.sort { $0.date < $1.date }
-                
-                self.foodEntries = mergedEntries
-                print("🔄 Food entries updated: \(mergedEntries.count) total for user: \(currentUserId)")
             }
         
-        // Scrapbook entries listener - TEMPORARILY DISABLED
-        print("📖 Scrapbook listener temporarily disabled - setting empty array")
-        self.scrapbookEntries = []
-        
-        // Update listeners array to include only active listeners (no scrapbook)
-        listeners = [weightListener, workoutListener, foodListener]
-        print("✅ All real-time listeners started for user: \(currentUserId)")
+        listeners.append(contentsOf: [weightListener, workoutListener, foodListener])
     }
     
-    func removeAllListeners() {
+    private func removeAllListeners() {
+        print("🔕 Removing all Firestore listeners")
         listeners.forEach { $0.remove() }
         listeners.removeAll()
     }
@@ -332,7 +300,7 @@ class FirestoreManager: ObservableObject {
         }
     }
     
-    private func uploadPDFToStorage(_ pdfData: Data, for date: Date, accountKind: GoogleAuthManager.AccountKind) async throws -> String {
+    private func uploadPDFToStorage(_ pdfData: Data, for date: Date) async throws -> String {
         // TEMPORARILY DISABLED - Storage operations suspended
         print("📖 Storage upload temporarily disabled")
         return "disabled://scrapbook-temporarily-disabled"

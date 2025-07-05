@@ -803,16 +803,41 @@ struct TasksView: View {
                         Task {
                             await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, listId), to: (targetAccountKind, targetListId))
                         }
-                    }
+                    },
+                    isNew: false
                 )
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            NewTaskView(
-                viewModel: viewModel,
-                authManager: authManager,
-                appPrefs: appPrefs
-            )
+            if let accountKind = selectedAccountKind {
+                let taskLists = accountKind == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
+                let defaultListId = taskLists.first?.id ?? ""
+                TaskDetailsView(
+                    task: GoogleTask(
+                        id: UUID().uuidString,
+                        title: "",
+                        notes: nil,
+                        status: "needsAction",
+                        due: nil,
+                        completed: nil,
+                        updated: nil
+                    ),
+                    taskListId: defaultListId,
+                    accountKind: accountKind,
+                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    personalTaskLists: viewModel.personalTaskLists,
+                    professionalTaskLists: viewModel.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: viewModel,
+                    onSave: { _ in },
+                    onDelete: {},
+                    onMove: { _, _ in },
+                    onCrossAccountMove: { _, _, _ in },
+                    isNew: true
+                )
+            } else {
+                Text("Select an account to create a task")
+            }
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -879,10 +904,10 @@ struct TasksView: View {
         return tasksDict.mapValues { tasks in
             var filteredTasks = tasks
             
-            // First, filter by hide completed tasks setting (disabled for now)
-            // if hideCompletedTasks {
-            //     filteredTasks = filteredTasks.filter { !$0.isCompleted }
-            // }
+            // Hide completed tasks if preference is on
+            if appPrefs.hideCompletedTasks {
+                filteredTasks = filteredTasks.filter { !$0.isCompleted }
+            }
             
             // Then apply time-based filter if not "all"
             if selectedFilter != .all {
@@ -1256,6 +1281,7 @@ struct TaskDetailsView: View {
     let onDelete: () -> Void
     let onMove: (GoogleTask, String) -> Void
     let onCrossAccountMove: (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void
+    let isNew: Bool
     
     @Environment(\.dismiss) private var dismiss
     @State private var editedTitle: String
@@ -1275,7 +1301,7 @@ struct TaskDetailsView: View {
         return formatter
     }()
     
-    init(task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind, accentColor: Color, personalTaskLists: [GoogleTaskList], professionalTaskLists: [GoogleTaskList], appPrefs: AppPreferences, viewModel: TasksViewModel, onSave: @escaping (GoogleTask) -> Void, onDelete: @escaping () -> Void, onMove: @escaping (GoogleTask, String) -> Void, onCrossAccountMove: @escaping (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void) {
+    init(task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind, accentColor: Color, personalTaskLists: [GoogleTaskList], professionalTaskLists: [GoogleTaskList], appPrefs: AppPreferences, viewModel: TasksViewModel, onSave: @escaping (GoogleTask) -> Void, onDelete: @escaping () -> Void, onMove: @escaping (GoogleTask, String) -> Void, onCrossAccountMove: @escaping (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void, isNew: Bool = false) {
         self.task = task
         self.taskListId = taskListId
         self.accountKind = accountKind
@@ -1288,6 +1314,7 @@ struct TaskDetailsView: View {
         self.onDelete = onDelete
         self.onMove = onMove
         self.onCrossAccountMove = onCrossAccountMove
+        self.isNew = isNew
         
         _editedTitle = State(initialValue: task.title)
         _editedNotes = State(initialValue: task.notes ?? "")
@@ -1342,34 +1369,27 @@ struct TaskDetailsView: View {
                 
                 Section("Account & Task List") {
                     VStack(alignment: .leading, spacing: 12) {
-                        // Account Selection
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Account")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Picker("Account", selection: $selectedAccountKind) {
-                                HStack {
-                                    Image(systemName: "person.circle.fill")
-                                        .foregroundColor(appPrefs.personalColor)
-                                    Text("Personal")
-                                }.tag(GoogleAuthManager.AccountKind.personal)
-                                
-                                HStack {
-                                    Image(systemName: "briefcase.circle.fill")
-                                        .foregroundColor(appPrefs.professionalColor)
-                                    Text("Professional")
-                                }.tag(GoogleAuthManager.AccountKind.professional)
-                            }
-                            .pickerStyle(.segmented)
-                            .onChange(of: selectedAccountKind) { _, newAccount in
-                                // When account changes, reset to first available list
-                                if let firstList = availableTaskLists.first {
-                                    selectedListId = firstList.id
+                        // Radio-style buttons for account selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \..self) { kind in
+                                if GoogleAuthManager.shared.isLinked(kind: kind) {
+                                    Button {
+                                        selectedAccountKind = kind
+                                        // Reset list selection when account changes
+                                        if let firstList = availableTaskLists.first {
+                                            selectedListId = firstList.id
+                                        }
+                                        isCreatingNewList = false
+                                        newListName = ""
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: selectedAccountKind == kind ? "largecircle.fill.circle" : "circle")
+                                                .foregroundColor(selectedAccountKind == kind ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .secondary)
+                                            Text(kind == .personal ? "Personal" : "Professional")
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                // Reset new list creation state
-                                isCreatingNewList = false
-                                newListName = ""
                             }
                         }
                         
@@ -1475,15 +1495,17 @@ struct TaskDetailsView: View {
                     }
                 }
                 
-                Section {
-                    Button("Delete Task") {
-                        showingDeleteAlert = true
+                if !isNew {
+                    Section {
+                        Button("Delete Task") {
+                            showingDeleteAlert = true
+                        }
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .foregroundColor(.red)
-                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
-            .navigationTitle("Task Details")
+            .navigationTitle(isNew ? "New Task" : "Task Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1494,10 +1516,10 @@ struct TaskDetailsView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(isSaving ? "Saving..." : "Save") {
+                    Button(isSaving ? (isNew ? "Creating..." : "Saving...") : (isNew ? "Create" : "Save")) {
                         saveTask()
                     }
-                    .disabled(!canSave || !hasChanges || isSaving)
+                    .disabled(!canSave || (isNew ? false : !hasChanges) || isSaving)
                     .fontWeight(.semibold)
                 }
             }
@@ -1583,296 +1605,36 @@ struct TaskDetailsView: View {
                     updated: task.updated
                 )
                 
-                await MainActor.run {
-                    // Check if the task is being moved to a different account
-                    if selectedAccountKind != accountKind {
-                        // Cross-account move: delete from original account and create in new account
-                        onCrossAccountMove(updatedTask, selectedAccountKind, targetListId)
-                    } else if targetListId != taskListId {
-                        // Same account, different list: use the move callback
-                        onMove(updatedTask, targetListId)
-                    } else {
-                        // Same account, same list: just update the task
-                        onSave(updatedTask)
+                if isNew {
+                    // Creation path
+                    await viewModel.createTask(
+                        title: updatedTask.title,
+                        notes: updatedTask.notes,
+                        dueDate: editedDueDate,
+                        in: targetListId,
+                        for: selectedAccountKind
+                    )
+                    await MainActor.run {
+                        dismiss()
                     }
-                    
-                    dismiss()
+                } else {
+                    await MainActor.run {
+                        // Editing path
+                        if selectedAccountKind != accountKind {
+                            onCrossAccountMove(updatedTask, selectedAccountKind, targetListId)
+                        } else if targetListId != taskListId {
+                            onMove(updatedTask, targetListId)
+                        } else {
+                            onSave(updatedTask)
+                        }
+                        dismiss()
+                    }
                 }
             } catch {
                 await MainActor.run {
                     isSaving = false
                     // Handle error (could show alert)
                     print("Failed to save task: \(error)")
-                }
-            }
-        }
-    }
-}
-
-// MARK: - New Task View
-struct NewTaskView: View {
-    let viewModel: TasksViewModel
-    let authManager: GoogleAuthManager
-    let appPrefs: AppPreferences
-    
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var notes = ""
-    @State private var selectedAccountKind: GoogleAuthManager.AccountKind = .personal
-    @State private var selectedListId = ""
-    @State private var newListName = ""
-    @State private var isCreatingNewList = false
-    @State private var dueDate: Date?
-    @State private var showingDatePicker = false
-    @State private var isCreating = false
-    
-    private var availableTaskLists: [GoogleTaskList] {
-        selectedAccountKind == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
-    }
-    
-    private var currentAccentColor: Color {
-        selectedAccountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
-    }
-    
-    private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        ((!isCreatingNewList && !selectedListId.isEmpty) || 
-         (isCreatingNewList && !newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-    }
-    
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Task Details") {
-                    TextField("Task title", text: $title)
-                        .textFieldStyle(.plain)
-                    
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(3...6)
-                }
-                
-                Section("Account") {
-                    HStack {
-                        Text("Account")
-                        Spacer()
-                        Picker("Account", selection: $selectedAccountKind) {
-                            if authManager.isLinked(kind: .personal) {
-                                Text("Personal").tag(GoogleAuthManager.AccountKind.personal)
-                            }
-                            if authManager.isLinked(kind: .professional) {
-                                Text("Professional").tag(GoogleAuthManager.AccountKind.professional)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                }
-                
-                Section("List") {
-                    HStack {
-                        Button(action: {
-                            isCreatingNewList.toggle()
-                            if !isCreatingNewList && !availableTaskLists.isEmpty {
-                                selectedListId = availableTaskLists.first?.id ?? ""
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
-                                    .foregroundColor(isCreatingNewList ? currentAccentColor : .secondary)
-                                Text("Create new list")
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        Spacer()
-                    }
-                    
-                    if isCreatingNewList {
-                        TextField("List name", text: $newListName)
-                            .textFieldStyle(.plain)
-                            .padding(.leading, 28)
-                    }
-                    
-                    // Existing Lists
-                    if !isCreatingNewList && !availableTaskLists.isEmpty {
-                        ForEach(availableTaskLists) { taskList in
-                            HStack {
-                                Button(action: {
-                                    selectedListId = taskList.id
-                                }) {
-                                    HStack {
-                                        Image(systemName: selectedListId == taskList.id ? "checkmark.circle.fill" : "circle")
-                                            .foregroundColor(selectedListId == taskList.id ? currentAccentColor : .secondary)
-                                        Text(taskList.title)
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                Spacer()
-                            }
-                        }
-                    }
-                    
-                    if !isCreatingNewList && availableTaskLists.isEmpty {
-                        Text("No lists available. Create a new list above.")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                            .padding(.leading, 28)
-                    }
-                }
-                
-                Section("Due Date") {
-                    HStack {
-                        Text("Due Date")
-                        Spacer()
-                        if let dueDate = dueDate {
-                            Text(dueDate, style: .date)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("None")
-                                .foregroundColor(.secondary)
-                        }
-                        Button(action: {
-                            showingDatePicker.toggle()
-                        }) {
-                            Image(systemName: "calendar")
-                                .foregroundColor(.accentColor)
-                        }
-                    }
-                    
-                    if dueDate != nil {
-                        Button("Remove Due Date") {
-                            dueDate = nil
-                        }
-                        .foregroundColor(.red)
-                    }
-                }
-            }
-            .navigationTitle("New Task")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .disabled(isCreating)
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(isCreating ? "Creating..." : "Create") {
-                        createTask()
-                    }
-                    .disabled(!canSave || isCreating)
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-        .onAppear {
-            // Set default account and list
-            if authManager.isLinked(kind: .personal) {
-                selectedAccountKind = .personal
-                if !viewModel.personalTaskLists.isEmpty {
-                    selectedListId = viewModel.personalTaskLists.first?.id ?? ""
-                    isCreatingNewList = false
-                } else {
-                    isCreatingNewList = true
-                }
-            } else if authManager.isLinked(kind: .professional) {
-                selectedAccountKind = .professional
-                if !viewModel.professionalTaskLists.isEmpty {
-                    selectedListId = viewModel.professionalTaskLists.first?.id ?? ""
-                    isCreatingNewList = false
-                } else {
-                    isCreatingNewList = true
-                }
-            }
-        }
-        .sheet(isPresented: $showingDatePicker) {
-            NavigationStack {
-                DatePicker("Due Date", selection: Binding(
-                    get: { dueDate ?? Date() },
-                    set: { dueDate = $0 }
-                ), displayedComponents: .date)
-                .datePickerStyle(.wheel)
-                .navigationTitle("Set Due Date")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Cancel") {
-                            showingDatePicker = false
-                        }
-                    }
-                    
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Done") {
-                            showingDatePicker = false
-                        }
-                        .fontWeight(.semibold)
-                    }
-                }
-            }
-            .presentationDetents([.medium])
-        }
-    }
-    
-    private func createTask() {
-        isCreating = true
-        
-        Task {
-            do {
-                let targetListId: String
-                
-                if isCreatingNewList {
-                    // Create new task list first
-                    guard let newListId = await viewModel.createTaskList(
-                        title: newListName.trimmingCharacters(in: .whitespacesAndNewlines),
-                        for: selectedAccountKind
-                    ) else {
-                        await MainActor.run {
-                            isCreating = false
-                        }
-                        return
-                    }
-                    targetListId = newListId
-                } else {
-                    targetListId = selectedListId
-                }
-                
-                // Prepare due date string
-                let dueDateString: String?
-                if let dueDate = dueDate {
-                    let formatter = DateFormatter()
-                    formatter.dateFormat = "yyyy-MM-dd"
-                    formatter.timeZone = TimeZone.current
-                    dueDateString = formatter.string(from: dueDate)
-                } else {
-                    dueDateString = nil
-                }
-                
-                let newTask = GoogleTask(
-                    id: UUID().uuidString, // Temporary ID
-                    title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    notes: notes.isEmpty ? nil : notes,
-                    status: "needsAction",
-                    due: dueDateString,
-                    completed: nil,
-                    updated: nil
-                )
-                
-                await viewModel.createTask(
-                    title: newTask.title,
-                    notes: newTask.notes,
-                    dueDate: newTask.dueDate,
-                    in: targetListId,
-                    for: selectedAccountKind
-                )
-                
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isCreating = false
-                    // Handle error (could show alert)
-                    print("Failed to create task: \(error)")
                 }
             }
         }

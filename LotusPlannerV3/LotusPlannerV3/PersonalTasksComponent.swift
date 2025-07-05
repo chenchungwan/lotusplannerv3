@@ -6,6 +6,7 @@ struct PersonalTasksComponent: View {
     let accentColor: Color
     let onTaskToggle: (GoogleTask, String) -> Void
     let onTaskDetails: (GoogleTask, String) -> Void
+    @ObservedObject private var appPrefs = AppPreferences.shared
     
     var body: some View {
         VStack(spacing: 12) {
@@ -17,22 +18,28 @@ struct PersonalTasksComponent: View {
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(taskLists, id: \.id) { taskList in
-                        if let tasks = tasksDict[taskList.id], !tasks.isEmpty {
-                            PersonalTaskListCard(
-                                taskList: taskList,
-                                tasks: tasks,
-                                accentColor: accentColor,
-                                onTaskToggle: { task in
-                                    onTaskToggle(task, taskList.id)
-                                },
-                                onTaskDetails: { task in
-                                    onTaskDetails(task, taskList.id)
-                                }
-                            )
+                        if let tasks = tasksDict[taskList.id] {
+                            let filteredTasks = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
+                            if !filteredTasks.isEmpty {
+                                PersonalTaskListCard(
+                                    taskList: taskList,
+                                    tasks: filteredTasks,
+                                    accentColor: accentColor,
+                                    onTaskToggle: { task in
+                                        onTaskToggle(task, taskList.id)
+                                    },
+                                    onTaskDetails: { task in
+                                        onTaskDetails(task, taskList.id)
+                                    }
+                                )
+                            }
                         }
                     }
                     
-                    if tasksDict.allSatisfy({ $0.value.isEmpty }) {
+                    if tasksDict.allSatisfy({ tasks in
+                        let filteredTasks = appPrefs.hideCompletedTasks ? tasks.value.filter { !$0.isCompleted } : tasks.value
+                        return filteredTasks.isEmpty
+                    }) {
                         Text("No tasks for today")
                             .font(.body)
                             .foregroundColor(.secondary)

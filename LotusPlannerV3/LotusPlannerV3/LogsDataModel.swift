@@ -31,15 +31,13 @@ struct WeightLogEntry: Identifiable, Codable, Hashable {
     let weight: Double
     let unit: WeightUnit
     let userId: String
-    let accountKind: String // "personal" or "professional"
     
-    init(weight: Double, unit: WeightUnit, userId: String, accountKind: GoogleAuthManager.AccountKind) {
+    init(weight: Double, unit: WeightUnit, userId: String) {
         self.id = UUID().uuidString
         self.timestamp = Date()
         self.weight = weight
         self.unit = unit
         self.userId = userId
-        self.accountKind = accountKind.rawValue
     }
     
     // For Firestore
@@ -49,8 +47,7 @@ struct WeightLogEntry: Identifiable, Codable, Hashable {
               let weight = data["weight"] as? Double,
               let unitString = data["unit"] as? String,
               let unit = WeightUnit(rawValue: unitString),
-              let userId = data["userId"] as? String,
-              let accountKind = data["accountKind"] as? String else {
+              let userId = data["userId"] as? String else {
             return nil
         }
         
@@ -59,7 +56,6 @@ struct WeightLogEntry: Identifiable, Codable, Hashable {
         self.weight = weight
         self.unit = unit
         self.userId = userId
-        self.accountKind = accountKind
     }
     
     var firestoreData: [String: Any] {
@@ -67,8 +63,7 @@ struct WeightLogEntry: Identifiable, Codable, Hashable {
             "timestamp": Timestamp(date: timestamp),
             "weight": weight,
             "unit": unit.rawValue,
-            "userId": userId,
-            "accountKind": accountKind
+            "userId": userId
         ]
     }
 }
@@ -91,15 +86,13 @@ struct WorkoutLogEntry: Identifiable, Codable, Hashable {
     let date: Date
     let name: String
     let userId: String
-    let accountKind: String
     let createdAt: Date
     
-    init(date: Date, name: String, userId: String, accountKind: GoogleAuthManager.AccountKind) {
+    init(date: Date, name: String, userId: String) {
         self.id = UUID().uuidString
         self.date = date
         self.name = name
         self.userId = userId
-        self.accountKind = accountKind.rawValue
         self.createdAt = Date()
     }
     
@@ -109,7 +102,6 @@ struct WorkoutLogEntry: Identifiable, Codable, Hashable {
               let date = (data["date"] as? Timestamp)?.dateValue(),
               let name = data["name"] as? String,
               let userId = data["userId"] as? String,
-              let accountKind = data["accountKind"] as? String,
               let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() else {
             return nil
         }
@@ -118,7 +110,6 @@ struct WorkoutLogEntry: Identifiable, Codable, Hashable {
         self.date = date
         self.name = name
         self.userId = userId
-        self.accountKind = accountKind
         self.createdAt = createdAt
     }
     
@@ -127,7 +118,6 @@ struct WorkoutLogEntry: Identifiable, Codable, Hashable {
             "date": Timestamp(date: date),
             "name": name,
             "userId": userId,
-            "accountKind": accountKind,
             "createdAt": Timestamp(date: createdAt)
         ]
     }
@@ -139,15 +129,13 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
     let date: Date
     let name: String
     let userId: String
-    let accountKind: String
     let createdAt: Date
     
-    init(date: Date, name: String, userId: String, accountKind: GoogleAuthManager.AccountKind) {
+    init(date: Date, name: String, userId: String) {
         self.id = UUID().uuidString
         self.date = date
         self.name = name
         self.userId = userId
-        self.accountKind = accountKind.rawValue
         self.createdAt = Date()
     }
     
@@ -157,7 +145,6 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
               let date = (data["date"] as? Timestamp)?.dateValue(),
               let name = data["name"] as? String,
               let userId = data["userId"] as? String,
-              let accountKind = data["accountKind"] as? String,
               let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() else {
             return nil
         }
@@ -166,7 +153,6 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
         self.date = date
         self.name = name
         self.userId = userId
-        self.accountKind = accountKind
         self.createdAt = createdAt
     }
     
@@ -175,7 +161,6 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
             "date": Timestamp(date: date),
             "name": name,
             "userId": userId,
-            "accountKind": accountKind,
             "createdAt": Timestamp(date: createdAt)
         ]
     }
@@ -243,7 +228,6 @@ protocol LogEntry {
     var id: String { get }
     var date: Date { get }
     var userId: String { get }
-    var accountKind: String { get }
     var firestoreData: [String: Any] { get }
 }
 

@@ -3,11 +3,9 @@ import SwiftUI
 struct LogsComponent: View {
     @StateObject private var viewModel = LogsViewModel()
     let currentDate: Date
-    let accountKind: GoogleAuthManager.AccountKind
     
-    init(currentDate: Date = Date(), accountKind: GoogleAuthManager.AccountKind = .personal) {
+    init(currentDate: Date = Date()) {
         self.currentDate = currentDate
-        self.accountKind = accountKind
     }
     
     var body: some View {
@@ -71,14 +69,10 @@ struct LogsComponent: View {
             }
         }
         .onAppear {
-            viewModel.selectedAccountKind = accountKind
             viewModel.changeDate(to: currentDate)
         }
         .onChange(of: currentDate) { oldValue, newValue in
             viewModel.changeDate(to: newValue)
-        }
-        .onChange(of: accountKind) { oldValue, newValue in
-            viewModel.changeAccountKind(to: newValue)
         }
     }
     
@@ -112,17 +106,19 @@ struct LogsComponent: View {
     }
     
     private func weightEntryRow(_ entry: WeightLogEntry) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(formatTime(entry.timestamp))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("\(entry.weight, specifier: "%.1f") \(entry.unit.displayName)")
-                    .font(.caption)
-                    .fontWeight(.medium)
-            }
+        HStack(spacing: 8) {
+            Text("\(entry.weight, specifier: "%.1f") \(entry.unit.displayName)")
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.tail)
             
-            Spacer()
+            Spacer(minLength: 8)
+            
+            Text(formatDate(entry.timestamp))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .fixedSize()
             
             Button(action: {
                 viewModel.deleteWeightEntry(entry)
@@ -168,17 +164,19 @@ struct LogsComponent: View {
     }
     
     private func workoutEntryRow(_ entry: WorkoutLogEntry) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Text(formatDate(entry.date))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+        HStack(spacing: 8) {
+            Text(entry.name)
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.tail)
             
-            Spacer()
+            Spacer(minLength: 8)
+            
+            Text(formatDate(entry.date))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .fixedSize()
             
             Button(action: {
                 viewModel.deleteWorkoutEntry(entry)
@@ -224,17 +222,19 @@ struct LogsComponent: View {
     }
     
     private func foodEntryRow(_ entry: FoodLogEntry) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                Text(formatDate(entry.date))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+        HStack(spacing: 8) {
+            Text(entry.name)
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.tail)
             
-            Spacer()
+            Spacer(minLength: 8)
+            
+            Text(formatDate(entry.date))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .fixedSize()
             
             Button(action: {
                 viewModel.deleteFoodEntry(entry)
@@ -281,19 +281,6 @@ struct AddLogEntryView: View {
                         }
                     }
                     .pickerStyle(SegmentedPickerStyle())
-                }
-                
-                // Account selection if multiple accounts are available
-                if viewModel.availableAccountKinds.count > 1 {
-                    Section("Account") {
-                        Picker("Account", selection: $viewModel.selectedAccountKind) {
-                            ForEach(viewModel.availableAccountKinds, id: \.self) { kind in
-                                Text(kind.rawValue.capitalized)
-                                    .tag(kind)
-                            }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                    }
                 }
                 
                 // Form fields based on log type

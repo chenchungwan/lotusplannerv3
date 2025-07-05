@@ -4,7 +4,6 @@ import SwiftUI
 @MainActor
 class LogsViewModel: ObservableObject {
     @Published var selectedLogType: LogType = .weight
-    @Published var selectedAccountKind: GoogleAuthManager.AccountKind = .personal
     @Published var currentDate: Date = Date()
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -25,52 +24,27 @@ class LogsViewModel: ObservableObject {
     private let firestoreManager = FirestoreManager.shared
     private let authManager = GoogleAuthManager.shared
     
-    init() {
-        // Set default account kind based on what's available
-        if authManager.isLinked(kind: .personal) {
-            selectedAccountKind = .personal
-        } else if authManager.isLinked(kind: .professional) {
-            selectedAccountKind = .professional
-        }
-    }
-    
     // MARK: - Computed Properties
-    var availableAccountKinds: [GoogleAuthManager.AccountKind] {
-        var kinds: [GoogleAuthManager.AccountKind] = []
-        if authManager.isLinked(kind: .personal) {
-            kinds.append(.personal)
-        }
-        if authManager.isLinked(kind: .professional) {
-            kinds.append(.professional)
-        }
-        return kinds
-    }
-    
     var weightEntries: [WeightLogEntry] {
         return firestoreManager.weightEntries.filter { entry in
-            entry.accountKind == selectedAccountKind.rawValue &&
             Calendar.current.isDate(entry.timestamp, inSameDayAs: currentDate)
         }
     }
     
     var workoutEntries: [WorkoutLogEntry] {
         return firestoreManager.workoutEntries.filter { entry in
-            entry.accountKind == selectedAccountKind.rawValue &&
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
         }
     }
     
     var foodEntries: [FoodLogEntry] {
         return firestoreManager.foodEntries.filter { entry in
-            entry.accountKind == selectedAccountKind.rawValue &&
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
         }
     }
     
     var accentColor: Color {
-        return selectedAccountKind == .personal ? 
-            AppPreferences.shared.personalColor : 
-            AppPreferences.shared.professionalColor
+        return AppPreferences.shared.personalColor
     }
     
     // MARK: - Actions
@@ -81,9 +55,9 @@ class LogsViewModel: ObservableObject {
             
             do {
                 // First, load existing data for the current date
-                async let weightEntries = firestoreManager.getWeightEntries(for: currentDate, accountKind: selectedAccountKind)
-                async let workoutEntries = firestoreManager.getWorkoutEntries(for: currentDate, accountKind: selectedAccountKind)
-                async let foodEntries = firestoreManager.getFoodEntries(for: currentDate, accountKind: selectedAccountKind)
+                async let weightEntries = firestoreManager.getWeightEntries(for: currentDate)
+                async let workoutEntries = firestoreManager.getWorkoutEntries(for: currentDate)
+                async let foodEntries = firestoreManager.getFoodEntries(for: currentDate)
                 
                 let (weights, workouts, foods) = try await (weightEntries, workoutEntries, foodEntries)
                 
@@ -98,7 +72,7 @@ class LogsViewModel: ObservableObject {
                 }
                 
                 // Start real-time listeners for new changes
-                firestoreManager.startListening(for: currentDate, accountKind: selectedAccountKind)
+                firestoreManager.startListening(for: currentDate)
                 
                 print("📊 Loaded \(weights.count) weight, \(workouts.count) workout, \(foods.count) food entries for \(currentDate)")
             } catch {
@@ -125,17 +99,16 @@ class LogsViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                let userId = authManager.getEmail(for: selectedAccountKind)
-                print("📝 Adding weight entry for user: \(userId), account: \(selectedAccountKind)")
+                let userId = authManager.getEmail(for: .personal)
+                print("📝 Adding weight entry for user: \(userId)")
                 
                 let entry = WeightLogEntry(
                     weight: weight,
                     unit: selectedWeightUnit,
-                    userId: userId,
-                    accountKind: selectedAccountKind
+                    userId: userId
                 )
                 
-                try await firestoreManager.addWeightEntry(entry, for: selectedAccountKind)
+                try await firestoreManager.addWeightEntry(entry)
                 print("✅ Successfully added weight entry: \(weight) \(selectedWeightUnit.displayName)")
                 
                 // Clear form
@@ -151,8 +124,9 @@ class LogsViewModel: ObservableObject {
     }
     
     func addWorkoutEntry() {
-        guard !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            errorMessage = "Please enter a workout name"
+        let trimmedWorkout = workoutName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedWorkout.count >= 10 else {
+            errorMessage = "Workout name must be at least 10 characters"
             return
         }
         
@@ -161,17 +135,16 @@ class LogsViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                let userId = authManager.getEmail(for: selectedAccountKind)
-                print("📝 Adding workout entry for user: \(userId), account: \(selectedAccountKind)")
+                let userId = authManager.getEmail(for: .personal)
+                print("📝 Adding workout entry for user: \(userId)")
                 
                 let entry = WorkoutLogEntry(
                     date: workoutDate,
-                    name: workoutName.trimmingCharacters(in: .whitespacesAndNewlines),
-                    userId: userId,
-                    accountKind: selectedAccountKind
+                    name: trimmedWorkout,
+                    userId: userId
                 )
                 
-                try await firestoreManager.addWorkoutEntry(entry, for: selectedAccountKind)
+                try await firestoreManager.addWorkoutEntry(entry)
                 print("✅ Successfully added workout entry: \(workoutName)")
                 
                 // Clear form
@@ -188,8 +161,9 @@ class LogsViewModel: ObservableObject {
     }
     
     func addFoodEntry() {
-        guard !foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            errorMessage = "Please enter a food name"
+        let trimmedFood = foodName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedFood.count >= 10 else {
+            errorMessage = "Food name must be at least 10 characters"
             return
         }
         
@@ -198,17 +172,16 @@ class LogsViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                let userId = authManager.getEmail(for: selectedAccountKind)
-                print("📝 Adding food entry for user: \(userId), account: \(selectedAccountKind)")
+                let userId = authManager.getEmail(for: .personal)
+                print("📝 Adding food entry for user: \(userId)")
                 
                 let entry = FoodLogEntry(
                     date: foodDate,
-                    name: foodName.trimmingCharacters(in: .whitespacesAndNewlines),
-                    userId: userId,
-                    accountKind: selectedAccountKind
+                    name: trimmedFood,
+                    userId: userId
                 )
                 
-                try await firestoreManager.addFoodEntry(entry, for: selectedAccountKind)
+                try await firestoreManager.addFoodEntry(entry)
                 print("✅ Successfully added food entry: \(foodName)")
                 
                 // Clear form
@@ -230,7 +203,7 @@ class LogsViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                try await firestoreManager.deleteWeightEntry(entry.id, for: selectedAccountKind)
+                try await firestoreManager.deleteWeightEntry(entry.id)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -245,7 +218,7 @@ class LogsViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                try await firestoreManager.deleteWorkoutEntry(entry.id, for: selectedAccountKind)
+                try await firestoreManager.deleteWorkoutEntry(entry.id)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -260,7 +233,7 @@ class LogsViewModel: ObservableObject {
             errorMessage = nil
             
             do {
-                try await firestoreManager.deleteFoodEntry(entry.id, for: selectedAccountKind)
+                try await firestoreManager.deleteFoodEntry(entry.id)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -274,11 +247,6 @@ class LogsViewModel: ObservableObject {
         loadLogsForCurrentDate()
     }
     
-    func changeAccountKind(to newKind: GoogleAuthManager.AccountKind) {
-        selectedAccountKind = newKind
-        loadLogsForCurrentDate()
-    }
-    
     // MARK: - Form Validation
     var canAddWeight: Bool {
         guard let weight = Double(weightValue) else { return false }
@@ -286,11 +254,11 @@ class LogsViewModel: ObservableObject {
     }
     
     var canAddWorkout: Bool {
-        return !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return workoutName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
     }
     
     var canAddFood: Bool {
-        return !foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return foodName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
     }
     
     var canAddCurrentLogType: Bool {
@@ -327,24 +295,22 @@ class LogsViewModel: ObservableObject {
         return isValidUser
     }
     
-    private func filterEntriesByUser<T: LogEntry>(_ entries: [T], accountKind: GoogleAuthManager.AccountKind) -> [T] {
-        let expectedUserId = authManager.getEmail(for: accountKind)
+    private func filterEntriesByUser<T: LogEntry>(_ entries: [T]) -> [T] {
+        let expectedUserId = authManager.getEmail(for: .personal)
         return entries.filter { entry in
-            let isValid = validateUserAccess(for: entry, expectedUserId: expectedUserId) && 
-                         entry.accountKind == accountKind.rawValue
+            let isValid = validateUserAccess(for: entry, expectedUserId: expectedUserId)
             return isValid
         }
     }
     
     // MARK: - Validation Methods
     func validateLogEntrySecurity() {
-        print("🔒 Validating log entry security for user: \(authManager.getEmail(for: selectedAccountKind))")
+        print("🔒 Validating log entry security for user: \(authManager.getEmail(for: .personal))")
         
         // Validate weight entries
-        let expectedUserId = authManager.getEmail(for: selectedAccountKind)
-        let invalidWeightEntries = weightEntries.filter { !validateUserAccess(for: $0, expectedUserId: expectedUserId) }
-        let invalidWorkoutEntries = workoutEntries.filter { !validateUserAccess(for: $0, expectedUserId: expectedUserId) }
-        let invalidFoodEntries = foodEntries.filter { !validateUserAccess(for: $0, expectedUserId: expectedUserId) }
+        let invalidWeightEntries = weightEntries.filter { !validateUserAccess(for: $0, expectedUserId: authManager.getEmail(for: .personal)) }
+        let invalidWorkoutEntries = workoutEntries.filter { !validateUserAccess(for: $0, expectedUserId: authManager.getEmail(for: .personal)) }
+        let invalidFoodEntries = foodEntries.filter { !validateUserAccess(for: $0, expectedUserId: authManager.getEmail(for: .personal)) }
         
         if !invalidWeightEntries.isEmpty || !invalidWorkoutEntries.isEmpty || !invalidFoodEntries.isEmpty {
             errorMessage = "Security Warning: Some entries don't belong to current user!"
