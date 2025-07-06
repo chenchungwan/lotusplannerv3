@@ -149,11 +149,16 @@ struct GoalsView: View {
                         .foregroundColor(.secondary)
                 } else {
                     ForEach(goalsForCat) { goal in
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("• " + goal.description)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(goal.isCompleted ? .green : .secondary)
+                                .onTapGesture {
+                                    Task { await viewModel.toggleCompletion(goal) }
+                                }
+                            Text(goal.description)
                                 .font(.callout)
                                 .lineLimit(1)
-                                .truncationMode(.tail)
+                                .strikethrough(goal.isCompleted)
                             Spacer()
                             if let due = goal.dueDate {
                                 Text(due.formatted(date: .abbreviated, time: .omitted))

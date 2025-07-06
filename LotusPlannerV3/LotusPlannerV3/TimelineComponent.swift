@@ -135,9 +135,8 @@ struct TimelineComponent: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(eventColor.opacity(0.1))
         )
-        .onTapGesture {
-            onEventTap?(event)
-        }
+        .onTapGesture { onEventTap?(event) }
+        .onLongPressGesture { onEventTap?(event) }
     }
     
     private func timeSlot(hour: Int) -> some View {
@@ -225,9 +224,8 @@ struct TimelineComponent: View {
                 )
                     .offset(x: 60, y: topOffset)
                     .padding(.trailing, 8)
-                    .onTapGesture {
-                        onEventTap?(event)
-                    }
+                    .onTapGesture { onEventTap?(event) }
+                    .onLongPressGesture { onEventTap?(event) }
             }
         }
     }

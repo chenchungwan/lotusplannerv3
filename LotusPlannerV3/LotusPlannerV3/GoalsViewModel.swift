@@ -66,7 +66,7 @@ class GoalsViewModel: ObservableObject {
 
     func addGoal(description: String, dueDate: Date?, categoryId: UUID) async {
         let userId = GoogleAuthManager.shared.getEmail(for: .personal)
-        let newGoal = Goal(description: description, dueDate: dueDate, categoryId: categoryId, userId: userId)
+        let newGoal = Goal(description: description, dueDate: dueDate, categoryId: categoryId, isCompleted: false, userId: userId)
         await MainActor.run { goals.append(newGoal) } // optimistic UI update
         do {
             try await firestore.addGoal(newGoal)
@@ -98,5 +98,11 @@ class GoalsViewModel: ObservableObject {
         } catch {
             print("update goal error \(error)")
         }
+    }
+
+    func toggleCompletion(_ goal: Goal) async {
+        var updated = goal
+        updated.isCompleted.toggle()
+        await updateGoal(updated)
     }
 } 

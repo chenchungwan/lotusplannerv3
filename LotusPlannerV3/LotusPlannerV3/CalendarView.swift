@@ -562,6 +562,9 @@ struct CalendarView: View {
                 trailingToolbarButtons
             }
         }
+        .sheet(isPresented: $showingEventDetails) {
+            eventDetailsSheet
+        }
     }
     
     private func splitScreenContent(geometry: GeometryProxy) -> some View {
@@ -572,19 +575,14 @@ struct CalendarView: View {
 
     
     private var leadingToolbarButtons: some View {
-        Group {
-            Button(action: { step(-1) }) {
-                Image(systemName: "chevron.left")
-            }
-            Button("Today") { currentDate = Date() }
-            Button(action: { step(1) }) {
-                Image(systemName: "chevron.right")
-            }
-        }
+        EmptyView() // arrows moved to principal, Today moved to trailing
     }
     
     private var principalToolbarContent: some View {
-        Group {
+        HStack(spacing: 8) {
+            Button(action: { step(-1) }) {
+                Image(systemName: "chevron.left")
+            }
             if interval == .year {
                 Text(String(Calendar.current.component(.year, from: currentDate)))
                     .font(.title2)
@@ -602,21 +600,25 @@ struct CalendarView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
             }
+            Button(action: { step(1) }) {
+                Image(systemName: "chevron.right")
+            }
         }
     }
     
     private var trailingToolbarButtons: some View {
         Group {
-            // Add button for tasks/events (available in all views)
-            Button(action: {
-                showingAddItem = true
-            }) {
+            // Add button
+            Button(action: { showingAddItem = true }) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
                     .foregroundColor(.accentColor)
             }
             .buttonStyle(PlainButtonStyle())
-            
+
+            // Today button before interval buttons
+            Button("Today") { currentDate = Date() }
+
             ForEach(TimelineInterval.allCases) { item in
                 Button(item.rawValue) { interval = item }
                     .fontWeight(item == interval ? .bold : .regular)
@@ -663,7 +665,22 @@ struct CalendarView: View {
                     MonthCardView(
                         month: month,
                         year: Calendar.current.component(.year, from: currentDate),
-                        currentDate: Date()
+                        currentDate: currentDate,
+                        onDayTap: { date in
+                            currentDate = date
+                            interval = .day
+                        },
+                        onMonthTap: {
+                            let cal = Calendar.mondayFirst
+                            if let first = cal.date(from: DateComponents(year: Calendar.current.component(.year, from: currentDate), month: month, day: 1)) {
+                                currentDate = first
+                            }
+                            interval = .month
+                        },
+                        onWeekTap: { date in
+                            currentDate = date
+                            interval = .week
+                        }
                     )
                 }
             }
@@ -938,7 +955,22 @@ struct CalendarView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 // Top section - Week Calendar
-                weekCalendarSection
+                WeekTimelineComponent(
+                    currentDate: currentDate,
+                    weekEvents: getWeekEventsGroupedByDate(),
+                    personalEvents: calendarViewModel.personalEvents,
+                    professionalEvents: calendarViewModel.professionalEvents,
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    onEventTap: { ev in
+                        selectedCalendarEvent = ev
+                        showingEventDetails = true
+                    },
+                    onDayTap: { date in
+                        currentDate = date
+                        interval = .day
+                    }
+                )
                     .frame(height: weekTopSectionHeight)
                 
                 // Draggable divider
@@ -1046,7 +1078,15 @@ struct CalendarView: View {
             personalEvents: calendarViewModel.personalEvents,
             professionalEvents: calendarViewModel.professionalEvents,
             personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor
+            professionalColor: appPrefs.professionalColor,
+            onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            },
+            onDayTap: { date in
+                currentDate = date
+                interval = .day
+            }
         )
         .task {
             await calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
@@ -1132,9 +1172,6 @@ struct CalendarView: View {
                 calendarViewModel: calendarViewModel,
                 appPrefs: appPrefs
             )
-        }
-        .sheet(isPresented: $showingEventDetails) {
-            eventDetailsSheet
         }
     }
     
@@ -1294,7 +1331,11 @@ struct CalendarView: View {
             personalEvents: calendarViewModel.personalEvents,
             professionalEvents: calendarViewModel.professionalEvents,
             personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor
+            professionalColor: appPrefs.professionalColor,
+            onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            }
         )
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
@@ -3054,6 +3095,9 @@ struct MonthCardView: View {
     let month: Int
     let year: Int
     let currentDate: Date
+    let onDayTap: (Date) -> Void
+    let onMonthTap: () -> Void
+    let onWeekTap: (Date) -> Void
     
     private var monthName: String {
         Calendar.mondayFirst.monthSymbols[month - 1]
@@ -3089,6 +3133,8 @@ struct MonthCardView: View {
                 .padding(.vertical, 6)
                 .background(isCurrentMonth ? Color.blue : Color.clear)
                 .cornerRadius(6)
+                .contentShape(Rectangle())
+                .onTapGesture { onMonthTap() }
             
             // Week headers
             HStack(spacing: 2) {
@@ -3115,6 +3161,9 @@ struct MonthCardView: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        .onTapGesture {
+            onDayTap(currentDate)
+        }
     }
     
     private func weekRow(week: Int) -> some View {
@@ -3125,6 +3174,12 @@ struct MonthCardView: View {
                 .fontWeight(.medium)
                 .foregroundColor(.secondary)
                 .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if let weekStart = getWeekStartDate(for: week) {
+                        onWeekTap(weekStart)
+                    }
+                }
             
             // Days
             ForEach(0..<7, id: \.self) { dayOfWeek in
@@ -3148,6 +3203,13 @@ struct MonthCardView: View {
                     .background(isToday ? Color.red : Color.clear)
                     .foregroundColor(isToday ? .white : .primary)
                     .clipShape(Circle())
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        let calendar = Calendar.mondayFirst
+                        if let date = calendar.date(from: DateComponents(year: year, month: month, day: dayNumber)) {
+                            onDayTap(date)
+                        }
+                    }
             } else {
                 Color.clear
                     .frame(maxWidth: .infinity)
@@ -3169,6 +3231,15 @@ struct MonthCardView: View {
         
         let weekNumber = calendar.component(.weekOfYear, from: currentWeekDate)
         return weekNumber > 0 ? "\(weekNumber)" : ""
+    }
+    
+    private func getWeekStartDate(for week: Int) -> Date? {
+        let calendar = Calendar.mondayFirst
+        let firstDayOfMonth = calendar.date(from: DateComponents(year: year, month: month, day: 1))!
+        let firstWeekday = calendar.component(.weekday, from: firstDayOfMonth)
+        let offsetDays = (firstWeekday + 5) % 7
+        guard let firstDayOfFirstWeek = calendar.date(byAdding: .day, value: -offsetDays, to: firstDayOfMonth) else { return nil }
+        return calendar.date(byAdding: .day, value: week * 7, to: firstDayOfFirstWeek)
     }
 }
 
@@ -3200,6 +3271,9 @@ struct AddItemView: View {
     @State private var dueDate: Date?
     @State private var hasDueDate = false
     @State private var isCreating = false
+    @State private var eventStart: Date
+    @State private var eventEnd: Date
+    @State private var isAllDay = false
     
     let currentDate: Date
     let tasksViewModel: TasksViewModel
@@ -3227,12 +3301,24 @@ struct AddItemView: View {
     
     private var canCreateEvent: Bool {
         !itemTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        selectedAccountKind != nil
+        selectedAccountKind != nil && (isAllDay || eventEnd > eventStart)
     }
     
     private var accentColor: Color {
         guard let accountKind = selectedAccountKind else { return .accentColor }
         return accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
+    }
+    
+    init(currentDate: Date, tasksViewModel: TasksViewModel, calendarViewModel: CalendarViewModel, appPrefs: AppPreferences) {
+        self.currentDate = currentDate
+        self.tasksViewModel = tasksViewModel
+        self.calendarViewModel = calendarViewModel
+        self.appPrefs = appPrefs
+        // default times
+        let cal = Calendar.current
+        let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
+        _eventStart = State(initialValue: rounded)
+        _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
     }
     
     var body: some View {
@@ -3396,14 +3482,9 @@ struct AddItemView: View {
                     } else {
                         // Calendar event-specific fields
                         Section("Event Time") {
-                            DatePicker("Start Date", selection: Binding(
-                                get: { dueDate ?? currentDate },
-                                set: { dueDate = $0 }
-                            ), displayedComponents: [.date, .hourAndMinute])
-                            
-                            Text("Calendar events will be created in your selected Google Calendar")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Toggle("All Day", isOn: $isAllDay)
+                            DatePicker("Start", selection: $eventStart, displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
+                            DatePicker("End", selection: $eventEnd, in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                         }
                     }
                 }
@@ -3481,10 +3562,58 @@ struct AddItemView: View {
     }
     
     private func createEvent() {
-        // Calendar event creation would require Google Calendar API integration
-        // For now, just dismiss
-        print("Calendar event creation not yet implemented")
-        dismiss()
+        guard let accountKind = selectedAccountKind else { return }
+        isCreating = true
+
+        Task {
+            do {
+                let accessToken = try await authManager.getAccessToken(for: accountKind)
+                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let isoFormatter = ISO8601DateFormatter()
+                isoFormatter.timeZone = TimeZone.current
+
+                var startDict: [String: String] = [:]
+                var endDict: [String: String] = [:]
+                if isAllDay {
+                    let startDate = Calendar.current.startOfDay(for: eventStart)
+                    let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+                    startDict["date"] = dateFormatter.string(from: startDate)
+                    endDict["date"] = dateFormatter.string(from: endDate)
+                } else {
+                    startDict["dateTime"] = isoFormatter.string(from: eventStart)
+                    endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+                }
+
+                var body: [String: Any] = [
+                    "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                    "start": startDict,
+                    "end": endDict
+                ]
+                if !itemNotes.isEmpty { body["description"] = itemNotes }
+
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+                    throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                }
+
+                // Refresh events
+                await calendarViewModel.loadCalendarData(for: eventStart)
+
+                await MainActor.run { dismiss() }
+            } catch {
+                print("Failed to create calendar event: \(error)")
+                await MainActor.run { isCreating = false }
+            }
+        }
     }
 }
 

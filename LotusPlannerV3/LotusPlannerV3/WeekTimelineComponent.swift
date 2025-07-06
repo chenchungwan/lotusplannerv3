@@ -8,6 +8,7 @@ struct WeekTimelineComponent: View {
     let personalColor: Color
     let professionalColor: Color
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
+    let onDayTap: ((Date) -> Void)?
     
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
@@ -17,7 +18,7 @@ struct WeekTimelineComponent: View {
     private let endHour = 23
     private let timeColumnWidth: CGFloat = 60
     
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
@@ -25,6 +26,7 @@ struct WeekTimelineComponent: View {
         self.personalColor = personalColor
         self.professionalColor = professionalColor
         self.onEventTap = onEventTap
+        self.onDayTap = onDayTap
     }
     
     // MARK: - Event Layout Models
@@ -239,9 +241,8 @@ struct WeekTimelineComponent: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(eventColor.opacity(0.1))
         )
-        .onTapGesture {
-            onEventTap?(event)
-        }
+        .onTapGesture { onEventTap?(event) }
+        .onLongPressGesture { onEventTap?(event) }
     }
     
     private func timeSlot(hour: Int) -> some View {
@@ -363,6 +364,8 @@ struct WeekTimelineComponent: View {
         }
         .frame(height: 50)
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { onDayTap?(date) }
     }
     
     // Hour grid background
@@ -541,9 +544,11 @@ struct WeekTimelineComponent: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             )
             .offset(x: layout.xOffset, y: layout.topOffset)
-            .onTapGesture {
-                onEventTap?(event)
-            }
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                TapGesture().onEnded { _ in onEventTap?(event) }
+            )
+            .onLongPressGesture { onEventTap?(event) }
     }
     
     // MARK: - Timer Methods

@@ -236,6 +236,7 @@ class FirestoreManager: ObservableObject {
             let dueTimestamp = data["dueDate"] as? Timestamp
             let dueDate = dueTimestamp?.dateValue()
             let linksArr = data["taskLinks"] as? [[String: Any]] ?? []
+            let completed = data["isCompleted"] as? Bool ?? false
             let links: [Goal.TaskLink] = linksArr.compactMap { dict in
                 if let taskId = dict["taskId"] as? String,
                    let listId = dict["listId"] as? String,
@@ -244,7 +245,7 @@ class FirestoreManager: ObservableObject {
                 }
                 return nil
             }
-            return Goal(id: doc.documentID, description: description, dueDate: dueDate, categoryId: categoryUUID, taskLinks: links, userId: userId)
+            return Goal(id: doc.documentID, description: description, dueDate: dueDate, categoryId: categoryUUID, isCompleted: completed, taskLinks: links, userId: userId)
         }
         return loaded
     }
@@ -253,7 +254,8 @@ class FirestoreManager: ObservableObject {
         var data: [String: Any] = [
             "description": goal.description,
             "categoryId": goal.categoryId.uuidString,
-            "userId": goal.userId
+            "userId": goal.userId,
+            "isCompleted": goal.isCompleted
         ]
         if let due = goal.dueDate {
             data["dueDate"] = Timestamp(date: due)

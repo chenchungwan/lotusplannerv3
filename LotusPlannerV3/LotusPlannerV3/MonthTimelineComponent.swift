@@ -8,10 +8,11 @@ struct MonthTimelineComponent: View {
     let personalColor: Color
     let professionalColor: Color
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
+    let onDayTap: ((Date) -> Void)?
     
     private let dayHeight: CGFloat = 120
     
-    init(currentDate: Date, monthEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+    init(currentDate: Date, monthEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.monthEvents = monthEvents
         self.personalEvents = personalEvents
@@ -19,6 +20,7 @@ struct MonthTimelineComponent: View {
         self.personalColor = personalColor
         self.professionalColor = professionalColor
         self.onEventTap = onEventTap
+        self.onDayTap = onDayTap
     }
     
     var body: some View {
@@ -100,6 +102,12 @@ struct MonthTimelineComponent: View {
         }
         .frame(width: columnWidth, height: dayHeight)
         .background(isCurrentMonth ? Color(.systemBackground) : Color(.systemGray6).opacity(0.3))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let validDate = date {
+                onDayTap?(validDate)
+            }
+        }
     }
     
     // MARK: - Events Area
@@ -157,9 +165,8 @@ struct MonthTimelineComponent: View {
             RoundedRectangle(cornerRadius: 5)
                 .fill(eventColor.opacity(0.1))
         )
-        .onTapGesture {
-            onEventTap?(event)
-        }
+        .onTapGesture { onEventTap?(event) }
+        .onLongPressGesture { onEventTap?(event) }
     }
     
     // MARK: - Helper Functions

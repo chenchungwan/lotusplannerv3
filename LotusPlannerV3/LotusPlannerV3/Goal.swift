@@ -5,14 +5,16 @@ struct Goal: Identifiable, Codable, Equatable {
     var description: String
     var dueDate: Date?
     var categoryId: UUID // reference to GoalCategory.id
+    var isCompleted: Bool
     var taskLinks: [TaskLink]
     var userId: String
     
-    init(id: String = UUID().uuidString, description: String, dueDate: Date? = nil, categoryId: UUID, taskLinks: [TaskLink] = [], userId: String) {
+    init(id: String = UUID().uuidString, description: String, dueDate: Date? = nil, categoryId: UUID, isCompleted: Bool = false, taskLinks: [TaskLink] = [], userId: String) {
         self.id = id
         self.description = description
         self.dueDate = dueDate
         self.categoryId = categoryId
+        self.isCompleted = isCompleted
         self.taskLinks = taskLinks
         self.userId = userId
     }
