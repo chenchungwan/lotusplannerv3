@@ -825,46 +825,49 @@ struct TasksView: View {
                 Text("Select an account to create a task")
             }
         }
+        .navigationTitle("")
+        .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack {
-                    // Filter Menu
-                    Menu {
-                        Picker("Filter", selection: $selectedFilter) {
-                            ForEach(TaskFilter.allCases, id: \.self) { filter in
-                                Label(filter.rawValue, systemImage: filter.icon)
-                                    .tag(filter)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: selectedFilter.icon)
-                            .foregroundColor(.primary)
-                    }
-                    
-                    // Add Task Menu
-                    Menu {
-                        if authManager.isLinked(kind: .personal) {
-                            Button("Personal Task") {
-                                selectedAccountKind = .personal
-                                showingNewTask = true
-                            }
-                        }
-                        if authManager.isLinked(kind: .professional) {
-                            Button("Professional Task") {
-                                selectedAccountKind = .professional
-                                showingNewTask = true
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .foregroundColor(.primary)
-                    }
-                    .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
+            ToolbarItemGroup(placement: .navigationBarLeading) { EmptyView() }
+
+            ToolbarItemGroup(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text("Tasks")
+                        .font(.title2).fontWeight(.semibold)
+                    Text(subtitleForFilter(selectedFilter))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
+
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                // Filter Menu
+                ForEach(TaskFilter.allCases, id: \.self) { filter in
+                    Button(filter.rawValue) { selectedFilter = filter }
+                        .fontWeight(filter == selectedFilter ? .bold : .regular)
+                }
+                // Add Task Menu
+                Menu {
+                    if authManager.isLinked(kind: .personal) {
+                        Button("Personal Task") {
+                            selectedAccountKind = .personal
+                            showingNewTask = true
+                        }
+                    }
+                    if authManager.isLinked(kind: .professional) {
+                        Button("Professional Task") {
+                            selectedAccountKind = .professional
+                            showingNewTask = true
+                        }
+                    }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.accentColor)
+                }
+                .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
+            }
         }
-        .navigationTitle("Tasks")
-        .navigationBarTitleDisplayMode(.automatic)
     }
     
     // Helper computed properties
@@ -940,6 +943,35 @@ struct TasksView: View {
         let calendar = Calendar.mondayFirst
         let today = calendar.startOfDay(for: Date())
         return dueDate < today
+    }
+    
+    // MARK: - Subtitle helper
+    private func subtitleForFilter(_ filter: TaskFilter) -> String {
+        let cal = Calendar.mondayFirst
+        let now = Date()
+        let formatter = DateFormatter()
+        switch filter {
+        case .all:
+            return ""
+        case .today:
+            formatter.dateFormat = "MMM d, yyyy"
+            return formatter.string(from: now)
+        case .thisWeek:
+            guard let weekStart = cal.dateInterval(of: .weekOfYear, for: now)?.start,
+                  let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return "" }
+            formatter.dateFormat = "MMM d"
+            let startStr = formatter.string(from: weekStart)
+            let endStr = formatter.string(from: weekEnd)
+            formatter.dateFormat = "yyyy"
+            let yearStr = formatter.string(from: now)
+            return "\(startStr) - \(endStr), \(yearStr)"
+        case .thisMonth:
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: now)
+        case .thisYear:
+            formatter.dateFormat = "yyyy"
+            return formatter.string(from: now)
+        }
     }
 }
 

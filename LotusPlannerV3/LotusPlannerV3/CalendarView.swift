@@ -608,21 +608,21 @@ struct CalendarView: View {
     
     private var trailingToolbarButtons: some View {
         Group {
-            // Add button
-            Button(action: { showingAddItem = true }) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-                    .foregroundColor(.accentColor)
-            }
-            .buttonStyle(PlainButtonStyle())
-
-            // Today button before interval buttons
+            // Today button
             Button("Today") { currentDate = Date() }
 
             ForEach(TimelineInterval.allCases) { item in
                 Button(item.rawValue) { interval = item }
                     .fontWeight(item == interval ? .bold : .regular)
             }
+
+            // Add button (right-most)
+            Button(action: { showingAddItem = true }) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(.accentColor)
+            }
+            .buttonStyle(PlainButtonStyle())
         }
     }
     

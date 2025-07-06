@@ -53,24 +53,36 @@ struct GoalsView: View {
             }
             .padding()
         }
-        .navigationTitle(timeFilter.rawValue)
+        .navigationTitle("")
+        .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarLeading) { EmptyView() }
+
+            ToolbarItemGroup(placement: .principal) {
+                VStack(spacing: 2) {
+                    Text("Goals")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text(subtitle(for: timeFilter))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                ForEach(TimeFilter.allCases) { tf in
+                    Button(tf.rawValue) { timeFilter = tf }
+                        .fontWeight(tf == timeFilter ? .bold : .regular)
+                }
+
                 Button {
                     selectedCategoryForAdd = viewModel.categories.first
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.accentColor)
                 }
                 .disabled(viewModel.categories.isEmpty)
-            }
-            ToolbarItem(placement: .navigationBarLeading) {
-                Picker("Filter", selection: $timeFilter) {
-                    ForEach(TimeFilter.allCases) { tf in
-                        Text(tf.rawValue).tag(tf)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 260)
             }
         }
         .sheet(item: $editingCategory) { cat in
@@ -240,6 +252,34 @@ struct GoalsView: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    // MARK: - Subtitle Helper
+    private func subtitle(for filter: TimeFilter) -> String {
+        let now = Date()
+        let cal = Calendar.mondayFirst
+        let formatter = DateFormatter()
+        switch filter {
+        case .all:
+            return ""
+        case .year:
+            formatter.dateFormat = "yyyy"
+            return formatter.string(from: now)
+        case .quarter:
+            let month = cal.component(.month, from: now)
+            let year = cal.component(.year, from: now)
+            let quarterStartMonth = ((month - 1) / 3) * 3 + 1
+            let startDate = cal.date(from: DateComponents(year: year, month: quarterStartMonth, day: 1))!
+            let endMonth = quarterStartMonth + 2
+            let endDate = cal.date(from: DateComponents(year: year, month: endMonth, day: 1))!
+            formatter.dateFormat = "MMMM"
+            let startStr = formatter.string(from: startDate)
+            let endStr = formatter.string(from: endDate)
+            return "\(startStr) - \(endStr), \(year)"
+        case .month:
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: now)
+        }
     }
 }
 
