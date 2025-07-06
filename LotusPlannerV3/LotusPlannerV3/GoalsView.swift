@@ -56,9 +56,7 @@ struct GoalsView: View {
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) { EmptyView() }
-
-            ToolbarItemGroup(placement: .principal) {
+            ToolbarItemGroup(placement: .navigationBarLeading) {
                 VStack(spacing: 2) {
                     Text("Goals")
                         .font(.title2)
@@ -68,6 +66,8 @@ struct GoalsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            ToolbarItemGroup(placement: .principal) { EmptyView() }
 
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 ForEach(TimeFilter.allCases) { tf in

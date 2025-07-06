@@ -112,13 +112,9 @@ struct LogsComponent: View {
                 .fontWeight(.medium)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
             
             Spacer(minLength: 8)
-            
-            Text(formatDate(entry.timestamp))
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .fixedSize()
             
             Button(action: {
                 viewModel.deleteWeightEntry(entry)
@@ -170,13 +166,9 @@ struct LogsComponent: View {
                 .fontWeight(.medium)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
             
             Spacer(minLength: 8)
-            
-            Text(formatDate(entry.date))
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .fixedSize()
             
             Button(action: {
                 viewModel.deleteWorkoutEntry(entry)
@@ -228,13 +220,9 @@ struct LogsComponent: View {
                 .fontWeight(.medium)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
             
             Spacer(minLength: 8)
-            
-            Text(formatDate(entry.date))
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .fixedSize()
             
             Button(action: {
                 viewModel.deleteFoodEntry(entry)

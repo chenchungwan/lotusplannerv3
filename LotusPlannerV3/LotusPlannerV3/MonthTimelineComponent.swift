@@ -165,7 +165,11 @@ struct MonthTimelineComponent: View {
             RoundedRectangle(cornerRadius: 5)
                 .fill(eventColor.opacity(0.1))
         )
-        .onTapGesture { onEventTap?(event) }
+        .highPriorityGesture(
+            TapGesture().onEnded { _ in
+                onEventTap?(event)
+            }
+        )
         .onLongPressGesture { onEventTap?(event) }
     }
     

@@ -73,10 +73,17 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    @Published var weekViewVersion: Int {
+        didSet {
+            UserDefaults.standard.set(weekViewVersion, forKey: "weekViewVersion")
+        }
+    }
+    
     private init() {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
+        self.weekViewVersion = UserDefaults.standard.integer(forKey: "weekViewVersion")
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -104,6 +111,10 @@ class AppPreferences: ObservableObject {
     
     func updateHideRecurringEventsInMonth(_ value: Bool) {
         hideRecurringEventsInMonth = value
+    }
+    
+    func updateWeekViewVersion(_ value: Int) {
+        weekViewVersion = value
     }
 }
 
@@ -139,28 +150,7 @@ struct SettingsView: View {
                     )
                 }
                 
-                Section("Task Management") {
-                    HStack {
-                        Image(systemName: "eye.slash")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hide Completed Tasks")
-                                .font(.body)
-                            Text("Hide tasks that are marked as completed")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: Binding(
-                            get: { appPrefs.hideCompletedTasks },
-                            set: { appPrefs.updateHideCompletedTasks($0) }
-                        ))
-                    }
-                }
+                // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
                 
                 Section("Calendar Management") {
                     HStack {
@@ -182,6 +172,33 @@ struct SettingsView: View {
                             get: { appPrefs.hideRecurringEventsInMonth },
                             set: { appPrefs.updateHideRecurringEventsInMonth($0) }
                         ))
+                    }
+                    
+                    // Week View Version Picker
+                    HStack {
+                        Image(systemName: "rectangle.3.offgrid")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Week View Layout")
+                                .font(.body)
+                            Text("Choose how the week screen displays tasks/events")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Picker("Week View", selection: Binding(
+                            get: { appPrefs.weekViewVersion },
+                            set: { appPrefs.updateWeekViewVersion($0) }
+                        )) {
+                            Text("Weekly").tag(1)
+                            Text("Daily").tag(2)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 200)
                     }
                 }
                 

@@ -579,19 +579,19 @@ class TasksViewModel: ObservableObject {
 
 // MARK: - Task Filter Enum
 enum TaskFilter: String, CaseIterable {
+    case day = "Day"
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
     case all = "All"
-    case today = "Today"
-    case thisWeek = "This Week"
-    case thisMonth = "This Month"
-    case thisYear = "This Year"
     
     var icon: String {
         switch self {
         case .all: return "line.horizontal.3.decrease.circle"
-        case .today: return "calendar"
-        case .thisWeek: return "calendar"
-        case .thisMonth: return "calendar"
-        case .thisYear: return "calendar"
+        case .day: return "calendar"
+        case .week: return "calendar"
+        case .month: return "calendar"
+        case .year: return "calendar"
         }
     }
 }
@@ -626,6 +626,7 @@ struct TasksView: View {
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @State private var selectedFilter: TaskFilter = .all
+    @State private var referenceDate: Date = Date()
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
@@ -828,23 +829,39 @@ struct TasksView: View {
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) { EmptyView() }
-
-            ToolbarItemGroup(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text("Tasks")
-                        .font(.title2).fontWeight(.semibold)
-                    Text(subtitleForFilter(selectedFilter))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            ToolbarItemGroup(placement: .navigationBarLeading) {
+                HStack(spacing: 6) {
+                    if selectedFilter == .all {
+                        Text("All")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                    } else {
+                        Button(action: { step(-1) }) { Image(systemName: "chevron.left") }
+                        Text(subtitleForFilter(selectedFilter))
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        Button(action: { step(1) }) { Image(systemName: "chevron.right") }
+                    }
                 }
             }
 
+            ToolbarItemGroup(placement: .principal) { EmptyView() }
+
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                // Filter Menu
-                ForEach(TaskFilter.allCases, id: \.self) { filter in
-                    Button(filter.rawValue) { selectedFilter = filter }
+                // Filter Menu (ordered: Day, Week, Month, Year, All)
+                ForEach([TaskFilter.day, .week, .month, .year, .all], id: \.self) { filter in
+                    Button(filter.rawValue) {
+                        selectedFilter = filter
+                        referenceDate = Date() // reset reference when changing view
+                    }
                         .fontWeight(filter == selectedFilter ? .bold : .regular)
+                }
+                // Toggle Hide Completed Tasks
+                Button(action: {
+                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
+                }) {
+                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
+                        .font(.body)
                 }
                 // Add Task Menu
                 Menu {
@@ -901,36 +918,18 @@ struct TasksView: View {
             // Then apply time-based filter if not "all"
             if selectedFilter != .all {
                 filteredTasks = filteredTasks.filter { task in
-                    if task.isCompleted {
-                        // For completed tasks, check if they were completed today/this week/etc.
-                        // This requires checking the completion date, but for simplicity,
-                        // we'll show all completed tasks when not filtering
+                    guard let dueDate = task.dueDate else { return false }
+                    switch selectedFilter {
+                    case .day:
+                        return calendar.isDate(dueDate, inSameDayAs: referenceDate)
+                    case .week:
+                        return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
+                    case .month:
+                        return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .month)
+                    case .year:
+                        return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .year)
+                    case .all:
                         return true
-                    } else {
-                        // For incomplete tasks, use due date logic
-                        guard let dueDate = task.dueDate else { 
-                            return false 
-                        }
-                        
-                        // Check if task is overdue (due date is before today)
-                        let isOverdue = dueDate < startOfToday
-                        
-                        switch selectedFilter {
-                        case .all:
-                            return true
-                        case .today:
-                            let isSameDay = calendar.isDate(dueDate, inSameDayAs: now)
-                            return isOverdue || isSameDay
-                        case .thisWeek:
-                            let isSameWeek = calendar.isDate(dueDate, equalTo: now, toGranularity: .weekOfYear)
-                            return isOverdue || isSameWeek
-                        case .thisMonth:
-                            let isSameMonth = calendar.isDate(dueDate, equalTo: now, toGranularity: .month)
-                            return isOverdue || isSameMonth
-                        case .thisYear:
-                            let isSameYear = calendar.isDate(dueDate, equalTo: now, toGranularity: .year)
-                            return isOverdue || isSameYear
-                        }
                     }
                 }
             }
@@ -953,10 +952,10 @@ struct TasksView: View {
         switch filter {
         case .all:
             return ""
-        case .today:
+        case .day:
             formatter.dateFormat = "MMM d, yyyy"
-            return formatter.string(from: now)
-        case .thisWeek:
+            return formatter.string(from: referenceDate)
+        case .week:
             guard let weekStart = cal.dateInterval(of: .weekOfYear, for: now)?.start,
                   let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return "" }
             formatter.dateFormat = "MMM d"
@@ -965,12 +964,36 @@ struct TasksView: View {
             formatter.dateFormat = "yyyy"
             let yearStr = formatter.string(from: now)
             return "\(startStr) - \(endStr), \(yearStr)"
-        case .thisMonth:
+        case .month:
             formatter.dateFormat = "MMMM yyyy"
-            return formatter.string(from: now)
-        case .thisYear:
+            return formatter.string(from: referenceDate)
+        case .year:
             formatter.dateFormat = "yyyy"
-            return formatter.string(from: now)
+            return formatter.string(from: referenceDate)
+        }
+    }
+    
+    // MARK: - Step helper
+    private func step(_ direction: Int) {
+        switch selectedFilter {
+        case .day:
+            if let newDate = Calendar.mondayFirst.date(byAdding: .day, value: direction, to: referenceDate) {
+                referenceDate = newDate
+            }
+        case .week:
+            if let newDate = Calendar.mondayFirst.date(byAdding: .weekOfYear, value: direction, to: referenceDate) {
+                referenceDate = newDate
+            }
+        case .month:
+            if let newDate = Calendar.mondayFirst.date(byAdding: .month, value: direction, to: referenceDate) {
+                referenceDate = newDate
+            }
+        case .year:
+            if let newDate = Calendar.mondayFirst.date(byAdding: .year, value: direction, to: referenceDate) {
+                referenceDate = newDate
+            }
+        case .all:
+            break
         }
     }
 }
