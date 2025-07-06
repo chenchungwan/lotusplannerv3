@@ -16,6 +16,7 @@ class FirestoreManager: ObservableObject {
     @Published var workoutEntries: [WorkoutLogEntry] = []
     @Published var foodEntries: [FoodLogEntry] = []
     @Published var scrapbookEntries: [ScrapbookEntry] = []
+    @Published var goals: [Goal] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -46,6 +47,15 @@ class FirestoreManager: ObservableObject {
             .collection("personal")
             .document("scrapbook")
             .collection("entries")
+    }
+    
+    private func getGoalsCollectionRef() -> CollectionReference {
+        let userId = getUserId()
+        return db.collection("users")
+            .document(userId)
+            .collection("personal")
+            .document("goals")
+            .collection("items")
     }
     
     private func getUserId() -> String {
@@ -197,6 +207,65 @@ class FirestoreManager: ObservableObject {
     
     func deletePDFFromStorage(url: String) async throws {
         print("📖 Scrapbook operations temporarily disabled - skipping storage delete")
+    }
+    
+    // MARK: - Goals CRUD
+    func addGoal(_ goal: Goal) async throws {
+        let collection = getGoalsCollectionRef()
+        try await collection.document(goal.id).setData(goalFirestoreData(goal))
+    }
+    
+    func updateGoal(_ goal: Goal) async throws {
+        let collection = getGoalsCollectionRef()
+        try await collection.document(goal.id).setData(goalFirestoreData(goal))
+    }
+    
+    func deleteGoal(_ goalId: String) async throws {
+        let collection = getGoalsCollectionRef()
+        try await collection.document(goalId).delete()
+    }
+    
+    func loadGoals() async throws -> [Goal] {
+        let snapshot = try await getGoalsCollectionRef().getDocuments()
+        let loaded: [Goal] = snapshot.documents.compactMap { doc in
+            guard let data = doc.data() as? [String: Any],
+                  let description = data["description"] as? String,
+                  let categoryIdStr = data["categoryId"] as? String,
+                  let categoryUUID = UUID(uuidString: categoryIdStr),
+                  let userId = data["userId"] as? String else { return nil }
+            let dueTimestamp = data["dueDate"] as? Timestamp
+            let dueDate = dueTimestamp?.dateValue()
+            let linksArr = data["taskLinks"] as? [[String: Any]] ?? []
+            let links: [Goal.TaskLink] = linksArr.compactMap { dict in
+                if let taskId = dict["taskId"] as? String,
+                   let listId = dict["listId"] as? String,
+                   let kind = dict["accountKindRaw"] as? String {
+                    return Goal.TaskLink(taskId: taskId, listId: listId, accountKindRaw: kind)
+                }
+                return nil
+            }
+            return Goal(id: doc.documentID, description: description, dueDate: dueDate, categoryId: categoryUUID, taskLinks: links, userId: userId)
+        }
+        return loaded
+    }
+    
+    private func goalFirestoreData(_ goal: Goal) -> [String: Any] {
+        var data: [String: Any] = [
+            "description": goal.description,
+            "categoryId": goal.categoryId.uuidString,
+            "userId": goal.userId
+        ]
+        if let due = goal.dueDate {
+            data["dueDate"] = Timestamp(date: due)
+        }
+        if !goal.taskLinks.isEmpty {
+            data["taskLinks"] = goal.taskLinks.map { [
+                "taskId": $0.taskId,
+                "listId": $0.listId,
+                "accountKindRaw": $0.accountKindRaw
+            ] }
+        }
+        return data
     }
     
     // MARK: - Real-time Updates

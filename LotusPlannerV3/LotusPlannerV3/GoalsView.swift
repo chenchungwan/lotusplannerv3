@@ -14,12 +14,26 @@ private enum TimelineInterval: String, CaseIterable, Identifiable {
     }
 }
 
+private enum TimeFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case month = "This Month"
+    case quarter = "This Quarter"
+    case year = "This Year"
+    var id: String { rawValue }
+}
+
 struct GoalsView: View {
     @StateObject private var viewModel = GoalsViewModel()
     @State private var showingAddCategory = false
     @State private var newCategoryName = ""
     @State private var editingCategory: GoalCategory?
     @Namespace private var dragNS
+    
+    @State private var selectedCategoryForAdd: GoalCategory?
+    @State private var editingGoal: Goal?
+    @State private var categoryPendingDelete: GoalCategory?
+    
+    @State private var timeFilter: TimeFilter = .all
     
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
     
@@ -39,35 +53,128 @@ struct GoalsView: View {
             }
             .padding()
         }
-        .navigationTitle("Goals")
+        .navigationTitle(timeFilter.rawValue)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    selectedCategoryForAdd = viewModel.categories.first
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .disabled(viewModel.categories.isEmpty)
+            }
+            ToolbarItem(placement: .navigationBarLeading) {
+                Picker("Filter", selection: $timeFilter) {
+                    ForEach(TimeFilter.allCases) { tf in
+                        Text(tf.rawValue).tag(tf)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+            }
+        }
         .sheet(item: $editingCategory) { cat in
             editSheet(for: cat)
         }
         .sheet(isPresented: $showingAddCategory) {
             addSheet
         }
+        .sheet(item: $selectedCategoryForAdd) { cat in
+            GoalEditorView(mode: .new, category: cat) { desc, date, catId in
+                Task { await viewModel.addGoal(description: desc, dueDate: date, categoryId: catId) }
+            }
+            .environmentObject(viewModel)
+        }
+        .sheet(item: $editingGoal) { g in
+            let cat = viewModel.categories.first(where: { $0.id == g.categoryId }) ?? viewModel.categories.first!
+            GoalEditorView(mode: .edit(g), category: cat) { desc, date, catId in
+                var updated = g
+                updated.description = desc
+                updated.dueDate = date
+                updated.categoryId = catId
+                Task { await viewModel.updateGoal(updated) }
+            }
+            .environmentObject(viewModel)
+        }
+        .alert("Delete Category?", isPresented: Binding(get: { categoryPendingDelete != nil }, set: { if !$0 { categoryPendingDelete = nil } })) {
+            Button("Delete", role: .destructive) {
+                if let cat = categoryPendingDelete {
+                    let goalsToDelete = viewModel.goals.filter { $0.categoryId == cat.id }
+                    for g in goalsToDelete { Task { await viewModel.deleteGoal(g) } }
+                    if let idx = viewModel.categories.firstIndex(of: cat) {
+                        viewModel.categories.remove(at: idx)
+                    }
+                    categoryPendingDelete = nil
+                }
+            }
+            Button("Cancel", role: .cancel) { categoryPendingDelete = nil }
+        } message: {
+            Text("Deleting \(categoryPendingDelete?.name ?? "this category") will also delete all its goals. This action cannot be undone.")
+        }
+        #if DEBUG
+        .onAppear {
+            // Inject mock goals if none exist for quick UI testing
+            if viewModel.goals.isEmpty, let firstCat = viewModel.categories.first {
+                viewModel.goals = [
+                    Goal(description: "Run 5k", dueDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()), categoryId: firstCat.id, userId: "debug"),
+                    Goal(description: "Read a book", dueDate: nil, categoryId: firstCat.id, userId: "debug"),
+                    Goal(description: "Meditate 10min", dueDate: Date(), categoryId: firstCat.id, userId: "debug")
+                ]
+            }
+        }
+        #endif
     }
     
     private func goalCard(_ category: GoalCategory) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.blue.opacity(0.1))
-            VStack {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(category.name)
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                    .padding()
-            }
-        }
-        .frame(height: 120)
-        .contextMenu {
-            Button("Rename") { editingCategory = category }
-            Button("Delete", role: .destructive) {
-                if let idx = viewModel.categories.firstIndex(of: category) {
-                    viewModel.categories.remove(at: idx)
+                    .font(.title3)
+                    .padding(.bottom, 2)
+                    .contextMenu {
+                        Button("Rename") { editingCategory = category }
+                        Button("Delete", role: .destructive) { categoryPendingDelete = category }
+                    }
+                let goalsForCat = viewModel.goals.filter { goal in
+                    guard goal.categoryId == category.id else { return false }
+                    if timeFilter == .all { return true }
+                    guard let due = goal.dueDate else { return false }
+                    return isDue(due, within: timeFilter)
                 }
+                if goalsForCat.isEmpty {
+                    Text("No goals yet")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(goalsForCat) { goal in
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("• " + goal.description)
+                                .font(.callout)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Spacer()
+                            if let due = goal.dueDate {
+                                Text(due.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .contextMenu {
+                            Button("Edit") { editingGoal = goal }
+                            Button("Delete", role: .destructive) {
+                                Task { await viewModel.deleteGoal(goal) }
+                            }
+                        }
+                    }
+                }
+                Spacer()
             }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private var addCard: some View {
@@ -151,6 +258,91 @@ struct GoalDropDelegate: DropDelegate {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Goals List Sheet per Category
+extension GoalsView {
+    struct GoalsListSheet: View {
+        let category: GoalCategory
+        @EnvironmentObject var viewModel: GoalsViewModel
+        @State private var showNewEditor = false
+        @State private var editingGoal: Goal?
+        var body: some View {
+            NavigationStack {
+                List {
+                    ForEach(viewModel.goals.filter { $0.categoryId == category.id }) { goal in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(goal.description)
+                                    .font(.body)
+                                    .bold()
+                                    .lineLimit(1)
+                                if let due = goal.dueDate {
+                                    Text(due.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption)
+                                }
+                            }
+                            Spacer()
+                        }
+                        .contextMenu {
+                            Button("Edit") { editingGoal = goal }
+                            Button("Delete", role: .destructive) {
+                                Task { await viewModel.deleteGoal(goal) }
+                            }
+                        }
+                    }
+                    .onDelete { indexSet in
+                        Task {
+                            let goals = viewModel.goals.filter { $0.categoryId == category.id }
+                            for idx in indexSet { await viewModel.deleteGoal(goals[idx]) }
+                        }
+                    }
+                }
+                .navigationTitle(category.name)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Add") { showNewEditor = true }
+                    }
+                }
+            }
+            .sheet(isPresented: $showNewEditor) {
+                GoalEditorView(mode: .new, category: category) { desc, date, catId in
+                    Task { await viewModel.addGoal(description: desc, dueDate: date, categoryId: catId) }
+                }
+                .environmentObject(viewModel)
+            }
+            .sheet(item: $editingGoal) { g in
+                GoalEditorView(mode: .edit(g), category: category) { desc, date, catId in
+                    var updated = g
+                    updated.description = desc
+                    updated.dueDate = date
+                    updated.categoryId = catId
+                    Task { await viewModel.updateGoal(updated) }
+                }
+                .environmentObject(viewModel)
+            }
+        }
+    }
+}
+
+// MARK: - Date filter helper
+extension GoalsView {
+    private func isDue(_ date: Date, within filter: TimeFilter) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        switch filter {
+        case .all:
+            return true
+        case .month:
+            return calendar.isDate(date, equalTo: now, toGranularity: .month)
+        case .quarter:
+            let nowQuarter = (calendar.component(.month, from: now) - 1) / 3
+            let dateQuarter = (calendar.component(.month, from: date) - 1) / 3
+            return calendar.component(.year, from: date) == calendar.component(.year, from: now) && nowQuarter == dateQuarter
+        case .year:
+            return calendar.isDate(date, equalTo: now, toGranularity: .year)
         }
     }
 }

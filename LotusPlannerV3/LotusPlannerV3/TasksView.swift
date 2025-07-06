@@ -196,13 +196,6 @@ class TasksViewModel: ObservableObject {
             throw TasksError.apiError(httpResponse.statusCode)
         }
         
-        // Log raw API response
-        if let rawResponse = String(data: data, encoding: .utf8) {
-            print("📋 RAW TASK LISTS API RESPONSE for \(kind):")
-            print(rawResponse)
-            print("--- END RAW RESPONSE ---")
-        }
-        
         let decoder = JSONDecoder()
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
@@ -230,13 +223,6 @@ class TasksViewModel: ObservableObject {
         
         if httpResponse.statusCode != 200 {
             throw TasksError.apiError(httpResponse.statusCode)
-        }
-        
-        // Log raw API response
-        if let rawResponse = String(data: data, encoding: .utf8) {
-            print("📝 RAW TASKS API RESPONSE for \(kind) list \(taskListId):")
-            print(rawResponse)
-            print("--- END RAW RESPONSE ---")
         }
         
         let decoder = JSONDecoder()
