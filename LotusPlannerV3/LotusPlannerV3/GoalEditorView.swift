@@ -16,6 +16,7 @@ struct GoalEditorView: View {
     let mode: Mode
     let category: GoalCategory
     let onSave: (String, Date?, UUID) -> Void
+    let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var descriptionText: String
     @State private var dueDate: Date?
@@ -23,10 +24,11 @@ struct GoalEditorView: View {
     @State private var selectedCategoryId: UUID
     @EnvironmentObject private var viewModel: GoalsViewModel
     
-    init(mode: Mode, category: GoalCategory, onSave: @escaping (String, Date?, UUID) -> Void) {
+    init(mode: Mode, category: GoalCategory, onSave: @escaping (String, Date?, UUID) -> Void, onDelete: (() -> Void)? = nil) {
         self.mode = mode
         self.category = category
         self.onSave = onSave
+        self.onDelete = onDelete
         switch mode {
         case .new:
             _descriptionText = State(initialValue: "")
@@ -80,17 +82,29 @@ struct GoalEditorView: View {
                     .disabled(!canSave)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                if case .edit(_) = mode, let del = onDelete {
+                    Button(role: .destructive) {
+                        del()
+                        dismiss()
+                    } label: { Text("Delete Goal").frame(maxWidth: .infinity) }
+                    .buttonStyle(.bordered)
+                    .padding()
+                }
+            }
         }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker("Due Date", selection: Binding(get: { dueDate ?? Date() }, set: { dueDate = $0 }), displayedComponents: .date)
-                    .datePickerStyle(.wheel)
+                    .datePickerStyle(.graphical)
+                    .frame(maxHeight: 400)
+                    .environment(\.calendar, Calendar.mondayFirst)
                     .navigationTitle("Select Date")
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { showingDatePicker = false } }
                     }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.large])
         }
     }
 } 

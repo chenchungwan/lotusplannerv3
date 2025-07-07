@@ -15,10 +15,10 @@ private enum TimelineInterval: String, CaseIterable, Identifiable {
 }
 
 private enum TimeFilter: String, CaseIterable, Identifiable {
+    case month = "Month"
+    case quarter = "Quarter"
+    case year = "Year"
     case all = "All"
-    case month = "This Month"
-    case quarter = "This Quarter"
-    case year = "This Year"
     var id: String { rawValue }
 }
 
@@ -36,6 +36,14 @@ struct GoalsView: View {
     @State private var timeFilter: TimeFilter = .all
     
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
+    
+    private let cardHeight: CGFloat = UIScreen.main.bounds.height / 3
+    
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d/yy"
+        return f
+    }()
     
     var body: some View {
         ScrollView {
@@ -57,20 +65,12 @@ struct GoalsView: View {
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
-                VStack(spacing: 2) {
-                    Text("Goals")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text(subtitle(for: timeFilter))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text(titleLine)
+                    .font(.title2)
+                    .fontWeight(.semibold)
             }
-
-            ToolbarItemGroup(placement: .principal) { EmptyView() }
-
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                ForEach(TimeFilter.allCases) { tf in
+                ForEach([TimeFilter.month, .quarter, .year, .all], id: \TimeFilter.id) { tf in
                     Button(tf.rawValue) { timeFilter = tf }
                         .fontWeight(tf == timeFilter ? .bold : .regular)
                 }
@@ -99,13 +99,15 @@ struct GoalsView: View {
         }
         .sheet(item: $editingGoal) { g in
             let cat = viewModel.categories.first(where: { $0.id == g.categoryId }) ?? viewModel.categories.first!
-            GoalEditorView(mode: .edit(g), category: cat) { desc, date, catId in
+            GoalEditorView(mode: .edit(g), category: cat, onSave: { desc, date, catId in
                 var updated = g
                 updated.description = desc
                 updated.dueDate = date
                 updated.categoryId = catId
                 Task { await viewModel.updateGoal(updated) }
-            }
+            }, onDelete: {
+                Task { await viewModel.deleteGoal(g) }
+            })
             .environmentObject(viewModel)
         }
         .alert("Delete Category?", isPresented: Binding(get: { categoryPendingDelete != nil }, set: { if !$0 { categoryPendingDelete = nil } })) {
@@ -173,11 +175,13 @@ struct GoalsView: View {
                                 .strikethrough(goal.isCompleted)
                             Spacer()
                             if let due = goal.dueDate {
-                                Text(due.formatted(date: .abbreviated, time: .omitted))
+                                Text(Self.shortDateFormatter.string(from: due))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture { editingGoal = goal }
                         .contextMenu {
                             Button("Edit") { editingGoal = goal }
                             Button("Delete", role: .destructive) {
@@ -189,9 +193,11 @@ struct GoalsView: View {
                 Spacer()
             }
             .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(height: cardHeight)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .frame(height: cardHeight)
     }
     
     private var addCard: some View {
@@ -206,7 +212,7 @@ struct GoalsView: View {
                     .font(.largeTitle)
                     .foregroundColor(.blue)
             }
-            .frame(height: 120)
+            .frame(height: cardHeight)
         }
     }
     
@@ -280,6 +286,11 @@ struct GoalsView: View {
             formatter.dateFormat = "MMMM yyyy"
             return formatter.string(from: now)
         }
+    }
+
+    private var titleLine: String {
+        let sub = subtitle(for: timeFilter)
+        return sub.isEmpty ? "Goals" : "Goals \(sub)"
     }
 }
 

@@ -565,6 +565,17 @@ struct CalendarView: View {
         .sheet(isPresented: $showingEventDetails) {
             eventDetailsSheet
         }
+        .sheet(isPresented: $showingTaskDetails) {
+            taskDetailsSheet
+        }
+        .sheet(isPresented: $showingAddItem) {
+            AddItemView(
+                currentDate: currentDate,
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs
+            )
+        }
     }
     
     private func splitScreenContent(geometry: GeometryProxy) -> some View {
@@ -1118,12 +1129,13 @@ struct CalendarView: View {
                     }.max().map { CGFloat(max($0,1))*lineHeight + 4 } ?? lineHeight + 4
                 }()
 
-                // Bottom untimed task columns (own vertical scroll)
-                ScrollView(.vertical, showsIndicators: true) {
+                // Bottom untimed task columns – supports horizontal & vertical scrolling
+                ScrollView([.horizontal, .vertical], showsIndicators: true) {
                     HStack(spacing: 0) {
-                        let timeWidth: CGFloat = 60
-                        let dayColumnWidth = (geometry.size.width - timeWidth) / 7
-                        // Spacer time column
+                        let timeWidth: CGFloat = 60.0
+                        let dayColumnWidth: CGFloat = 140.0 // fixed width for each day column
+
+                        // Spacer time column (keeps time labels aligned with top timeline if desired)
                         Rectangle()
                             .fill(Color.clear)
                             .frame(width: timeWidth)
@@ -1214,6 +1226,20 @@ struct CalendarView: View {
                             showingTaskDetails = true
                         }
                     })
+                    .onLongPressGesture {
+                        var foundListId: String? = nil
+                        if accountKind == .personal {
+                            for (lid, arr) in tasksViewModel.personalTasks where arr.contains(tk) { foundListId = lid; break }
+                        } else {
+                            for (lid, arr) in tasksViewModel.professionalTasks where arr.contains(tk) { foundListId = lid; break }
+                        }
+                        if let lid = foundListId {
+                            selectedTask = tk
+                            selectedTaskListId = lid
+                            selectedAccountKind = accountKind
+                            showingTaskDetails = true
+                        }
+                    }
                 }
             }
         }
@@ -1330,17 +1356,6 @@ struct CalendarView: View {
                 handleSelectedPhoto(newPhoto)
             }
         }
-        .sheet(isPresented: $showingTaskDetails) {
-            taskDetailsSheet
-        }
-        .sheet(isPresented: $showingAddItem) {
-            AddItemView(
-                currentDate: currentDate,
-                tasksViewModel: tasksViewModel,
-                calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs
-            )
-        }
     }
     
     @ViewBuilder
@@ -1398,11 +1413,15 @@ struct CalendarView: View {
     @ViewBuilder
     private var eventDetailsSheet: some View {
         if let ev = selectedCalendarEvent {
-            CalendarEventDetailsView(event: ev) {
-                // Delete action placeholder: remove from local arrays
-                calendarViewModel.personalEvents.removeAll { $0.id == ev.id }
-                calendarViewModel.professionalEvents.removeAll { $0.id == ev.id }
-            }
+            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind
+            )
         }
     }
     
@@ -2006,16 +2025,16 @@ struct CalendarView: View {
             .overlay(
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.event.summary)
-                        .font(.headline)
-                        .fontWeight(.medium)
+                        .font(.body)
+                        .fontWeight(.semibold)
                         .foregroundColor(color)
                         .lineLimit(nil)
                         .multilineTextAlignment(.leading)
                     
                     if event.height >= 50 { // Show time only if event is tall enough
                         Text(formatEventTime(event.event))
-                            .font(.caption)
-                            .foregroundColor(color.opacity(0.7))
+                            .font(.caption2)
+                            .foregroundColor(color.opacity(0.8))
                     }
                 }
                 .padding(.horizontal, 6)
@@ -2027,6 +2046,10 @@ struct CalendarView: View {
                     .stroke(color, lineWidth: 1.5)
             )
             // No long-press action for placeholder string events
+            .onLongPressGesture {
+                selectedCalendarEvent = event.event
+                showingEventDetails = true
+            }
     }
     
     private func formatEventTime(_ event: GoogleCalendarEvent) -> String {
@@ -2155,7 +2178,7 @@ struct CalendarView: View {
     }
     
     // Mini event view for week timeline (same positioning as day view)
-    private func miniDayEventView(event: GoogleCalendarEvent, dayWidth: CGFloat) -> some View {
+    private func miniDayEventView(event: GoogleCalendarEvent, dayWidth: CGFloat) -> AnyView {
         guard let startTime = event.startTime,
               let endTime = event.endTime else {
             return AnyView(EmptyView())
@@ -2177,14 +2200,14 @@ struct CalendarView: View {
         let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
         let backgroundColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
         
-        return AnyView(
+        let view = AnyView(
             RoundedRectangle(cornerRadius: 5)
                 .fill(backgroundColor.opacity(0.8))
                 .frame(height: height)
                 .overlay(
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(event.summary)
-                            .font(.caption2)
+                            .font(.body)
                             .fontWeight(.medium)
                             .foregroundColor(.white)
                             .lineLimit(height > 40 ? 2 : 1)
@@ -2192,7 +2215,7 @@ struct CalendarView: View {
                         if height > 30 {
                             Text("\(String(format: "%02d:%02d", startHour, startMinute))")
                                 .font(.caption2)
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(.white.opacity(0.85))
                         }
                     }
                     .padding(.horizontal, 2)
@@ -2202,6 +2225,10 @@ struct CalendarView: View {
                 .offset(y: topOffset)
                 .padding(.horizontal, 1) // Small padding to prevent events from touching edges
         )
+        let modified = view
+            .onTapGesture { onEventLongPress(event) }
+            .onLongPressGesture { onEventLongPress(event) }
+        return AnyView(modified)
     }
     
     // Mini current time line for week view
@@ -2507,7 +2534,7 @@ struct CalendarView: View {
             )
     }
     
-    private func weekEventBlock(event: GoogleCalendarEvent, date: Date) -> some View {
+    private func weekEventBlock(event: GoogleCalendarEvent, date: Date) -> AnyView {
         guard let startTime = event.startTime,
               let endTime = event.endTime else {
             return AnyView(EmptyView())
@@ -2532,23 +2559,23 @@ struct CalendarView: View {
         let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
         let backgroundColor = isPersonal ? appPrefs.personalColor.opacity(0.7) : appPrefs.professionalColor.opacity(0.7)
         
-        return AnyView(
+        let view = AnyView(
             RoundedRectangle(cornerRadius: 6)
                 .fill(backgroundColor)
                 .frame(height: height)
                 .overlay(
                     VStack(alignment: .leading, spacing: 2) {
                         Text(event.summary)
-                            .font(.caption)
-                            .fontWeight(.medium)
+                            .font(.body)
+                            .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .multilineTextAlignment(.leading)
                             .lineLimit(3)
                         
                         if height > 60 {
                             Text("\(String(format: "%02d:%02d", startHour, startMinute))")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.8))
+                                .font(.caption2)
+                                .foregroundColor(.white.opacity(0.85))
                         }
                     }
                     .padding(.horizontal, 6)
@@ -2559,6 +2586,10 @@ struct CalendarView: View {
                 .padding(.horizontal, 2)
                 // No long-press action for placeholder string events
         )
+        let mod = view
+            .onTapGesture { onEventLongPress(event) }
+            .onLongPressGesture { onEventLongPress(event) }
+        return AnyView(mod)
     }
     
     private var weekCurrentTimeLine: some View {
@@ -3022,7 +3053,10 @@ struct CalendarView: View {
         }
     }
     
-
+    private func onEventLongPress(_ ev: GoogleCalendarEvent) {
+        selectedCalendarEvent = ev
+        showingEventDetails = true
+    }
 }
 
 // MARK: - Week PencilKit View
@@ -3436,6 +3470,8 @@ struct AddItemView: View {
     let tasksViewModel: TasksViewModel
     let calendarViewModel: CalendarViewModel
     let appPrefs: AppPreferences
+    let existingEvent: GoogleCalendarEvent?
+    let existingEventAccountKind: GoogleAuthManager.AccountKind?
     
     private let authManager = GoogleAuthManager.shared
     
@@ -3458,7 +3494,7 @@ struct AddItemView: View {
     
     private var canCreateEvent: Bool {
         !itemTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        selectedAccountKind != nil && (isAllDay || eventEnd > eventStart)
+        (isEditingEvent || selectedAccountKind != nil) && (isAllDay || eventEnd > eventStart)
     }
     
     private var accentColor: Color {
@@ -3466,16 +3502,36 @@ struct AddItemView: View {
         return accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
     }
     
-    init(currentDate: Date, tasksViewModel: TasksViewModel, calendarViewModel: CalendarViewModel, appPrefs: AppPreferences) {
+    private var isEditingEvent: Bool { existingEvent != nil }
+    
+    init(currentDate: Date,
+         tasksViewModel: TasksViewModel,
+         calendarViewModel: CalendarViewModel,
+         appPrefs: AppPreferences,
+         existingEvent: GoogleCalendarEvent? = nil,
+         accountKind: GoogleAuthManager.AccountKind? = nil) {
         self.currentDate = currentDate
         self.tasksViewModel = tasksViewModel
         self.calendarViewModel = calendarViewModel
         self.appPrefs = appPrefs
+        self.existingEvent = existingEvent
+        self.existingEventAccountKind = accountKind
         // default times
         let cal = Calendar.current
-        let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
-        _eventStart = State(initialValue: rounded)
-        _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
+        if let ev = existingEvent {
+            // Editing path – prefill
+            _selectedTab = State(initialValue: 1)
+            _itemTitle = State(initialValue: ev.summary)
+            _itemNotes = State(initialValue: ev.description ?? "")
+            _selectedAccountKind = State(initialValue: accountKind)
+            _eventStart = State(initialValue: ev.startTime ?? Date())
+            _eventEnd   = State(initialValue: ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800))
+            _isAllDay = State(initialValue: ev.isAllDay)
+        } else {
+            let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
+            _eventStart = State(initialValue: rounded)
+            _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
+        }
     }
     
     var body: some View {
@@ -3651,7 +3707,7 @@ struct AddItemView: View {
                     }
                 }
             }
-            .navigationTitle(selectedTab == 0 ? "New Task" : "New Event")
+            .navigationTitle(selectedTab == 0 ? "New Task" : (isEditingEvent ? "Edit Event" : "New Event"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -3661,16 +3717,36 @@ struct AddItemView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(selectedTab == 0 ? "Create Task" : "Create Event") {
+                    Button(selectedTab == 0 ? (isEditingEvent ? "Save" : "Create Task") : (isEditingEvent ? "Save" : "Create Event")) {
                         if selectedTab == 0 {
                             createTask()
                         } else {
-                            createEvent()
+                            if isEditingEvent {
+                                updateEvent()
+                            } else {
+                                createEvent()
+                            }
                         }
                     }
                     .disabled(selectedTab == 0 ? !canCreateTask : !canCreateEvent)
                     .foregroundColor(accentColor)
                 }
+                
+                // Removed delete button from top toolbar
+            }
+        }
+        
+        // Add Delete section at bottom for editing event
+        .safeAreaInset(edge: .bottom) {
+            if isEditingEvent {
+                Button(role: .destructive) {
+                    deleteEvent()
+                } label: {
+                    Text("Delete Event")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding()
             }
         }
     }
@@ -3773,6 +3849,88 @@ struct AddItemView: View {
                 await MainActor.run { dismiss() }
             } catch {
                 print("Failed to create calendar event: \(error)")
+                await MainActor.run { isCreating = false }
+            }
+        }
+    }
+    
+    // MARK: - Update existing event
+    private func updateEvent() {
+        guard let ev = existingEvent, let accountKind = existingEventAccountKind ?? selectedAccountKind else { return }
+        isCreating = true
+
+        Task {
+            do {
+                let accessToken = try await authManager.getAccessToken(for: accountKind)
+                let calId = ev.calendarId ?? "primary"
+                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(ev.id)")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "PATCH"
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let isoFormatter = ISO8601DateFormatter()
+                isoFormatter.timeZone = TimeZone.current
+
+                var startDict: [String: String] = [:]
+                var endDict: [String: String] = [:]
+                if isAllDay {
+                    let startDate = Calendar.current.startOfDay(for: eventStart)
+                    let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+                    startDict["date"] = dateFormatter.string(from: startDate)
+                    endDict["date"] = dateFormatter.string(from: endDate)
+                } else {
+                    startDict["dateTime"] = isoFormatter.string(from: eventStart)
+                    endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+                }
+
+                var body: [String: Any] = [
+                    "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                    "start": startDict,
+                    "end": endDict
+                ]
+                if !itemNotes.isEmpty { body["description"] = itemNotes }
+
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                }
+
+                // Refresh events
+                await calendarViewModel.loadCalendarData(for: eventStart)
+                await MainActor.run { dismiss() }
+            } catch {
+                print("Failed to update event: \(error)")
+                await MainActor.run { isCreating = false }
+            }
+        }
+    }
+    
+    // MARK: - Delete Event
+    private func deleteEvent() {
+        guard let ev = existingEvent, let accountKind = existingEventAccountKind ?? selectedAccountKind else { return }
+        isCreating = true
+        Task {
+            do {
+                let accessToken = try await authManager.getAccessToken(for: accountKind)
+                let calId = ev.calendarId ?? "primary"
+                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(ev.id)")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "DELETE"
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 204 else {
+                    throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                }
+                await calendarViewModel.loadCalendarData(for: currentDate)
+                await MainActor.run { dismiss() }
+            } catch {
+                print("Failed to delete event: \(error)")
                 await MainActor.run { isCreating = false }
             }
         }
