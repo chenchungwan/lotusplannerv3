@@ -286,11 +286,9 @@ struct WeekTimelineComponent: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(eventColor.opacity(0.1))
         )
-        .highPriorityGesture(
-            TapGesture().onEnded { _ in
-                onEventTap?(event)
-            }
-        )
+        .onTapGesture {
+            onEventTap?(event)
+        }
         .onLongPressGesture { onEventTap?(event) }
     }
     
@@ -594,9 +592,9 @@ struct WeekTimelineComponent: View {
             )
             .offset(x: layout.xOffset, y: layout.topOffset)
             .contentShape(Rectangle())
-            .highPriorityGesture(
-                TapGesture().onEnded { _ in onEventTap?(event) }
-            )
+            .onTapGesture {
+                onEventTap?(event)
+            }
             .onLongPressGesture { onEventTap?(event) }
     }
     

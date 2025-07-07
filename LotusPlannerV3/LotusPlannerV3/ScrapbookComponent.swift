@@ -146,7 +146,7 @@ struct ScrapbookComponent: View {
     @State private var isShowingPhotoPicker = false
     @State private var containerSize: CGSize = .zero
     
-    init(canvasView: Binding<PKCanvasView>, title: String = "Scrapbook", currentDate: Date = Date(), accountKind: GoogleAuthManager.AccountKind = .personal) {
+    init(canvasView: Binding<PKCanvasView>, title: String = "Journal", currentDate: Date = Date(), accountKind: GoogleAuthManager.AccountKind = .personal) {
         self._canvasView = canvasView
         self.title = title
         self.currentDate = currentDate

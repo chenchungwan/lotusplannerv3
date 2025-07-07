@@ -541,6 +541,8 @@ struct CalendarView: View {
     
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var showingEventDetails = false
+    // Controls visibility of the day view's left panel (timeline & logs)
+    @State private var isLeftPanelVisible: Bool = true
     
     var body: some View {
         GeometryReader { geometry in
@@ -578,6 +580,14 @@ struct CalendarView: View {
     
     private var principalToolbarContent: some View {
         HStack(spacing: 8) {
+            // Hamburger menu to toggle left panel in Day view
+            Button(action: {
+                withAnimation {
+                    isLeftPanelVisible.toggle()
+                }
+            }) {
+                Image(systemName: "line.3.horizontal")
+            }
             Button(action: { step(-1) }) {
                 Image(systemName: "chevron.left")
             }
@@ -1421,21 +1431,28 @@ struct CalendarView: View {
     
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            // Left section (dynamic width)
-            leftDaySectionWithDivider(geometry: geometry)
-                .frame(width: dayLeftSectionWidth)
-            
-            // Vertical divider
-            dayVerticalDivider
-            
-            // Right section (remaining width)
+            if isLeftPanelVisible {
+                // Left section (dynamic width)
+                leftDaySectionWithDivider(geometry: geometry)
+                    .frame(width: dayLeftSectionWidth)
+                
+                // Vertical divider
+                dayVerticalDivider
+            }
+
+            // Right section expands to fill remaining space
             rightDaySection(geometry: geometry)
-                .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
+                .frame(maxWidth: .infinity)
         }
     }
     
     private func rightDaySection(geometry: GeometryProxy) -> some View {
-        let rightSectionWidth = geometry.size.width - dayLeftSectionWidth - 8 // 8 for divider width
+        let rightSectionWidth: CGFloat
+        if isLeftPanelVisible {
+            rightSectionWidth = geometry.size.width - dayLeftSectionWidth - 8 // divider width
+        } else {
+            rightSectionWidth = geometry.size.width
+        }
         
         return VStack(spacing: 0) {
             // Top section of right side - split into two columns for tasks
@@ -1989,7 +2006,7 @@ struct CalendarView: View {
             .overlay(
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.event.summary)
-                        .font(.body)
+                        .font(.headline)
                         .fontWeight(.medium)
                         .foregroundColor(color)
                         .lineLimit(nil)
@@ -1997,7 +2014,7 @@ struct CalendarView: View {
                     
                     if event.height >= 50 { // Show time only if event is tall enough
                         Text(formatEventTime(event.event))
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundColor(color.opacity(0.7))
                     }
                 }
@@ -2530,7 +2547,7 @@ struct CalendarView: View {
                         
                         if height > 60 {
                             Text("\(String(format: "%02d:%02d", startHour, startMinute))")
-                                .font(.caption2)
+                                .font(.caption)
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }
@@ -2661,14 +2678,7 @@ struct CalendarView: View {
                 
                 Spacer()
                 
-                let completedTasks = tasks.filter { $0.isCompleted }.count
-                Text("\(completedTasks)/\(tasks.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(4)
+                // Removed task count display
             }
             
             // Tasks for this list
@@ -2724,8 +2734,6 @@ struct CalendarView: View {
                 
                 if let dueDate = task.dueDate {
                     HStack(spacing: 2) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
                         Text(dueDate, formatter: Self.dateFormatter)
                             .font(.caption2)
                     }
@@ -2783,14 +2791,7 @@ struct CalendarView: View {
                 
                 Spacer()
                 
-                let completedTasks = tasks.filter { $0.isCompleted }.count
-                Text("\(completedTasks)/\(tasks.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(4)
+                // Removed task count display
             }
             
             // Tasks for this list
@@ -2831,8 +2832,6 @@ struct CalendarView: View {
                 
                 if let dueDate = task.dueDate {
                     HStack(spacing: 2) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
                         Text(dueDate, formatter: Self.dateFormatter)
                             .font(.caption2)
                     }
@@ -3635,6 +3634,9 @@ struct AddItemView: View {
                                     get: { dueDate ?? currentDate },
                                     set: { dueDate = $0 }
                                 ), displayedComponents: .date)
+                                .datePickerStyle(.graphical)
+                                .frame(maxHeight: 400)
+                                .environment(\.calendar, Calendar.mondayFirst)
                             }
                         }
                     } else {
@@ -3642,7 +3644,9 @@ struct AddItemView: View {
                         Section("Event Time") {
                             Toggle("All Day", isOn: $isAllDay)
                             DatePicker("Start", selection: $eventStart, displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
+                                .environment(\.calendar, Calendar.mondayFirst)
                             DatePicker("End", selection: $eventEnd, in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
+                                .environment(\.calendar, Calendar.mondayFirst)
                         }
                     }
                 }

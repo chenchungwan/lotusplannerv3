@@ -623,6 +623,7 @@ enum TasksError: Error {
 // MARK: - Tasks View
 struct TasksView: View {
     @StateObject private var viewModel = TasksViewModel()
+    @StateObject private var calendarViewModel = CalendarViewModel()
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @State private var selectedFilter: TaskFilter = .all
@@ -636,18 +637,14 @@ struct TasksView: View {
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-                HStack(spacing: 24) {
-                    // Personal Tasks Section
+                // Two equal-width columns (50% each)
+                HStack(spacing: 0) {
+                    // Personal Tasks Column
                     if authManager.isLinked(kind: .personal) {
-                        TasksSectionView(
-                            title: "Personal",
-                            icon: "person.circle.fill",
-                            accentColor: appPrefs.personalColor,
-                            isLinked: authManager.isLinked(kind: .personal),
+                        PersonalTasksComponent(
                             taskLists: viewModel.personalTaskLists,
                             tasksDict: filteredTasks(viewModel.personalTasks),
-                            accountKind: .personal,
-                            filter: selectedFilter,
+                            accentColor: appPrefs.personalColor,
                             onTaskToggle: { task, listId in
                                 Task {
                                     await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
@@ -658,23 +655,17 @@ struct TasksView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .personal
                                 showingTaskDetails = true
-                            },
-                            width: authManager.isLinked(kind: .professional) ? 
-                                (geometry.size.width - 48) / 2 : geometry.size.width - 24
+                            }
                         )
+                        .frame(width: geometry.size.width / 2, alignment: .topLeading)
                     }
                     
-                    // Professional Tasks Section  
+                    // Professional Tasks Column
                     if authManager.isLinked(kind: .professional) {
-                        TasksSectionView(
-                            title: "Professional",
-                            icon: "briefcase.circle.fill",
-                            accentColor: appPrefs.professionalColor,
-                            isLinked: authManager.isLinked(kind: .professional),
+                        ProfessionalTasksComponent(
                             taskLists: viewModel.professionalTaskLists,
                             tasksDict: filteredTasks(viewModel.professionalTasks),
-                            accountKind: .professional,
-                            filter: selectedFilter,
+                            accentColor: appPrefs.professionalColor,
                             onTaskToggle: { task, listId in
                                 Task {
                                     await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
@@ -685,13 +676,12 @@ struct TasksView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .professional
                                 showingTaskDetails = true
-                            },
-                            width: authManager.isLinked(kind: .personal) ? 
-                                (geometry.size.width - 48) / 2 : geometry.size.width - 24
+                            }
                         )
+                        .frame(width: geometry.size.width / 2, alignment: .topLeading)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 0)
                 .padding(.vertical, 16)
                 
                 // Debug overlay - only show when no tasks are visible
@@ -796,35 +786,12 @@ struct TasksView: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            if let accountKind = selectedAccountKind {
-                let taskLists = accountKind == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
-                let defaultListId = taskLists.first?.id ?? ""
-                TaskDetailsView(
-                    task: GoogleTask(
-                        id: UUID().uuidString,
-                        title: "",
-                        notes: nil,
-                        status: "needsAction",
-                        due: nil,
-                        completed: nil,
-                        updated: nil
-                    ),
-                    taskListId: defaultListId,
-                    accountKind: accountKind,
-                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: viewModel.personalTaskLists,
-                    professionalTaskLists: viewModel.professionalTaskLists,
-                    appPrefs: appPrefs,
-                    viewModel: viewModel,
-                    onSave: { _ in },
-                    onDelete: {},
-                    onMove: { _, _ in },
-                    onCrossAccountMove: { _, _, _ in },
-                    isNew: true
-                )
-            } else {
-                Text("Select an account to create a task")
-            }
+            AddItemView(
+                currentDate: referenceDate,
+                tasksViewModel: viewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs
+            )
         }
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
@@ -863,21 +830,10 @@ struct TasksView: View {
                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                         .font(.body)
                 }
-                // Add Task Menu
-                Menu {
-                    if authManager.isLinked(kind: .personal) {
-                        Button("Personal Task") {
-                            selectedAccountKind = .personal
-                            showingNewTask = true
-                        }
-                    }
-                    if authManager.isLinked(kind: .professional) {
-                        Button("Professional Task") {
-                            selectedAccountKind = .professional
-                            showingNewTask = true
-                        }
-                    }
-                } label: {
+                // Add Task Button
+                Button(action: {
+                    showingNewTask = true
+                }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
                         .foregroundColor(.accentColor)
@@ -956,13 +912,13 @@ struct TasksView: View {
             formatter.dateFormat = "MMM d, yyyy"
             return formatter.string(from: referenceDate)
         case .week:
-            guard let weekStart = cal.dateInterval(of: .weekOfYear, for: now)?.start,
+            guard let weekStart = cal.dateInterval(of: .weekOfYear, for: referenceDate)?.start,
                   let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return "" }
             formatter.dateFormat = "MMM d"
             let startStr = formatter.string(from: weekStart)
             let endStr = formatter.string(from: weekEnd)
             formatter.dateFormat = "yyyy"
-            let yearStr = formatter.string(from: now)
+            let yearStr = formatter.string(from: referenceDate)
             return "\(startStr) - \(endStr), \(yearStr)"
         case .month:
             formatter.dateFormat = "MMMM yyyy"
@@ -1046,8 +1002,9 @@ struct TasksSectionView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.top, 40)
                 } else {
+                    let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
                     ScrollView {
-                        LazyVStack(spacing: 16) {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
                             ForEach(taskLists) { taskList in
                                 let filteredTasks = tasksDict[taskList.id] ?? []
                                 if !filteredTasks.isEmpty || filter == .all {
@@ -1144,10 +1101,6 @@ struct TaskListCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .italic()
-                    } else if !tasks.isEmpty {
-                        Text("\(completedTasks)/\(tasks.count) completed")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -1511,7 +1464,11 @@ struct TaskDetailsView: View {
                                 .foregroundColor(.secondary)
                         }
                         Button(action: {
-                            showingDatePicker.toggle()
+                            if editedDueDate == nil {
+                                // Initialize with today so a value is captured even if the user doesn't tap a specific date
+                                editedDueDate = Date()
+                            }
+                            showingDatePicker = true
                         }) {
                             Image(systemName: "calendar")
                                 .foregroundColor(accentColor)
@@ -1571,7 +1528,8 @@ struct TaskDetailsView: View {
                     get: { editedDueDate ?? Date() },
                     set: { editedDueDate = $0 }
                 ), displayedComponents: .date)
-                .datePickerStyle(.wheel)
+                .datePickerStyle(.graphical)
+                .environment(\.calendar, Calendar.mondayFirst)
                 .navigationTitle("Set Due Date")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -1589,7 +1547,8 @@ struct TaskDetailsView: View {
                     }
                 }
             }
-            .presentationDetents([.medium])
+            .frame(maxHeight: 400)
+            .presentationDetents([.large])
         }
         .alert("Delete Task", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }

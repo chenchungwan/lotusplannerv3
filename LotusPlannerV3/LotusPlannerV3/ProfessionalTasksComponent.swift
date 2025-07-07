@@ -86,15 +86,6 @@ struct ProfessionalTaskListCard: View {
                     .foregroundColor(accentColor)
                 
                 Spacer()
-                
-                let completedTasks = tasks.filter { $0.isCompleted }.count
-                Text("\(completedTasks)/\(tasks.count)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(4)
             }
             
             // Tasks for this list
@@ -156,8 +147,6 @@ struct ProfessionalTaskRow: View {
                 
                 if let dueDate = task.dueDate {
                     HStack(spacing: 2) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
                         Text(dueDate, formatter: Self.dateFormatter)
                             .font(.caption2)
                     }
