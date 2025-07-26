@@ -544,6 +544,17 @@ struct CalendarView: View {
     // Controls visibility of the day view's left panel (timeline & logs)
     @State private var isLeftPanelVisible: Bool = true
     
+    // Date picker modal state
+    @State private var showingDatePicker = false
+    @State private var datePickerSelection: Date = Date()
+    // Navigation triggers
+    @State private var navigateToTasks = false
+    @State private var navigateToSettings = false
+    // 0 = Calendar Day view, 1 = Tasks view
+    @State private var viewMode: Int = 0
+    // Global canvas for handwriting overlay
+    @State private var dayCanvasView = PKCanvasView()
+    
     var body: some View {
         GeometryReader { geometry in
             splitScreenContent(geometry: geometry)
@@ -563,7 +574,27 @@ struct CalendarView: View {
             }
         }
         .sheet(isPresented: $showingEventDetails) {
-            eventDetailsSheet
+            // obsolete – replaced by item-driven sheet
+        }
+        .sheet(item: $selectedCalendarEvent) { ev in
+            let accountKind: GoogleAuthManager.AccountKind = {
+                if calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) {
+                    return .personal
+                } else if calendarViewModel.professionalEvents.contains(where: { $0.id == ev.id }) {
+                    return .professional
+                } else {
+                    // Fallback: if event not found in either array, default to personal
+                    return .personal
+                }
+            }()
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind
+            )
         }
         .sheet(isPresented: $showingTaskDetails) {
             taskDetailsSheet
@@ -576,6 +607,37 @@ struct CalendarView: View {
                 appPrefs: appPrefs
             )
         }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                VStack(spacing: 20) {
+                    DatePicker("Select Date", selection: $datePickerSelection, displayedComponents: [.date])
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .padding()
+                        .onChange(of: datePickerSelection) { _, newVal in
+                            currentDate = newVal
+                            interval = .day
+                        }
+                }
+                .navigationTitle("Jump to Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Done") {
+                            showingDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.large])
+        }
+        // Invisible navigation links to push Tasks or Settings views
+        .background(
+            Group {
+                NavigationLink(destination: TasksView(), isActive: $navigateToTasks) { EmptyView() }
+                NavigationLink(destination: SettingsView(), isActive: $navigateToSettings) { EmptyView() }
+            }
+        )
     }
     
     private func splitScreenContent(geometry: GeometryProxy) -> some View {
@@ -591,14 +653,23 @@ struct CalendarView: View {
     
     private var principalToolbarContent: some View {
         HStack(spacing: 8) {
-            // Hamburger menu to toggle left panel in Day view
-            Button(action: {
-                withAnimation {
-                    isLeftPanelVisible.toggle()
-                }
-            }) {
-                Image(systemName: "line.3.horizontal")
+            // Toggle between Calendar and Tasks
+            Picker("", selection: $viewMode) {
+                Image(systemName: "calendar").tag(0)
+                Image(systemName: "checklist").tag(1)
             }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 120)
+            .onChange(of: viewMode) { _, newVal in
+                if newVal == 1 {
+                    navigateToTasks = true
+                    // reset to calendar mode for next time
+                    DispatchQueue.main.async {
+                        viewMode = 0
+                    }
+                }
+            }
+
             Button(action: { step(-1) }) {
                 Image(systemName: "chevron.left")
             }
@@ -615,9 +686,15 @@ struct CalendarView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
             } else if interval == .day {
-                Text(dayTitle)
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                Button(action: {
+                    datePickerSelection = currentDate
+                    showingDatePicker = true
+                }) {
+                    Text(dayTitle)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .underline()
+                }
             }
             Button(action: { step(1) }) {
                 Image(systemName: "chevron.right")
@@ -627,7 +704,7 @@ struct CalendarView: View {
     
     private var trailingToolbarButtons: some View {
         Group {
-            ForEach(TimelineInterval.allCases) { item in
+            ForEach(visibleTimelineIntervals) { item in
                 Button(item.rawValue) {
                     interval = item
                     currentDate = Date() // reset to today/current period
@@ -638,6 +715,12 @@ struct CalendarView: View {
             // Hide Completed toggle
             Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
                 Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
+                    .font(.body)
+            }
+
+            // Settings gear icon (to the left of plus)
+            Button(action: { navigateToSettings = true }) {
+                Image(systemName: "gearshape")
                     .font(.body)
             }
 
@@ -994,7 +1077,6 @@ struct CalendarView: View {
                     initialUntimedRows: 2,
                     onEventTap: { ev in
                         selectedCalendarEvent = ev
-                        showingEventDetails = true
                     },
                     onDayTap: { date in
                         currentDate = date
@@ -1098,7 +1180,6 @@ struct CalendarView: View {
                     initialUntimedRows: 2,
                     onEventTap: { ev in
                         selectedCalendarEvent = ev
-                        showingEventDetails = true
                     },
                     onDayTap: nil
                 )
@@ -1256,13 +1337,7 @@ struct CalendarView: View {
     
     // MARK: - Selector
     private var weekView: some View {
-        Group {
-            if appPrefs.weekViewVersion == 2 {
-                weekViewV2
-            } else {
-                weekViewV1
-            }
-        }
+        weekViewV1
     }
     
     private var singleMonthSection: some View {
@@ -1275,7 +1350,6 @@ struct CalendarView: View {
             professionalColor: appPrefs.professionalColor,
             onEventTap: { ev in
                 selectedCalendarEvent = ev
-                showingEventDetails = true
             },
             onDayTap: { date in
                 currentDate = date
@@ -1300,6 +1374,10 @@ struct CalendarView: View {
                 updateCachedTasks()
             }
             .onChange(of: currentDate) { oldValue, newValue in
+                // Persist drawings per day
+                saveCurrentDrawing(for: oldValue)
+                loadDrawing(for: newValue)
+
                 Task {
                     await calendarViewModel.loadCalendarData(for: newValue)
                 }
@@ -1317,15 +1395,26 @@ struct CalendarView: View {
 
             .onAppear {
                 startCurrentTimeTimer()
+                loadDrawing(for: currentDate)
             }
             .onDisappear {
                 stopCurrentTimeTimer()
+                saveCurrentDrawing(for: currentDate)
             }
     }
     
     private var dayViewBase: some View {
         GeometryReader { geometry in
-            dayViewContent(geometry: geometry)
+            ZStack {
+                dayViewContent(geometry: geometry)
+
+                // Full-screen writable canvas
+                PencilKitView(canvasView: $dayCanvasView, onDrawingChanged: { _ in saveCurrentDrawing(for: currentDate) })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(true)
+                    .zIndex(10)
+            }
         }
         .background(Color(.systemBackground))
         .overlay(loadingOverlay)
@@ -1356,6 +1445,25 @@ struct CalendarView: View {
                 handleSelectedPhoto(newPhoto)
             }
         }
+        // Swipe gesture to navigate days
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    let horizontalAmount = value.translation.width
+                    let verticalAmount = value.translation.height
+                    // Ensure mostly horizontal swipe
+                    if abs(horizontalAmount) > abs(verticalAmount) {
+                        if horizontalAmount < 0 {
+                            // Swipe left -> next day
+                            step(1)
+                        } else if horizontalAmount > 0 {
+                            // Swipe right -> previous day
+                            step(-1)
+                        }
+                    }
+                }
+        )
     }
     
     @ViewBuilder
@@ -1410,21 +1518,6 @@ struct CalendarView: View {
         }
     }
     
-    @ViewBuilder
-    private var eventDetailsSheet: some View {
-        if let ev = selectedCalendarEvent {
-            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
-            AddItemView(
-                currentDate: ev.startTime ?? Date(),
-                tasksViewModel: tasksViewModel,
-                calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs,
-                existingEvent: ev,
-                accountKind: accountKind
-            )
-        }
-    }
-    
     // MARK: - Current Time Timer Functions
     private func startCurrentTimeTimer() {
         // Update every 5 minutes instead of every minute to reduce performance impact
@@ -1449,52 +1542,35 @@ struct CalendarView: View {
     }
     
     private func dayViewContent(geometry: GeometryProxy) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            if isLeftPanelVisible {
-                // Left section (dynamic width)
-                leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
-                
-                // Vertical divider
-                dayVerticalDivider
-            }
+        let leftWidth = geometry.size.width * 0.25
 
-            // Right section expands to fill remaining space
-            rightDaySection(geometry: geometry)
-                .frame(maxWidth: .infinity)
+        return ScrollView(.vertical, showsIndicators: true) {
+            HStack(alignment: .top, spacing: 0) {
+                // Left timeline column (fixed 25%)
+                leftDaySectionWithDivider(geometry: geometry)
+                    .frame(width: leftWidth)
+
+                // Right tasks column occupies remaining 75%
+                rightDaySection(geometry: geometry, leftWidth: leftWidth)
+                    .frame(maxWidth: .infinity)
+            }
         }
     }
     
-    private func rightDaySection(geometry: GeometryProxy) -> some View {
-        let rightSectionWidth: CGFloat
-        if isLeftPanelVisible {
-            rightSectionWidth = geometry.size.width - dayLeftSectionWidth - 8 // divider width
-        } else {
-            rightSectionWidth = geometry.size.width
-        }
+    private func rightDaySection(geometry: GeometryProxy, leftWidth: CGFloat) -> some View {
+        let rightSectionWidth: CGFloat = geometry.size.width - leftWidth
         
-        return VStack(spacing: 0) {
-            // Top section of right side - split into two columns for tasks
-            HStack(alignment: .top, spacing: 0) {
-                // Personal tasks (left column)
-                topLeftDaySection
-                    .frame(width: rightSectionWidth / 2, alignment: .topLeading)
-                
-                // Professional tasks (right column)
-                topRightDaySection
-                    .frame(width: rightSectionWidth / 2, alignment: .topLeading)
-            }
-            .frame(height: rightSectionTopHeight, alignment: .top)
-            .padding(.all, 8)
-            
-            // Draggable divider
-            rightSectionDivider
-            
-            // Bottom section - Scrapbook
-            ScrapbookComponent(canvasView: $pencilKitCanvasView, currentDate: currentDate, accountKind: .personal)
-                .frame(maxHeight: .infinity)
-                .padding(.all, 8)
+        // Two-column tasks only, filling available space
+        return HStack(alignment: .top, spacing: 0) {
+            // Personal tasks (left column)
+            topLeftDaySection
+                .frame(width: rightSectionWidth / 2, alignment: .topLeading)
+
+            // Professional tasks (right column)
+            topRightDaySection
+                .frame(width: rightSectionWidth / 2, alignment: .topLeading)
         }
+        .padding(.all, 8)
     }
     
     private func setupDayView() -> some View {
@@ -1502,20 +1578,9 @@ struct CalendarView: View {
     }
     
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
-        VStack(spacing: 0) {
-            // Timeline section (3/4 of left section height)
-            leftTimelineSection
-                .frame(height: leftTimelineHeight)
-                .padding(.all, 8)
-            
-            // Left section divider
-            leftSectionDivider
-            
-            // Bottom section (1/4 of left section height)
-            leftBottomSection
-                .frame(height: max(200, geometry.size.height - leftTimelineHeight - 8))
-                .padding(.all, 8)
-        }
+        // Timeline only – logs section removed
+        leftTimelineSection
+            .padding(.all, 8)
     }
     
     private var leftTimelineSection: some View {
@@ -1528,7 +1593,6 @@ struct CalendarView: View {
             professionalColor: appPrefs.professionalColor,
             onEventTap: { ev in
                 selectedCalendarEvent = ev
-                showingEventDetails = true
             }
         )
         .background(Color(.secondarySystemBackground))
@@ -1625,10 +1689,6 @@ struct CalendarView: View {
                         isDayVerticalDividerDragging = false
                     }
             )
-    }
-    
-    private var leftBottomSection: some View {
-        LogsComponent(currentDate: currentDate)
     }
     
     private var timelineWithEvents: some View {
@@ -2045,11 +2105,18 @@ struct CalendarView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(color, lineWidth: 1.5)
             )
-            // No long-press action for placeholder string events
-            .onLongPressGesture {
-                selectedCalendarEvent = event.event
-                showingEventDetails = true
-            }
+            .contentShape(Rectangle()) // ensure full frame is tappable even if padding/overlay
+            // Use tap (quick) and long-press (legacy) to open details
+            .highPriorityGesture(
+                TapGesture()
+                    .onEnded { selectedCalendarEvent = event.event }
+            )
+            .simultaneousGesture(
+                LongPressGesture()
+                    .onEnded { _ in selectedCalendarEvent = event.event }
+            )
+            // Earlier events should sit above later ones to avoid upper blocks being obscured
+            .zIndex(Double(-event.startSlot))
     }
     
     private func formatEventTime(_ event: GoogleCalendarEvent) -> String {
@@ -2224,10 +2291,12 @@ struct CalendarView: View {
                 )
                 .offset(y: topOffset)
                 .padding(.horizontal, 1) // Small padding to prevent events from touching edges
+                .contentShape(Rectangle())
+                .zIndex(Double(-topOffset))
         )
         let modified = view
-            .onTapGesture { onEventLongPress(event) }
-            .onLongPressGesture { onEventLongPress(event) }
+            .onTapGesture { selectedCalendarEvent = event }
+            .onLongPressGesture { selectedCalendarEvent = event }
         return AnyView(modified)
     }
     
@@ -2587,8 +2656,8 @@ struct CalendarView: View {
                 // No long-press action for placeholder string events
         )
         let mod = view
-            .onTapGesture { onEventLongPress(event) }
-            .onLongPressGesture { onEventLongPress(event) }
+            .onTapGesture { selectedCalendarEvent = event }
+            .onLongPressGesture { selectedCalendarEvent = event }
         return AnyView(mod)
     }
     
@@ -3055,7 +3124,43 @@ struct CalendarView: View {
     
     private func onEventLongPress(_ ev: GoogleCalendarEvent) {
         selectedCalendarEvent = ev
-        showingEventDetails = true
+    }
+
+    // Filter timeline intervals based on user preferences
+    private var visibleTimelineIntervals: [TimelineInterval] {
+        TimelineInterval.allCases.filter { intv in
+            switch intv {
+            case .day:
+                return true
+            case .week:
+                return appPrefs.showWeekView
+            case .month:
+                return appPrefs.showMonthView
+            case .year:
+                return appPrefs.showYearView
+            }
+        }
+    }
+
+    // MARK: - Drawing persistence helpers
+    private func drawingURL(for date: Date) -> URL? {
+        let fm = FileManager.default
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"
+        let filename = formatter.string(from: date) + ".drawing"
+        // Try iCloud container first
+        let baseURL = fm.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents/Drawings", isDirectory: true) ?? fm.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent("Drawings", isDirectory: true)
+        try? fm.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        return baseURL.appendingPathComponent(filename)
+    }
+
+    private func saveCurrentDrawing(for date: Date) {
+        guard let url = drawingURL(for: date) else { return }
+        do { let data = dayCanvasView.drawing.dataRepresentation(); try data.write(to: url) } catch { print("Failed to save drawing: \(error)") }
+    }
+
+    private func loadDrawing(for date: Date) {
+        guard let url = drawingURL(for: date) else { dayCanvasView.drawing = PKDrawing(); return }
+        if let data = try? Data(contentsOf: url), let drawing = try? PKDrawing(data: data) { dayCanvasView.drawing = drawing } else { dayCanvasView.drawing = PKDrawing() }
     }
 }
 
@@ -3436,11 +3541,39 @@ struct MonthCardView: View {
 
 struct PencilKitView: UIViewRepresentable {
     @Binding var canvasView: PKCanvasView
-    
+    var onDrawingChanged: ((PKDrawing) -> Void)? = nil
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+        let parent: PencilKitView
+        init(parent: PencilKitView) { self.parent = parent }
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            parent.onDrawingChanged?(canvasView.drawing)
+        }
+    }
+
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
-        canvasView.drawingPolicy = .anyInput
+        // Allow only Apple Pencil drawing so finger can scroll underlying content
+        if #available(iOS 14.0, *) {
+            canvasView.drawingPolicy = .pencilOnly
+        } else {
+            canvasView.allowsFingerDrawing = false
+        }
         canvasView.backgroundColor = .clear
+        canvasView.delegate = context.coordinator
+        
+        // Show the tool picker
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first {
+            let picker = PKToolPicker.shared(for: window)
+            picker?.setVisible(true, forFirstResponder: canvasView)
+            picker?.addObserver(canvasView)
+            canvasView.becomeFirstResponder()
+        }
         return canvasView
     }
     
@@ -3528,10 +3661,28 @@ struct AddItemView: View {
             _eventEnd   = State(initialValue: ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800))
             _isAllDay = State(initialValue: ev.isAllDay)
         } else {
-            let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
-            _eventStart = State(initialValue: rounded)
-            _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
+            // Initialize with simple placeholders to avoid complex init logic
+            _eventStart = State(initialValue: Date())
+            _eventEnd = State(initialValue: Date())
         }
+    }
+    
+    private static func calculateInitialDates() -> (start: Date, end: Date) {
+        let cal = Calendar.current
+        let now = Date()
+        let currentMinute = cal.component(.minute, from: now)
+        
+        let minutesToAdd: Int
+        if currentMinute < 30 {
+            minutesToAdd = 30 - currentMinute
+        } else {
+            minutesToAdd = 60 - currentMinute
+        }
+        
+        let roundedStart = cal.date(byAdding: .minute, value: minutesToAdd, to: now) ?? now
+        let roundedEnd = cal.date(byAdding: .minute, value: 30, to: roundedStart) ?? roundedStart.addingTimeInterval(1800)
+        
+        return (roundedStart, roundedEnd)
     }
     
     var body: some View {
@@ -3562,55 +3713,8 @@ struct AddItemView: View {
                     
                     Section("Account") {
                         HStack(spacing: 12) {
-                            if authManager.isLinked(kind: .personal) {
-                                Button(action: {
-                                    selectedAccountKind = .personal
-                                    selectedTaskListId = ""
-                                    isCreatingNewList = false
-                                }) {
-                                    HStack {
-                                        Image(systemName: "person.circle.fill")
-                                        Text("Personal")
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(selectedAccountKind == .personal ? appPrefs.personalColor.opacity(0.2) : Color(.systemGray6))
-                                    )
-                                    .foregroundColor(selectedAccountKind == .personal ? appPrefs.personalColor : .primary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedAccountKind == .personal ? appPrefs.personalColor : Color.clear, lineWidth: 2)
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                            
-                            if authManager.isLinked(kind: .professional) {
-                                Button(action: {
-                                    selectedAccountKind = .professional
-                                    selectedTaskListId = ""
-                                    isCreatingNewList = false
-                                }) {
-                                    HStack {
-                                        Image(systemName: "briefcase.circle.fill")
-                                        Text("Professional")
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(selectedAccountKind == .professional ? appPrefs.professionalColor.opacity(0.2) : Color(.systemGray6))
-                                    )
-                                    .foregroundColor(selectedAccountKind == .professional ? appPrefs.professionalColor : .primary)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedAccountKind == .professional ? appPrefs.professionalColor : Color.clear, lineWidth: 2)
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
+                            AccountSelectButton(kind: .personal, selectedAccountKind: $selectedAccountKind, appPrefs: appPrefs)
+                            AccountSelectButton(kind: .professional, selectedAccountKind: $selectedAccountKind, appPrefs: appPrefs)
                         }
                     }
                     
@@ -3628,8 +3732,7 @@ struct AddItemView: View {
                                             }
                                         }) {
                                             HStack {
-                                                Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundColor(isCreatingNewList ? accentColor : .secondary)
+                                                Image(systemName: isCreatingNewList ? accentColor : .secondary)
                                                 Text("Create new list")
                                             }
                                         }
@@ -3651,8 +3754,7 @@ struct AddItemView: View {
                                                     selectedTaskListId = taskList.id
                                                 }) {
                                                     HStack {
-                                                        Image(systemName: selectedTaskListId == taskList.id ? "checkmark.circle.fill" : "circle")
-                                                            .foregroundColor(selectedTaskListId == taskList.id ? accentColor : .secondary)
+                                                        Image(systemName: selectedTaskListId == taskList.id ? accentColor : .secondary)
                                                         Text(taskList.title)
                                                     }
                                                 }
@@ -3707,7 +3809,7 @@ struct AddItemView: View {
                     }
                 }
             }
-            .navigationTitle(selectedTab == 0 ? "New Task" : (isEditingEvent ? "Edit Event" : "New Event"))
+            .navigationTitle(isEditingEvent ? "Edit Event" : "Add Item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -3843,9 +3945,10 @@ struct AddItemView: View {
                     throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
                 }
 
-                // Refresh events
+                // Refresh events for all granularities so every view updates immediately
                 await calendarViewModel.loadCalendarData(for: eventStart)
-
+                await calendarViewModel.loadCalendarDataForWeek(containing: eventStart)
+                await calendarViewModel.loadCalendarDataForMonth(containing: eventStart)
                 await MainActor.run { dismiss() }
             } catch {
                 print("Failed to create calendar event: \(error)")
@@ -3900,8 +4003,10 @@ struct AddItemView: View {
                     throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
                 }
 
-                // Refresh events
+                // Refresh events for all granularities so every view updates immediately
                 await calendarViewModel.loadCalendarData(for: eventStart)
+                await calendarViewModel.loadCalendarDataForWeek(containing: eventStart)
+                await calendarViewModel.loadCalendarDataForMonth(containing: eventStart)
                 await MainActor.run { dismiss() }
             } catch {
                 print("Failed to update event: \(error)")
@@ -3934,6 +4039,40 @@ struct AddItemView: View {
                 await MainActor.run { isCreating = false }
             }
         }
+    }
+}
+
+// MARK: - Helper subview to reduce complexity
+private struct AccountSelectButton: View {
+    let kind: GoogleAuthManager.AccountKind
+    @Binding var selectedAccountKind: GoogleAuthManager.AccountKind?
+    let appPrefs: AppPreferences
+    let authManager = GoogleAuthManager.shared
+
+    var body: some View {
+        let isSelected = selectedAccountKind == kind
+        let label: some View = HStack {
+            Image(systemName: kind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
+            Text(kind == .personal ? "Personal" : "Professional")
+        }
+        return Button(action: {
+            selectedAccountKind = kind
+        }) {
+            label
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected ? (kind == .personal ? appPrefs.personalColor.opacity(0.2) : appPrefs.professionalColor.opacity(0.2)) : Color(.systemGray6))
+                )
+                .foregroundColor(isSelected ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .primary)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : Color.clear, lineWidth: 2)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!authManager.isLinked(kind: kind))
     }
 }
 

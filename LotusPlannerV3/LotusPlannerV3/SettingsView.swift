@@ -78,12 +78,45 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(weekViewVersion, forKey: "weekViewVersion")
         }
     }
+
+    // Controls visibility of calendar interval views
+    @Published var showWeekView: Bool {
+        didSet {
+            UserDefaults.standard.set(showWeekView, forKey: "showWeekView")
+        }
+    }
+
+    @Published var showMonthView: Bool {
+        didSet {
+            UserDefaults.standard.set(showMonthView, forKey: "showMonthView")
+        }
+    }
+
+    @Published var showYearView: Bool {
+        didSet {
+            UserDefaults.standard.set(showYearView, forKey: "showYearView")
+        }
+    }
     
     private init() {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
         self.weekViewVersion = UserDefaults.standard.integer(forKey: "weekViewVersion")
+
+        // Calendar interval view visibility toggles (defaults: true)
+        if UserDefaults.standard.object(forKey: "showWeekView") == nil {
+            UserDefaults.standard.set(true, forKey: "showWeekView")
+        }
+        if UserDefaults.standard.object(forKey: "showMonthView") == nil {
+            UserDefaults.standard.set(true, forKey: "showMonthView")
+        }
+        if UserDefaults.standard.object(forKey: "showYearView") == nil {
+            UserDefaults.standard.set(true, forKey: "showYearView")
+        }
+        self.showWeekView = UserDefaults.standard.bool(forKey: "showWeekView")
+        self.showMonthView = UserDefaults.standard.bool(forKey: "showMonthView")
+        self.showYearView = UserDefaults.standard.bool(forKey: "showYearView")
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -115,6 +148,19 @@ class AppPreferences: ObservableObject {
     
     func updateWeekViewVersion(_ value: Int) {
         weekViewVersion = value
+    }
+
+    // MARK: - Calendar view visibility updates
+    func updateShowWeekView(_ value: Bool) {
+        showWeekView = value
+    }
+
+    func updateShowMonthView(_ value: Bool) {
+        showMonthView = value
+    }
+
+    func updateShowYearView(_ value: Bool) {
+        showYearView = value
     }
 }
 
@@ -174,31 +220,70 @@ struct SettingsView: View {
                         ))
                     }
                     
-                    // Week View Version Picker
+                    // Week View layout picker removed – always uses weekly layout now
+
+                    // Toggle visibility of calendar interval views
                     HStack {
-                        Image(systemName: "rectangle.3.offgrid")
+                        Image(systemName: "calendar")
                             .foregroundColor(.secondary)
                             .font(.title2)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Week View Layout")
+                            Text("Show Week View")
                                 .font(.body)
-                            Text("Choose how the week screen displays tasks/events")
+                            Text("Enable the weekly calendar view")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
 
                         Spacer()
 
-                        Picker("Week View", selection: Binding(
-                            get: { appPrefs.weekViewVersion },
-                            set: { appPrefs.updateWeekViewVersion($0) }
-                        )) {
-                            Text("Weekly").tag(1)
-                            Text("Daily").tag(2)
+                        Toggle("", isOn: Binding(
+                            get: { appPrefs.showWeekView },
+                            set: { appPrefs.updateShowWeekView($0) }
+                        ))
+                    }
+
+                    HStack {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show Month View")
+                                .font(.body)
+                            Text("Enable the monthly calendar view")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 200)
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding(
+                            get: { appPrefs.showMonthView },
+                            set: { appPrefs.updateShowMonthView($0) }
+                        ))
+                    }
+
+                    HStack {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show Year View")
+                                .font(.body)
+                            Text("Enable the yearly calendar view")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding(
+                            get: { appPrefs.showYearView },
+                            set: { appPrefs.updateShowYearView($0) }
+                        ))
                     }
                 }
                 

@@ -633,6 +633,10 @@ struct TasksView: View {
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
+
+    // Toggle between Calendar (0) and Tasks (1)
+    @State private var viewMode: Int = 1
+    @State private var navigateToCalendar = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -743,7 +747,11 @@ struct TasksView: View {
                     .background(Color.black.opacity(0.1))
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(
+            Group {
+                NavigationLink(destination: CalendarView(), isActive: $navigateToCalendar) { EmptyView() }
+            }
+        )
         .sidebarToggleHidden()
         .onAppear {
             Task {
@@ -797,6 +805,19 @@ struct TasksView: View {
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
+                // Mode toggle
+                Picker("", selection: $viewMode) {
+                    Image(systemName: "calendar").tag(0)
+                    Image(systemName: "checklist").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 120)
+                .onChange(of: viewMode) { _, newVal in
+                    if newVal == 0 {
+                        navigateToCalendar = true
+                    }
+                }
+
                 HStack(spacing: 6) {
                     if selectedFilter == .all {
                         Text("All")
