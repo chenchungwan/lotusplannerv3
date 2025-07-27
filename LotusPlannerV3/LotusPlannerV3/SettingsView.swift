@@ -73,9 +73,9 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var weekViewVersion: Int {
+    @Published var useWeek2View: Bool {
         didSet {
-            UserDefaults.standard.set(weekViewVersion, forKey: "weekViewVersion")
+            UserDefaults.standard.set(useWeek2View, forKey: "useWeek2View")
         }
     }
     
@@ -83,7 +83,7 @@ class AppPreferences: ObservableObject {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
-        self.weekViewVersion = UserDefaults.standard.integer(forKey: "weekViewVersion")
+        self.useWeek2View = UserDefaults.standard.bool(forKey: "useWeek2View")
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -113,14 +113,16 @@ class AppPreferences: ObservableObject {
         hideRecurringEventsInMonth = value
     }
     
-    func updateWeekViewVersion(_ value: Int) {
-        weekViewVersion = value
+    func updateUseWeek2View(_ value: Bool) {
+        useWeek2View = value
     }
+
 }
 
 struct SettingsView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var appPrefs = AppPreferences.shared
+    @StateObject private var cloudManager = iCloudManager.shared
     
     // State for show/hide account toggles (placeholder for future implementation)
     @State private var showPersonalAccount = true
@@ -175,31 +177,7 @@ struct SettingsView: View {
                     }
                     
                     // Week View Version Picker
-                    HStack {
-                        Image(systemName: "rectangle.3.offgrid")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Week View Layout")
-                                .font(.body)
-                            Text("Choose how the week screen displays tasks/events")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        Picker("Week View", selection: Binding(
-                            get: { appPrefs.weekViewVersion },
-                            set: { appPrefs.updateWeekViewVersion($0) }
-                        )) {
-                            Text("Weekly").tag(1)
-                            Text("Daily").tag(2)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 200)
-                    }
                 }
                 
                 Section("App Preferences") {
@@ -221,6 +199,27 @@ struct SettingsView: View {
                         Toggle("", isOn: Binding(
                             get: { appPrefs.isDarkMode },
                             set: { appPrefs.updateDarkMode($0) }
+                        ))
+                    }
+                    
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Week View Style")
+                                .font(.body)
+                            Text("Use Week2 (Day-style timelines) or Week1 (Tasks rows)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: Binding(
+                            get: { appPrefs.useWeek2View },
+                            set: { appPrefs.updateUseWeek2View($0) }
                         ))
                     }
                     
@@ -248,28 +247,78 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section("Debug & Testing") {
+                Section("iCloud Storage") {
+                    // iCloud Status
                     HStack {
-                        Image(systemName: "externaldrive.connected.to.line.below")
-                            .foregroundColor(.secondary)
+                        Image(systemName: cloudManager.iCloudAvailable ? "icloud.fill" : "icloud.slash")
+                            .foregroundColor(cloudManager.iCloudAvailable ? .blue : .secondary)
                             .font(.title2)
                         
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Test Firestore Connection")
+                            let storageInfo = cloudManager.getStorageStatus()
+                            Text("Storage: \(storageInfo.0)")
                                 .font(.body)
-                            Text("Write a test document to verify database connection")
+                            Text(storageInfo.1)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         
                         Spacer()
                         
-                        Button("Test") {
-                            Task {
-                                await FirestoreManager.shared.testFirestoreConnection()
+                        Button(cloudManager.iCloudAvailable ? "Sync" : "Unavailable") {
+                            if cloudManager.iCloudAvailable {
+                                cloudManager.forceSyncToiCloud()
                             }
                         }
+                        .buttonStyle(.bordered)
+                        .disabled(!cloudManager.iCloudAvailable)
+                    }
+                    
+                    // Migration from Local Storage
+                    HStack {
+                        Image(systemName: "arrow.up.icloud")
+                            .foregroundColor(.blue)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Migrate Local Data")
+                                .font(.body)
+                            Text("Move existing data to iCloud")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Migrate") {
+                            cloudManager.migrateLocalDataToiCloud()
+                        }
                         .buttonStyle(.borderedProminent)
+                        .disabled(!cloudManager.iCloudAvailable)
+                    }
+                    
+                    // Clear iCloud Data
+                    HStack {
+                        Image(systemName: "trash.circle")
+                            .foregroundColor(.red)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Clear iCloud Data")
+                                .font(.body)
+                            Text("Remove all data from iCloud storage")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Clear") {
+                            cloudManager.clearAllCloudData()
+                        }
+                        .buttonStyle(.bordered)
+                        .foregroundColor(.red)
+                        .disabled(!cloudManager.iCloudAvailable)
                     }
                     
                     HStack {
@@ -575,6 +624,25 @@ struct ColorPickerRow: View {
                 onColorChange: onColorChange
             )
         }
+    }
+
+    
+    // MARK: - Helper Methods
+    private func hasLocalData() -> Bool {
+        return UserDefaults.standard.data(forKey: "stored_weight_entries") != nil ||
+               UserDefaults.standard.data(forKey: "stored_workout_entries") != nil ||
+               UserDefaults.standard.data(forKey: "stored_food_entries") != nil ||
+               UserDefaults.standard.data(forKey: "stored_goals") != nil ||
+               UserDefaults.standard.data(forKey: "goalCategories") != nil
+    }
+    
+    private func clearLocalData() {
+        UserDefaults.standard.removeObject(forKey: "stored_weight_entries")
+        UserDefaults.standard.removeObject(forKey: "stored_workout_entries")
+        UserDefaults.standard.removeObject(forKey: "stored_food_entries")
+        UserDefaults.standard.removeObject(forKey: "stored_goals")
+        UserDefaults.standard.removeObject(forKey: "goalCategories")
+        print("🗑️ Cleared all local storage")
     }
 }
 

@@ -6,16 +6,11 @@
 //
 
 import SwiftUI
-import FirebaseCore
 
 @main
 struct LotusPlannerV3App: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var appPrefs = AppPreferences.shared
-
-    init() {
-        FirebaseApp.configure()
-    }
 
     var body: some Scene {
         WindowGroup {

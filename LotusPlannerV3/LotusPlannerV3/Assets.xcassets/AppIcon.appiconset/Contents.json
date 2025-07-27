@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "LPLogo.jpg",
+      "filename" : "icon2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "LPLogo 1.jpg",
+      "filename" : "icon2 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "LPLogo 2.jpg",
+      "filename" : "icon2 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

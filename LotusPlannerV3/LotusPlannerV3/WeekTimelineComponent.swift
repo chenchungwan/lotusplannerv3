@@ -11,7 +11,6 @@ struct WeekTimelineComponent: View {
     let personalTasks: [GoogleTask]
     let professionalTasks: [GoogleTask]
     let hideCompletedTasks: Bool
-    let initialUntimedRows: Int
     
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onDayTap: ((Date) -> Void)?
@@ -19,27 +18,15 @@ struct WeekTimelineComponent: View {
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
     @State private var showTaskRows: Bool = true
-    @State private var untimedRows: Int = 0
-    @State private var dragStartRows: Int = 0
     
     private let hourHeight: CGFloat = 100
     private let startHour = 6
     private let endHour = 23
     private let timeColumnWidth: CGFloat = 60
     
-    private var dividerGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                let deltaRows = Int((value.translation.height / hourHeight).rounded())
-                let newVal = max(0, dragStartRows + deltaRows)
-                if newVal != untimedRows { untimedRows = newVal }
-            }
-            .onEnded { _ in
-                dragStartRows = untimedRows
-            }
-    }
+
     
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTasks: [GoogleTask] = [], professionalTasks: [GoogleTask] = [], hideCompletedTasks: Bool = false, initialUntimedRows: Int = 0, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTasks: [GoogleTask] = [], professionalTasks: [GoogleTask] = [], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
@@ -49,11 +36,8 @@ struct WeekTimelineComponent: View {
         self.personalTasks = personalTasks
         self.professionalTasks = professionalTasks
         self.hideCompletedTasks = hideCompletedTasks
-        self.initialUntimedRows = initialUntimedRows
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
-        _untimedRows = State(initialValue: initialUntimedRows)
-        _dragStartRows = State(initialValue: initialUntimedRows)
     }
     
     // MARK: - Event Layout Models
@@ -165,14 +149,6 @@ struct WeekTimelineComponent: View {
                     timeSlot(hour: hour)
                         .frame(height: hourHeight)
                 }
-                // Divider between timed and untimed
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 8)
-                    .gesture(dividerGesture)
-                ForEach(0..<untimedRows, id: \.self) { _ in
-                    Rectangle().fill(Color.clear).frame(height: hourHeight)
-                }
             }
             .frame(width: timeColumnWidth)
             .background(Color(.systemGray6).opacity(0.3))
@@ -181,14 +157,6 @@ struct WeekTimelineComponent: View {
             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                 VStack(spacing: 0) {
                     dayTimelineColumn(date: date, width: dayColumnWidth)
-                    // Divider
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(height: 8)
-                        .gesture(dividerGesture)
-                    ForEach(0..<untimedRows, id: \.self) { _ in
-                        Rectangle().fill(Color.clear).frame(height: hourHeight)
-                    }
                 }
                 .overlay(
                     // Right border between days
@@ -702,8 +670,7 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
             professionalColor: .green,
             personalTasks: [],
             professionalTasks: [],
-            hideCompletedTasks: false,
-            initialUntimedRows: 0
+            hideCompletedTasks: false
         )
         .previewLayout(.sizeThatFits)
     }

@@ -1,5 +1,4 @@
 import SwiftUI
-import FirebaseFirestore
 
 struct GoalCategory: Identifiable, Hashable, Codable {
     let id: UUID
@@ -15,13 +14,16 @@ class GoalsViewModel: ObservableObject {
     @Published var categories: [GoalCategory] = [] {
         didSet { saveCategories() }
     }
-    @Published var goals: [Goal] = []
-    private let storageKey = "goalCategories"
-    private let firestore = FirestoreManager.shared
+    @Published var goals: [Goal] = [] {
+        didSet { saveGoals() }
+    }
+    
+    private let cloudManager = iCloudManager.shared
 
     init() {
         loadCategories()
-        Task { await loadGoals() }
+        loadGoals()
+        setupiCloudSync()
     }
 
     func addCategory(name: String) {
@@ -39,64 +41,57 @@ class GoalsViewModel: ObservableObject {
         categories.move(fromOffsets: source, toOffset: destination)
     }
 
-    private func saveCategories() {
-        if let data = try? JSONEncoder().encode(categories) {
-            UserDefaults.standard.set(data, forKey: storageKey)
+    private func setupiCloudSync() {
+        // Listen for iCloud data changes
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.loadCategories()
+            self?.loadGoals()
         }
+    }
+
+    private func saveCategories() {
+        cloudManager.saveGoalCategories(categories)
     }
 
     private func loadCategories() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([GoalCategory].self, from: data) {
-            categories = decoded
-        } else {
+        let loadedCategories = cloudManager.loadGoalCategories()
+        if loadedCategories.isEmpty {
             categories = ["Health & Fitness", "Work & Projects", "Family & Friends", "Finances", "Misc."].map { GoalCategory(name: $0) }
-            // Fill up to 6 with blanks
+            // Save default categories to iCloud
+            saveCategories()
+        } else {
+            categories = loadedCategories
         }
     }
 
-    func loadGoals() async {
-        do {
-            let fetched = try await firestore.loadGoals()
-            await MainActor.run { goals = fetched }
-        } catch {
-            print("Failed to load goals: \(error)")
-        }
+    private func saveGoals() {
+        cloudManager.saveGoals(goals)
+    }
+
+    private func loadGoals() {
+        goals = cloudManager.loadGoals()
     }
 
     func addGoal(description: String, dueDate: Date?, categoryId: UUID) async {
         let userId = GoogleAuthManager.shared.getEmail(for: .personal)
         let newGoal = Goal(description: description, dueDate: dueDate, categoryId: categoryId, isCompleted: false, userId: userId)
-        await MainActor.run { goals.append(newGoal) } // optimistic UI update
-        do {
-            try await firestore.addGoal(newGoal)
-            // Success: we already added locally, no immediate reload needed.
-        } catch {
-            print("add goal error \(error)")
-        }
+        goals.append(newGoal)
+        print("✅ Added goal: \(description)")
     }
 
     func deleteGoal(_ goal: Goal) async {
-        await MainActor.run { goals.removeAll { $0.id == goal.id } }
-        do {
-            try await firestore.deleteGoal(goal.id)
-            await loadGoals()
-        } catch {
-            print("delete goal error \(error)")
-        }
+        goals.removeAll { $0.id == goal.id }
+        print("🗑️ Deleted goal: \(goal.description)")
     }
 
     func updateGoal(_ goal: Goal) async {
-        await MainActor.run {
-            if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
-                goals[idx] = goal
-            }
-        }
-        do {
-            try await firestore.updateGoal(goal)
-            await loadGoals()
-        } catch {
-            print("update goal error \(error)")
+        if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
+            goals[idx] = goal
+            print("📝 Updated goal: \(goal.description)")
         }
     }
 

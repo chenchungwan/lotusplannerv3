@@ -991,7 +991,6 @@ struct CalendarView: View {
                     personalTasks: tasksViewModel.personalTasks.values.flatMap { $0 },
                     professionalTasks: tasksViewModel.professionalTasks.values.flatMap { $0 },
                     hideCompletedTasks: appPrefs.hideCompletedTasks,
-                    initialUntimedRows: 2,
                     onEventTap: { ev in
                         selectedCalendarEvent = ev
                         showingEventDetails = true
@@ -1080,173 +1079,6 @@ struct CalendarView: View {
         }
     }
     
-    // MARK: - Week View Version 2 (Events Columns)
-    private var weekViewV2: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Top timed timeline (scrollable internally)
-                WeekTimelineComponent(
-                    currentDate: currentDate,
-                    weekEvents: getWeekEventsGroupedByDate(),
-                    personalEvents: calendarViewModel.personalEvents,
-                    professionalEvents: calendarViewModel.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    personalTasks: [],
-                    professionalTasks: [],
-                    hideCompletedTasks: appPrefs.hideCompletedTasks,
-                    initialUntimedRows: 2,
-                    onEventTap: { ev in
-                        selectedCalendarEvent = ev
-                        showingEventDetails = true
-                    },
-                    onDayTap: nil
-                )
-                .frame(height: weekTopSectionHeight)
-
-                // Draggable divider to resize sections
-                weekDivider
-
-                // Calculate uniform row heights across the week for personal and professional task rows
-                let lineHeight: CGFloat = 20
-                let personalRowHeight: CGFloat = {
-                    weekDates.map { date in
-                        tasksViewModel.personalTasks.values.flatMap { $0 }
-                            .filter { t in
-                                (!appPrefs.hideCompletedTasks || !t.isCompleted) &&
-                                t.dueDate.map { Calendar.mondayFirst.isDate($0, inSameDayAs: date) } ?? false
-                            }.count
-                    }.max().map { CGFloat(max($0,1))*lineHeight + 4 } ?? lineHeight + 4
-                }()
-
-                let professionalRowHeight: CGFloat = {
-                    weekDates.map { date in
-                        tasksViewModel.professionalTasks.values.flatMap { $0 }
-                            .filter { t in
-                                (!appPrefs.hideCompletedTasks || !t.isCompleted) &&
-                                t.dueDate.map { Calendar.mondayFirst.isDate($0, inSameDayAs: date) } ?? false
-                            }.count
-                    }.max().map { CGFloat(max($0,1))*lineHeight + 4 } ?? lineHeight + 4
-                }()
-
-                // Bottom untimed task columns – supports horizontal & vertical scrolling
-                ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                    HStack(spacing: 0) {
-                        let timeWidth: CGFloat = 60.0
-                        let dayColumnWidth: CGFloat = 140.0 // fixed width for each day column
-
-                        // Spacer time column (keeps time labels aligned with top timeline if desired)
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(width: timeWidth)
-
-                        ForEach(weekDates, id: \..self) { date in
-                            VStack(alignment: .leading, spacing: 0) {
-                                // Personal tasks row
-                                tasksColumn(for: tasksViewModel.personalTasks.values.flatMap { $0 },
-                                           taskLists: tasksViewModel.personalTaskLists,
-                                           date: date,
-                                           accentColor: appPrefs.personalColor,
-                                           fixedHeight: personalRowHeight,
-                                           accountKind: .personal)
-                                Divider()
-                                // Professional tasks row
-                                tasksColumn(for: tasksViewModel.professionalTasks.values.flatMap { $0 },
-                                           taskLists: tasksViewModel.professionalTaskLists,
-                                           date: date,
-                                           accentColor: appPrefs.professionalColor,
-                                           fixedHeight: professionalRowHeight,
-                                           accountKind: .professional)
-                            }
-                            .frame(width: dayColumnWidth, alignment: .topLeading)
-                            .overlay(Rectangle().fill(Color(.systemGray4)).frame(width: 0.5), alignment: .trailing)
-                        }
-                    }
-                }
-            }
-        }
-        .background(Color(.systemBackground))
-        .task {
-            await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
-            await tasksViewModel.loadTasks()
-        }
-        .onChange(of: currentDate) { _, newValue in
-            Task { await calendarViewModel.loadCalendarDataForWeek(containing: newValue) }
-        }
-        .onChange(of: tasksViewModel.personalTasks) { _ , _  in }
-    }
-    
-    // Helper: tasks filtered by date and grouped
-    private func tasksColumn(for tasks: [GoogleTask], taskLists: [GoogleTaskList], date: Date, accentColor: Color, fixedHeight: CGFloat, accountKind: GoogleAuthManager.AccountKind) -> some View {
-        let cal = Calendar.mondayFirst
-        let listMap = Dictionary(uniqueKeysWithValues: taskLists.map { ($0.id, $0.title) })
-        let dayTasks = tasks.filter { task in
-            guard let due = task.dueDate else { return false }
-            if appPrefs.hideCompletedTasks && task.isCompleted { return false }
-            return cal.isDate(due, inSameDayAs: date)
-        }
-        return VStack(alignment: .leading, spacing: 2) {
-            if dayTasks.isEmpty {
-                Text("No tasks")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(dayTasks) { tk in
-                    HStack(spacing: 4) {
-                        Image(systemName: tk.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(accentColor)
-                            .onTapGesture {
-                                Task {
-                                    await tasksViewModel.toggleTaskCompletion(tk, in: "", for: accountKind)
-                                }
-                            }
-                        Text(tk.title)
-                            .font(.caption2)
-                            .lineLimit(1)
-                        Spacer()
-                        if let listTitle = listMap[tk.id] {
-                            Text(listTitle)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .highPriorityGesture(TapGesture().onEnded {
-                        // Determine listId for the task
-                        var foundListId: String? = nil
-                        if accountKind == .personal {
-                            for (lid, arr) in tasksViewModel.personalTasks where arr.contains(tk) { foundListId = lid; break }
-                        } else {
-                            for (lid, arr) in tasksViewModel.professionalTasks where arr.contains(tk) { foundListId = lid; break }
-                        }
-                        if let lid = foundListId {
-                            selectedTask = tk
-                            selectedTaskListId = lid
-                            selectedAccountKind = accountKind
-                            showingTaskDetails = true
-                        }
-                    })
-                    .onLongPressGesture {
-                        var foundListId: String? = nil
-                        if accountKind == .personal {
-                            for (lid, arr) in tasksViewModel.personalTasks where arr.contains(tk) { foundListId = lid; break }
-                        } else {
-                            for (lid, arr) in tasksViewModel.professionalTasks where arr.contains(tk) { foundListId = lid; break }
-                        }
-                        if let lid = foundListId {
-                            selectedTask = tk
-                            selectedTaskListId = lid
-                            selectedAccountKind = accountKind
-                            showingTaskDetails = true
-                        }
-                    }
-                }
-            }
-        }
-        .padding(2)
-        .frame(height: fixedHeight, alignment: .topLeading)
-    }
-    
     // Week dates helper
     private var weekDates: [Date] {
         let cal = Calendar.mondayFirst
@@ -1254,14 +1086,41 @@ struct CalendarView: View {
         return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
     }
     
-    // MARK: - Selector
+    // MARK: - Week View Selector
     private var weekView: some View {
         Group {
-            if appPrefs.weekViewVersion == 2 {
+            if appPrefs.useWeek2View {
                 weekViewV2
             } else {
                 weekViewV1
             }
+        }
+    }
+    
+    // MARK: - Week View V2 (Day-style timelines)
+    private var weekViewV2: some View {
+        Week2TimelineComponent(
+            currentDate: currentDate,
+            weekEvents: getWeekEventsGroupedByDate(),
+            personalEvents: calendarViewModel.personalEvents,
+            professionalEvents: calendarViewModel.professionalEvents,
+            personalColor: appPrefs.personalColor,
+            professionalColor: appPrefs.professionalColor,
+            onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            },
+            onDayTap: { date in
+                currentDate = date
+                interval = .day
+            }
+        )
+        .background(Color(.systemBackground))
+        .task {
+            await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
+        }
+        .onChange(of: currentDate) { _, newValue in
+            Task { await calendarViewModel.loadCalendarDataForWeek(containing: newValue) }
         }
     }
     

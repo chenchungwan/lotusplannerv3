@@ -2,6 +2,45 @@ import SwiftUI
 import PencilKit
 import PhotosUI
 
+// MARK: - Drawing Tool Models
+enum DrawingTool: String, CaseIterable {
+    case pen = "pencil"
+    case marker = "paintbrush.pointed"
+    case pencil = "pencil.tip"
+    case eraser = "eraser"
+    case monoline = "pencil.line"
+    
+    var pkTool: PKInkingTool.InkType {
+        switch self {
+        case .pen: return .pen
+        case .marker: return .marker
+        case .pencil: return .pencil
+        case .eraser: return .pen // Will be handled differently
+        case .monoline: return .monoline
+        }
+    }
+    
+    var displayName: String {
+        switch self {
+        case .pen: return "Pen"
+        case .marker: return "Marker"
+        case .pencil: return "Pencil"
+        case .eraser: return "Eraser"
+        case .monoline: return "Monoline"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .pen: return "Pressure-sensitive pen"
+        case .marker: return "Highlighter style"
+        case .pencil: return "Textured pencil"
+        case .eraser: return "Remove drawings"
+        case .monoline: return "Consistent width"
+        }
+    }
+}
+
 // MARK: - Photo Model
 struct ScrapbookPhoto: Identifiable, Codable {
     let id = UUID()
@@ -131,7 +170,7 @@ struct DraggablePhotoView: View {
 // MARK: - Enhanced Scrapbook Component
 struct ScrapbookComponent: View {
     @Binding var canvasView: PKCanvasView
-    @StateObject private var firestoreManager = FirestoreManager.shared
+    // Note: Scrapbook storage functionality temporarily disabled
     @State private var showingSaveAlert = false
     @State private var scrapbookTitle = ""
     @State private var isSaving = false
@@ -145,6 +184,13 @@ struct ScrapbookComponent: View {
     @State private var selectedPhotoId: UUID?
     @State private var isShowingPhotoPicker = false
     @State private var containerSize: CGSize = .zero
+    
+    // Drawing tool states
+    @State private var selectedTool: DrawingTool = .pen
+    @State private var selectedColor: Color = .black
+    @State private var penWidth: CGFloat = 2.0
+    @State private var showingColorPicker = false
+    @State private var showingToolPalette = false
     
     init(canvasView: Binding<PKCanvasView>, title: String = "Journal", currentDate: Date = Date(), accountKind: GoogleAuthManager.AccountKind = .personal) {
         self._canvasView = canvasView
@@ -225,6 +271,108 @@ struct ScrapbookComponent: View {
         errorMessage = "Scrapbook deletion is temporarily disabled"
     }
     
+    // MARK: - Drawing Tools Palette
+    private var drawingToolsPalette: some View {
+        VStack(spacing: 8) {
+            // Tool Selection Row
+            HStack(spacing: 12) {
+                ForEach(DrawingTool.allCases, id: \.self) { tool in
+                    Button(action: {
+                        selectedTool = tool
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: tool.rawValue)
+                                .font(.title2)
+                                .foregroundColor(selectedTool == tool ? .white : .primary)
+                            
+                            Text(tool.displayName)
+                                .font(.caption2)
+                                .foregroundColor(selectedTool == tool ? .white : .secondary)
+                        }
+                        .frame(width: 60, height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(selectedTool == tool ? Color.blue : Color(.systemGray6))
+                        )
+                    }
+                }
+                
+                Spacer()
+                
+                // Quick Color Picker
+                Button(action: {
+                    showingColorPicker = true
+                }) {
+                    Circle()
+                        .fill(selectedColor)
+                        .frame(width: 30, height: 30)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.primary, lineWidth: 2)
+                        )
+                }
+            }
+            .padding(.horizontal)
+            
+            // Tool Options (when not eraser)
+            if selectedTool != .eraser {
+                VStack(spacing: 8) {
+                    // Pen Width Slider
+                    HStack {
+                        Text("Width:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Slider(value: $penWidth, in: 1...20, step: 1)
+                            .frame(width: 100)
+                        
+                        Text("\(Int(penWidth))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(width: 25)
+                    }
+                    
+                    // Color Palette
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 8), spacing: 4) {
+                        ForEach(predefinedColors, id: \.self) { color in
+                            Button(action: {
+                                selectedColor = color
+                            }) {
+                                Circle()
+                                    .fill(color)
+                                    .frame(width: 25, height: 25)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(selectedColor == color ? Color.primary : Color.clear, lineWidth: 2)
+                                    )
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+                .cornerRadius(8)
+                .padding(.horizontal)
+            }
+        }
+        .sheet(isPresented: $showingColorPicker) {
+            ColorPicker("Choose Color", selection: $selectedColor)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+    }
+    
+    // Predefined color palette
+    private var predefinedColors: [Color] {
+        [
+            .black, .gray, .red, .orange,
+            .yellow, .green, .blue, .purple,
+            .pink, .brown, .indigo, .cyan,
+            .mint, .teal, .white, Color(.systemGray4)
+        ]
+    }
+    
     var body: some View {
         VStack(spacing: 12) {
             // Header
@@ -236,6 +384,17 @@ struct ScrapbookComponent: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
+                    // Drawing Tools Toggle
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showingToolPalette.toggle()
+                        }
+                    }) {
+                        Image(systemName: showingToolPalette ? "paintpalette.fill" : "paintpalette")
+                            .font(.caption)
+                            .foregroundColor(showingToolPalette ? .blue : .primary)
+                    }
+                    
                     // Save to Firestore button
                     Button(action: {
                         showingSaveAlert = true
@@ -275,11 +434,22 @@ struct ScrapbookComponent: View {
             .padding(.horizontal)
             .padding(.top)
             
+            // Drawing Tools Palette (conditionally shown)
+            if showingToolPalette {
+                drawingToolsPalette
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+            }
+            
             // Saved scrapbook entries for today
-            if !firestoreManager.scrapbookEntries.isEmpty {
+            // Note: Scrapbook entry display temporarily disabled
+            /*
+            if !scrapbookEntries.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(firestoreManager.scrapbookEntries) { entry in
+                        ForEach(scrapbookEntries) { entry in
                             scrapbookEntryCard(entry)
                         }
                     }
@@ -287,13 +457,19 @@ struct ScrapbookComponent: View {
                 }
                 .frame(height: 60)
             }
+            */
             
             // Main Scrapbook Area
             GeometryReader { geometry in
                 ZStack {
                     // PencilKit Canvas (background layer)
-                    ScrapbookPencilKitView(canvasView: $canvasView)
-                        .background(Color(.systemBackground))
+                    ScrapbookPencilKitView(
+                        canvasView: $canvasView,
+                        selectedTool: selectedTool,
+                        selectedColor: selectedColor,
+                        penWidth: penWidth
+                    )
+                    .background(Color(.systemBackground))
                         .onTapGesture {
                             // Deselect photo when tapping empty area
                             selectedPhotoId = nil
@@ -419,19 +595,32 @@ struct PhotoPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - PencilKit View (unchanged)
+// MARK: - Enhanced PencilKit View
 struct ScrapbookPencilKitView: UIViewRepresentable {
     @Binding var canvasView: PKCanvasView
+    let selectedTool: DrawingTool
+    let selectedColor: Color
+    let penWidth: CGFloat
     
     func makeUIView(context: Context) -> PKCanvasView {
-        canvasView.drawingPolicy = .anyInput
-        canvasView.tool = PKInkingTool(.pen, color: .black, width: 2)
+        canvasView.drawingPolicy = .pencilOnly // Prefer Apple Pencil for best experience
         canvasView.backgroundColor = UIColor.clear
+        canvasView.allowsFingerDrawing = true // Allow finger drawing as backup
+        updateTool()
         return canvasView
     }
     
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
-        // Update the view if needed
+        updateTool()
+    }
+    
+    private func updateTool() {
+        if selectedTool == .eraser {
+            canvasView.tool = PKEraserTool(.bitmap)
+        } else {
+            let uiColor = UIColor(selectedColor)
+            canvasView.tool = PKInkingTool(selectedTool.pkTool, color: uiColor, width: penWidth)
+        }
     }
 }
 
