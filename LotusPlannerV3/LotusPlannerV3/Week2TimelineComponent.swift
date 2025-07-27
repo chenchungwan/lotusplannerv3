@@ -87,7 +87,7 @@ struct Week2TimelineComponent: View {
         .frame(height: 40)
         .frame(maxWidth: .infinity)
         .background(isToday ? Color.blue : Color(.systemGray5))
-    }
+        }
 }
 
 // MARK: - Preview
