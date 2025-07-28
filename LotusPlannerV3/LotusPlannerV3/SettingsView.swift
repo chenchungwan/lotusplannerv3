@@ -248,73 +248,7 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section("Debug & Testing") {
-                    HStack {
-                        Image(systemName: "externaldrive.connected.to.line.below")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Test Firestore Connection")
-                                .font(.body)
-                            Text("Write a test document to verify database connection")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Test") {
-                            Task {
-                                await FirestoreManager.shared.testFirestoreConnection()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    
-                    HStack {
-                        Image(systemName: "person.2.badge.gearshape")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Test Google Sign-In Config")
-                                .font(.body)
-                            Text("Verify Google Sign-In is properly configured")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Debug") {
-                            testGoogleSignInConfig()
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    
-                    HStack {
-                        Image(systemName: "trash.circle")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Clear Auth Tokens")
-                                .font(.body)
-                            Text("Reset all Google authentication tokens")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Clear") {
-                            clearAllAuthTokens()
-                        }
-                        .buttonStyle(.bordered)
-                        .foregroundColor(.red)
-                    }
-                }
+                // Debug & Testing section removed - now using iCloud storage
             }
             .navigationTitle("Settings")
             .sidebarToggleHidden()

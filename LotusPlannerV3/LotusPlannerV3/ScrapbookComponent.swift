@@ -131,7 +131,7 @@ struct DraggablePhotoView: View {
 // MARK: - Enhanced Scrapbook Component
 struct ScrapbookComponent: View {
     @Binding var canvasView: PKCanvasView
-    @StateObject private var firestoreManager = FirestoreManager.shared
+    // @StateObject private var firestoreManager = FirestoreManager.shared // Removed - using local storage only
     @State private var showingSaveAlert = false
     @State private var scrapbookTitle = ""
     @State private var isSaving = false
@@ -275,11 +275,13 @@ struct ScrapbookComponent: View {
             .padding(.horizontal)
             .padding(.top)
             
-            // Saved scrapbook entries for today
-            if !firestoreManager.scrapbookEntries.isEmpty {
+            // Saved scrapbook entries for today - TEMPORARILY DISABLED
+            // TODO: Implement local scrapbook entry storage
+            /*
+            if !scrapbookEntries.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(firestoreManager.scrapbookEntries) { entry in
+                        ForEach(scrapbookEntries) { entry in
                             scrapbookEntryCard(entry)
                         }
                     }
@@ -287,6 +289,7 @@ struct ScrapbookComponent: View {
                 }
                 .frame(height: 60)
             }
+            */
             
             // Main Scrapbook Area
             GeometryReader { geometry in

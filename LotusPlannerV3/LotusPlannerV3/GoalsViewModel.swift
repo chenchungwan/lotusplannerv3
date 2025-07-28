@@ -1,5 +1,4 @@
 import SwiftUI
-import FirebaseFirestore
 
 struct GoalCategory: Identifiable, Hashable, Codable {
     let id: UUID
@@ -15,15 +14,44 @@ class GoalsViewModel: ObservableObject {
     @Published var categories: [GoalCategory] = [] {
         didSet { saveCategories() }
     }
-    @Published var goals: [Goal] = []
-    private let storageKey = "goalCategories"
-    private let firestore = FirestoreManager.shared
+    @Published var goals: [Goal] = [] {
+        didSet { saveGoals() }
+    }
+    
+    private let cloudManager = iCloudManager.shared
 
     init() {
-        loadCategories()
-        Task { await loadGoals() }
+        loadLocalData()
+        setupiCloudSync()
+    }
+    
+    // MARK: - Data Loading and Syncing
+    private func loadLocalData() {
+        print("📊 Loading local goals data...")
+        categories = cloudManager.loadCategories()
+        goals = cloudManager.loadGoals()
+        
+        // Initialize default categories if none exist
+        if categories.isEmpty {
+            categories = ["Health & Fitness", "Work & Projects", "Family & Friends", "Finances", "Misc."].map { GoalCategory(name: $0) }
+        }
+        
+        print("📊 Loaded \(categories.count) categories and \(goals.count) goals")
+    }
+    
+    private func setupiCloudSync() {
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.loadLocalData()
+            }
+        }
     }
 
+    // MARK: - Category Management
     func addCategory(name: String) {
         guard categories.count < 6 else { return }
         categories.append(GoalCategory(name: name))
@@ -40,69 +68,36 @@ class GoalsViewModel: ObservableObject {
     }
 
     private func saveCategories() {
-        if let data = try? JSONEncoder().encode(categories) {
-            UserDefaults.standard.set(data, forKey: storageKey)
-        }
+        cloudManager.saveCategories(categories)
     }
 
-    private func loadCategories() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let decoded = try? JSONDecoder().decode([GoalCategory].self, from: data) {
-            categories = decoded
-        } else {
-            categories = ["Health & Fitness", "Work & Projects", "Family & Friends", "Finances", "Misc."].map { GoalCategory(name: $0) }
-            // Fill up to 6 with blanks
-        }
-    }
-
-    func loadGoals() async {
-        do {
-            let fetched = try await firestore.loadGoals()
-            await MainActor.run { goals = fetched }
-        } catch {
-            print("Failed to load goals: \(error)")
-        }
-    }
-
-    func addGoal(description: String, dueDate: Date?, categoryId: UUID) async {
-        let userId = GoogleAuthManager.shared.getEmail(for: .personal)
+    // MARK: - Goal Management
+    func addGoal(description: String, dueDate: Date?, categoryId: UUID) {
+        let userId = GoogleAuthManager.shared.getEmail(for: .personal) ?? "default_user"
         let newGoal = Goal(description: description, dueDate: dueDate, categoryId: categoryId, isCompleted: false, userId: userId)
-        await MainActor.run { goals.append(newGoal) } // optimistic UI update
-        do {
-            try await firestore.addGoal(newGoal)
-            // Success: we already added locally, no immediate reload needed.
-        } catch {
-            print("add goal error \(error)")
+        goals.append(newGoal)
+        print("✅ Added goal: \(description)")
+    }
+
+    func deleteGoal(_ goal: Goal) {
+        goals.removeAll { $0.id == goal.id }
+        print("🗑️ Deleted goal: \(goal.id)")
+    }
+
+    func updateGoal(_ goal: Goal) {
+        if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
+            goals[idx] = goal
+            print("✏️ Updated goal: \(goal.id)")
         }
     }
 
-    func deleteGoal(_ goal: Goal) async {
-        await MainActor.run { goals.removeAll { $0.id == goal.id } }
-        do {
-            try await firestore.deleteGoal(goal.id)
-            await loadGoals()
-        } catch {
-            print("delete goal error \(error)")
-        }
-    }
-
-    func updateGoal(_ goal: Goal) async {
-        await MainActor.run {
-            if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
-                goals[idx] = goal
-            }
-        }
-        do {
-            try await firestore.updateGoal(goal)
-            await loadGoals()
-        } catch {
-            print("update goal error \(error)")
-        }
-    }
-
-    func toggleCompletion(_ goal: Goal) async {
+    func toggleCompletion(_ goal: Goal) {
         var updated = goal
         updated.isCompleted.toggle()
-        await updateGoal(updated)
+        updateGoal(updated)
+    }
+    
+    private func saveGoals() {
+        cloudManager.saveGoals(goals)
     }
 } 

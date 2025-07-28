@@ -69,10 +69,12 @@ struct LogsComponent: View {
             }
         }
         .onAppear {
-            viewModel.changeDate(to: currentDate)
+            viewModel.currentDate = currentDate
+            viewModel.loadLogsForCurrentDate()
         }
         .onChange(of: currentDate) { oldValue, newValue in
-            viewModel.changeDate(to: newValue)
+            viewModel.currentDate = newValue
+            viewModel.loadLogsForCurrentDate()
         }
     }
     
@@ -88,14 +90,14 @@ struct LogsComponent: View {
                 Spacer()
             }
             
-            if viewModel.weightEntries.isEmpty {
+                                    if viewModel.filteredWeightEntries.isEmpty {
                 Text("No weight entries for today")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
             } else {
-                ForEach(viewModel.weightEntries) { entry in
+                                        ForEach(viewModel.filteredWeightEntries) { entry in
                     weightEntryRow(entry)
                 }
             }
@@ -142,14 +144,14 @@ struct LogsComponent: View {
                 Spacer()
             }
             
-            if viewModel.workoutEntries.isEmpty {
+                                    if viewModel.filteredWorkoutEntries.isEmpty {
                 Text("No workout entries for today")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
             } else {
-                ForEach(viewModel.workoutEntries) { entry in
+                                        ForEach(viewModel.filteredWorkoutEntries) { entry in
                     workoutEntryRow(entry)
                 }
             }
@@ -196,14 +198,14 @@ struct LogsComponent: View {
                 Spacer()
             }
             
-            if viewModel.foodEntries.isEmpty {
+                                    if viewModel.filteredFoodEntries.isEmpty {
                 Text("No food entries for today")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
             } else {
-                ForEach(viewModel.foodEntries) { entry in
+                                        ForEach(viewModel.filteredFoodEntries) { entry in
                     foodEntryRow(entry)
                 }
             }

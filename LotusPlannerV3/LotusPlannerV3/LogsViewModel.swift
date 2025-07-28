@@ -21,24 +21,34 @@ class LogsViewModel: ObservableObject {
     @Published var foodName = ""
     @Published var foodDate = Date()
     
-    private let firestoreManager = FirestoreManager.shared
+    // Local data storage
+    @Published var weightEntries: [WeightLogEntry] = []
+    @Published var workoutEntries: [WorkoutLogEntry] = []
+    @Published var foodEntries: [FoodLogEntry] = []
+    
+    private let cloudManager = iCloudManager.shared
     private let authManager = GoogleAuthManager.shared
     
+    init() {
+        loadLocalData()
+        setupiCloudSync()
+    }
+    
     // MARK: - Computed Properties
-    var weightEntries: [WeightLogEntry] {
-        return firestoreManager.weightEntries.filter { entry in
+    var filteredWeightEntries: [WeightLogEntry] {
+        return weightEntries.filter { entry in
             Calendar.current.isDate(entry.timestamp, inSameDayAs: currentDate)
         }
     }
     
-    var workoutEntries: [WorkoutLogEntry] {
-        return firestoreManager.workoutEntries.filter { entry in
+    var filteredWorkoutEntries: [WorkoutLogEntry] {
+        return workoutEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
         }
     }
     
-    var foodEntries: [FoodLogEntry] {
-        return firestoreManager.foodEntries.filter { entry in
+    var filteredFoodEntries: [FoodLogEntry] {
+        return foodEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
         }
     }
@@ -47,218 +57,164 @@ class LogsViewModel: ObservableObject {
         return AppPreferences.shared.personalColor
     }
     
-    // MARK: - Actions
-    func loadLogsForCurrentDate() {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                // First, load existing data for the current date
-                async let weightEntries = firestoreManager.getWeightEntries(for: currentDate)
-                async let workoutEntries = firestoreManager.getWorkoutEntries(for: currentDate)
-                async let foodEntries = firestoreManager.getFoodEntries(for: currentDate)
-                
-                let (weights, workouts, foods) = try await (weightEntries, workoutEntries, foodEntries)
-                
-                // Update the FirestoreManager's published properties
-                await MainActor.run {
-                    firestoreManager.weightEntries = weights
-                    firestoreManager.workoutEntries = workouts
-                    firestoreManager.foodEntries = foods
-                    
-                    // Validate user security after loading
-                    self.validateLogEntrySecurity()
-                }
-                
-                // Start real-time listeners for new changes
-                firestoreManager.startListening(for: currentDate)
-                
-                print("📊 Loaded \(weights.count) weight, \(workouts.count) workout, \(foods.count) food entries for \(currentDate)")
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = "Failed to load logs: \(error.localizedDescription)"
-                    print("❌ Error loading logs: \(error)")
-                }
-            }
-            
-            await MainActor.run {
-                self.isLoading = false
+    // MARK: - Data Loading and Syncing
+    private func loadLocalData() {
+        print("📊 Loading local log data...")
+        weightEntries = cloudManager.loadWeightEntries()
+        workoutEntries = cloudManager.loadWorkoutEntries()
+        foodEntries = cloudManager.loadFoodEntries()
+        print("📊 Loaded \(weightEntries.count) weight, \(workoutEntries.count) workout, \(foodEntries.count) food entries")
+    }
+    
+    private func setupiCloudSync() {
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.loadLocalData()
             }
         }
     }
     
+    func loadLogsForCurrentDate() {
+        // Data is already loaded locally, just filter for current date
+        // This method is kept for compatibility with existing UI
+        print("📊 Displaying logs for date: \(currentDate)")
+        print("📊 Found \(filteredWeightEntries.count) weight, \(filteredWorkoutEntries.count) workout, \(filteredFoodEntries.count) food entries")
+    }
+    
+    // MARK: - Weight Entries
     func addWeightEntry() {
-        guard let weight = Double(weightValue), weight > 0 else {
+        guard let weight = Double(weightValue), !weightValue.isEmpty else {
             errorMessage = "Please enter a valid weight"
             return
         }
         
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                let userId = authManager.getEmail(for: .personal)
-                print("📝 Adding weight entry for user: \(userId)")
-                
-                let entry = WeightLogEntry(
-                    weight: weight,
-                    unit: selectedWeightUnit,
-                    userId: userId
-                )
-                
-                try await firestoreManager.addWeightEntry(entry)
-                print("✅ Successfully added weight entry: \(weight) \(selectedWeightUnit.displayName)")
-                
-                // Clear form
-                weightValue = ""
-                showingAddLogSheet = false
-            } catch {
-                errorMessage = error.localizedDescription
-                print("❌ Error adding weight entry: \(error)")
-            }
-            
-            isLoading = false
-        }
-    }
-    
-    func addWorkoutEntry() {
-        let trimmedWorkout = workoutName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedWorkout.count >= 10 else {
-            errorMessage = "Workout name must be at least 10 characters"
-            return
-        }
+        let userId = getUserId()
+        let entry = WeightLogEntry(weight: weight, unit: selectedWeightUnit, userId: userId)
         
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                let userId = authManager.getEmail(for: .personal)
-                print("📝 Adding workout entry for user: \(userId)")
-                
-                let entry = WorkoutLogEntry(
-                    date: workoutDate,
-                    name: trimmedWorkout,
-                    userId: userId
-                )
-                
-                try await firestoreManager.addWorkoutEntry(entry)
-                print("✅ Successfully added workout entry: \(workoutName)")
-                
-                // Clear form
-                workoutName = ""
-                workoutDate = Date()
-                showingAddLogSheet = false
-            } catch {
-                errorMessage = error.localizedDescription
-                print("❌ Error adding workout entry: \(error)")
-            }
-            
-            isLoading = false
-        }
-    }
-    
-    func addFoodEntry() {
-        let trimmedFood = foodName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedFood.count >= 10 else {
-            errorMessage = "Food name must be at least 10 characters"
-            return
-        }
+        weightEntries.append(entry)
+        saveWeightEntries()
         
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                let userId = authManager.getEmail(for: .personal)
-                print("📝 Adding food entry for user: \(userId)")
-                
-                let entry = FoodLogEntry(
-                    date: foodDate,
-                    name: trimmedFood,
-                    userId: userId
-                )
-                
-                try await firestoreManager.addFoodEntry(entry)
-                print("✅ Successfully added food entry: \(foodName)")
-                
-                // Clear form
-                foodName = ""
-                foodDate = Date()
-                showingAddLogSheet = false
-            } catch {
-                errorMessage = error.localizedDescription
-                print("❌ Error adding food entry: \(error)")
-            }
-            
-            isLoading = false
-        }
+        // Clear form
+        weightValue = ""
+        showingAddLogSheet = false
+        
+        print("✅ Added weight entry: \(weight) \(selectedWeightUnit.rawValue)")
     }
     
     func deleteWeightEntry(_ entry: WeightLogEntry) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                try await firestoreManager.deleteWeightEntry(entry.id)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            
-            isLoading = false
+        weightEntries.removeAll { $0.id == entry.id }
+        saveWeightEntries()
+        print("🗑️ Deleted weight entry: \(entry.id)")
+    }
+    
+    private func saveWeightEntries() {
+        cloudManager.saveWeightEntries(weightEntries)
+    }
+    
+    // MARK: - Workout Entries
+    func addWorkoutEntry() {
+        guard !workoutName.isEmpty else {
+            errorMessage = "Please enter a workout name"
+            return
         }
+        
+        let userId = getUserId()
+        let entry = WorkoutLogEntry(date: workoutDate, name: workoutName, userId: userId)
+        
+        workoutEntries.append(entry)
+        saveWorkoutEntries()
+        
+        // Clear form
+        workoutName = ""
+        workoutDate = Date()
+        showingAddLogSheet = false
+        
+        print("✅ Added workout entry: \(workoutName)")
     }
     
     func deleteWorkoutEntry(_ entry: WorkoutLogEntry) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                try await firestoreManager.deleteWorkoutEntry(entry.id)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            
-            isLoading = false
+        workoutEntries.removeAll { $0.id == entry.id }
+        saveWorkoutEntries()
+        print("🗑️ Deleted workout entry: \(entry.id)")
+    }
+    
+    private func saveWorkoutEntries() {
+        cloudManager.saveWorkoutEntries(workoutEntries)
+    }
+    
+    // MARK: - Food Entries
+    func addFoodEntry() {
+        guard !foodName.isEmpty else {
+            errorMessage = "Please enter a food name"
+            return
         }
+        
+        let userId = getUserId()
+        let entry = FoodLogEntry(date: foodDate, name: foodName, userId: userId)
+        
+        print("🍎 Adding food entry: \(foodName) for date: \(foodDate)")
+        foodEntries.append(entry)
+        print("📊 Total food entries after add: \(foodEntries.count)")
+        
+        saveFoodEntries()
+        
+        // Clear form
+        foodName = ""
+        foodDate = Date()
+        showingAddLogSheet = false
+        
+        print("✅ Added food entry: \(foodName)")
     }
     
     func deleteFoodEntry(_ entry: FoodLogEntry) {
-        Task {
-            isLoading = true
-            errorMessage = nil
-            
-            do {
-                try await firestoreManager.deleteFoodEntry(entry.id)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            
-            isLoading = false
-        }
+        foodEntries.removeAll { $0.id == entry.id }
+        saveFoodEntries()
+        print("🗑️ Deleted food entry: \(entry.id)")
     }
     
-    func changeDate(to newDate: Date) {
-        currentDate = newDate
+    private func saveFoodEntries() {
+        print("💾 Saving \(foodEntries.count) food entries...")
+        cloudManager.saveFoodEntries(foodEntries)
+        print("✅ Food entries saved")
+    }
+    
+    // MARK: - Helper Methods
+    private func getUserId() -> String {
+        return authManager.getEmail(for: .personal) ?? "default_user"
+    }
+    
+    // MARK: - Date Navigation
+    func goToPreviousDay() {
+        currentDate = Calendar.current.date(byAdding: .day, value: -1, to: currentDate) ?? currentDate
         loadLogsForCurrentDate()
     }
     
-    // MARK: - Form Validation
+    func goToNextDay() {
+        currentDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        loadLogsForCurrentDate()
+    }
+    
+    func goToToday() {
+        currentDate = Date()
+        loadLogsForCurrentDate()
+    }
+    
+    // MARK: - Form Validation & Actions (for UI compatibility)
     var canAddWeight: Bool {
         guard let weight = Double(weightValue) else { return false }
-        return weight > 0
+        return weight > 0 && !weightValue.isEmpty
     }
     
     var canAddWorkout: Bool {
-        return workoutName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
+        return !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
     var canAddFood: Bool {
-        return foodName.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
+        return !foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
     var canAddCurrentLogType: Bool {
@@ -269,7 +225,6 @@ class LogsViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Form Actions
     func addCurrentLogEntry() {
         switch selectedLogType {
         case .weight: addWeightEntry()
@@ -284,39 +239,5 @@ class LogsViewModel: ObservableObject {
         foodName = ""
         workoutDate = currentDate
         foodDate = currentDate
-    }
-    
-    // MARK: - Private Helper Methods
-    private func validateUserAccess(for entry: any LogEntry, expectedUserId: String) -> Bool {
-        let isValidUser = entry.userId == expectedUserId
-        if !isValidUser {
-            print("⚠️ Security Warning: Entry \(entry.id) belongs to different user: \(entry.userId), expected: \(expectedUserId)")
-        }
-        return isValidUser
-    }
-    
-    private func filterEntriesByUser<T: LogEntry>(_ entries: [T]) -> [T] {
-        let expectedUserId = authManager.getEmail(for: .personal)
-        return entries.filter { entry in
-            let isValid = validateUserAccess(for: entry, expectedUserId: expectedUserId)
-            return isValid
-        }
-    }
-    
-    // MARK: - Validation Methods
-    func validateLogEntrySecurity() {
-        print("🔒 Validating log entry security for user: \(authManager.getEmail(for: .personal))")
-        
-        // Validate weight entries
-        let invalidWeightEntries = weightEntries.filter { !validateUserAccess(for: $0, expectedUserId: authManager.getEmail(for: .personal)) }
-        let invalidWorkoutEntries = workoutEntries.filter { !validateUserAccess(for: $0, expectedUserId: authManager.getEmail(for: .personal)) }
-        let invalidFoodEntries = foodEntries.filter { !validateUserAccess(for: $0, expectedUserId: authManager.getEmail(for: .personal)) }
-        
-        if !invalidWeightEntries.isEmpty || !invalidWorkoutEntries.isEmpty || !invalidFoodEntries.isEmpty {
-            errorMessage = "Security Warning: Some entries don't belong to current user!"
-            print("❌ Found invalid entries - Weight: \(invalidWeightEntries.count), Workout: \(invalidWorkoutEntries.count), Food: \(invalidFoodEntries.count)")
-        } else {
-            print("✅ All entries properly filtered for current user")
-        }
     }
 } 
