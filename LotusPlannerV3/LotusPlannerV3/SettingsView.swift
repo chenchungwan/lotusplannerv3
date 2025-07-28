@@ -92,11 +92,7 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var hideLeftPanel: Bool {
-        didSet {
-            UserDefaults.standard.set(hideLeftPanel, forKey: "hideLeftPanel")
-        }
-    }
+
     
 
     
@@ -104,7 +100,6 @@ class AppPreferences: ObservableObject {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
-        self.hideLeftPanel = UserDefaults.standard.bool(forKey: "hideLeftPanel")
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -134,9 +129,7 @@ class AppPreferences: ObservableObject {
         hideRecurringEventsInMonth = value
     }
     
-    func updateHideLeftPanel(_ value: Bool) {
-        hideLeftPanel = value
-    }
+
     
 
 }
@@ -247,51 +240,10 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                     }
                     
-                    HStack {
-                        Image(systemName: "sidebar.left")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hide Left Panel")
-                                .font(.body)
-                            Text("Hide the navigation sidebar panel")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: Binding(
-                            get: { appPrefs.hideLeftPanel },
-                            set: { appPrefs.updateHideLeftPanel($0) }
-                        ))
-                    }
+
                 }
                 
-                Section("Goals & Planning") {
-                    NavigationLink(destination: GoalsView()) {
-                        HStack {
-                            Image(systemName: "target")
-                                .foregroundColor(.secondary)
-                                .font(.title2)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Set Goals")
-                                    .font(.body)
-                                Text("Manage your personal and professional goals")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                    }
-                }
+
                 
                 // Debug & Testing section removed - now using iCloud storage
             }

@@ -518,7 +518,6 @@ struct CalendarView: View {
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingAddItem = false
-    @State private var showingSettings = false
     @State private var currentTimeTimer: Timer?
     @State private var currentTimeSlot: Double = 0
     @State private var movablePhotos: [MovablePhoto] = []
@@ -578,18 +577,7 @@ struct CalendarView: View {
                 appPrefs: appPrefs
             )
         }
-        .sheet(isPresented: $showingSettings) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
-                                showingSettings = false
-                            }
-                        }
-                    }
-            }
-        }
+
 
     }
     
@@ -657,12 +645,7 @@ struct CalendarView: View {
                     .font(.body)
             }
 
-            // Settings button
-            Button(action: { showingSettings = true }) {
-                Image(systemName: "gear")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-            }
+
 
             // Add button (right-most)
             Button(action: { showingAddItem = true }) {

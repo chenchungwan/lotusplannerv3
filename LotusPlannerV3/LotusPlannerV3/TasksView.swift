@@ -634,7 +634,6 @@ struct TasksView: View {
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
-    @State private var showingSettings = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -795,18 +794,7 @@ struct TasksView: View {
                 appPrefs: appPrefs
             )
         }
-        .sheet(isPresented: $showingSettings) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Done") {
-                                showingSettings = false
-                            }
-                        }
-                    }
-            }
-        }
+
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
@@ -853,12 +841,7 @@ struct TasksView: View {
                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                         .font(.body)
                 }
-                // Settings button
-                Button(action: { showingSettings = true }) {
-                    Image(systemName: "gear")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                }
+
                 // Add Task Button
                 Button(action: {
                     showingNewTask = true

@@ -7,23 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Conditional Sidebar Toggle Modifier
-struct SidebarToggleConditional: ViewModifier {
-    let hideToggle: Bool
-    
-    func body(content: Content) -> some View {
-        if hideToggle {
-            if #available(iOS 17, macOS 14, *) {
-                content.toolbar(removing: .sidebarToggle)
-            } else {
-                content.toolbar(.hidden, for: .navigationBar)
-            }
-        } else {
-            content
-        }
-    }
-}
-
 // MARK: - Sidebar Menu Items
 private enum MenuItem: String, CaseIterable, Identifiable, Hashable {
     case calendar = "Calendars"
@@ -37,9 +20,8 @@ private enum MenuItem: String, CaseIterable, Identifiable, Hashable {
 struct ContentView: View {
     // Current selection in the sidebar
     @State private var selection: MenuItem = .calendar
-    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
+    @State private var columnVisibility = NavigationSplitViewVisibility.detailOnly
     @ObservedObject private var navigationManager = NavigationManager.shared
-    @ObservedObject private var appPrefs = AppPreferences.shared
 
     var body: some View {
         Group {
@@ -50,7 +32,7 @@ struct ContentView: View {
                 } detail: {
                     detailView(for: selection)
                 }
-                .modifier(SidebarToggleConditional(hideToggle: appPrefs.hideLeftPanel))
+                .toolbar(removing: .sidebarToggle)
             } else {
                 // Fallback for iPadOS 16: non-selection initializer
                 NavigationSplitView {
@@ -63,19 +45,7 @@ struct ContentView: View {
         .onChange(of: selection) {
             // Auto-close sidebar when user selects a menu item
             if #available(iOS 17, macOS 14, *) {
-                columnVisibility = appPrefs.hideLeftPanel ? .detailOnly : .automatic
-            }
-        }
-        .onChange(of: appPrefs.hideLeftPanel) {
-            // Update sidebar visibility when setting changes
-            if #available(iOS 17, macOS 14, *) {
-                columnVisibility = appPrefs.hideLeftPanel ? .detailOnly : .automatic
-            }
-        }
-        .onAppear {
-            // Set initial sidebar visibility based on preference
-            if #available(iOS 17, macOS 14, *) {
-                columnVisibility = appPrefs.hideLeftPanel ? .detailOnly : .automatic
+                columnVisibility = .detailOnly
             }
         }
     }
