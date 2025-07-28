@@ -1,4 +1,23 @@
 import SwiftUI
+import UIKit
+
+// MARK: - Navigation Manager
+@MainActor
+class NavigationManager: ObservableObject {
+    static let shared = NavigationManager()
+    
+    @Published var showTasksView = false
+    
+    private init() {}
+    
+    func switchToCalendar() {
+        showTasksView = false
+    }
+    
+    func switchToTasks() {
+        showTasksView = true
+    }
+}
 
 // MARK: - Color Extensions
 extension Color {
@@ -73,17 +92,19 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var weekViewVersion: Int {
+    @Published var hideLeftPanel: Bool {
         didSet {
-            UserDefaults.standard.set(weekViewVersion, forKey: "weekViewVersion")
+            UserDefaults.standard.set(hideLeftPanel, forKey: "hideLeftPanel")
         }
     }
+    
+
     
     private init() {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
-        self.weekViewVersion = UserDefaults.standard.integer(forKey: "weekViewVersion")
+        self.hideLeftPanel = UserDefaults.standard.bool(forKey: "hideLeftPanel")
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -113,9 +134,11 @@ class AppPreferences: ObservableObject {
         hideRecurringEventsInMonth = value
     }
     
-    func updateWeekViewVersion(_ value: Int) {
-        weekViewVersion = value
+    func updateHideLeftPanel(_ value: Bool) {
+        hideLeftPanel = value
     }
+    
+
 }
 
 struct SettingsView: View {
@@ -129,6 +152,8 @@ struct SettingsView: View {
     // State for color picker modals
     @State private var showingPersonalColorPicker = false
     @State private var showingProfessionalColorPicker = false
+    
+
     
     var body: some View {
         NavigationStack {
@@ -174,32 +199,7 @@ struct SettingsView: View {
                         ))
                     }
                     
-                    // Week View Version Picker
-                    HStack {
-                        Image(systemName: "rectangle.3.offgrid")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Week View Layout")
-                                .font(.body)
-                            Text("Choose how the week screen displays tasks/events")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        Picker("Week View", selection: Binding(
-                            get: { appPrefs.weekViewVersion },
-                            set: { appPrefs.updateWeekViewVersion($0) }
-                        )) {
-                            Text("Weekly").tag(1)
-                            Text("Daily").tag(2)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 200)
-                    }
                 }
                 
                 Section("App Preferences") {
@@ -246,6 +246,51 @@ struct SettingsView: View {
                         .disabled(true) // Disabled for now since it's not implemented
                         .foregroundColor(.secondary)
                     }
+                    
+                    HStack {
+                        Image(systemName: "sidebar.left")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hide Left Panel")
+                                .font(.body)
+                            Text("Hide the navigation sidebar panel")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: Binding(
+                            get: { appPrefs.hideLeftPanel },
+                            set: { appPrefs.updateHideLeftPanel($0) }
+                        ))
+                    }
+                }
+                
+                Section("Goals & Planning") {
+                    NavigationLink(destination: GoalsView()) {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundColor(.secondary)
+                                .font(.title2)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Set Goals")
+                                    .font(.body)
+                                Text("Manage your personal and professional goals")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
                 }
                 
                 // Debug & Testing section removed - now using iCloud storage
@@ -253,6 +298,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sidebarToggleHidden()
         }
+
     }
     
     @ViewBuilder

@@ -498,14 +498,13 @@ struct CalendarView: View {
     @StateObject private var calendarViewModel = CalendarViewModel()
     @StateObject private var tasksViewModel = TasksViewModel()
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var currentDate = Date()
     @State private var interval: TimelineInterval = .day
     @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
     @State private var rightSectionTopHeight: CGFloat = UIScreen.main.bounds.height * 0.6
-    @State private var leftTimelineHeight: CGFloat = UIScreen.main.bounds.height * 0.75
     @State private var isDragging = false
     @State private var isRightDividerDragging = false
-    @State private var isLeftDividerDragging = false
     @State private var pencilKitCanvasView = PKCanvasView()
 
     @State private var canvasView = PKCanvasView()
@@ -519,6 +518,7 @@ struct CalendarView: View {
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingAddItem = false
+    @State private var showingSettings = false
     @State private var currentTimeTimer: Timer?
     @State private var currentTimeSlot: Double = 0
     @State private var movablePhotos: [MovablePhoto] = []
@@ -539,10 +539,12 @@ struct CalendarView: View {
     @State private var dayLeftSectionWidth: CGFloat = UIScreen.main.bounds.width * 0.25 // Default 1/4 width
     @State private var isDayVerticalDividerDragging = false
     
+    // Day view right section column widths and divider state
+    @State private var dayRightColumn2Width: CGFloat = UIScreen.main.bounds.width * 0.3 // Default width for 2nd column
+    @State private var isDayRightDividerDragging = false
+    
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var showingEventDetails = false
-    // Controls visibility of the day view's left panel (timeline & logs)
-    @State private var isLeftPanelVisible: Bool = true
     
     var body: some View {
         GeometryReader { geometry in
@@ -576,6 +578,19 @@ struct CalendarView: View {
                 appPrefs: appPrefs
             )
         }
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Done") {
+                                showingSettings = false
+                            }
+                        }
+                    }
+            }
+        }
+
     }
     
     private func splitScreenContent(geometry: GeometryProxy) -> some View {
@@ -591,14 +606,15 @@ struct CalendarView: View {
     
     private var principalToolbarContent: some View {
         HStack(spacing: 8) {
-            // Hamburger menu to toggle left panel in Day view
+            // Calendar/Tasks toggle button
             Button(action: {
-                withAnimation {
-                    isLeftPanelVisible.toggle()
-                }
+                navigationManager.switchToTasks()
             }) {
-                Image(systemName: "line.3.horizontal")
+                Image(systemName: navigationManager.showTasksView ? "calendar" : "checklist")
+                    .font(.title3)
+                    .foregroundColor(.accentColor)
             }
+            
             Button(action: { step(-1) }) {
                 Image(systemName: "chevron.left")
             }
@@ -639,6 +655,13 @@ struct CalendarView: View {
             Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
                 Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                     .font(.body)
+            }
+
+            // Settings button
+            Button(action: { showingSettings = true }) {
+                Image(systemName: "gear")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
             }
 
             // Add button (right-most)
@@ -1080,172 +1103,9 @@ struct CalendarView: View {
         }
     }
     
-    // MARK: - Week View Version 2 (Events Columns)
-    private var weekViewV2: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Top timed timeline (scrollable internally)
-                WeekTimelineComponent(
-                    currentDate: currentDate,
-                    weekEvents: getWeekEventsGroupedByDate(),
-                    personalEvents: calendarViewModel.personalEvents,
-                    professionalEvents: calendarViewModel.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    personalTasks: [],
-                    professionalTasks: [],
-                    hideCompletedTasks: appPrefs.hideCompletedTasks,
-                    initialUntimedRows: 2,
-                    onEventTap: { ev in
-                        selectedCalendarEvent = ev
-                        showingEventDetails = true
-                    },
-                    onDayTap: nil
-                )
-                .frame(height: weekTopSectionHeight)
 
-                // Draggable divider to resize sections
-                weekDivider
 
-                // Calculate uniform row heights across the week for personal and professional task rows
-                let lineHeight: CGFloat = 20
-                let personalRowHeight: CGFloat = {
-                    weekDates.map { date in
-                        tasksViewModel.personalTasks.values.flatMap { $0 }
-                            .filter { t in
-                                (!appPrefs.hideCompletedTasks || !t.isCompleted) &&
-                                t.dueDate.map { Calendar.mondayFirst.isDate($0, inSameDayAs: date) } ?? false
-                            }.count
-                    }.max().map { CGFloat(max($0,1))*lineHeight + 4 } ?? lineHeight + 4
-                }()
 
-                let professionalRowHeight: CGFloat = {
-                    weekDates.map { date in
-                        tasksViewModel.professionalTasks.values.flatMap { $0 }
-                            .filter { t in
-                                (!appPrefs.hideCompletedTasks || !t.isCompleted) &&
-                                t.dueDate.map { Calendar.mondayFirst.isDate($0, inSameDayAs: date) } ?? false
-                            }.count
-                    }.max().map { CGFloat(max($0,1))*lineHeight + 4 } ?? lineHeight + 4
-                }()
-
-                // Bottom untimed task columns – supports horizontal & vertical scrolling
-                ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                    HStack(spacing: 0) {
-                        let timeWidth: CGFloat = 60.0
-                        let dayColumnWidth: CGFloat = 140.0 // fixed width for each day column
-
-                        // Spacer time column (keeps time labels aligned with top timeline if desired)
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(width: timeWidth)
-
-                        ForEach(weekDates, id: \..self) { date in
-                            VStack(alignment: .leading, spacing: 0) {
-                                // Personal tasks row
-                                tasksColumn(for: tasksViewModel.personalTasks.values.flatMap { $0 },
-                                           taskLists: tasksViewModel.personalTaskLists,
-                                           date: date,
-                                           accentColor: appPrefs.personalColor,
-                                           fixedHeight: personalRowHeight,
-                                           accountKind: .personal)
-                                Divider()
-                                // Professional tasks row
-                                tasksColumn(for: tasksViewModel.professionalTasks.values.flatMap { $0 },
-                                           taskLists: tasksViewModel.professionalTaskLists,
-                                           date: date,
-                                           accentColor: appPrefs.professionalColor,
-                                           fixedHeight: professionalRowHeight,
-                                           accountKind: .professional)
-                            }
-                            .frame(width: dayColumnWidth, alignment: .topLeading)
-                            .overlay(Rectangle().fill(Color(.systemGray4)).frame(width: 0.5), alignment: .trailing)
-                        }
-                    }
-                }
-            }
-        }
-        .background(Color(.systemBackground))
-        .task {
-            await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
-            await tasksViewModel.loadTasks()
-        }
-        .onChange(of: currentDate) { _, newValue in
-            Task { await calendarViewModel.loadCalendarDataForWeek(containing: newValue) }
-        }
-        .onChange(of: tasksViewModel.personalTasks) { _ , _  in }
-    }
-    
-    // Helper: tasks filtered by date and grouped
-    private func tasksColumn(for tasks: [GoogleTask], taskLists: [GoogleTaskList], date: Date, accentColor: Color, fixedHeight: CGFloat, accountKind: GoogleAuthManager.AccountKind) -> some View {
-        let cal = Calendar.mondayFirst
-        let listMap = Dictionary(uniqueKeysWithValues: taskLists.map { ($0.id, $0.title) })
-        let dayTasks = tasks.filter { task in
-            guard let due = task.dueDate else { return false }
-            if appPrefs.hideCompletedTasks && task.isCompleted { return false }
-            return cal.isDate(due, inSameDayAs: date)
-        }
-        return VStack(alignment: .leading, spacing: 2) {
-            if dayTasks.isEmpty {
-                Text("No tasks")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(dayTasks) { tk in
-                    HStack(spacing: 4) {
-                        Image(systemName: tk.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(accentColor)
-                            .onTapGesture {
-                                Task {
-                                    await tasksViewModel.toggleTaskCompletion(tk, in: "", for: accountKind)
-                                }
-                            }
-                        Text(tk.title)
-                            .font(.caption2)
-                            .lineLimit(1)
-                        Spacer()
-                        if let listTitle = listMap[tk.id] {
-                            Text(listTitle)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .highPriorityGesture(TapGesture().onEnded {
-                        // Determine listId for the task
-                        var foundListId: String? = nil
-                        if accountKind == .personal {
-                            for (lid, arr) in tasksViewModel.personalTasks where arr.contains(tk) { foundListId = lid; break }
-                        } else {
-                            for (lid, arr) in tasksViewModel.professionalTasks where arr.contains(tk) { foundListId = lid; break }
-                        }
-                        if let lid = foundListId {
-                            selectedTask = tk
-                            selectedTaskListId = lid
-                            selectedAccountKind = accountKind
-                            showingTaskDetails = true
-                        }
-                    })
-                    .onLongPressGesture {
-                        var foundListId: String? = nil
-                        if accountKind == .personal {
-                            for (lid, arr) in tasksViewModel.personalTasks where arr.contains(tk) { foundListId = lid; break }
-                        } else {
-                            for (lid, arr) in tasksViewModel.professionalTasks where arr.contains(tk) { foundListId = lid; break }
-                        }
-                        if let lid = foundListId {
-                            selectedTask = tk
-                            selectedTaskListId = lid
-                            selectedAccountKind = accountKind
-                            showingTaskDetails = true
-                        }
-                    }
-                }
-            }
-        }
-        .padding(2)
-        .frame(height: fixedHeight, alignment: .topLeading)
-    }
     
     // Week dates helper
     private var weekDates: [Date] {
@@ -1256,13 +1116,7 @@ struct CalendarView: View {
     
     // MARK: - Selector
     private var weekView: some View {
-        Group {
-            if appPrefs.weekViewVersion == 2 {
-                weekViewV2
-            } else {
-                weekViewV1
-            }
-        }
+        weekViewV1
     }
     
     private var singleMonthSection: some View {
@@ -1324,8 +1178,11 @@ struct CalendarView: View {
     }
     
     private var dayViewBase: some View {
-        GeometryReader { geometry in
-            dayViewContent(geometry: geometry)
+        GeometryReader { outerGeometry in
+            ScrollView(.horizontal, showsIndicators: true) {
+                dayViewContent(geometry: outerGeometry)
+                    .frame(width: outerGeometry.size.width * 1.25) // 125% of device width
+            }
         }
         .background(Color(.systemBackground))
         .overlay(loadingOverlay)
@@ -1450,14 +1307,12 @@ struct CalendarView: View {
     
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            if isLeftPanelVisible {
-                // Left section (dynamic width)
-                leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
-                
-                // Vertical divider
-                dayVerticalDivider
-            }
+            // Left section (dynamic width)
+            leftDaySectionWithDivider(geometry: geometry)
+                .frame(width: dayLeftSectionWidth)
+            
+            // Vertical divider
+            dayVerticalDivider
 
             // Right section expands to fill remaining space
             rightDaySection(geometry: geometry)
@@ -1466,23 +1321,27 @@ struct CalendarView: View {
     }
     
     private func rightDaySection(geometry: GeometryProxy) -> some View {
-        let rightSectionWidth: CGFloat
-        if isLeftPanelVisible {
-            rightSectionWidth = geometry.size.width - dayLeftSectionWidth - 8 // divider width
-        } else {
-            rightSectionWidth = geometry.size.width
-        }
+        // The total content width is 125% of device width
+        let totalWidth = geometry.size.width * 1.25
+        let rightSectionWidth: CGFloat = totalWidth - dayLeftSectionWidth - 8 // divider width
         
         return VStack(spacing: 0) {
-            // Top section of right side - split into two columns for tasks
+            // Top section of right side - split into three columns
             HStack(alignment: .top, spacing: 0) {
-                // Personal tasks (left column)
+                // Personal tasks (1st column)
                 topLeftDaySection
-                    .frame(width: rightSectionWidth / 2, alignment: .topLeading)
+                    .frame(width: rightSectionWidth / 3, alignment: .topLeading)
                 
-                // Professional tasks (right column)
+                // Professional tasks (2nd column)
                 topRightDaySection
-                    .frame(width: rightSectionWidth / 2, alignment: .topLeading)
+                    .frame(width: dayRightColumn2Width, alignment: .topLeading)
+                
+                // Vertical divider between 2nd and 3rd columns
+                dayRightColumnDivider
+                
+                // Third column (new)
+                topThirdDaySection
+                    .frame(width: rightSectionWidth - (rightSectionWidth / 3) - dayRightColumn2Width - 8, alignment: .topLeading)
             }
             .frame(height: rightSectionTopHeight, alignment: .top)
             .padding(.all, 8)
@@ -1502,20 +1361,10 @@ struct CalendarView: View {
     }
     
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
-        VStack(spacing: 0) {
-            // Timeline section (3/4 of left section height)
-            leftTimelineSection
-                .frame(height: leftTimelineHeight)
-                .padding(.all, 8)
-            
-            // Left section divider
-            leftSectionDivider
-            
-            // Bottom section (1/4 of left section height)
-            leftBottomSection
-                .frame(height: max(200, geometry.size.height - leftTimelineHeight - 8))
-                .padding(.all, 8)
-        }
+        // Timeline section (100% of height)
+        leftTimelineSection
+            .frame(height: geometry.size.height)
+            .padding(.all, 8)
     }
     
     private var leftTimelineSection: some View {
@@ -1558,28 +1407,7 @@ struct CalendarView: View {
             )
     }
     
-    private var leftSectionDivider: some View {
-        Rectangle()
-            .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLeftDividerDragging ? .white : .gray)
-            )
 
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLeftDividerDragging = true
-                        let newHeight = leftTimelineHeight + value.translation.height
-                        leftTimelineHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLeftDividerDragging = false
-                    }
-            )
-    }
     
     private var weekDivider: some View {
         Rectangle()
@@ -1627,9 +1455,30 @@ struct CalendarView: View {
             )
     }
     
-    private var leftBottomSection: some View {
-        LogsComponent(currentDate: currentDate)
+    private var dayRightColumnDivider: some View {
+        Rectangle()
+            .fill(isDayRightDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(width: 8)
+            .overlay(
+                Image(systemName: "line.3.vertical")
+                    .font(.caption)
+                    .foregroundColor(isDayRightDividerDragging ? .white : .gray)
+            )
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDayRightDividerDragging = true
+                        let newWidth = dayRightColumn2Width + value.translation.width
+                        // Constrain to reasonable bounds: minimum 150pt, maximum to leave space for other columns
+                        dayRightColumn2Width = max(150, min(UIScreen.main.bounds.width * 0.4, newWidth))
+                    }
+                    .onEnded { _ in
+                        isDayRightDividerDragging = false
+                    }
+            )
     }
+    
+
     
     private var timelineWithEvents: some View {
         ZStack(alignment: .topLeading) {
@@ -2808,6 +2657,20 @@ struct CalendarView: View {
                 }
             }
         )
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+    
+    private var topThirdDaySection: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                // Logs component integration
+                LogsComponent(currentDate: currentDate)
+            }
+        }
+        .frame(maxHeight: .infinity)
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.3))
+        .cornerRadius(8)
         .frame(maxHeight: .infinity, alignment: .top)
     }
     

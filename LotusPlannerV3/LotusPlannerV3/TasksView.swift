@@ -626,6 +626,7 @@ struct TasksView: View {
     @StateObject private var calendarViewModel = CalendarViewModel()
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var selectedFilter: TaskFilter = .all
     @State private var referenceDate: Date = Date()
     @State private var selectedTask: GoogleTask?
@@ -633,6 +634,7 @@ struct TasksView: View {
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
+    @State private var showingSettings = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -793,11 +795,32 @@ struct TasksView: View {
                 appPrefs: appPrefs
             )
         }
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Done") {
+                                showingSettings = false
+                            }
+                        }
+                    }
+            }
+        }
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
                 HStack(spacing: 6) {
+                    // Calendar/Tasks toggle button
+                    Button(action: {
+                        navigationManager.switchToCalendar()
+                    }) {
+                        Image(systemName: "calendar")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                    }
+                    
                     if selectedFilter == .all {
                         Text("All")
                             .font(.title2)
@@ -829,6 +852,12 @@ struct TasksView: View {
                 }) {
                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                         .font(.body)
+                }
+                // Settings button
+                Button(action: { showingSettings = true }) {
+                    Image(systemName: "gear")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
                 }
                 // Add Task Button
                 Button(action: {
