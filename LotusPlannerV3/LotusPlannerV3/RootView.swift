@@ -53,30 +53,7 @@ struct RootView: View {
                         // Keep the sliding animation in sync with state changes
                         .animation(.interactiveSpring(), value: coverOffset)
                     
-                    // Tap to skip overlay
-                    VStack {
-                        Spacer()
-                        
-                        Button(action: {
-                            dismissCover()
-                        }) {
-                            HStack {
-                                Text("TAP HERE TO SKIP")
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .font(.title2)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(Color.black.opacity(0.7))
-                            .cornerRadius(25)
-                            .shadow(radius: 10)
-                        }
-                        .padding(.bottom, 50)
-                    }
-                    .ignoresSafeArea()
+                    // Removed Tap-to-Skip button overlay per requirement
                 }
                 .onAppear {
                     startAutoSkipTimer()

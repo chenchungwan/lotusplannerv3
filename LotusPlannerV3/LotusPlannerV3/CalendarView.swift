@@ -845,6 +845,7 @@ struct CalendarView: View {
             
             // Bottom section - Journal
             JournalView(currentDate: currentDate, embedded: true)
+                .id(currentDate)
                 .frame(maxHeight: .infinity)
                 .padding(.all, 8)
         }
@@ -1449,6 +1450,7 @@ struct CalendarView: View {
             
             // Bottom section - Journal
             JournalView(currentDate: currentDate, embedded: true)
+                .id(currentDate)
                 .frame(maxHeight: .infinity)
                 .padding(.all, 8)
         }

@@ -49,13 +49,31 @@ struct JournalView: View {
         Group {
             if embedded {
                 canvasContent
-                    .onAppear { loadDrawing() }
+                    .onAppear {
+                        loadDrawing()
+                    }
+                    .onDisappear {
+                        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+                    }
+                    .onChange(of: currentDate) { oldValue, newValue in
+                        // Save drawing for the old date, load for the new date
+                        JournalManager.shared.saveDrawing(for: oldValue, drawing: canvasView.drawing)
+                        loadDrawing()
+                    }
             } else {
                 NavigationStack {
                     canvasContent
                         .navigationTitle("")
                         .toolbarTitleDisplayMode(.inline)
                         .onAppear { loadDrawing() }
+                        .onChange(of: currentDate) { oldValue, newValue in
+                            JournalManager.shared.saveDrawing(for: oldValue, drawing: canvasView.drawing)
+                            loadDrawing()
+                        }
+                        .onDisappear {
+                            // Persist when view leaves hierarchy (e.g., day changed)
+                            JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+                        }
                         .toolbar {
                             ToolbarItemGroup(placement: .navigationBarLeading) {
                                 HStack(spacing: 8) {
