@@ -171,9 +171,8 @@ struct SettingsView: View {
     // State for color picker modals
     @State private var showingPersonalColorPicker = false
     @State private var showingProfessionalColorPicker = false
-    
 
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -241,29 +240,6 @@ struct SettingsView: View {
                             get: { appPrefs.isDarkMode },
                             set: { appPrefs.updateDarkMode($0) }
                         ))
-                    }
-                    
-                    HStack {
-                        Image(systemName: "photo.circle")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Custom Cover Image")
-                                .font(.body)
-                            Text("Upload your own cover image")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Upload") {
-                            // TODO: Implement cover image upload functionality
-                            print("Cover image upload tapped - not yet implemented")
-                        }
-                        .disabled(true) // Disabled for now since it's not implemented
-                        .foregroundColor(.secondary)
                     }
                     
 

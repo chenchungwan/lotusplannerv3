@@ -37,16 +37,26 @@ struct JournalManager {
         UserDefaults.standard.set(storedURL.path, forKey: "journalBackgroundPDFPath")
     }
     
-    /// URL to the stored PDF if it exists.
+    /// URL for the background PDF. Resolution order:
+    /// 1. User-selected file in Documents/iCloud directory
+    /// 2. Path stored in UserDefaults (legacy)
+    /// 3. Bundled resource "JournalTemplate.pdf" shipped with the app
     var backgroundPDFURL: URL? {
+        // 1. Previously imported file
         if FileManager.default.fileExists(atPath: storedURL.path) {
             return storedURL
         }
+
+        // 2. Legacy path persisted in UserDefaults
         if let path = UserDefaults.standard.string(forKey: "journalBackgroundPDFPath") {
             let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: path) { return url }
+            if FileManager.default.fileExists(atPath: path) {
+                return url
+            }
         }
-        return nil
+
+        // 3. Fallback to bundled default PDF
+        return Bundle.main.url(forResource: "JournalTemplate", withExtension: "pdf")
     }
     
     /// Load PDF data if available.

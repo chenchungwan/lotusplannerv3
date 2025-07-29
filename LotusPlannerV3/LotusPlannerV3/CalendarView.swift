@@ -843,9 +843,9 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.all, 8)
             
-            // Scrapbook Component
-            ScrapbookComponent(canvasView: $monthCanvasView, currentDate: currentDate, accountKind: .personal)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // Bottom section - Journal
+            JournalView(currentDate: currentDate, embedded: true)
+                .frame(maxHeight: .infinity)
                 .padding(.all, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1447,8 +1447,8 @@ struct CalendarView: View {
             // Draggable divider
             rightSectionDivider
             
-            // Bottom section - Scrapbook
-            ScrapbookComponent(canvasView: $pencilKitCanvasView, currentDate: currentDate, accountKind: .personal)
+            // Bottom section - Journal
+            JournalView(currentDate: currentDate, embedded: true)
                 .frame(maxHeight: .infinity)
                 .padding(.all, 8)
         }
@@ -3471,6 +3471,20 @@ struct PencilKitView: UIViewRepresentable {
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
         canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = .clear
+
+        // Present the system tool picker (colour, stroke, eraser, etc.)
+        if let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first,
+           let toolPicker = PKToolPicker.shared(for: window) {
+            toolPicker.setVisible(true, forFirstResponder: canvasView)
+            toolPicker.addObserver(canvasView)
+            DispatchQueue.main.async { // ensure first responder after view attached
+                canvasView.becomeFirstResponder()
+            }
+        }
+
         return canvasView
     }
     
