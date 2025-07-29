@@ -66,31 +66,44 @@ final class GoogleAuthManager: ObservableObject {
         print("🎯 Using presenting VC: \(type(of: presentingVC))")
         
         print("🚀 Initiating GoogleSignIn...")
-        let result = try await GIDSignIn.sharedInstance.signIn(
-            withPresenting: presentingVC,
-            hint: nil,
-            additionalScopes: scopes
-        )
-        print("✅ Google sign-in completed successfully")
-        
-        // Store refresh token
-        let refreshToken = result.user.refreshToken.tokenString
-        print("🔑 Storing refresh token for \(kind): \(refreshToken.prefix(20))...")
-        UserDefaults.standard.set(refreshToken, forKey: tokenKeyPrefix + kind.rawValue)
-        
-        // Store access token and expiry
-        let accessToken = result.user.accessToken.tokenString
-        let expirationDate = result.user.accessToken.expirationDate
-        UserDefaults.standard.set(accessToken, forKey: accessTokenKeyPrefix + kind.rawValue)
-        UserDefaults.standard.set(expirationDate, forKey: tokenExpiryKeyPrefix + kind.rawValue)
-        print("🔑 Stored access token for \(kind), expires: \(String(describing: expirationDate))")
-        
-        // Store user email
-        let userEmail = result.user.profile?.email ?? "Unknown"
-        UserDefaults.standard.set(userEmail, forKey: emailKeyPrefix + kind.rawValue)
-        print("📧 Stored email for \(kind): \(userEmail)")
-        
-        updateStates()
+        do {
+            let result = try await GIDSignIn.sharedInstance.signIn(
+                withPresenting: presentingVC,
+                hint: nil,
+                additionalScopes: scopes
+            )
+            print("✅ Google sign-in completed successfully")
+            
+            // Store refresh token
+            let refreshToken = result.user.refreshToken.tokenString
+            print("🔑 Storing refresh token for \(kind): \(refreshToken.prefix(20))...")
+            UserDefaults.standard.set(refreshToken, forKey: tokenKeyPrefix + kind.rawValue)
+            
+            // Store access token and expiry
+            let accessToken = result.user.accessToken.tokenString
+            let expirationDate = result.user.accessToken.expirationDate
+            UserDefaults.standard.set(accessToken, forKey: accessTokenKeyPrefix + kind.rawValue)
+            UserDefaults.standard.set(expirationDate, forKey: tokenExpiryKeyPrefix + kind.rawValue)
+            print("🔑 Stored access token for \(kind), expires: \(String(describing: expirationDate))")
+            
+            // Store user email
+            let userEmail = result.user.profile?.email ?? "Unknown"
+            UserDefaults.standard.set(userEmail, forKey: emailKeyPrefix + kind.rawValue)
+            print("📧 Stored email for \(kind): \(userEmail)")
+            
+            updateStates()
+        } catch {
+            print("❌ Google sign-in failed with error: \(error)")
+            
+            // Handle keychain errors specifically
+            if let nsError = error as NSError?, 
+               nsError.domain == "com.google.GIDSignIn" && nsError.code == -2 {
+                print("🔑 Keychain error detected - clearing auth state and retrying may help")
+                clearAllAuthState()
+            }
+            
+            throw error
+        }
         #else
         print("⚠️ GoogleSignIn framework NOT available - using stub")
         // Stub – simulate success
@@ -106,12 +119,32 @@ final class GoogleAuthManager: ObservableObject {
             // Revoke token if needed using Google REST API … skipped for brevity.
             print("Revoking token: \(token)")
         }
+        // Clear any Google Sign-In keychain items that might be causing conflicts
+        clearGoogleKeychainItems()
         #endif
         UserDefaults.standard.removeObject(forKey: tokenKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: accessTokenKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: tokenExpiryKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: emailKeyPrefix + kind.rawValue)
         updateStates()
+    }
+    
+    // MARK: - Keychain Cleanup
+    private func clearGoogleKeychainItems() {
+        #if canImport(GoogleSignIn)
+        // This helps resolve keychain conflicts
+        GIDSignIn.sharedInstance.signOut()
+        #endif
+    }
+    
+    // Public method to force-clear all auth state when keychain errors occur
+    func clearAllAuthState() {
+        print("🧹 Clearing all Google authentication state due to keychain errors")
+        #if canImport(GoogleSignIn)
+        GIDSignIn.sharedInstance.signOut()
+        #endif
+        unlink(kind: .personal)
+        unlink(kind: .professional)
     }
     
     // MARK: - Access Token Management

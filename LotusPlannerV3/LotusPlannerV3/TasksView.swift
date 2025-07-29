@@ -632,8 +632,16 @@ struct TasksView: View {
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    @State private var showingAddItem = false
+    // Personal/Professional task divider
+    @State private var tasksPersonalWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var isTasksDividerDragging = false
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
+    
+    // Navigation date picker state
+    @State private var showingNavigationDatePicker = false
+    @State private var selectedDateForNavigation = Date()
     
     var body: some View {
         GeometryReader { geometry in
@@ -658,7 +666,12 @@ struct TasksView: View {
                                 showingTaskDetails = true
                             }
                         )
-                        .frame(width: geometry.size.width / 2, alignment: .topLeading)
+                        .frame(width: tasksPersonalWidth, alignment: .topLeading)
+                    }
+                    
+                    // Vertical divider (only show if both accounts are linked)
+                    if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+                        tasksViewDivider
                     }
                     
                     // Professional Tasks Column
@@ -679,7 +692,7 @@ struct TasksView: View {
                                 showingTaskDetails = true
                             }
                         )
-                        .frame(width: geometry.size.width / 2, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
                 .padding(.horizontal, 0)
@@ -794,20 +807,39 @@ struct TasksView: View {
                 appPrefs: appPrefs
             )
         }
+        .sheet(isPresented: $showingNavigationDatePicker) {
+            NavigationStack {
+                DatePicker(
+                    "Select Date",
+                    selection: $selectedDateForNavigation,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .navigationTitle("Select Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") {
+                            showingNavigationDatePicker = false
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            navigateToDate(selectedDateForNavigation)
+                            showingNavigationDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.large])
+        }
 
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
                 HStack(spacing: 6) {
-                    // Calendar/Tasks toggle button
-                    Button(action: {
-                        navigationManager.switchToCalendar()
-                    }) {
-                        Image(systemName: "calendar")
-                            .font(.title3)
-                            .foregroundColor(.accentColor)
-                    }
+                    SharedNavigationToolbar()
                     
                     if selectedFilter == .all {
                         Text("All")
@@ -815,9 +847,15 @@ struct TasksView: View {
                             .fontWeight(.semibold)
                     } else {
                         Button(action: { step(-1) }) { Image(systemName: "chevron.left") }
-                        Text(subtitleForFilter(selectedFilter))
-                            .font(.title3)
-                            .fontWeight(.semibold)
+                        Button(action: {
+                            selectedDateForNavigation = referenceDate
+                            showingNavigationDatePicker = true
+                        }) {
+                            Text(subtitleForFilter(selectedFilter))
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                        }
                         Button(action: { step(1) }) { Image(systemName: "chevron.right") }
                     }
                 }
@@ -853,6 +891,28 @@ struct TasksView: View {
                 .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
             }
         }
+    }
+    
+    private var tasksViewDivider: some View {
+        Rectangle()
+            .fill(isTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(width: 8)
+            .overlay(
+                Image(systemName: "line.3.vertical")
+                    .font(.caption)
+                    .foregroundColor(isTasksDividerDragging ? .white : .gray)
+            )
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isTasksDividerDragging = true
+                        let newWidth = tasksPersonalWidth + value.translation.width
+                        tasksPersonalWidth = max(200, min(UIScreen.main.bounds.width - 200, newWidth))
+                    }
+                    .onEnded { _ in
+                        isTasksDividerDragging = false
+                    }
+            )
     }
     
     // Helper computed properties
@@ -938,6 +998,43 @@ struct TasksView: View {
         case .year:
             formatter.dateFormat = "yyyy"
             return formatter.string(from: referenceDate)
+        }
+    }
+    
+    private func navigateToDate(_ selectedDate: Date) {
+        switch selectedFilter {
+        case .day:
+            // For day view, navigate directly to the selected date
+            referenceDate = selectedDate
+        case .week:
+            // For week view, navigate to the week containing the selected date
+            let calendar = Calendar.mondayFirst
+            if let weekStart = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start {
+                referenceDate = weekStart
+            } else {
+                referenceDate = selectedDate
+            }
+        case .month:
+            // For month view, navigate to the month containing the selected date
+            let calendar = Calendar.current
+            let components = calendar.dateComponents([.year, .month], from: selectedDate)
+            if let firstOfMonth = calendar.date(from: components) {
+                referenceDate = firstOfMonth
+            } else {
+                referenceDate = selectedDate
+            }
+        case .year:
+            // For year view, navigate to the year containing the selected date
+            let calendar = Calendar.current
+            let year = calendar.component(.year, from: selectedDate)
+            if let firstOfYear = calendar.date(from: DateComponents(year: year, month: 1, day: 1)) {
+                referenceDate = firstOfYear
+            } else {
+                referenceDate = selectedDate
+            }
+        case .all:
+            // For "all" view, don't change the reference date as it shows all tasks
+            break
         }
     }
     

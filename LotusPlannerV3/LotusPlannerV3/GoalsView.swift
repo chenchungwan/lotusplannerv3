@@ -65,9 +65,12 @@ struct GoalsView: View {
         .toolbarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarLeading) {
-                Text(titleLine)
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                HStack(spacing: 8) {
+                    SharedNavigationToolbar()
+                    Text(titleLine)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                }
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 ForEach([TimeFilter.month, .quarter, .year, .all], id: \TimeFilter.id) { tf in

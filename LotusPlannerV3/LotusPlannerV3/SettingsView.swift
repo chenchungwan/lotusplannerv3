@@ -6,16 +6,42 @@ import UIKit
 class NavigationManager: ObservableObject {
     static let shared = NavigationManager()
     
+    enum CurrentView {
+        case calendar
+        case tasks
+        case goals
+        case journal
+        case settings
+    }
+    
+    @Published var currentView: CurrentView = .calendar
     @Published var showTasksView = false
     
     private init() {}
     
     func switchToCalendar() {
+        currentView = .calendar
         showTasksView = false
     }
     
     func switchToTasks() {
+        currentView = .tasks
         showTasksView = true
+    }
+    
+    func switchToGoals() {
+        currentView = .goals
+        showTasksView = false
+    }
+    
+    func switchToJournal() {
+        currentView = .journal
+        showTasksView = false
+    }
+    
+    func switchToSettings() {
+        currentView = .settings
+        showTasksView = false
     }
 }
 
@@ -243,11 +269,43 @@ struct SettingsView: View {
 
                 }
                 
-
+                Section("Debug & Auth Issues") {
+                    HStack {
+                        Image(systemName: "key.slash")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Clear Auth State")
+                                .font(.body)
+                            Text("Fix keychain errors by clearing all Google auth data")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Clear") {
+                            GoogleAuthManager.shared.clearAllAuthState()
+                        }
+                        .buttonStyle(.bordered)
+                        .foregroundColor(.red)
+                    }
+                }
                 
-                // Debug & Testing section removed - now using iCloud storage
             }
-            .navigationTitle("Settings")
+            .navigationTitle("")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
+                    HStack(spacing: 8) {
+                        SharedNavigationToolbar()
+                        Text("Settings")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                    }
+                }
+            }
             .sidebarToggleHidden()
         }
 
