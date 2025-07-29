@@ -18,7 +18,7 @@ class GoalsViewModel: ObservableObject {
         didSet { saveGoals() }
     }
     
-    private let cloudManager = iCloudManager.shared
+    private let coreDataManager = CoreDataManager.shared
 
     init() {
         loadLocalData()
@@ -27,13 +27,21 @@ class GoalsViewModel: ObservableObject {
     
     // MARK: - Data Loading and Syncing
     private func loadLocalData() {
-        print("📊 Loading local goals data...")
-        categories = cloudManager.loadCategories()
-        goals = cloudManager.loadGoals()
+        print("📊 Loading local goals data from Core Data...")
+        
+        categories = coreDataManager.loadCategories()
+        goals = coreDataManager.loadGoals()
         
         // Initialize default categories if none exist
         if categories.isEmpty {
-            categories = ["Health & Fitness", "Work & Projects", "Family & Friends", "Finances", "Misc."].map { GoalCategory(name: $0) }
+            let defaultCategories = ["Health & Fitness", "Work & Projects", "Family & Friends", "Finances", "Misc."].map { GoalCategory(name: $0) }
+            
+            // Save default categories to Core Data
+            for category in defaultCategories {
+                coreDataManager.saveCategory(category)
+            }
+            
+            categories = defaultCategories
         }
         
         print("📊 Loaded \(categories.count) categories and \(goals.count) goals")
@@ -54,12 +62,21 @@ class GoalsViewModel: ObservableObject {
     // MARK: - Category Management
     func addCategory(name: String) {
         guard categories.count < 6 else { return }
-        categories.append(GoalCategory(name: name))
+        let newCategory = GoalCategory(name: name)
+        
+        // Save to Core Data
+        coreDataManager.saveCategory(newCategory)
+        
+        // Update local array
+        categories.append(newCategory)
     }
 
     func rename(_ category: GoalCategory, to newName: String) {
         if let idx = categories.firstIndex(where: { $0.id == category.id }) {
             categories[idx].name = newName
+            
+            // Update in Core Data
+            coreDataManager.updateCategory(categories[idx])
         }
     }
 
@@ -68,23 +85,37 @@ class GoalsViewModel: ObservableObject {
     }
 
     private func saveCategories() {
-        cloudManager.saveCategories(categories)
+        // Individual categories are saved immediately when modified in Core Data
+        // No batch save needed
     }
 
     // MARK: - Goal Management
     func addGoal(description: String, dueDate: Date?, categoryId: UUID) {
         let userId = GoogleAuthManager.shared.getEmail(for: .personal) ?? "default_user"
         let newGoal = Goal(description: description, dueDate: dueDate, categoryId: categoryId, isCompleted: false, userId: userId)
+        
+        // Save to Core Data
+        coreDataManager.saveGoal(newGoal)
+        
+        // Update local array
         goals.append(newGoal)
         print("✅ Added goal: \(description)")
     }
 
     func deleteGoal(_ goal: Goal) {
+        // Delete from Core Data
+        coreDataManager.deleteGoal(goal)
+        
+        // Update local array
         goals.removeAll { $0.id == goal.id }
         print("🗑️ Deleted goal: \(goal.id)")
     }
 
     func updateGoal(_ goal: Goal) {
+        // Update in Core Data
+        coreDataManager.updateGoal(goal)
+        
+        // Update local array
         if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
             goals[idx] = goal
             print("✏️ Updated goal: \(goal.id)")
@@ -98,6 +129,7 @@ class GoalsViewModel: ObservableObject {
     }
     
     private func saveGoals() {
-        cloudManager.saveGoals(goals)
+        // Individual goals are saved immediately when modified in Core Data
+        // No batch save needed
     }
 } 

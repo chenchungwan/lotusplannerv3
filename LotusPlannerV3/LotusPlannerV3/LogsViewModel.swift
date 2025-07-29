@@ -3,6 +3,21 @@ import SwiftUI
 
 @MainActor
 class LogsViewModel: ObservableObject {
+    static let shared = LogsViewModel()
+    
+    private init() {
+        print("🚀 LogsViewModel singleton initializing...")
+        setupiCloudSync()
+        loadLocalData()
+    }
+    
+    // Reload data from Core Data
+    func reloadData() {
+        print("🔄 Reloading data from Core Data...")
+        loadLocalData()
+    }
+    
+
     @Published var selectedLogType: LogType = .weight
     @Published var currentDate: Date = Date()
     @Published var isLoading = false
@@ -26,13 +41,8 @@ class LogsViewModel: ObservableObject {
     @Published var workoutEntries: [WorkoutLogEntry] = []
     @Published var foodEntries: [FoodLogEntry] = []
     
-    private let cloudManager = iCloudManager.shared
+    private let coreDataManager = CoreDataManager.shared
     private let authManager = GoogleAuthManager.shared
-    
-    init() {
-        loadLocalData()
-        setupiCloudSync()
-    }
     
     // MARK: - Computed Properties
     var filteredWeightEntries: [WeightLogEntry] {
@@ -59,23 +69,18 @@ class LogsViewModel: ObservableObject {
     
     // MARK: - Data Loading and Syncing
     private func loadLocalData() {
-        print("📊 Loading local log data...")
-        weightEntries = cloudManager.loadWeightEntries()
-        workoutEntries = cloudManager.loadWorkoutEntries()
-        foodEntries = cloudManager.loadFoodEntries()
+        print("📊 Loading local log data from Core Data...")
+        
+        weightEntries = coreDataManager.loadWeightEntries()
+        workoutEntries = coreDataManager.loadWorkoutEntries()
+        foodEntries = coreDataManager.loadFoodEntries()
+        
         print("📊 Loaded \(weightEntries.count) weight, \(workoutEntries.count) workout, \(foodEntries.count) food entries")
     }
     
     private func setupiCloudSync() {
-        NotificationCenter.default.addObserver(
-            forName: .iCloudDataChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.loadLocalData()
-            }
-        }
+        // Core Data with CloudKit handles sync automatically
+        // No manual sync setup needed
     }
     
     func loadLogsForCurrentDate() {
@@ -95,8 +100,11 @@ class LogsViewModel: ObservableObject {
         let userId = getUserId()
         let entry = WeightLogEntry(weight: weight, unit: selectedWeightUnit, userId: userId)
         
+        // Save to Core Data immediately
+        coreDataManager.saveWeightEntry(entry)
+        
+        // Update local array
         weightEntries.append(entry)
-        saveWeightEntries()
         
         // Clear form
         weightValue = ""
@@ -106,13 +114,18 @@ class LogsViewModel: ObservableObject {
     }
     
     func deleteWeightEntry(_ entry: WeightLogEntry) {
+        // Delete from Core Data
+        coreDataManager.deleteWeightEntry(entry)
+        
+        // Update local array
         weightEntries.removeAll { $0.id == entry.id }
-        saveWeightEntries()
+        
         print("🗑️ Deleted weight entry: \(entry.id)")
     }
     
     private func saveWeightEntries() {
-        cloudManager.saveWeightEntries(weightEntries)
+        // Individual entries are saved immediately when added/updated
+        // No batch save needed with Core Data
     }
     
     // MARK: - Workout Entries
@@ -125,8 +138,11 @@ class LogsViewModel: ObservableObject {
         let userId = getUserId()
         let entry = WorkoutLogEntry(date: workoutDate, name: workoutName, userId: userId)
         
+        // Save to Core Data immediately
+        coreDataManager.saveWorkoutEntry(entry)
+        
+        // Update local array
         workoutEntries.append(entry)
-        saveWorkoutEntries()
         
         // Clear form
         workoutName = ""
@@ -137,13 +153,13 @@ class LogsViewModel: ObservableObject {
     }
     
     func deleteWorkoutEntry(_ entry: WorkoutLogEntry) {
+        // Delete from Core Data
+        coreDataManager.deleteWorkoutEntry(entry)
+        
+        // Update local array
         workoutEntries.removeAll { $0.id == entry.id }
-        saveWorkoutEntries()
+        
         print("🗑️ Deleted workout entry: \(entry.id)")
-    }
-    
-    private func saveWorkoutEntries() {
-        cloudManager.saveWorkoutEntries(workoutEntries)
     }
     
     // MARK: - Food Entries
@@ -157,10 +173,13 @@ class LogsViewModel: ObservableObject {
         let entry = FoodLogEntry(date: foodDate, name: foodName, userId: userId)
         
         print("🍎 Adding food entry: \(foodName) for date: \(foodDate)")
+        
+        // Save to Core Data immediately
+        coreDataManager.saveFoodEntry(entry)
+        
+        // Update local array
         foodEntries.append(entry)
         print("📊 Total food entries after add: \(foodEntries.count)")
-        
-        saveFoodEntries()
         
         // Clear form
         foodName = ""
@@ -171,15 +190,13 @@ class LogsViewModel: ObservableObject {
     }
     
     func deleteFoodEntry(_ entry: FoodLogEntry) {
+        // Delete from Core Data
+        coreDataManager.deleteFoodEntry(entry)
+        
+        // Update local array
         foodEntries.removeAll { $0.id == entry.id }
-        saveFoodEntries()
+        
         print("🗑️ Deleted food entry: \(entry.id)")
-    }
-    
-    private func saveFoodEntries() {
-        print("💾 Saving \(foodEntries.count) food entries...")
-        cloudManager.saveFoodEntries(foodEntries)
-        print("✅ Food entries saved")
     }
     
     // MARK: - Helper Methods

@@ -8,9 +8,16 @@ struct JournalManager {
     private init() {}
     
     private let fileName = "journal_background.pdf"
-    
+
+    // Prefer the app’s iCloud Drive container for user-generated files. If
+    // iCloud is unavailable (e.g. signed-out, Simulator), fall back to the
+    // local Documents directory so the feature continues to work offline.
+    private var ubiquityDocsURL: URL? {
+        FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents")
+    }
+
     private var docsURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        ubiquityDocsURL ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     }
     private var storedURL: URL { docsURL.appendingPathComponent(fileName) }
     

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LogsComponent: View {
-    @StateObject private var viewModel = LogsViewModel()
+    @ObservedObject private var viewModel = LogsViewModel.shared
     let currentDate: Date
     
     init(currentDate: Date = Date()) {
@@ -18,6 +18,15 @@ struct LogsComponent: View {
                     .foregroundColor(.primary)
                 
                 Spacer()
+                
+                // Refresh button - reload data from Core Data
+                Button(action: {
+                    viewModel.reloadData()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 
                 Button(action: {
                     viewModel.showingAddLogSheet = true
@@ -70,6 +79,7 @@ struct LogsComponent: View {
         }
         .onAppear {
             viewModel.currentDate = currentDate
+            viewModel.reloadData()
             viewModel.loadLogsForCurrentDate()
         }
         .onChange(of: currentDate) { oldValue, newValue in
