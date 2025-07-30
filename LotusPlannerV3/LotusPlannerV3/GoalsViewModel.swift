@@ -11,6 +11,8 @@ struct GoalCategory: Identifiable, Hashable, Codable {
 
 @MainActor
 class GoalsViewModel: ObservableObject {
+    /// UserDefaults key for persisting custom order of goal categories
+    private let orderKey = "GoalCategoryOrder"
     @Published var categories: [GoalCategory] = [] {
         didSet { saveCategories() }
     }
@@ -21,7 +23,10 @@ class GoalsViewModel: ObservableObject {
     private let coreDataManager = CoreDataManager.shared
 
     init() {
+        // Load persistent data then apply saved order
+
         loadLocalData()
+        applySavedOrder()
         setupiCloudSync()
     }
     
@@ -82,9 +87,35 @@ class GoalsViewModel: ObservableObject {
 
     func move(from source: IndexSet, to destination: Int) {
         categories.move(fromOffsets: source, toOffset: destination)
+        saveCategoryOrder()
+    }
+    
+    // Drag-drop within Grid directly mutates `categories`, so didSet already
+    // triggers, but we add explicit convenience helper here as well.
+    private func saveCategoryOrder() {
+        let ids = categories.map { $0.id.uuidString }
+        UserDefaults.standard.set(ids, forKey: orderKey)
+    }
+    private func applySavedOrder() {
+        guard let stored = UserDefaults.standard.array(forKey: orderKey) as? [String], !stored.isEmpty else { return }
+        var reordered: [GoalCategory] = []
+        var remaining = categories
+        for idStr in stored {
+            if let idx = remaining.firstIndex(where: { $0.id.uuidString == idStr }) {
+                reordered.append(remaining.remove(at: idx))
+            }
+        }
+        reordered.append(contentsOf: remaining) // Append any new categories
+        categories = reordered
+    }
+    
+    // Original move function preserved for list reordering if ever needed
+    func _moveDeprecated(from source: IndexSet, to destination: Int) {
+        categories.move(fromOffsets: source, toOffset: destination)
     }
 
     private func saveCategories() {
+        saveCategoryOrder()
         // Individual categories are saved immediately when modified in Core Data
         // No batch save needed
     }

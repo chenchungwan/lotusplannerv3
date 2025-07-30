@@ -3468,29 +3468,55 @@ struct MonthCardView: View {
 
 struct PencilKitView: UIViewRepresentable {
     @Binding var canvasView: PKCanvasView
+    /// Controls whether the system PKToolPicker is visible. Defaults to `true` to
+    /// keep existing behaviour for call-sites that don’t specify the argument.
+    var showsToolPicker: Bool = true
     
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
         canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = .clear
 
-        // Present the system tool picker (colour, stroke, eraser, etc.)
+        // Present (or hide) the system tool picker (colour, stroke, eraser …)
         if let window = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .flatMap({ $0.windows })
                 .first,
            let toolPicker = PKToolPicker.shared(for: window) {
-            toolPicker.setVisible(true, forFirstResponder: canvasView)
+            toolPicker.setVisible(showsToolPicker, forFirstResponder: canvasView)
             toolPicker.addObserver(canvasView)
-            DispatchQueue.main.async { // ensure first responder after view attached
-                canvasView.becomeFirstResponder()
+            if showsToolPicker {
+                DispatchQueue.main.async { // ensure first responder after view attached
+                    canvasView.becomeFirstResponder()
+                }
             }
         }
 
         return canvasView
     }
     
-    func updateUIView(_ uiView: PKCanvasView, context: Context) {}
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Update tool-picker visibility when state changes
+        guard let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first,
+              let toolPicker = PKToolPicker.shared(for: window) else { return }
+        toolPicker.setVisible(showsToolPicker, forFirstResponder: uiView)
+        if showsToolPicker {
+            // Become first-responder so the picker can attach
+            if !uiView.isFirstResponder {
+                DispatchQueue.main.async {
+                    uiView.becomeFirstResponder()
+                }
+            }
+        } else {
+            // Hide keyboard / resign when picker hidden
+            if uiView.isFirstResponder {
+                uiView.resignFirstResponder()
+            }
+        }
+    }
 }
 
 
