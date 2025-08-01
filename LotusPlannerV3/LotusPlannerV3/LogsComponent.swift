@@ -3,9 +3,11 @@ import SwiftUI
 struct LogsComponent: View {
     @ObservedObject private var viewModel = LogsViewModel.shared
     let currentDate: Date
+    let horizontal: Bool
     
-    init(currentDate: Date = Date()) {
+    init(currentDate: Date = Date(), horizontal: Bool = false) {
         self.currentDate = currentDate
+        self.horizontal = horizontal
     }
     
     var body: some View {
@@ -39,15 +41,31 @@ struct LogsComponent: View {
             
             // All log sections in a scrollable view
             ScrollView {
-                VStack(spacing: 16) {
-                    // Weight Section
-                    weightSection
-                    
-                    // Workout Section  
-                    workoutSection
-                    
-                    // Food Section
-                    foodSection
+                if horizontal {
+                    HStack(alignment: .top, spacing: 16) {
+                        // Weight Section
+                        weightSection
+                            .frame(maxWidth: .infinity, alignment: .top)
+                        
+                        // Workout Section  
+                        workoutSection
+                            .frame(maxWidth: .infinity, alignment: .top)
+                        
+                        // Food Section
+                        foodSection
+                            .frame(maxWidth: .infinity, alignment: .top)
+                    }
+                } else {
+                    VStack(spacing: 16) {
+                        // Weight Section
+                        weightSection
+                        
+                        // Workout Section  
+                        workoutSection
+                        
+                        // Food Section
+                        foodSection
+                    }
                 }
             }
             
@@ -347,7 +365,7 @@ struct AddLogEntryView: View {
 // MARK: - Preview
 struct LogsComponent_Previews: PreviewProvider {
     static var previews: some View {
-        LogsComponent()
+        LogsComponent(currentDate: Date(), horizontal: false)
             .previewLayout(.sizeThatFits)
             .frame(height: 400)
     }

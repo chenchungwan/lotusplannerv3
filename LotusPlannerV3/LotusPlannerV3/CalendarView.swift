@@ -1291,7 +1291,7 @@ struct CalendarView: View {
         GeometryReader { outerGeometry in
             ScrollView(.horizontal, showsIndicators: true) {
                 dayViewContent(geometry: outerGeometry)
-                    .frame(width: outerGeometry.size.width) // 100% of device width
+                    .frame(width: (appPrefs.dayViewLayout == .expanded ? outerGeometry.size.width * 2 : outerGeometry.size.width)) // 100% of device width
             }
         }
         .background(Color(.systemBackground))
@@ -1415,7 +1415,16 @@ struct CalendarView: View {
         currentTimeSlot = Double(hour) * 2.0 + Double(minute) / 30.0
     }
     
+    @ViewBuilder
     private func dayViewContent(geometry: GeometryProxy) -> some View {
+        if appPrefs.dayViewLayout == .expanded {
+            dayViewContentExpanded(geometry: geometry)
+        } else {
+            dayViewContentCompact(geometry: geometry)
+        }
+    }
+    
+    private func dayViewContentCompact(geometry: GeometryProxy) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // Left section (dynamic width)
             leftDaySectionWithDivider(geometry: geometry)
@@ -1427,6 +1436,45 @@ struct CalendarView: View {
             // Right section expands to fill remaining space
             rightDaySection(geometry: geometry)
                 .frame(maxWidth: .infinity)
+        }
+    }
+    
+    private func dayViewContentExpanded(geometry: GeometryProxy) -> some View {
+        let deviceWidth = UIScreen.main.bounds.width
+        let dividerWidth: CGFloat = 8
+        let column1Width = deviceWidth * 0.25  // Timeline: 25% of device width
+        let column2Width = deviceWidth * 0.75  // Tasks + Logs: 75% of device width
+        let column3Width = deviceWidth         // Journal: 100% of device width
+
+        return HStack(alignment: .top, spacing: 0) {
+            // Column 1 – timeline (25% device width)
+            leftTimelineSection
+                .frame(width: column1Width)
+                .padding(.all, 8)
+
+            dayVerticalDivider
+
+            // Column 2 – Tasks + Logs (75% device width)
+            VStack(spacing: 0) {
+                topLeftDaySection
+                    .frame(height: rightSectionTopHeight)
+                    .padding(.all, 8)
+
+                rightSectionDivider
+
+                LogsComponent(currentDate: currentDate, horizontal: true)
+                    .frame(maxHeight: .infinity)
+                    .padding(.all, 8)
+            }
+            .frame(width: column2Width)
+
+            dayVerticalDivider
+
+            // Column 3 – Journal (100% device width)
+            JournalView(currentDate: currentDate, embedded: true)
+                .id(currentDate)
+                .frame(width: column3Width)
+                .padding(.all, 8)
         }
     }
     
@@ -1472,7 +1520,7 @@ struct CalendarView: View {
             
             // Logs section (bottom part)
             VStack(alignment: .leading, spacing: 8) {
-                LogsComponent(currentDate: currentDate)
+                LogsComponent(currentDate: currentDate, horizontal: false)
             }
             .frame(maxHeight: .infinity)
             .padding(.all, 8)

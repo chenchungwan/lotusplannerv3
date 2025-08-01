@@ -1,6 +1,20 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Day View Layout Option Enum
+enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
+    case compact = 0
+    case expanded = 1
+
+    var id: Int { rawValue }
+    var displayName: String {
+        switch self {
+        case .compact: "Compact"
+        case .expanded: "Expanded"
+        }
+    }
+}
+
 // MARK: - Navigation Manager
 @MainActor
 class NavigationManager: ObservableObject {
@@ -112,11 +126,21 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Hide recurring events setting
     @Published var hideRecurringEventsInMonth: Bool {
         didSet {
             UserDefaults.standard.set(hideRecurringEventsInMonth, forKey: "hideRecurringEventsInMonth")
         }
     }
+    
+    
+    // Day view layout preference
+    @Published var dayViewLayout: DayViewLayoutOption {
+        didSet {
+            UserDefaults.standard.set(dayViewLayout.rawValue, forKey: "dayViewLayout")
+        }
+    }
+    
     
 
     
@@ -126,6 +150,10 @@ class AppPreferences: ObservableObject {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
+        
+        // Load day view layout preference
+        let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
+        self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -153,6 +181,10 @@ class AppPreferences: ObservableObject {
     
     func updateHideRecurringEventsInMonth(_ value: Bool) {
         hideRecurringEventsInMonth = value
+    }
+    
+    func updateDayViewLayout(_ layout: DayViewLayoutOption) {
+        dayViewLayout = layout
     }
     
 
@@ -218,6 +250,19 @@ struct SettingsView: View {
                     }
                     
 
+                }
+                
+
+                Section("Day View Layout") {
+                    Picker("Layout", selection: Binding(
+                        get: { appPrefs.dayViewLayout },
+                        set: { appPrefs.updateDayViewLayout($0) }
+                    )) {
+                        ForEach(DayViewLayoutOption.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.inline)
                 }
                 
                 Section("App Preferences") {

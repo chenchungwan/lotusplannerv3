@@ -139,14 +139,12 @@ struct JournalView: View {
                     photos.remove(at: idx)
                 }
             }
-            // Floating controls (bottom-right)
-            VStack {
+            // Floating controls (top-right)
+            HStack {
                 Spacer()
-                HStack {
-                    Spacer()
-                    controlButtons
-                }
+                controlButtons
             }
+            .padding(.top, 8)
         }
         .onChange(of: pickerItems) { _ in
             loadSelectedPhotos()
@@ -159,6 +157,13 @@ struct JournalView: View {
             // Toggle tool picker
             Button(action: { showToolPicker.toggle() }) {
                 Image(systemName: showToolPicker ? "pencil.slash" : "pencil")
+                    .padding(10)
+                    .background(Color(.systemBackground).opacity(0.8))
+                    .clipShape(Circle())
+            }
+            // Eraser button – clears all content
+            Button(action: { clearJournal() }) {
+                Image(systemName: "eraser")
                     .padding(10)
                     .background(Color(.systemBackground).opacity(0.8))
                     .clipShape(Circle())
@@ -185,6 +190,12 @@ struct JournalView: View {
             }
         }
         .padding(12)
+    }
+    
+    // MARK: - Clear Journal
+    private func clearJournal() {
+        canvasView.drawing = PKDrawing()
+        photos.removeAll()
     }
     
     // MARK: - Photo Data Persistence
