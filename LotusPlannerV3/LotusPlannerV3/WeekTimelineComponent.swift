@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct WeekTimelineComponent: View {
+    // MARK: - Properties
     let currentDate: Date
     let weekEvents: [Date: [GoogleCalendarEvent]]
     let personalEvents: [GoogleCalendarEvent]
     let professionalEvents: [GoogleCalendarEvent]
     let personalColor: Color
     let professionalColor: Color
-    // Task data
     let personalTasks: [GoogleTask]
     let professionalTasks: [GoogleTask]
     let hideCompletedTasks: Bool
@@ -16,29 +16,19 @@ struct WeekTimelineComponent: View {
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onDayTap: ((Date) -> Void)?
     
+    // MARK: - State
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
-    @State private var showTaskRows: Bool = true
-    @State private var untimedRows: Int = 0
-    @State private var dragStartRows: Int = 0
     
-    private let hourHeight: CGFloat = 100
-    private let startHour = 6
-    private let endHour = 23
-    private let timeColumnWidth: CGFloat = 60
+    // MARK: - Constants
+    private let hourHeight: CGFloat = 80
+    private let defaultStartHour = 6
+    private let defaultEndHour = 22
+    private let timeColumnWidth: CGFloat = 50
+    private let dayHeaderHeight: CGFloat = 60
+    private let allDayEventHeight: CGFloat = 24
     
-    private var dividerGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                let deltaRows = Int((value.translation.height / hourHeight).rounded())
-                let newVal = max(0, dragStartRows + deltaRows)
-                if newVal != untimedRows { untimedRows = newVal }
-            }
-            .onEnded { _ in
-                dragStartRows = untimedRows
-            }
-    }
-    
+    // MARK: - Initializer
     init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTasks: [GoogleTask] = [], professionalTasks: [GoogleTask] = [], hideCompletedTasks: Bool = false, initialUntimedRows: Int = 0, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
@@ -52,99 +42,148 @@ struct WeekTimelineComponent: View {
         self.initialUntimedRows = initialUntimedRows
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
-        _untimedRows = State(initialValue: initialUntimedRows)
-        _dragStartRows = State(initialValue: initialUntimedRows)
     }
     
-    // MARK: - Event Layout Models
+    // MARK: - Data Models
     struct EventLayout {
         let event: GoogleCalendarEvent
-        let column: Int
-        let totalColumns: Int
-        let topOffset: CGFloat
+        let startOffset: CGFloat
         let height: CGFloat
         let width: CGFloat
         let xOffset: CGFloat
+        let isPersonal: Bool
     }
     
-    struct EventTime {
-        let event: GoogleCalendarEvent
-        let startMinutes: Int
-        let endMinutes: Int
-        
-        func overlaps(with other: EventTime) -> Bool {
-            return startMinutes < other.endMinutes && endMinutes > other.startMinutes
-        }
+    struct DayData {
+        let date: Date
+        let isToday: Bool
+        let events: [GoogleCalendarEvent]
+        let allDayEvents: [GoogleCalendarEvent]
+        let timedEvents: [GoogleCalendarEvent]
+        let tasks: [GoogleTask]
     }
     
+    // MARK: - Main Body
     var body: some View {
         GeometryReader { geometry in
             let dayColumnWidth = (geometry.size.width - timeColumnWidth) / 7
             
             VStack(spacing: 0) {
-                // Frozen header section with only day titles (no all-day events)
-                frozenHeaderSection(dayColumnWidth: dayColumnWidth)
+                // Fixed header with day labels
+                headerSection(dayColumnWidth: dayColumnWidth)
                 
-                // Scrollable timeline section with Task rows + all-day events at the top
+                // Scrollable content
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 0) {
-                        // All-day events section (scrollable)
-                        if hasAllDayEvents {
+                        // All-day events section
+                        if hasAnyAllDayEvents {
                             allDayEventsSection(dayColumnWidth: dayColumnWidth)
                         }
                         
-                        // Regular timeline section
-                        scrollableTimelineSection(dayColumnWidth: dayColumnWidth)
+                        // Timeline grid with events
+                        timelineSection(dayColumnWidth: dayColumnWidth)
                     }
                 }
             }
         }
-        .onAppear {
-            startCurrentTimeTimer()
-        }
-        .onDisappear {
-            stopCurrentTimeTimer()
-        }
+        .onAppear { startTimer() }
+        .onDisappear { stopTimer() }
     }
     
-    // MARK: - Week Dates
+    // MARK: - Computed Properties
     private var weekDates: [Date] {
         let calendar = Calendar.mondayFirst
         guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: currentDate)?.start else {
             return []
         }
-        
         return (0..<7).compactMap { dayOffset in
             calendar.date(byAdding: .day, value: dayOffset, to: weekStart)
         }
     }
     
-    // MARK: - All-Day Events Check
-    private var hasAllDayEvents: Bool {
-        return weekDates.contains { date in
+    private var timelineHours: (start: Int, end: Int) {
+        let calendar = Calendar.current
+        var earliestHour = defaultStartHour
+        var latestHour = defaultEndHour
+        
+        // Check all events across the week to find the earliest and latest times
+        for date in weekDates {
+            let events = weekEvents[date] ?? []
+            let timedEvents = events.filter { !$0.isAllDay }
+            
+            for event in timedEvents {
+                if let startTime = event.startTime {
+                    let startHour = calendar.component(.hour, from: startTime)
+                    earliestHour = min(earliestHour, startHour)
+                }
+                
+                if let endTime = event.endTime {
+                    let endHour = calendar.component(.hour, from: endTime)
+                    // If minutes are > 0, we need to show the next hour too
+                    let endMinute = calendar.component(.minute, from: endTime)
+                    let adjustedEndHour = endMinute > 0 ? endHour + 1 : endHour
+                    latestHour = max(latestHour, adjustedEndHour)
+                }
+            }
+        }
+        
+        // Ensure we have at least the default range and cap at 24-hour bounds
+        return (
+            start: max(0, min(earliestHour, defaultStartHour)),
+            end: min(24, max(latestHour, defaultEndHour))
+        )
+    }
+    
+    private var startHour: Int {
+        return timelineHours.start
+    }
+    
+    private var endHour: Int {
+        return timelineHours.end
+    }
+    
+    private var hasAnyAllDayEvents: Bool {
+        weekDates.contains { date in
             let events = weekEvents[date] ?? []
             return events.contains { $0.isAllDay }
         }
     }
     
-    // MARK: - Frozen Header Section
-    private func frozenHeaderSection(dayColumnWidth: CGFloat) -> some View {
-        // Day headers row only (all-day events moved to scrollable area)
+    private func dayData(for date: Date) -> DayData {
+        let events = weekEvents[date] ?? []
+        let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
+        let allDayEvents = events.filter { $0.isAllDay }
+        let timedEvents = events.filter { !$0.isAllDay && isEventInTimeRange($0) }
+        let tasks = getTasksForDate(date)
+        
+        return DayData(
+            date: date,
+            isToday: isToday,
+            events: events,
+            allDayEvents: allDayEvents,
+            timedEvents: timedEvents,
+            tasks: tasks
+        )
+    }
+    
+    // MARK: - Header Section
+    private func headerSection(dayColumnWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            // Time column header
+            // Time column placeholder
             Text("Time")
                 .font(.caption2)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
-                .frame(width: timeColumnWidth, height: 50)
-                .background(Color(.systemGray5))
+                .frame(width: timeColumnWidth, height: dayHeaderHeight)
+                .background(Color(.systemGray6))
             
             // Day headers
-            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                dayHeader(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
-                    .frame(width: dayColumnWidth)
+            ForEach(weekDates, id: \.self) { date in
+                let data = dayData(for: date)
+                dayHeaderView(data: data)
+                    .frame(width: dayColumnWidth, height: dayHeaderHeight)
+                    .background(Color(.systemGray6))
                     .overlay(
-                        // Right border between days
                         Rectangle()
                             .fill(Color(.systemGray4))
                             .frame(width: 0.5),
@@ -153,85 +192,33 @@ struct WeekTimelineComponent: View {
             }
         }
         .background(Color(.systemBackground))
-        .zIndex(1) // Ensure it stays on top
-    }
-    
-    // MARK: - Scrollable Timeline Section
-    private func scrollableTimelineSection(dayColumnWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            // Time labels column (without header)
-            VStack(spacing: 0) {
-                ForEach(startHour..<endHour, id: \.self) { hour in
-                    timeSlot(hour: hour)
-                        .frame(height: hourHeight)
-                }
-                // Divider between timed and untimed
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 8)
-                    .gesture(dividerGesture)
-                ForEach(0..<untimedRows, id: \.self) { _ in
-                    Rectangle().fill(Color.clear).frame(height: hourHeight)
-                }
-            }
-            .frame(width: timeColumnWidth)
-            .background(Color(.systemGray6).opacity(0.3))
-            
-            // Seven day columns (without headers)
-            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                VStack(spacing: 0) {
-                    dayTimelineColumn(date: date, width: dayColumnWidth)
-                    // Divider
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(height: 8)
-                        .gesture(dividerGesture)
-                    ForEach(0..<untimedRows, id: \.self) { _ in
-                        Rectangle().fill(Color.clear).frame(height: hourHeight)
-                    }
-                }
-                .overlay(
-                    // Right border between days
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(width: 0.5),
-                    alignment: .trailing
-                )
-            }
-        }
     }
     
     // MARK: - All-Day Events Section
     private func allDayEventsSection(dayColumnWidth: CGFloat) -> some View {
-        let maxEventsInAnyDay = weekDates.map { date in
-            let events = weekEvents[date] ?? []
-            return events.filter { $0.isAllDay }.count
+        let maxEvents = weekDates.map { date in
+            dayData(for: date).allDayEvents.count
         }.max() ?? 0
         
-        // Calculate height based on actual number of events (20pt per event + padding)
-        let sectionHeight = max(40, CGFloat(maxEventsInAnyDay) * 24 + 16) // 24pt per event + 16pt total padding
+        let sectionHeight = max(40, CGFloat(maxEvents) * allDayEventHeight + 16)
         
         return VStack(spacing: 0) {
             HStack(spacing: 0) {
-                // Time column spacer with "All Day" label
-                VStack {
-                    Text("All Day")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, 4)
-                    Spacer()
-                }
-                .frame(width: timeColumnWidth, height: sectionHeight)
-                .background(Color(.systemGray6).opacity(0.3))
+                // Time column with "All Day" label
+                Text("All Day")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                    .frame(width: timeColumnWidth, height: sectionHeight)
+                    .background(Color(.systemGray6))
                 
-                // Day columns for all-day events
-                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                    allDayEventsForDay(date: date)
+                // All-day events for each day
+                ForEach(weekDates, id: \.self) { date in
+                    let data = dayData(for: date)
+                    allDayEventsColumn(data: data)
                         .frame(width: dayColumnWidth, height: sectionHeight)
+                        .background(Color(.systemBackground))
                         .overlay(
-                            // Right border between days
                             Rectangle()
                                 .fill(Color(.systemGray4))
                                 .frame(width: 0.5),
@@ -239,38 +226,96 @@ struct WeekTimelineComponent: View {
                         )
                 }
             }
-            .background(Color(.systemGray6).opacity(0.1))
             
-            // Divider to separate from timed events
             Divider()
-                .background(Color(.systemGray4))
+                .background(Color(.systemGray3))
         }
     }
     
-    // All-day events for a specific day
-    private func allDayEventsForDay(date: Date) -> some View {
-        let events = weekEvents[date] ?? []
-        let allDayEvents = events.filter { $0.isAllDay }
-        
-        return VStack(spacing: 2) {
-            ForEach(allDayEvents, id: \.id) { event in
-                allDayEventBlock(event: event)
+    // MARK: - Timeline Section
+    private func timelineSection(dayColumnWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            // Time column
+            timeColumn()
+                .frame(width: timeColumnWidth)
+                .background(Color(.systemGray6))
+            
+            // Day columns
+            ForEach(weekDates, id: \.self) { date in
+                let data = dayData(for: date)
+                dayTimelineColumn(data: data, width: dayColumnWidth)
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(width: 0.5),
+                        alignment: .trailing
+                    )
             }
-            Spacer(minLength: 0) // Push events to top if there are fewer events
         }
-        .padding(.all, 4)
+    }
+    
+    // MARK: - Individual Components
+    private func dayHeaderView(data: DayData) -> some View {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "E" // Mon, Tue, etc.
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "d" // 1, 2, 3
+        
+        return VStack(spacing: 4) {
+            Text(dayFormatter.string(from: data.date))
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(data.isToday ? .white : .secondary)
+            
+            Text(dateFormatter.string(from: data.date))
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(data.isToday ? .white : .primary)
+            
+            // Task indicator dots
+            if !data.tasks.isEmpty {
+                HStack(spacing: 2) {
+                    ForEach(0..<min(3, data.tasks.count), id: \.self) { _ in
+                        Circle()
+                            .fill(data.isToday ? Color.white.opacity(0.7) : Color.secondary.opacity(0.5))
+                            .frame(width: 3, height: 3)
+                    }
+                    if data.tasks.count > 3 {
+                        Text("+\(data.tasks.count - 3)")
+                            .font(.caption2)
+                            .foregroundColor(data.isToday ? .white : .secondary)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(data.isToday ? Color.blue : Color.clear)
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture { onDayTap?(data.date) }
+    }
+    
+    private func allDayEventsColumn(data: DayData) -> some View {
+        VStack(spacing: 2) {
+            ForEach(data.allDayEvents, id: \.id) { event in
+                allDayEventView(event: event)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
-    // Individual all-day event block
-    private func allDayEventBlock(event: GoogleCalendarEvent) -> some View {
+    private func allDayEventView(event: GoogleCalendarEvent) -> some View {
         let isPersonal = personalEvents.contains { $0.id == event.id }
-        let eventColor = isPersonal ? personalColor : professionalColor
+        let color = isPersonal ? personalColor : professionalColor
         
         return HStack(spacing: 4) {
             Circle()
-                .fill(eventColor)
-                .frame(width: 6, height: 6)
+                .fill(color)
+                .frame(width: 4, height: 4)
             
             Text(event.summary)
                 .font(.caption2)
@@ -281,28 +326,138 @@ struct WeekTimelineComponent: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 3)
+        .padding(.vertical, 2)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(eventColor.opacity(0.1))
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(0.15))
         )
-        .onTapGesture {
-            onEventTap?(event)
-        }
-        .onLongPressGesture { onEventTap?(event) }
+        .onTapGesture { onEventTap?(event) }
     }
     
-    private func timeSlot(hour: Int) -> some View {
+    private func timeColumn() -> some View {
+        VStack(spacing: 0) {
+            ForEach(startHour..<endHour, id: \.self) { hour in
+                timeSlotLabel(hour: hour)
+                    .frame(height: hourHeight)
+            }
+        }
+    }
+    
+    private func timeSlotLabel(hour: Int) -> some View {
         VStack {
             Text(formatHour(hour))
                 .font(.caption2)
+                .fontWeight(.medium)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.trailing, 4)
+                .padding(.trailing, 8)
+            
             Spacer()
         }
     }
     
+    private func dayTimelineColumn(data: DayData, width: CGFloat) -> some View {
+        let eventLayouts = calculateEventLayouts(events: data.timedEvents, width: width)
+        
+        return ZStack(alignment: .topLeading) {
+            // Background grid
+            timelineGrid()
+            
+            // Events
+            ForEach(eventLayouts, id: \.event.id) { layout in
+                timedEventView(layout: layout)
+            }
+            
+            // Current time indicator
+            if data.isToday {
+                currentTimeIndicator()
+            }
+        }
+        .frame(width: width)
+    }
+    
+    private func timelineGrid() -> some View {
+        VStack(spacing: 0) {
+            ForEach(startHour..<endHour, id: \.self) { hour in
+                Rectangle()
+                    .fill(Color(.systemBackground))
+                    .frame(height: hourHeight)
+                    .overlay(
+                        VStack(spacing: 0) {
+                            Rectangle()
+                                .fill(Color(.systemGray5))
+                                .frame(height: 0.5)
+                            
+                            Spacer()
+                            
+                            Rectangle()
+                                .fill(Color(.systemGray6))
+                                .frame(height: 0.5)
+                                .offset(y: -hourHeight/2)
+                        }
+                    )
+            }
+        }
+    }
+    
+    private func timedEventView(layout: EventLayout) -> some View {
+        let color = layout.isPersonal ? personalColor : professionalColor
+        
+        return RoundedRectangle(cornerRadius: 4)
+            .fill(color)
+            .frame(width: layout.width, height: layout.height)
+            .overlay(
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(layout.event.summary)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .lineLimit(layout.height > 30 ? 2 : 1)
+                    
+                    if layout.height > 25, let startTime = layout.event.startTime {
+                        Text(formatEventTime(startTime))
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            )
+            .offset(x: layout.xOffset, y: layout.startOffset)
+            .onTapGesture { onEventTap?(layout.event) }
+    }
+    
+    private func currentTimeIndicator() -> some View {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute], from: currentTime)
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        
+        guard hour >= startHour && hour < endHour else {
+            return AnyView(EmptyView())
+        }
+        
+        let yOffset = CGFloat(hour - startHour) * hourHeight + CGFloat(minute) * (hourHeight / 60.0)
+        
+        return AnyView(
+            HStack(spacing: 0) {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 6, height: 6)
+                    .offset(x: -3)
+                
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(height: 2)
+            }
+            .offset(y: yOffset)
+        )
+    }
+    
+    // MARK: - Helper Functions
     private func formatHour(_ hour: Int) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
@@ -310,245 +465,109 @@ struct WeekTimelineComponent: View {
         return formatter.string(from: date).lowercased()
     }
     
-    // MARK: - Day Column (Legacy - kept for reference)
-    private func dayColumn(date: Date, width: CGFloat) -> some View {
-        let events = weekEvents[date] ?? []
-        let timedEvents = events.filter { !$0.isAllDay }
-        let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
-        
-        return VStack(spacing: 0) {
-            // Day header
-            dayHeader(date: date, isToday: isToday)
-                .frame(width: width)
-            
-            // Timeline for this day
-            ZStack(alignment: .topLeading) {
-                // Background grid
-                VStack(spacing: 0) {
-                    ForEach(startHour..<endHour, id: \.self) { hour in
-                        hourGrid
-                            .frame(height: hourHeight)
-                    }
-                }
-                
-                // Timed events overlay
-                ForEach(timedEvents, id: \.id) { event in
-                    eventView(for: event, dayWidth: width)
-                }
-                
-                // Current time line (only show if date is today)
-                if isToday {
-                    currentTimeLine
-                }
-            }
-        }
-        .frame(width: width)
+    private func formatEventTime(_ time: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: time)
     }
     
-    // MARK: - Day Timeline Column (without header)
-    private func dayTimelineColumn(date: Date, width: CGFloat) -> some View {
-        let events = weekEvents[date] ?? []
-        let timedEvents = events.filter { !$0.isAllDay }
-        let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
-        
-        // Calculate event layouts with overlap resolution
-        let eventLayouts = calculateEventLayouts(for: timedEvents, dayWidth: width)
-        
-        return ZStack(alignment: .topLeading) {
-            // Background grid
-            VStack(spacing: 0) {
-                ForEach(startHour..<endHour, id: \.self) { hour in
-                    hourGrid
-                        .frame(height: hourHeight)
-                }
-            }
-            
-            // Timed events overlay with proper positioning
-            ForEach(eventLayouts, id: \.event.id) { layout in
-                eventBlock(for: layout.event, layout: layout)
-            }
-            
-            // Current time line (only show if date is today)
-            if isToday {
-                currentTimeLine
-            }
-        }
-        .frame(width: width)
-    }
-    
-    // Day header with day name and date
-    private func dayHeader(date: Date, isToday: Bool) -> some View {
-        let dayOfWeekFormatter = DateFormatter()
-        dayOfWeekFormatter.dateFormat = "E" // Mon, Tue, etc.
-        
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "d" // 1, 2, 3, etc.
-        
-        return ZStack {
-            // Background for the entire header
-            Color(.systemGray5)
-            
-            // Content with conditional highlighting
-            VStack(spacing: 2) {
-                Text(dayOfWeekFormatter.string(from: date))
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(isToday ? .white : .primary)
-                
-                Text(dayFormatter.string(from: date))
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(isToday ? .white : .primary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                isToday ? 
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue) : 
-                nil
-            )
-        }
-        .frame(height: 50)
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture { onDayTap?(date) }
-    }
-    
-    // Hour grid background
-    private var hourGrid: some View {
-        Rectangle()
-            .fill(Color(.systemGray6).opacity(0.3))
-            .overlay(
-                // Half-hour line
-                Rectangle()
-                    .fill(Color(.systemGray6))
-                    .frame(height: 0.5)
-                    .offset(y: hourHeight / 2)
-            )
-            .overlay(
-                // Hour line
-                Rectangle()
-                    .fill(Color(.systemGray5))
-                    .frame(height: 1)
-                    .offset(y: -0.5),
-                alignment: .top
-            )
-    }
-    
-    // MARK: - Event View with Overlap Handling
-    @ViewBuilder
-    private func eventView(for event: GoogleCalendarEvent, dayWidth: CGFloat) -> some View {
-        // This is now handled by the dayTimelineColumn with overlap resolution
-        EmptyView()
-    }
-    
-    // MARK: - Current Time Line
-    private var currentTimeLine: some View {
+    private func isEventInTimeRange(_ event: GoogleCalendarEvent) -> Bool {
+        guard let startTime = event.startTime else { return false }
         let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: currentTime)
+        let components = calendar.dateComponents([.hour], from: startTime)
         let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
+        return hour >= startHour && hour < endHour
+    }
+    
+    private func getTasksForDate(_ date: Date) -> [GoogleTask] {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
         
-        let yOffset = CGFloat(hour - startHour) * hourHeight + CGFloat(minute) * (hourHeight / 60.0)
-        
-        return HStack(spacing: 0) {
-            Circle()
-                .fill(Color.red)
-                .frame(width: 6, height: 6)
-                .offset(x: -3)
-            
-            Rectangle()
-                .fill(Color.red)
-                .frame(height: 2)
+        let personalTasks = personalTasks.filter { task in
+            guard let dueDate = task.dueDate else { return false }
+            return calendar.isDate(dueDate, inSameDayAs: startOfDay) && (!hideCompletedTasks || !task.isCompleted)
         }
-        .offset(y: yOffset)
-        .opacity(hour >= startHour && hour <= endHour ? 1 : 0)
+        
+        let professionalTasks = professionalTasks.filter { task in
+            guard let dueDate = task.dueDate else { return false }
+            return calendar.isDate(dueDate, inSameDayAs: startOfDay) && (!hideCompletedTasks || !task.isCompleted)
+        }
+        
+        return personalTasks + professionalTasks
     }
     
     // MARK: - Event Layout Calculation
-    private func calculateEventLayouts(for events: [GoogleCalendarEvent], dayWidth: CGFloat) -> [EventLayout] {
-        // Convert events to EventTime objects and sort by start time
-        let eventTimes = events.compactMap { event -> EventTime? in
-            guard let startTime = event.startTime,
-                  let endTime = event.endTime else { return nil }
-            
-            let calendar = Calendar.current
-            let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-            let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
-            
-            guard let startHour = startComponents.hour,
-                  let startMinute = startComponents.minute,
-                  let endHour = endComponents.hour,
-                  let endMinute = endComponents.minute,
-                  startHour >= self.startHour && startHour <= self.endHour else { return nil }
-            
-            let startMinutes = (startHour - self.startHour) * 60 + startMinute
-            let endMinutes = (endHour - self.startHour) * 60 + endMinute
-            
-            return EventTime(event: event, startMinutes: startMinutes, endMinutes: endMinutes)
-        }.sorted { $0.startMinutes < $1.startMinutes }
+    private func calculateEventLayouts(events: [GoogleCalendarEvent], width: CGFloat) -> [EventLayout] {
+        var layouts: [EventLayout] = []
+        let calendar = Calendar.current
         
-        // Group overlapping events using a more sophisticated algorithm
-        var eventGroups: [[EventTime]] = []
+        // Group overlapping events
+        let sortedEvents = events.sorted { event1, event2 in
+            guard let start1 = event1.startTime, let start2 = event2.startTime else {
+                return false
+            }
+            return start1 < start2
+        }
         
-        for eventTime in eventTimes {
-            var mergedGroups: [Int] = []
+        var eventGroups: [[GoogleCalendarEvent]] = []
+        
+        for event in sortedEvents {
+            guard let eventStart = event.startTime, let eventEnd = event.endTime else { continue }
             
-            // Find all groups that this event overlaps with
-            for (groupIndex, group) in eventGroups.enumerated() {
+            // Find which group this event belongs to (if any)
+            var addedToGroup = false
+            for groupIndex in 0..<eventGroups.count {
+                let group = eventGroups[groupIndex]
                 let overlapsWithGroup = group.contains { existingEvent in
-                    eventTime.overlaps(with: existingEvent)
+                    guard let existingStart = existingEvent.startTime,
+                          let existingEnd = existingEvent.endTime else { return false }
+                    return eventStart < existingEnd && eventEnd > existingStart
                 }
                 
                 if overlapsWithGroup {
-                    mergedGroups.append(groupIndex)
+                    eventGroups[groupIndex].append(event)
+                    addedToGroup = true
+                    break
                 }
             }
             
-            if mergedGroups.isEmpty {
-                // No overlap, create new group
-                eventGroups.append([eventTime])
-            } else if mergedGroups.count == 1 {
-                // Overlaps with one group, add to it
-                eventGroups[mergedGroups[0]].append(eventTime)
-            } else {
-                // Overlaps with multiple groups, merge them all
-                var mergedGroup = [eventTime]
-                
-                // Collect all events from groups to merge (in reverse order to avoid index issues)
-                for groupIndex in mergedGroups.sorted(by: >) {
-                    mergedGroup.append(contentsOf: eventGroups[groupIndex])
-                    eventGroups.remove(at: groupIndex)
-                }
-                
-                eventGroups.append(mergedGroup)
+            if !addedToGroup {
+                eventGroups.append([event])
             }
         }
         
         // Calculate layouts for each group
-        var layouts: [EventLayout] = []
-        
         for group in eventGroups {
-            let totalColumns = group.count
+            let numColumns = group.count
+            let columnWidth = width / CGFloat(numColumns)
             
-            for (columnIndex, eventTime) in group.enumerated() {
-                let topOffset = CGFloat(eventTime.startMinutes) * (hourHeight / 60.0)
-                let duration = eventTime.endMinutes - eventTime.startMinutes
-                let height = max(20.0, CGFloat(duration) * (hourHeight / 60.0))
+            for (index, event) in group.enumerated() {
+                guard let startTime = event.startTime,
+                      let endTime = event.endTime else { continue }
                 
-                let columnWidth = dayWidth / CGFloat(totalColumns)
-                let width = columnWidth - 4 // Leave small gap between columns
-                let xOffset = CGFloat(columnIndex) * columnWidth + 2
+                let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                
+                let startHour = startComponents.hour ?? 0
+                let startMinute = startComponents.minute ?? 0
+                let endHour = endComponents.hour ?? 0
+                let endMinute = endComponents.minute ?? 0
+                
+                let startOffset = CGFloat(startHour - self.startHour) * hourHeight + 
+                                 CGFloat(startMinute) * (hourHeight / 60.0)
+                
+                let duration = endTime.timeIntervalSince(startTime)
+                let height = max(20, CGFloat(duration / 3600.0) * hourHeight)
+                
+                let isPersonal = personalEvents.contains { $0.id == event.id }
                 
                 let layout = EventLayout(
-                    event: eventTime.event,
-                    column: columnIndex,
-                    totalColumns: totalColumns,
-                    topOffset: topOffset,
+                    event: event,
+                    startOffset: startOffset,
                     height: height,
-                    width: width,
-                    xOffset: xOffset
+                    width: columnWidth - 4, // Leave small gap
+                    xOffset: CGFloat(index) * columnWidth + 2,
+                    isPersonal: isPersonal
                 )
                 
                 layouts.append(layout)
@@ -558,135 +577,17 @@ struct WeekTimelineComponent: View {
         return layouts
     }
     
-    // MARK: - Event Block View
-    @ViewBuilder
-    private func eventBlock(for event: GoogleCalendarEvent, layout: EventLayout) -> some View {
-        let isPersonal = personalEvents.contains { $0.id == event.id }
-        let backgroundColor = isPersonal ? personalColor : professionalColor
-        
-        RoundedRectangle(cornerRadius: 6)
-            .fill(backgroundColor)
-            .frame(width: layout.width, height: layout.height)
-            .overlay(
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(event.summary)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(layout.height > 40 ? 2 : 1)
-                    
-                    if layout.height > 30, let startTime = event.startTime {
-                        let calendar = Calendar.current
-                        let components = calendar.dateComponents([.hour, .minute], from: startTime)
-                        if let hour = components.hour, let minute = components.minute {
-                            Text("\(String(format: "%02d:%02d", hour, minute))")
-                                .font(.caption2)
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-                }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            )
-            .offset(x: layout.xOffset, y: layout.topOffset)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onEventTap?(event)
-            }
-            .onLongPressGesture { onEventTap?(event) }
-    }
-    
-    // MARK: - Timer Methods
-    private func startCurrentTimeTimer() {
-        currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+    // MARK: - Timer Functions
+    private func startTimer() {
+        currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             currentTime = Date()
         }
+        currentTime = Date()
     }
     
-    private func stopCurrentTimeTimer() {
+    private func stopTimer() {
         currentTimeTimer?.invalidate()
         currentTimeTimer = nil
-    }
-    
-    // MARK: - Task Rows Section
-    private func taskRowsSection(dayColumnWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            // Toggle row
-            HStack(spacing: 0) {
-                Button(action: { withAnimation { showTaskRows.toggle() } }) {
-                    Image(systemName: showTaskRows ? "chevron.up" : "chevron.down")
-                        .foregroundColor(.secondary)
-                }
-                .frame(width: timeColumnWidth, height: 24)
-                .background(Color(.systemGray6).opacity(0.3))
-
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(height: 0.5)
-            }
-            if showTaskRows {
-                // Personal Row
-                taskRow(for: personalTasksByDate, color: personalColor, height: 40, dayColumnWidth: dayColumnWidth)
-                // Professional Row
-                taskRow(for: professionalTasksByDate, color: professionalColor, height: 40, dayColumnWidth: dayColumnWidth)
-            }
-        }
-    }
-
-    private func taskRow(for tasksByDate: [Date: [GoogleTask]], color: Color, height: CGFloat, dayColumnWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(color.opacity(0.3))
-                .frame(width: timeColumnWidth, height: height)
-
-            ForEach(weekDates, id: \..self) { date in
-                let tasks = tasksByDate[Calendar.mondayFirst.startOfDay(for: date)] ?? []
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(tasks.prefix(3)) { task in
-                        Text(task.title)
-                            .font(.caption2)
-                            .lineLimit(1)
-                    }
-                    if tasks.count > 3 {
-                        Text("+\(tasks.count - 3) more")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .frame(width: dayColumnWidth, height: height, alignment: .topLeading)
-                .padding(4)
-                .background(Color(.systemBackground))
-                .overlay(
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(width: 0.5), alignment: .trailing)
-            }
-        }
-    }
-
-    // Grouped tasks by date
-    private var personalTasksByDate: [Date: [GoogleTask]] {
-        groupTasks(personalTasks)
-    }
-
-    private var professionalTasksByDate: [Date: [GoogleTask]] {
-        groupTasks(professionalTasks)
-    }
-
-    private func groupTasks(_ tasks: [GoogleTask]) -> [Date: [GoogleTask]] {
-        let cal = Calendar.mondayFirst
-        var dict: [Date: [GoogleTask]] = [:]
-        for task in tasks {
-            guard let dueDate = task.dueDate else { continue }
-            if hideCompletedTasks && task.isCompleted { continue }
-            let startOfDue = cal.startOfDay(for: dueDate)
-            if weekDates.contains(where: { cal.isDate($0, inSameDayAs: startOfDue) }) {
-                dict[startOfDue, default: []].append(task)
-            }
-        }
-        return dict
     }
 }
 
@@ -707,4 +608,4 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
         )
         .previewLayout(.sizeThatFits)
     }
-} 
+}
