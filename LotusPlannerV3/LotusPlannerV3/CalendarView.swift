@@ -478,21 +478,7 @@ class CalendarViewModel: ObservableObject {
 
 
 
-// Common interval types for timeline navigation
-private enum TimelineInterval: String, CaseIterable, Identifiable {
-    case day = "Day", week = "Week", month = "Month", year = "Year"
-
-    var id: String { rawValue }
-
-    fileprivate var calendarComponent: Calendar.Component {
-        switch self {
-        case .day:     return .day
-        case .week:    return .weekOfYear
-        case .month:   return .month
-        case .year:    return .year
-        }
-    }
-}
+// TimelineInterval is now defined in SettingsView.swift (shared)
 
 struct CalendarView: View {
     @StateObject private var calendarViewModel = CalendarViewModel()
@@ -500,7 +486,6 @@ struct CalendarView: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var currentDate = Date()
-    @State private var interval: TimelineInterval = .day
     @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
     @State private var rightSectionTopHeight: CGFloat = UIScreen.main.bounds.height * 0.6
     @State private var isDragging = false
@@ -635,7 +620,7 @@ struct CalendarView: View {
             Button(action: { step(-1) }) {
                 Image(systemName: "chevron.left")
             }
-            if interval == .year {
+            if navigationManager.currentInterval == .year {
                 Button(action: {
                     selectedDateForPicker = currentDate
                     showingDatePicker = true
@@ -645,7 +630,7 @@ struct CalendarView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                 }
-            } else if interval == .month {
+            } else if navigationManager.currentInterval == .month {
                 Button(action: {
                     selectedDateForPicker = currentDate
                     showingDatePicker = true
@@ -655,7 +640,7 @@ struct CalendarView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                 }
-            } else if interval == .week {
+            } else if navigationManager.currentInterval == .week {
                 Button(action: {
                     selectedDateForPicker = currentDate
                     showingDatePicker = true
@@ -665,7 +650,7 @@ struct CalendarView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                 }
-            } else if interval == .day {
+            } else if navigationManager.currentInterval == .day {
                 Button(action: {
                     selectedDateForPicker = currentDate
                     showingDatePicker = true
@@ -686,10 +671,10 @@ struct CalendarView: View {
         Group {
             ForEach(TimelineInterval.allCases) { item in
                 Button(item.rawValue) {
-                    interval = item
+                    navigationManager.updateInterval(item, date: Date())
                     currentDate = Date() // reset to today/current period
                 }
-                    .fontWeight(item == interval ? .bold : .regular)
+                    .fontWeight(item == navigationManager.currentInterval ? .bold : .regular)
             }
 
             // Hide Completed toggle
@@ -712,13 +697,13 @@ struct CalendarView: View {
     
     private var mainContentView: some View {
         Group {
-            if interval == .year {
+            if navigationManager.currentInterval == .year {
                 yearView
-            } else if interval == .month {
+            } else if navigationManager.currentInterval == .month {
                 monthView
-            } else if interval == .week {
+            } else if navigationManager.currentInterval == .week {
                 weekView
-            } else if interval == .day {
+            } else if navigationManager.currentInterval == .day {
                 setupDayView()
             } else {
                 Text("Calendar View")
@@ -730,10 +715,11 @@ struct CalendarView: View {
     }
 
     private func step(_ direction: Int) {
-        if let newDate = Calendar.current.date(byAdding: interval.calendarComponent,
+        if let newDate = Calendar.current.date(byAdding: navigationManager.currentInterval.calendarComponent,
                                                value: direction,
                                                to: currentDate) {
             currentDate = newDate
+            navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
         }
     }
     
@@ -760,18 +746,18 @@ struct CalendarView: View {
                             currentDate: currentDate,
                             onDayTap: { date in
                                 currentDate = date
-                                interval = .day
+                                navigationManager.updateInterval(.day, date: date)
                             },
                             onMonthTap: {
                                 let cal = Calendar.mondayFirst
                                 if let first = cal.date(from: DateComponents(year: Calendar.current.component(.year, from: currentDate), month: month, day: 1)) {
                                     currentDate = first
+                                    navigationManager.updateInterval(.month, date: first)
                                 }
-                                interval = .month
                             },
                             onWeekTap: { date in
                                 currentDate = date
-                                interval = .week
+                                navigationManager.updateInterval(.week, date: date)
                             }
                         )
                         .frame(height: monthCardHeight)
@@ -1034,37 +1020,42 @@ struct CalendarView: View {
     }
     
     private func navigateToDate(_ selectedDate: Date) {
-        switch interval {
+        let newDate: Date
+        
+        switch navigationManager.currentInterval {
         case .day:
             // For day view, navigate directly to the selected date
-            currentDate = selectedDate
+            newDate = selectedDate
         case .week:
             // For week view, navigate to the week containing the selected date
             let calendar = Calendar.mondayFirst
             if let weekStart = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start {
-                currentDate = weekStart
+                newDate = weekStart
             } else {
-                currentDate = selectedDate
+                newDate = selectedDate
             }
         case .month:
             // For month view, navigate to the month containing the selected date
             let calendar = Calendar.current
             let components = calendar.dateComponents([.year, .month], from: selectedDate)
             if let firstOfMonth = calendar.date(from: components) {
-                currentDate = firstOfMonth
+                newDate = firstOfMonth
             } else {
-                currentDate = selectedDate
+                newDate = selectedDate
             }
         case .year:
             // For year view, navigate to the year containing the selected date
             let calendar = Calendar.current
             let year = calendar.component(.year, from: selectedDate)
             if let firstOfYear = calendar.date(from: DateComponents(year: year, month: 1, day: 1)) {
-                currentDate = firstOfYear
+                newDate = firstOfYear
             } else {
-                currentDate = selectedDate
+                newDate = selectedDate
             }
         }
+        
+        currentDate = newDate
+        navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
     }
     
     // MARK: - Week View Version 1 (Tasks Rows)
@@ -1089,7 +1080,7 @@ struct CalendarView: View {
                     },
                     onDayTap: { date in
                         currentDate = date
-                        interval = .day
+                        navigationManager.updateInterval(.day, date: date)
                     }
                 )
                     .frame(height: appPrefs.hideWeeklyBottomSection ? nil : weekTopSectionHeight)
@@ -1206,7 +1197,7 @@ struct CalendarView: View {
             },
             onDayTap: { date in
                 currentDate = date
-                interval = .day
+                navigationManager.updateInterval(.day, date: date)
             }
         )
         .task {

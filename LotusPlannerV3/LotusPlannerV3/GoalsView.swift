@@ -1,19 +1,5 @@
 import SwiftUI
 
-private enum TimelineInterval: String, CaseIterable, Identifiable {
-    case day = "Day", week = "Week", month = "Month", quarter = "Quarter", year = "Year"
-    var id: String { rawValue }
-    var component: Calendar.Component {
-        switch self {
-        case .day: .day
-        case .week: .weekOfYear
-        case .month: .month
-        case .quarter: .quarter
-        case .year: .year
-        }
-    }
-}
-
 private enum TimeFilter: String, CaseIterable, Identifiable {
     case month = "Month"
     case quarter = "Quarter"

@@ -17,6 +17,45 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Shared Timeline Interval
+enum TimelineInterval: String, CaseIterable, Identifiable {
+    case day = "Day", week = "Week", month = "Month", year = "Year"
+
+    var id: String { rawValue }
+
+    var calendarComponent: Calendar.Component {
+        switch self {
+        case .day:     return .day
+        case .week:    return .weekOfYear
+        case .month:   return .month
+        case .year:    return .year
+        }
+    }
+    
+    // Convert to TaskFilter
+    var taskFilter: TaskFilter {
+        switch self {
+        case .day: return .day
+        case .week: return .week
+        case .month: return .month
+        case .year: return .year
+        }
+    }
+}
+
+// Extension for TaskFilter to convert to TimelineInterval
+extension TaskFilter {
+    var timelineInterval: TimelineInterval? {
+        switch self {
+        case .day: return .day
+        case .week: return .week
+        case .month: return .month
+        case .year: return .year
+        case .all: return nil // .all doesn't have a calendar equivalent
+        }
+    }
+}
+
 // MARK: - Navigation Manager
 @MainActor
 class NavigationManager: ObservableObject {
@@ -32,6 +71,8 @@ class NavigationManager: ObservableObject {
     
     @Published var currentView: CurrentView = .calendar
     @Published var showTasksView = false
+    @Published var currentInterval: TimelineInterval = .day
+    @Published var currentDate: Date = Date()
     
     private init() {}
     
@@ -58,6 +99,12 @@ class NavigationManager: ObservableObject {
     func switchToSettings() {
         currentView = .settings
         showTasksView = false
+    }
+    
+    // Update the current interval and date from calendar view
+    func updateInterval(_ interval: TimelineInterval, date: Date = Date()) {
+        currentInterval = interval
+        currentDate = date
     }
 }
 

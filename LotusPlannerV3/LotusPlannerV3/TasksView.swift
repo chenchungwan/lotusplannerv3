@@ -869,6 +869,11 @@ struct TasksView: View {
                     Button(filter.rawValue) {
                         selectedFilter = filter
                         referenceDate = Date() // reset reference when changing view
+                        
+                        // Sync with NavigationManager if possible
+                        if let timelineInterval = filter.timelineInterval {
+                            navigationManager.updateInterval(timelineInterval, date: Date())
+                        }
                     }
                         .fontWeight(filter == selectedFilter ? .bold : .regular)
                 }
@@ -890,6 +895,11 @@ struct TasksView: View {
                 }
                 .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
             }
+        }
+        .onAppear {
+            // Sync with NavigationManager's current interval when view appears
+            selectedFilter = navigationManager.currentInterval.taskFilter
+            referenceDate = navigationManager.currentDate
         }
     }
     
@@ -1044,18 +1054,22 @@ struct TasksView: View {
         case .day:
             if let newDate = Calendar.mondayFirst.date(byAdding: .day, value: direction, to: referenceDate) {
                 referenceDate = newDate
+                navigationManager.updateInterval(.day, date: newDate)
             }
         case .week:
             if let newDate = Calendar.mondayFirst.date(byAdding: .weekOfYear, value: direction, to: referenceDate) {
                 referenceDate = newDate
+                navigationManager.updateInterval(.week, date: newDate)
             }
         case .month:
             if let newDate = Calendar.mondayFirst.date(byAdding: .month, value: direction, to: referenceDate) {
                 referenceDate = newDate
+                navigationManager.updateInterval(.month, date: newDate)
             }
         case .year:
             if let newDate = Calendar.mondayFirst.date(byAdding: .year, value: direction, to: referenceDate) {
                 referenceDate = newDate
+                navigationManager.updateInterval(.year, date: newDate)
             }
         case .all:
             break
