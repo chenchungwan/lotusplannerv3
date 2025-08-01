@@ -72,7 +72,10 @@ struct WeekTimelineComponent: View {
                 // Fixed header with day labels
                 headerSection(dayColumnWidth: dayColumnWidth)
                 
-                // Scrollable content
+                // Fixed daily tasks section at top
+                dailyTasksSection(dayColumnWidth: dayColumnWidth)
+                
+                // Scrollable content (all-day events and timeline)
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 0) {
                         // All-day events section
@@ -154,7 +157,9 @@ struct WeekTimelineComponent: View {
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
         let allDayEvents = events.filter { $0.isAllDay }
         let timedEvents = events.filter { !$0.isAllDay && isEventInTimeRange($0) }
-        let tasks = getTasksForDate(date)
+        let personalTasksForDate = filteredTasksForDate(personalTasks, date: date)
+        let professionalTasksForDate = filteredTasksForDate(professionalTasks, date: date)
+        let tasks = personalTasksForDate + professionalTasksForDate
         
         return DayData(
             date: date,
@@ -194,6 +199,91 @@ struct WeekTimelineComponent: View {
         .background(Color(.systemBackground))
     }
     
+    // MARK: - Daily Tasks Section
+    private func dailyTasksSection(dayColumnWidth: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            // Personal Tasks Row
+            dailyTasksRow(
+                title: "Personal",
+                color: personalColor,
+                tasks: personalTasksByDate,
+                dayColumnWidth: dayColumnWidth
+            )
+            
+            // Thin separator line between personal and professional
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 0.5)
+            
+            // Professional Tasks Row
+            dailyTasksRow(
+                title: "Professional", 
+                color: professionalColor,
+                tasks: professionalTasksByDate,
+                dayColumnWidth: dayColumnWidth
+            )
+        }
+    }
+    
+    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            // Task type indicator circle with checkmark
+            VStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: 20, height: 20)
+                    .overlay(
+                        Image(systemName: "checkmark")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    )
+                Spacer()
+            }
+            .frame(width: timeColumnWidth, height: 60)
+            .background(Color(.systemGray6))
+            
+            // Tasks for each day
+            ForEach(weekDates, id: \.self) { date in
+                let dayTasks = tasks[Calendar.current.startOfDay(for: date)] ?? []
+                dailyTasksCell(tasks: dayTasks, color: color)
+                    .frame(width: dayColumnWidth, height: 60)
+                    .background(Color(.systemBackground))
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(width: 0.5),
+                        alignment: .trailing
+                    )
+            }
+        }
+    }
+    
+    private func dailyTasksCell(tasks: [GoogleTask], color: Color) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(tasks, id: \.id) { task in
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(task.isCompleted ? Color.gray : color)
+                            .frame(width: 4, height: 4)
+                        
+                        Text(task.title)
+                            .font(.caption2)
+                            .foregroundColor(task.isCompleted ? .gray : .primary)
+                            .strikethrough(task.isCompleted)
+                            .lineLimit(1)
+                        
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
     // MARK: - All-Day Events Section
     private func allDayEventsSection(dayColumnWidth: CGFloat) -> some View {
         let maxEvents = weekDates.map { date in
@@ -227,8 +317,9 @@ struct WeekTimelineComponent: View {
                 }
             }
             
-            Divider()
-                .background(Color(.systemGray3))
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 0.5)
         }
     }
     
@@ -273,21 +364,7 @@ struct WeekTimelineComponent: View {
                 .fontWeight(.bold)
                 .foregroundColor(data.isToday ? .white : .primary)
             
-            // Task indicator dots
-            if !data.tasks.isEmpty {
-                HStack(spacing: 2) {
-                    ForEach(0..<min(3, data.tasks.count), id: \.self) { _ in
-                        Circle()
-                            .fill(data.isToday ? Color.white.opacity(0.7) : Color.secondary.opacity(0.5))
-                            .frame(width: 3, height: 3)
-                    }
-                    if data.tasks.count > 3 {
-                        Text("+\(data.tasks.count - 3)")
-                            .font(.caption2)
-                            .foregroundColor(data.isToday ? .white : .secondary)
-                    }
-                }
-            }
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(data.isToday ? Color.blue : Color.clear)
@@ -479,21 +556,59 @@ struct WeekTimelineComponent: View {
         return hour >= startHour && hour < endHour
     }
     
-    private func getTasksForDate(_ date: Date) -> [GoogleTask] {
+
+    
+    // MARK: - Task Grouping
+    private var personalTasksByDate: [Date: [GoogleTask]] {
+        groupTasksByDate(personalTasks)
+    }
+    
+    private var professionalTasksByDate: [Date: [GoogleTask]] {
+        groupTasksByDate(professionalTasks)
+    }
+    
+    private func groupTasksByDate(_ tasks: [GoogleTask]) -> [Date: [GoogleTask]] {
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
+        var groupedTasks: [Date: [GoogleTask]] = [:]
         
-        let personalTasks = personalTasks.filter { task in
-            guard let dueDate = task.dueDate else { return false }
-            return calendar.isDate(dueDate, inSameDayAs: startOfDay) && (!hideCompletedTasks || !task.isCompleted)
+        // Group tasks by each day in the week using the same logic as day view
+        for date in weekDates {
+            let tasksForDate = filteredTasksForDate(tasks, date: date)
+            if !tasksForDate.isEmpty {
+                groupedTasks[calendar.startOfDay(for: date)] = tasksForDate
+            }
         }
         
-        let professionalTasks = professionalTasks.filter { task in
-            guard let dueDate = task.dueDate else { return false }
-            return calendar.isDate(dueDate, inSameDayAs: startOfDay) && (!hideCompletedTasks || !task.isCompleted)
+        return groupedTasks
+    }
+    
+    // Use the exact same filtering logic as the day view
+    private func filteredTasksForDate(_ tasks: [GoogleTask], date: Date) -> [GoogleTask] {
+        let calendar = Calendar.current
+        
+        var filteredTasks = tasks
+        
+        // First, filter by hide completed tasks setting if enabled
+        if hideCompletedTasks {
+            filteredTasks = filteredTasks.filter { !$0.isCompleted }
         }
         
-        return personalTasks + professionalTasks
+        // Then filter tasks based on date logic (same as day view)
+        filteredTasks = filteredTasks.compactMap { task in
+            // For completed tasks, only show them on their completion date
+            if task.isCompleted {
+                guard let completionDate = task.completionDate else { return nil }
+                return calendar.isDate(completionDate, inSameDayAs: date) ? task : nil
+            } else {
+                // For incomplete tasks, only show them on their exact due date
+                guard let dueDate = task.dueDate else { return nil }
+                
+                // Only show tasks on their exact due date (not on future dates)
+                return calendar.isDate(dueDate, inSameDayAs: date) ? task : nil
+            }
+        }
+        
+        return filteredTasks
     }
     
     // MARK: - Event Layout Calculation
@@ -550,8 +665,8 @@ struct WeekTimelineComponent: View {
                 
                 let startHour = startComponents.hour ?? 0
                 let startMinute = startComponents.minute ?? 0
-                let endHour = endComponents.hour ?? 0
-                let endMinute = endComponents.minute ?? 0
+                let _ = endComponents.hour ?? 0
+                let _ = endComponents.minute ?? 0
                 
                 let startOffset = CGFloat(startHour - self.startHour) * hourHeight + 
                                  CGFloat(startMinute) * (hourHeight / 60.0)

@@ -10,7 +10,7 @@ struct MonthTimelineComponent: View {
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onDayTap: ((Date) -> Void)?
     
-    private let dayHeight: CGFloat = 120
+    // dayHeight will be calculated dynamically based on available space
     
     init(currentDate: Date, monthEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
@@ -27,14 +27,12 @@ struct MonthTimelineComponent: View {
         GeometryReader { geometry in
             let columnWidth = geometry.size.width / 7
             
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(spacing: 0) {
-                    // Month header with day names
-                    monthHeader(columnWidth: columnWidth)
-                    
-                    // Month grid with events
-                    monthGrid(columnWidth: columnWidth)
-                }
+            VStack(spacing: 0) {
+                // Month header with day names
+                monthHeader(columnWidth: columnWidth)
+                
+                // Month grid with events (takes up remaining space)
+                monthGrid(columnWidth: columnWidth, availableHeight: geometry.size.height)
             }
         }
     }
@@ -55,23 +53,27 @@ struct MonthTimelineComponent: View {
     }
     
     // MARK: - Month Grid
-    private func monthGrid(columnWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
+    private func monthGrid(columnWidth: CGFloat, availableHeight: CGFloat) -> some View {
+        let headerHeight: CGFloat = 30 // Height of the day names header
+        let gridHeight = availableHeight - headerHeight
+        let rowHeight = gridHeight / 6 // Divide available space by 6 weeks
+        
+        return VStack(spacing: 0) {
             ForEach(0..<6, id: \.self) { weekIndex in
-                weekRow(weekIndex: weekIndex, columnWidth: columnWidth)
+                weekRow(weekIndex: weekIndex, columnWidth: columnWidth, rowHeight: rowHeight)
             }
         }
     }
     
-    private func weekRow(weekIndex: Int, columnWidth: CGFloat) -> some View {
+    private func weekRow(weekIndex: Int, columnWidth: CGFloat, rowHeight: CGFloat) -> some View {
         HStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { dayIndex in
-                dayCell(weekIndex: weekIndex, dayIndex: dayIndex, columnWidth: columnWidth)
+                dayCell(weekIndex: weekIndex, dayIndex: dayIndex, columnWidth: columnWidth, rowHeight: rowHeight)
             }
         }
     }
     
-    private func dayCell(weekIndex: Int, dayIndex: Int, columnWidth: CGFloat) -> some View {
+    private func dayCell(weekIndex: Int, dayIndex: Int, columnWidth: CGFloat, rowHeight: CGFloat) -> some View {
         let dayNumber = getDayNumber(weekIndex: weekIndex, dayIndex: dayIndex)
         let date = getDateForDay(dayNumber: dayNumber)
         let isValidDay = dayNumber > 0 && dayNumber <= daysInMonth
@@ -100,7 +102,7 @@ struct MonthTimelineComponent: View {
                 Color.clear
             }
         }
-        .frame(width: columnWidth, height: dayHeight)
+        .frame(width: columnWidth, height: rowHeight)
         .background(isCurrentMonth ? Color(.systemBackground) : Color(.systemGray6).opacity(0.3))
         .contentShape(Rectangle())
         .onTapGesture {

@@ -743,34 +743,43 @@ struct CalendarView: View {
     }
     
     private var monthsSection: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 16) {
-                ForEach(1...12, id: \.self) { month in
-                    MonthCardView(
-                        month: month,
-                        year: Calendar.current.component(.year, from: currentDate),
-                        currentDate: currentDate,
-                        onDayTap: { date in
-                            currentDate = date
-                            interval = .day
-                        },
-                        onMonthTap: {
-                            let cal = Calendar.mondayFirst
-                            if let first = cal.date(from: DateComponents(year: Calendar.current.component(.year, from: currentDate), month: month, day: 1)) {
-                                currentDate = first
+        GeometryReader { geometry in
+            let padding: CGFloat = 16
+            let gridSpacing: CGFloat = 16
+            let columnSpacing: CGFloat = 12
+            let availableHeight = geometry.size.height - (padding * 2)
+            let rows = 4 // 12 months ÷ 3 columns = 4 rows
+            let monthCardHeight = (availableHeight - (gridSpacing * CGFloat(rows - 1))) / CGFloat(rows)
+            
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: columnSpacing), count: 3), spacing: gridSpacing) {
+                    ForEach(1...12, id: \.self) { month in
+                        MonthCardView(
+                            month: month,
+                            year: Calendar.current.component(.year, from: currentDate),
+                            currentDate: currentDate,
+                            onDayTap: { date in
+                                currentDate = date
+                                interval = .day
+                            },
+                            onMonthTap: {
+                                let cal = Calendar.mondayFirst
+                                if let first = cal.date(from: DateComponents(year: Calendar.current.component(.year, from: currentDate), month: month, day: 1)) {
+                                    currentDate = first
+                                }
+                                interval = .month
+                            },
+                            onWeekTap: { date in
+                                currentDate = date
+                                interval = .week
                             }
-                            interval = .month
-                        },
-                        onWeekTap: { date in
-                            currentDate = date
-                            interval = .week
-                        }
-                    )
+                        )
+                        .frame(height: monthCardHeight)
+                    }
                 }
+                .padding(padding)
             }
-            .padding()
         }
-        .frame(maxHeight: .infinity)
     }
     
     private var dividerSection: some View {
@@ -983,60 +992,9 @@ struct CalendarView: View {
     private var monthView: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Top section - Single month calendar
+                // Single month calendar takes up full space
                 singleMonthSection
-                    .frame(height: weekTopSectionHeight)
-                
-                // Draggable divider  
-                weekDivider
-                
-                // Bottom section - Tasks side by side
-                HStack(alignment: .top, spacing: 8) {
-                    // Personal Tasks
-                    PersonalTasksComponent(
-                        taskLists: tasksViewModel.personalTaskLists,
-                        tasksDict: cachedMonthPersonalTasks,
-                        accentColor: appPrefs.personalColor,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                updateCachedTasks()
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedAccountKind = .personal
-                            DispatchQueue.main.async {
-                                showingTaskDetails = true
-                            }
-                        }
-                    )
-                    .frame(maxWidth: .infinity)
-                    
-                    // Professional Tasks
-                    ProfessionalTasksComponent(
-                        taskLists: tasksViewModel.professionalTaskLists,
-                        tasksDict: cachedMonthProfessionalTasks,
-                        accentColor: appPrefs.professionalColor,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                updateCachedTasks()
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedAccountKind = .professional
-                            DispatchQueue.main.async {
-                                showingTaskDetails = true
-                            }
-                        }
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .frame(maxHeight: .infinity)
+                    .frame(maxHeight: .infinity)
             }
         }
         .background(Color(.systemBackground))

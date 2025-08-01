@@ -16,6 +16,8 @@ struct JournalView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     /// Photos placed on the canvas.
     @State private var photos: [JournalPhoto] = []
+    /// Show confirmation alert before erasing journal content
+    @State private var showingEraseConfirmation = false
 
     /// When `embedded` is `true` the view shows only the canvas/background
     /// content and omits its own `NavigationStack` + toolbars so it can be
@@ -117,6 +119,14 @@ struct JournalView: View {
                 }
             }
         }
+        .alert("Clear Journal", isPresented: $showingEraseConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear All", role: .destructive) {
+                clearJournal()
+            }
+        } message: {
+            Text("Are you sure you want to erase all content from today's journal? This action cannot be undone.")
+        }
     }
 
     private var canvasContent: some View {
@@ -161,8 +171,8 @@ struct JournalView: View {
                     .background(Color(.systemBackground).opacity(0.8))
                     .clipShape(Circle())
             }
-            // Eraser button – clears all content
-            Button(action: { clearJournal() }) {
+            // Eraser button – shows confirmation before clearing
+            Button(action: { showingEraseConfirmation = true }) {
                 Image(systemName: "eraser")
                     .padding(10)
                     .background(Color(.systemBackground).opacity(0.8))
