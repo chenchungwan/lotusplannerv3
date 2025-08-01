@@ -1382,6 +1382,8 @@ struct CalendarView: View {
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         if appPrefs.dayViewLayout == .expanded {
             dayViewContentExpanded(geometry: geometry)
+        } else if appPrefs.dayViewLayout == .hybrid {
+            dayViewContentHybrid(geometry: geometry)
         } else {
             dayViewContentCompact(geometry: geometry)
         }
@@ -1434,10 +1436,25 @@ struct CalendarView: View {
             dayVerticalDivider
 
             // Column 3 – Journal (100% device width)
-            JournalView(currentDate: currentDate, embedded: true)
+            JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
                 .id(currentDate)
                 .frame(width: column3Width)
                 .padding(.all, 8)
+        }
+    }
+    
+    private func dayViewContentHybrid(geometry: GeometryProxy) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Left section (dynamic width) - same as compact
+            leftDaySectionWithDivider(geometry: geometry)
+                .frame(width: dayLeftSectionWidth)
+            
+            // Vertical divider
+            dayVerticalDivider
+
+            // Right section - journal only (no top tasks section)
+            rightDaySectionHybrid(geometry: geometry)
+                .frame(maxWidth: .infinity)
         }
     }
     
@@ -1460,7 +1477,21 @@ struct CalendarView: View {
             rightSectionDivider
             
             // Bottom section - Journal
-            JournalView(currentDate: currentDate, embedded: true)
+            JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                .id(currentDate)
+                .frame(maxHeight: .infinity)
+                .padding(.all, 8)
+        }
+    }
+    
+    private func rightDaySectionHybrid(geometry: GeometryProxy) -> some View {
+        // The total content width is 100% of device width
+        let totalWidth = geometry.size.width
+        let rightSectionWidth: CGFloat = totalWidth - dayLeftSectionWidth - 8 // divider width
+        
+        return VStack(spacing: 0) {
+            // Journal takes up entire column height - no top tasks section
+            JournalView(currentDate: currentDate, embedded: true, layoutType: .hybrid)
                 .id(currentDate)
                 .frame(maxHeight: .infinity)
                 .padding(.all, 8)

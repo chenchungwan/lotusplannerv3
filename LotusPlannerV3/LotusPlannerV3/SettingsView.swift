@@ -5,12 +5,14 @@ import UIKit
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
     case expanded = 1
+    case hybrid = 2
 
     var id: Int { rawValue }
     var displayName: String {
         switch self {
         case .compact: "Compact"
         case .expanded: "Expanded"
+        case .hybrid: "Hybrid"
         }
     }
 }

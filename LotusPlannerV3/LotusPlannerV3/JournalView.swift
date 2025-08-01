@@ -25,10 +25,14 @@ struct JournalView: View {
     /// nav bar.
     var embedded: Bool = false
     
-    init(currentDate: Date, embedded: Bool = false) {
+    /// Layout type for determining which background PDF to use
+    var layoutType: JournalLayoutType = .compact
+    
+    init(currentDate: Date, embedded: Bool = false, layoutType: JournalLayoutType = .compact) {
         _currentDate = State(initialValue: currentDate)
         _previousDate = State(initialValue: currentDate)
         self.embedded = embedded
+        self.layoutType = layoutType
     }
     
     // Interval is always day for journal navigation (reuse same step logic)
@@ -134,7 +138,7 @@ struct JournalView: View {
             // Observe photo picker selection
         
             // PDF background
-            if let url = JournalManager.shared.backgroundPDFURL,
+            if let url = JournalManager.shared.backgroundPDFURL(for: layoutType),
                let doc = PDFDocument(url: url) {
                 PDFKitView(document: doc)
                     .ignoresSafeArea()
