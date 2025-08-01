@@ -11,7 +11,7 @@ struct WeekTimelineComponent: View {
     let personalTasks: [GoogleTask]
     let professionalTasks: [GoogleTask]
     let hideCompletedTasks: Bool
-    let initialUntimedRows: Int
+    let hideDailyTasks: Bool
     
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onDayTap: ((Date) -> Void)?
@@ -19,6 +19,9 @@ struct WeekTimelineComponent: View {
     // MARK: - State
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
+    @State private var tasksRowHeight: CGFloat = 120 // Default height for tasks section
+    @State private var isDraggingSlider: Bool = false
+    @State private var dragStartHeight: CGFloat = 0
     
     // MARK: - Constants
     private let hourHeight: CGFloat = 80
@@ -27,9 +30,11 @@ struct WeekTimelineComponent: View {
     private let timeColumnWidth: CGFloat = 50
     private let dayHeaderHeight: CGFloat = 60
     private let allDayEventHeight: CGFloat = 24
+    private let minTasksRowHeight: CGFloat = 20 // Minimum height for tasks section (allows near-complete collapse)
+    private let minTimelineHeight: CGFloat = 100 // Minimum height for timeline section
     
     // MARK: - Initializer
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTasks: [GoogleTask] = [], professionalTasks: [GoogleTask] = [], hideCompletedTasks: Bool = false, initialUntimedRows: Int = 0, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTasks: [GoogleTask] = [], professionalTasks: [GoogleTask] = [], hideCompletedTasks: Bool = false, hideDailyTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
@@ -39,7 +44,7 @@ struct WeekTimelineComponent: View {
         self.personalTasks = personalTasks
         self.professionalTasks = professionalTasks
         self.hideCompletedTasks = hideCompletedTasks
-        self.initialUntimedRows = initialUntimedRows
+        self.hideDailyTasks = hideDailyTasks
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
     }
@@ -68,12 +73,21 @@ struct WeekTimelineComponent: View {
         GeometryReader { geometry in
             let dayColumnWidth = (geometry.size.width - timeColumnWidth) / 7
             
+            // Calculate maximum allowed height for tasks section
+            // Available space = total height - header height - slider height - minimum timeline height
+            let maxTasksRowHeight = geometry.size.height - dayHeaderHeight - 20 - minTimelineHeight
+            
             VStack(spacing: 0) {
                 // Fixed header with day labels
                 headerSection(dayColumnWidth: dayColumnWidth)
                 
-                // Fixed daily tasks section at top
-                dailyTasksSection(dayColumnWidth: dayColumnWidth)
+                // Fixed daily tasks section at top (conditionally shown)
+                if !hideDailyTasks {
+                    dailyTasksSection(dayColumnWidth: dayColumnWidth)
+                    
+                    // Slider between tasks and events
+                    sliderSection(maxHeight: maxTasksRowHeight)
+                }
                 
                 // Scrollable content (all-day events and timeline)
                 ScrollView(.vertical, showsIndicators: true) {
@@ -89,7 +103,16 @@ struct WeekTimelineComponent: View {
                 }
             }
         }
-        .onAppear { startTimer() }
+        .onAppear { 
+            startTimer()
+            // Initialize tasks row height based on content if not already set
+            if tasksRowHeight == 120 {
+                let personalHeight = calculateRowHeight(for: personalTasksByDate)
+                let professionalHeight = calculateRowHeight(for: professionalTasksByDate)
+                let calculatedHeight = personalHeight + professionalHeight + 0.5 // Add separator height
+                tasksRowHeight = max(minTasksRowHeight, calculatedHeight)
+            }
+        }
         .onDisappear { stopTimer() }
     }
     
@@ -175,10 +198,7 @@ struct WeekTimelineComponent: View {
     private func headerSection(dayColumnWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             // Time column placeholder
-            Text("Time")
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
+            Spacer()
                 .frame(width: timeColumnWidth, height: dayHeaderHeight)
                 .background(Color(.systemGray6))
             
@@ -201,13 +221,17 @@ struct WeekTimelineComponent: View {
     
     // MARK: - Daily Tasks Section
     private func dailyTasksSection(dayColumnWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        // Split the available height between personal and professional tasks
+        let individualRowHeight = (tasksRowHeight - 0.5) / 2 // Account for separator line
+        
+        return VStack(spacing: 0) {
             // Personal Tasks Row
             dailyTasksRow(
                 title: "Personal",
                 color: personalColor,
                 tasks: personalTasksByDate,
-                dayColumnWidth: dayColumnWidth
+                dayColumnWidth: dayColumnWidth,
+                rowHeight: individualRowHeight
             )
             
             // Thin separator line between personal and professional
@@ -220,34 +244,50 @@ struct WeekTimelineComponent: View {
                 title: "Professional", 
                 color: professionalColor,
                 tasks: professionalTasksByDate,
-                dayColumnWidth: dayColumnWidth
+                dayColumnWidth: dayColumnWidth,
+                rowHeight: individualRowHeight
             )
         }
+        .frame(height: tasksRowHeight)
     }
     
-    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat) -> some View {
+    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat, rowHeight: CGFloat) -> some View {
         HStack(spacing: 0) {
             // Task type indicator circle with checkmark
             VStack {
-                Circle()
-                    .fill(color)
-                    .frame(width: 20, height: 20)
-                    .overlay(
-                        Image(systemName: "checkmark")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                    )
-                Spacer()
+                if rowHeight > 20 {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 20, height: 20)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        )
+                    Spacer()
+                } else {
+                    // Condensed indicator for collapsed state
+                    Circle()
+                        .fill(color)
+                        .frame(width: 12, height: 12)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        )
+                    Spacer()
+                }
             }
-            .frame(width: timeColumnWidth, height: 60)
+            .frame(width: timeColumnWidth, height: rowHeight)
             .background(Color(.systemGray6))
             
             // Tasks for each day
             ForEach(weekDates, id: \.self) { date in
                 let dayTasks = tasks[Calendar.current.startOfDay(for: date)] ?? []
-                dailyTasksCell(tasks: dayTasks, color: color)
-                    .frame(width: dayColumnWidth, height: 60)
+                dailyTasksCell(tasks: dayTasks, color: color, rowHeight: rowHeight)
+                    .frame(width: dayColumnWidth, height: rowHeight)
                     .background(Color(.systemBackground))
                     .overlay(
                         Rectangle()
@@ -259,9 +299,10 @@ struct WeekTimelineComponent: View {
         }
     }
     
-    private func dailyTasksCell(tasks: [GoogleTask], color: Color) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 2) {
+    private func dailyTasksCell(tasks: [GoogleTask], color: Color, rowHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // Show tasks only if there's enough height, otherwise show condensed view
+            if rowHeight > 20 {
                 ForEach(tasks, id: \.id) { task in
                     HStack(spacing: 4) {
                         Circle()
@@ -277,13 +318,90 @@ struct WeekTimelineComponent: View {
                         Spacer(minLength: 0)
                     }
                 }
+            } else if !tasks.isEmpty {
+                // Condensed view: just show task count when collapsed
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 4, height: 4)
+                    
+                    Text("\(tasks.count) task\(tasks.count == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    
+                    Spacer(minLength: 0)
+                }
             }
         }
         .padding(.horizontal, 4)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
+    private func calculateRowHeight(for tasksByDate: [Date: [GoogleTask]]) -> CGFloat {
+        let maxTasksInAnyDay = tasksByDate.values.map { $0.count }.max() ?? 0
+        
+        // Minimum height of 40 points, then add 16 points for each task
+        // 16 points accounts for: caption2 font (~12) + spacing (2) + some buffer (2)
+        let baseHeight: CGFloat = 40
+        let taskHeight: CGFloat = 16
+        let calculatedHeight = baseHeight + CGFloat(maxTasksInAnyDay) * taskHeight
+        
+        // Ensure minimum height and reasonable maximum
+        return max(40, min(calculatedHeight, 200))
+    }
+    
+    // MARK: - Slider Section
+    private func sliderSection(maxHeight: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            // Left column (matching time column width)
+            Rectangle()
+                .fill(Color(.systemGray6))
+                .frame(width: timeColumnWidth, height: 20)
+            
+            // Draggable slider area
+            Rectangle()
+                .fill(isDraggingSlider ? Color(.systemGray4) : Color(.systemGray5))
+                .frame(height: 20)
+                .overlay(
+                    HStack {
+                        // Draggable handle with visual indicators
+                        HStack(spacing: 4) {
+                            Rectangle()
+                                .fill(isDraggingSlider ? Color(.systemGray2) : Color(.systemGray3))
+                                .frame(width: 30, height: isDraggingSlider ? 6 : 4)
+                                .cornerRadius(3)
+                                .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
+                            
+                            Image(systemName: "line.3.horizontal")
+                                .font(.caption2)
+                                .foregroundColor(isDraggingSlider ? Color(.systemGray2) : Color(.systemGray3))
+                                .scaleEffect(isDraggingSlider ? 1.1 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
+                        }
+                    }
+                )
+                .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            if !isDraggingSlider {
+                                isDraggingSlider = true
+                                dragStartHeight = tasksRowHeight
+                            }
+                            let newHeight = dragStartHeight + value.translation.height
+                            tasksRowHeight = max(minTasksRowHeight, min(maxHeight, newHeight))
+                        }
+                        .onEnded { _ in
+                            isDraggingSlider = false
+                            dragStartHeight = 0
+                        }
+                )
+        }
+    }
+
     // MARK: - All-Day Events Section
     private func allDayEventsSection(dayColumnWidth: CGFloat) -> some View {
         let maxEvents = weekDates.map { date in
@@ -556,8 +674,6 @@ struct WeekTimelineComponent: View {
         return hour >= startHour && hour < endHour
     }
     
-
-    
     // MARK: - Task Grouping
     private var personalTasksByDate: [Date: [GoogleTask]] {
         groupTasksByDate(personalTasks)
@@ -719,7 +835,7 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
             personalTasks: [],
             professionalTasks: [],
             hideCompletedTasks: false,
-            initialUntimedRows: 0
+            hideDailyTasks: false
         )
         .previewLayout(.sizeThatFits)
     }

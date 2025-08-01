@@ -1082,7 +1082,7 @@ struct CalendarView: View {
                     personalTasks: tasksViewModel.personalTasks.values.flatMap { $0 },
                     professionalTasks: tasksViewModel.professionalTasks.values.flatMap { $0 },
                     hideCompletedTasks: appPrefs.hideCompletedTasks,
-                    initialUntimedRows: 2,
+                    hideDailyTasks: appPrefs.hideWeeklyDailyTasks,
                     onEventTap: { ev in
                         selectedCalendarEvent = ev
                         showingEventDetails = true
@@ -1092,58 +1092,63 @@ struct CalendarView: View {
                         interval = .day
                     }
                 )
-                    .frame(height: weekTopSectionHeight)
+                    .frame(height: appPrefs.hideWeeklyBottomSection ? nil : weekTopSectionHeight)
+                    .frame(maxHeight: appPrefs.hideWeeklyBottomSection ? .infinity : nil)
                 
-                // Draggable divider
-                weekDivider
-                
-                // Bottom section - Tasks side by side
-                HStack(alignment: .top, spacing: 0) {
-                    // Personal Tasks
-                    PersonalTasksComponent(
-                        taskLists: tasksViewModel.personalTaskLists,
-                        tasksDict: cachedWeekPersonalTasks,
-                        accentColor: appPrefs.personalColor,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                updateCachedTasks()
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedAccountKind = .personal
-                            DispatchQueue.main.async {
-                                showingTaskDetails = true
-                            }
-                        }
-                    )
-                    .frame(width: geometry.size.width / 2)
-                    
-                    // Professional Tasks
-                    ProfessionalTasksComponent(
-                        taskLists: tasksViewModel.professionalTaskLists,
-                        tasksDict: cachedWeekProfessionalTasks,
-                        accentColor: appPrefs.professionalColor,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                updateCachedTasks()
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedAccountKind = .professional
-                            DispatchQueue.main.async {
-                                showingTaskDetails = true
-                            }
-                        }
-                    )
-                    .frame(width: geometry.size.width / 2)
+                // Draggable divider (only show if bottom section is visible)
+                if !appPrefs.hideWeeklyBottomSection {
+                    weekDivider
                 }
-                .frame(maxHeight: .infinity)
+                
+                // Bottom section - Tasks side by side (conditionally shown)
+                if !appPrefs.hideWeeklyBottomSection {
+                    HStack(alignment: .top, spacing: 0) {
+                        // Personal Tasks
+                        PersonalTasksComponent(
+                            taskLists: tasksViewModel.personalTaskLists,
+                            tasksDict: cachedWeekPersonalTasks,
+                            accentColor: appPrefs.personalColor,
+                            onTaskToggle: { task, listId in
+                                Task {
+                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                    updateCachedTasks()
+                                }
+                            },
+                            onTaskDetails: { task, listId in
+                                selectedTask = task
+                                selectedTaskListId = listId
+                                selectedAccountKind = .personal
+                                DispatchQueue.main.async {
+                                    showingTaskDetails = true
+                                }
+                            }
+                        )
+                        .frame(width: geometry.size.width / 2)
+                        
+                        // Professional Tasks
+                        ProfessionalTasksComponent(
+                            taskLists: tasksViewModel.professionalTaskLists,
+                            tasksDict: cachedWeekProfessionalTasks,
+                            accentColor: appPrefs.professionalColor,
+                            onTaskToggle: { task, listId in
+                                Task {
+                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                    updateCachedTasks()
+                                }
+                            },
+                            onTaskDetails: { task, listId in
+                                selectedTask = task
+                                selectedTaskListId = listId
+                                selectedAccountKind = .professional
+                                DispatchQueue.main.async {
+                                    showingTaskDetails = true
+                                }
+                            }
+                        )
+                        .frame(width: geometry.size.width / 2)
+                    }
+                    .frame(maxHeight: .infinity)
+                }
             }
         }
         .background(Color(.systemBackground))
