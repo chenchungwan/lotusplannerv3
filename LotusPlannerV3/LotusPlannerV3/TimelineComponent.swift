@@ -122,7 +122,7 @@ struct TimelineComponent: View {
                 .frame(width: 8, height: 8)
             
             Text(event.summary)
-                .font(.caption)
+                .font(.body)
                 .fontWeight(.medium)
                 .foregroundColor(.primary)
                 .lineLimit(1)
@@ -144,7 +144,7 @@ struct TimelineComponent: View {
             // Time label
             VStack {
                 Text(formatHour(hour))
-                    .font(.caption)
+                    .font(.body)
                     .foregroundColor(.secondary)
                     .frame(width: 50, alignment: .trailing)
                 Spacer()
@@ -202,7 +202,7 @@ struct TimelineComponent: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.summary)
-                        .font(.caption)
+                        .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
                         .multilineTextAlignment(.leading)
@@ -210,7 +210,7 @@ struct TimelineComponent: View {
                     
                     if height > 40 {
                         Text("\(String(format: "%02d:%02d", startHour, startMinute))")
-                            .font(.caption2)
+                            .font(.body)
                             .foregroundColor(.white.opacity(0.8))
                     }
                 }

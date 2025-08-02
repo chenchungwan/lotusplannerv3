@@ -15,6 +15,14 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .hybrid: "Hybrid"
         }
     }
+    
+    var description: String {
+        switch self {
+        case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
+        case .expanded: "Three columns: timeline, tasks & logs, and dedicated journal space"
+        case .hybrid: "Timeline on left, full-height journal on right (no tasks)"
+        }
+    }
 }
 
 // MARK: - Shared Timeline Interval
@@ -327,15 +335,33 @@ struct SettingsView: View {
                 
 
                 Section("View Layout") {
-                    Picker("Day View Layout", selection: Binding(
-                        get: { appPrefs.dayViewLayout },
-                        set: { appPrefs.updateDayViewLayout($0) }
-                    )) {
-                        ForEach(DayViewLayoutOption.allCases) { option in
-                            Text(option.displayName).tag(option)
+                    // Day View Layout Options with Radio Buttons
+                    ForEach(DayViewLayoutOption.allCases) { option in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: appPrefs.dayViewLayout == option ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(appPrefs.dayViewLayout == option ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    
+                                    Text(option.displayName)
+                                        .font(.body)
+                                        .fontWeight(appPrefs.dayViewLayout == option ? .semibold : .regular)
+                                }
+                                
+                                Text(option.description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.leading, 28)
+                            }
+                            
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateDayViewLayout(option)
                         }
                     }
-                    .pickerStyle(.inline)
                     
                     HStack {
                         Image(systemName: "calendar.day.timeline.leading")

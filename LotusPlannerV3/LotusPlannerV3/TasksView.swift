@@ -622,8 +622,8 @@ enum TasksError: Error {
 
 // MARK: - Tasks View
 struct TasksView: View {
-    @StateObject private var viewModel = TasksViewModel()
-    @StateObject private var calendarViewModel = CalendarViewModel()
+    @ObservedObject private var viewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared

@@ -146,6 +146,84 @@ class CalendarViewModel: ObservableObject {
     
     private let authManager = GoogleAuthManager.shared
     
+    // MARK: - Memory Cache
+    private var cachedEvents: [String: [GoogleCalendarEvent]] = [:]
+    private var cachedCalendars: [String: [GoogleCalendar]] = [:]
+    private var cacheTimestamps: [String: Date] = [:]
+    private let cacheTimeout: TimeInterval = 300 // 5 minutes
+    
+    // Track current loaded range to avoid unnecessary reloads
+    private var currentLoadedRange: (start: Date, end: Date, accountKind: GoogleAuthManager.AccountKind)?
+    
+    // MARK: - Cache Helper Methods
+    private func cacheKey(for accountKind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "\(accountKind.rawValue)_\(formatter.string(from: startDate))_\(formatter.string(from: endDate))"
+    }
+    
+    private func monthCacheKey(for date: Date, accountKind: GoogleAuthManager.AccountKind) -> String {
+        let calendar = Calendar.mondayFirst
+        let monthStart = calendar.dateInterval(of: .month, for: date)?.start ?? date
+        let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? date
+        return cacheKey(for: accountKind, startDate: monthStart, endDate: monthEnd)
+    }
+    
+    private func isCacheValid(for key: String) -> Bool {
+        guard let timestamp = cacheTimestamps[key] else { return false }
+        return Date().timeIntervalSince(timestamp) < cacheTimeout
+    }
+    
+    private func getCachedEvents(for key: String) -> [GoogleCalendarEvent]? {
+        guard isCacheValid(for: key) else {
+            cachedEvents.removeValue(forKey: key)
+            cacheTimestamps.removeValue(forKey: key)
+            return nil
+        }
+        return cachedEvents[key]
+    }
+    
+    private func cacheEvents(_ events: [GoogleCalendarEvent], for key: String) {
+        cachedEvents[key] = events
+        cacheTimestamps[key] = Date()
+    }
+    
+    private func getCachedCalendars(for key: String) -> [GoogleCalendar]? {
+        guard isCacheValid(for: key) else {
+            cachedCalendars.removeValue(forKey: key)
+            return nil
+        }
+        return cachedCalendars[key]
+    }
+    
+    private func cacheCalendars(_ calendars: [GoogleCalendar], for key: String) {
+        cachedCalendars[key] = calendars
+        cacheTimestamps[key] = Date()
+    }
+    
+    // MARK: - Preloading Methods
+    func preloadAdjacentMonths(around date: Date) async {
+        let calendar = Calendar.mondayFirst
+        
+        await withTaskGroup(of: Void.self) { group in
+            // Preload previous month
+            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
+                group.addTask { 
+                    await self.loadCalendarDataForMonth(containing: prevMonth)
+                }
+            }
+            
+            // Preload next month
+            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
+                group.addTask { 
+                    await self.loadCalendarDataForMonth(containing: nextMonth)
+                }
+            }
+        }
+        
+        print("✅ Preloaded adjacent months around \(date)")
+    }
+    
     func loadCalendarData(for date: Date) async {
         isLoading = true
         errorMessage = nil
@@ -197,29 +275,62 @@ class CalendarViewModel: ObservableObject {
     }
     
     func loadCalendarDataForMonth(containing date: Date) async {
-        isLoading = true
-        errorMessage = nil
+        let calendar = Calendar.mondayFirst
+        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
+              let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+            return
+        }
         
         print("🔄 Loading month calendar data...")
         print("  Personal account linked: \(authManager.isLinked(kind: .personal))")
         print("  Professional account linked: \(authManager.isLinked(kind: .professional))")
         
-        // Get the month range
-        let calendar = Calendar.mondayFirst
-        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
-              let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
-            isLoading = false
+        var hasValidCache = false
+        
+        // Check cache first - if we have valid cached data, use it immediately
+        if authManager.isLinked(kind: .personal) {
+            let personalKey = monthCacheKey(for: date, accountKind: .personal)
+            if let cachedEvents = getCachedEvents(for: personalKey),
+               let cachedCalendars = getCachedCalendars(for: personalKey) {
+                personalEvents = cachedEvents
+                personalCalendars = cachedCalendars
+                hasValidCache = true
+                print("💾 Using cached personal data (\(cachedEvents.count) events)")
+            }
+        }
+        
+        if authManager.isLinked(kind: .professional) {
+            let professionalKey = monthCacheKey(for: date, accountKind: .professional)
+            if let cachedEvents = getCachedEvents(for: professionalKey),
+               let cachedCalendars = getCachedCalendars(for: professionalKey) {
+                professionalEvents = cachedEvents
+                professionalCalendars = cachedCalendars
+                hasValidCache = true
+                print("💾 Using cached professional data (\(cachedEvents.count) events)")
+            }
+        }
+        
+        // If we have valid cache for all linked accounts, return early
+        let needsPersonalRefresh = authManager.isLinked(kind: .personal) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .personal)) == nil
+        let needsProfessionalRefresh = authManager.isLinked(kind: .professional) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .professional)) == nil
+        
+        if !needsPersonalRefresh && !needsProfessionalRefresh {
+            print("✅ All data loaded from cache")
             return
         }
         
+        // Load fresh data for accounts that need it
+        isLoading = true
+        errorMessage = nil
+        
         await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
+            if needsPersonalRefresh {
                 group.addTask {
                     await self.loadCalendarDataForMonthRange(.personal, startDate: monthStart, endDate: monthEnd)
                 }
             }
             
-            if authManager.isLinked(kind: .professional) {
+            if needsProfessionalRefresh {
                 group.addTask {
                     await self.loadCalendarDataForMonthRange(.professional, startDate: monthStart, endDate: monthEnd)
                 }
@@ -402,6 +513,12 @@ class CalendarViewModel: ObservableObject {
             let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
             print("  Found \(events.count) \(kind.rawValue) events")
             
+            // Cache the fresh data
+            let cacheKey = self.cacheKey(for: kind, startDate: startDate, endDate: endDate)
+            cacheEvents(events, for: cacheKey)
+            cacheCalendars(calendars, for: cacheKey)
+            print("  💾 Cached \(events.count) events for key: \(cacheKey)")
+            
             await MainActor.run {
                 switch kind {
                 case .personal:
@@ -481,8 +598,8 @@ class CalendarViewModel: ObservableObject {
 // TimelineInterval is now defined in SettingsView.swift (shared)
 
 struct CalendarView: View {
-    @StateObject private var calendarViewModel = CalendarViewModel()
-    @StateObject private var tasksViewModel = TasksViewModel()
+    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
+    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var currentDate = Date()
@@ -1070,8 +1187,10 @@ struct CalendarView: View {
                     professionalEvents: calendarViewModel.professionalEvents,
                     personalColor: appPrefs.personalColor,
                     professionalColor: appPrefs.professionalColor,
-                    personalTasks: tasksViewModel.personalTasks.values.flatMap { $0 },
-                    professionalTasks: tasksViewModel.professionalTasks.values.flatMap { $0 },
+                    personalTaskLists: tasksViewModel.personalTaskLists,
+                    personalTasks: tasksViewModel.personalTasks,
+                    professionalTaskLists: tasksViewModel.professionalTaskLists,
+                    professionalTasks: tasksViewModel.professionalTasks,
                     hideCompletedTasks: appPrefs.hideCompletedTasks,
                     hideDailyTasks: appPrefs.hideWeeklyDailyTasks,
                     onEventTap: { ev in
@@ -3382,7 +3501,7 @@ struct MonthCardView: View {
         VStack(spacing: 4) {
             // Month title
             Text(monthName)
-                .font(.headline)
+                .font(.title2)
                 .fontWeight(.semibold)
                 .foregroundColor(isCurrentMonth ? .white : .primary)
                 .frame(maxWidth: .infinity)
@@ -3398,7 +3517,7 @@ struct MonthCardView: View {
                     .frame(width: 20)
                 ForEach(["M", "T", "W", "T", "F", "S", "S"], id: \.self) { day in
                     Text(day)
-                        .font(.caption2)
+                        .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
@@ -3426,7 +3545,7 @@ struct MonthCardView: View {
         HStack(spacing: 2) {
             // Week number
             Text(getWeekNumber(for: week))
-                .font(.caption2)
+                .font(.body)
                 .fontWeight(.medium)
                 .foregroundColor(.secondary)
                 .frame(width: 20, height: 20)
@@ -3452,7 +3571,7 @@ struct MonthCardView: View {
         return Group {
             if isValidDay {
                 Text("\(dayNumber)")
-                    .font(.caption)
+                    .font(.body)
                     .fontWeight(.medium)
                     .frame(maxWidth: .infinity)
                     .frame(height: 20)

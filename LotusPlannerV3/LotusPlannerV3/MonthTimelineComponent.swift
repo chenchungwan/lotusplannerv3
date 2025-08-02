@@ -43,7 +43,7 @@ struct MonthTimelineComponent: View {
         HStack(spacing: 0) {
             ForEach(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], id: \.self) { dayName in
                 Text(dayName)
-                    .font(.caption)
+                    .font(.body)
                     .fontWeight(.semibold)
                     .foregroundColor(.secondary)
                     .frame(width: columnWidth, height: 30)
@@ -84,7 +84,7 @@ struct MonthTimelineComponent: View {
             if isValidDay, let dayDate = date {
                 // Day number header
                 Text("\(dayNumber)")
-                    .font(.caption)
+                    .font(.body)
                     .fontWeight(isToday ? .bold : .medium)
                     .foregroundColor(isToday ? .white : (isCurrentMonth ? .primary : .secondary))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -131,7 +131,7 @@ struct MonthTimelineComponent: View {
             // Show "+X more" if there are more than 5 events
             if events.count > 5 {
                 Text("+\(events.count - 5) more")
-                    .font(.caption2)
+                    .font(.body)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)
@@ -154,7 +154,7 @@ struct MonthTimelineComponent: View {
                 .frame(width: 4, height: 4)
             
             Text(displayText)
-                .font(.caption2)
+                .font(.body)
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)

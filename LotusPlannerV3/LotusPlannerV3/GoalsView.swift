@@ -21,6 +21,10 @@ struct GoalsView: View {
     
     @State private var timeFilter: TimeFilter = .all
     
+    // Drag and drop state
+    @State private var draggedCategory: GoalCategory?
+    @State private var dragOffset: CGSize = .zero
+    
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
     
     private let cardHeight: CGFloat = UIScreen.main.bounds.height / 3
@@ -36,16 +40,38 @@ struct GoalsView: View {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(viewModel.categories) { category in
                     goalCard(category)
+                        .scaleEffect(draggedCategory?.id == category.id ? 1.05 : 1.0)
+                        .opacity(draggedCategory?.id == category.id ? 0.8 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: draggedCategory?.id)
                         .onDrag {
-                            NSItemProvider(object: category.id.uuidString as NSString)
+                            draggedCategory = category
+                            // Add haptic feedback when drag starts
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
+                            return NSItemProvider(object: category.id.uuidString as NSString)
                         }
-                        .onDrop(of: [.text], delegate: GoalDropDelegate(item: category, viewModel: viewModel))
+                        .onDrop(of: [.text], delegate: EnhancedGoalDropDelegate(
+                            item: category, 
+                            viewModel: viewModel,
+                            draggedCategory: $draggedCategory
+                        ))
                 }
                 if viewModel.categories.count < 6 {
                     addCard
+                        .onDrop(of: [.text], delegate: EnhancedGoalDropDelegate(
+                            item: nil, 
+                            viewModel: viewModel,
+                            draggedCategory: $draggedCategory
+                        ))
                 }
             }
             .padding()
+        }
+        .onTapGesture {
+            // Reset drag state if user taps elsewhere during drag
+            if draggedCategory != nil {
+                draggedCategory = nil
+            }
         }
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
@@ -129,23 +155,47 @@ struct GoalsView: View {
     }
     
     private func goalCard(_ category: GoalCategory) -> some View {
-        ZStack {
+        let isDragged = draggedCategory?.id == category.id
+        
+        return ZStack {
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.blue.opacity(0.1))
+                .fill(Color.blue.opacity(isDragged ? 0.2 : 0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isDragged ? Color.blue.opacity(0.6) : Color.clear, lineWidth: 2)
+                )
+                .shadow(
+                    color: isDragged ? .blue.opacity(0.3) : .black.opacity(0.1),
+                    radius: isDragged ? 8 : 2,
+                    x: 0,
+                    y: isDragged ? 4 : 1
+                )
+            
             VStack(alignment: .leading, spacing: 6) {
-                Text(category.name)
-                    .font(.title3)
-                    .padding(.bottom, 2)
-                    .contextMenu {
-                        Button("Rename") { editingCategory = category }
-                        Button("Delete", role: .destructive) { categoryPendingDelete = category }
+                HStack {
+                    Text(category.name)
+                        .font(.title3)
+                        .fontWeight(isDragged ? .semibold : .regular)
+                    Spacer()
+                    if isDragged {
+                        Image(systemName: "hand.raised.fill")
+                            .foregroundColor(.blue.opacity(0.7))
+                            .font(.caption)
                     }
+                }
+                .padding(.bottom, 2)
+                .contextMenu {
+                    Button("Rename") { editingCategory = category }
+                    Button("Delete", role: .destructive) { categoryPendingDelete = category }
+                }
+                
                 let goalsForCat = viewModel.goals.filter { goal in
                     guard goal.categoryId == category.id else { return false }
                     if timeFilter == .all { return true }
                     guard let due = goal.dueDate else { return false }
                     return isDue(due, within: timeFilter)
                 }
+                
                 if goalsForCat.isEmpty {
                     Text("No goals yet")
                         .font(.callout)
@@ -190,19 +240,37 @@ struct GoalsView: View {
     }
     
     private var addCard: some View {
-        Button {
+        let isDropTarget = draggedCategory != nil
+        
+        return Button {
             showingAddCategory = true
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(style: StrokeStyle(lineWidth: 2, dash: [6]))
-                    .foregroundColor(.blue)
-                Image(systemName: "plus")
-                    .font(.largeTitle)
-                    .foregroundColor(.blue)
+                    .foregroundColor(isDropTarget ? .green : .blue)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isDropTarget ? Color.green.opacity(0.1) : Color.clear)
+                    )
+                    .animation(.easeInOut(duration: 0.2), value: isDropTarget)
+                
+                VStack(spacing: 8) {
+                    Image(systemName: isDropTarget ? "arrow.down.circle" : "plus")
+                        .font(.largeTitle)
+                        .foregroundColor(isDropTarget ? .green : .blue)
+                    
+                    if isDropTarget {
+                        Text("Drop here to reorder")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: isDropTarget)
             }
             .frame(height: cardHeight)
         }
+        .disabled(isDropTarget) // Prevent button action during drag
     }
     
     private func editSheet(for category: GoalCategory) -> some View {
@@ -283,27 +351,53 @@ struct GoalsView: View {
     }
 }
 
-// Drop Delegate
-struct GoalDropDelegate: DropDelegate {
-    let item: GoalCategory
+// Enhanced Drop Delegate with better visual feedback and grid positioning
+struct EnhancedGoalDropDelegate: DropDelegate {
+    let item: GoalCategory? // nil for add card
     let viewModel: GoalsViewModel
-    func performDrop(info: DropInfo) -> Bool { return true }
+    @Binding var draggedCategory: GoalCategory?
+    
+    func validateDrop(info: DropInfo) -> Bool {
+        return info.hasItemsConforming(to: [.text])
+    }
+    
     func dropEntered(info: DropInfo) {
-        guard let sourceId = info.itemProviders(for: [.text]).first else { return }
-        sourceId.loadItem(forTypeIdentifier: "public.text", options: nil) { (data, _) in
-            DispatchQueue.main.async {
-                guard let d = data as? Data,
-                      let idStr = String(data: d, encoding: .utf8),
-                      let uuid = UUID(uuidString: idStr),
-                      let sourceIndex = viewModel.categories.firstIndex(where: { $0.id == uuid }),
-                      let destIndex = viewModel.categories.firstIndex(of: item) else { return }
-                if sourceIndex != destIndex {
-                    withAnimation {
-                        viewModel.categories.move(fromOffsets: IndexSet(integer: sourceIndex), toOffset: destIndex > sourceIndex ? destIndex+1 : destIndex)
-                    }
-                }
+        guard let draggedCategory = draggedCategory,
+              let sourceIndex = viewModel.categories.firstIndex(where: { $0.id == draggedCategory.id }) else { return }
+        
+        let destIndex: Int
+        if let item = item {
+            // Dropping on existing category
+            guard let targetIndex = viewModel.categories.firstIndex(of: item) else { return }
+            destIndex = targetIndex
+        } else {
+            // Dropping on add card - move to end
+            destIndex = viewModel.categories.count
+        }
+        
+        // Only move if different positions
+        if sourceIndex != destIndex {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                let actualDestIndex = destIndex > sourceIndex ? destIndex : destIndex
+                viewModel.categories.move(fromOffsets: IndexSet(integer: sourceIndex), toOffset: actualDestIndex)
             }
         }
+    }
+    
+    func performDrop(info: DropInfo) -> Bool {
+        // Add haptic feedback on successful drop
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+        
+        // Reset drag state
+        DispatchQueue.main.async {
+            draggedCategory = nil
+        }
+        return true
+    }
+    
+    func dropExited(info: DropInfo) {
+        // Optional: Add visual feedback when drag exits
     }
 }
 

@@ -8,8 +8,10 @@ struct WeekTimelineComponent: View {
     let professionalEvents: [GoogleCalendarEvent]
     let personalColor: Color
     let professionalColor: Color
-    let personalTasks: [GoogleTask]
-    let professionalTasks: [GoogleTask]
+    let personalTaskLists: [GoogleTaskList]
+    let personalTasks: [String: [GoogleTask]]
+    let professionalTaskLists: [GoogleTaskList]
+    let professionalTasks: [String: [GoogleTask]]
     let hideCompletedTasks: Bool
     let hideDailyTasks: Bool
     
@@ -34,14 +36,16 @@ struct WeekTimelineComponent: View {
     private let minTimelineHeight: CGFloat = 100 // Minimum height for timeline section
     
     // MARK: - Initializer
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTasks: [GoogleTask] = [], professionalTasks: [GoogleTask] = [], hideCompletedTasks: Bool = false, hideDailyTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, hideDailyTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
         self.professionalEvents = professionalEvents
         self.personalColor = personalColor
         self.professionalColor = professionalColor
+        self.personalTaskLists = personalTaskLists
         self.personalTasks = personalTasks
+        self.professionalTaskLists = professionalTaskLists
         self.professionalTasks = professionalTasks
         self.hideCompletedTasks = hideCompletedTasks
         self.hideDailyTasks = hideDailyTasks
@@ -84,6 +88,7 @@ struct WeekTimelineComponent: View {
                 // Fixed daily tasks section at top (conditionally shown)
                 if !hideDailyTasks {
                     dailyTasksSection(dayColumnWidth: dayColumnWidth)
+                        .padding(.top, 2) // Small gap between header and tasks to prevent overlap
                     
                     // Slider between tasks and events
                     sliderSection(maxHeight: maxTasksRowHeight)
@@ -135,7 +140,7 @@ struct WeekTimelineComponent: View {
         // Check all events across the week to find the earliest and latest times
         for date in weekDates {
             let events = weekEvents[date] ?? []
-            let timedEvents = events.filter { !$0.isAllDay }
+            let timedEvents = events.filter { !$0.isAllDay && !isEvent24Hours($0) }
             
             for event in timedEvents {
                 if let startTime = event.startTime {
@@ -171,17 +176,17 @@ struct WeekTimelineComponent: View {
     private var hasAnyAllDayEvents: Bool {
         weekDates.contains { date in
             let events = weekEvents[date] ?? []
-            return events.contains { $0.isAllDay }
+            return events.contains { $0.isAllDay || isEvent24Hours($0) }
         }
     }
     
     private func dayData(for date: Date) -> DayData {
         let events = weekEvents[date] ?? []
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
-        let allDayEvents = events.filter { $0.isAllDay }
-        let timedEvents = events.filter { !$0.isAllDay && isEventInTimeRange($0) }
-        let personalTasksForDate = filteredTasksForDate(personalTasks, date: date)
-        let professionalTasksForDate = filteredTasksForDate(professionalTasks, date: date)
+        let allDayEvents = events.filter { $0.isAllDay || isEvent24Hours($0) }
+        let timedEvents = events.filter { !$0.isAllDay && !isEvent24Hours($0) && isEventInTimeRange($0) }
+        let personalTasksForDate = filteredTasksForDate(personalTasks.values.flatMap { $0 }, date: date)
+        let professionalTasksForDate = filteredTasksForDate(professionalTasks.values.flatMap { $0 }, date: date)
         let tasks = personalTasksForDate + professionalTasksForDate
         
         return DayData(
@@ -221,8 +226,14 @@ struct WeekTimelineComponent: View {
     
     // MARK: - Daily Tasks Section
     private func dailyTasksSection(dayColumnWidth: CGFloat) -> some View {
-        // Split the available height between personal and professional tasks
-        let individualRowHeight = (tasksRowHeight - 0.5) / 2 // Account for separator line
+        // Calculate optimal heights for each row based on content
+        let personalRowHeight = calculateOptimalRowHeight(for: personalTasksByDate, isPersonal: true, dayColumnWidth: dayColumnWidth)
+        let professionalRowHeight = calculateOptimalRowHeight(for: professionalTasksByDate, isPersonal: false, dayColumnWidth: dayColumnWidth)
+        
+        // Use the user's preferred height as the maximum, but allow shrinking for less content
+        let maxIndividualHeight = (tasksRowHeight - 0.5) / 2 // Account for separator line
+        let constrainedPersonalHeight = min(personalRowHeight, maxIndividualHeight)
+        let constrainedProfessionalHeight = min(professionalRowHeight, maxIndividualHeight)
         
         return VStack(spacing: 0) {
             // Personal Tasks Row
@@ -231,7 +242,9 @@ struct WeekTimelineComponent: View {
                 color: personalColor,
                 tasks: personalTasksByDate,
                 dayColumnWidth: dayColumnWidth,
-                rowHeight: individualRowHeight
+                rowHeight: constrainedPersonalHeight,
+                optimalHeight: personalRowHeight,
+                isPersonal: true
             )
             
             // Thin separator line between personal and professional
@@ -245,13 +258,15 @@ struct WeekTimelineComponent: View {
                 color: professionalColor,
                 tasks: professionalTasksByDate,
                 dayColumnWidth: dayColumnWidth,
-                rowHeight: individualRowHeight
+                rowHeight: constrainedProfessionalHeight,
+                optimalHeight: professionalRowHeight,
+                isPersonal: false
             )
         }
-        .frame(height: tasksRowHeight)
+        .frame(height: constrainedPersonalHeight + constrainedProfessionalHeight + 0.5)
     }
     
-    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat, rowHeight: CGFloat) -> some View {
+    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat, rowHeight: CGFloat, optimalHeight: CGFloat, isPersonal: Bool) -> some View {
         HStack(spacing: 0) {
             // Task type indicator circle with checkmark
             VStack {
@@ -261,7 +276,7 @@ struct WeekTimelineComponent: View {
                         .frame(width: 20, height: 20)
                         .overlay(
                             Image(systemName: "checkmark")
-                                .font(.caption2)
+                                .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                         )
@@ -273,7 +288,7 @@ struct WeekTimelineComponent: View {
                         .frame(width: 12, height: 12)
                         .overlay(
                             Image(systemName: "checkmark")
-                                .font(.caption2)
+                                .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                         )
@@ -283,60 +298,140 @@ struct WeekTimelineComponent: View {
             .frame(width: timeColumnWidth, height: rowHeight)
             .background(Color(.systemGray6))
             
-            // Tasks for each day
-            ForEach(weekDates, id: \.self) { date in
-                let dayTasks = tasks[Calendar.current.startOfDay(for: date)] ?? []
-                dailyTasksCell(tasks: dayTasks, color: color, rowHeight: rowHeight)
-                    .frame(width: dayColumnWidth, height: rowHeight)
-                    .background(Color(.systemBackground))
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .frame(width: 0.5),
-                        alignment: .trailing
-                    )
+            // Tasks for each day - scrollable horizontally
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(weekDates, id: \.self) { date in
+                        let dayTasks = tasks[Calendar.current.startOfDay(for: date)] ?? []
+                        dailyTasksCell(
+                            tasks: dayTasks, 
+                            color: color, 
+                            rowHeight: rowHeight,
+                            optimalHeight: optimalHeight,
+                            isPersonal: isPersonal
+                        )
+                        .frame(width: dayColumnWidth, height: rowHeight)
+                        .background(Color(.systemBackground))
+                        .overlay(
+                            Rectangle()
+                                .fill(Color(.systemGray4))
+                                .frame(width: 0.5),
+                            alignment: .trailing
+                        )
+                    }
+                }
             }
         }
     }
     
-    private func dailyTasksCell(tasks: [GoogleTask], color: Color, rowHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // Show tasks only if there's enough height, otherwise show condensed view
-            if rowHeight > 20 {
-                ForEach(tasks, id: \.id) { task in
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(task.isCompleted ? Color.gray : color)
-                            .frame(width: 4, height: 4)
-                        
-                        Text(task.title)
-                            .font(.caption2)
-                            .foregroundColor(task.isCompleted ? .gray : .primary)
-                            .strikethrough(task.isCompleted)
-                            .lineLimit(1)
-                        
-                        Spacer(minLength: 0)
+    private func dailyTasksCell(tasks: [GoogleTask], color: Color, rowHeight: CGFloat, optimalHeight: CGFloat, isPersonal: Bool) -> some View {
+        let taskLists = isPersonal ? personalTaskLists : professionalTaskLists
+        let tasksDict = isPersonal ? personalTasks : professionalTasks
+        // Always enable scrolling when there are tasks to ensure each cell can scroll independently
+        let needsScrolling = !tasks.isEmpty && rowHeight > 20
+        
+        if rowHeight > 40 {
+            let groupedTasks = groupTasksByList(tasks, color: color, taskLists: taskLists, tasksDict: tasksDict)
+            
+            if !groupedTasks.isEmpty {
+                let cardsContent = VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(groupedTasks.keys.sorted()), id: \.self) { taskListTitle in
+                        if let taskGroup = groupedTasks[taskListTitle] {
+                            WeeklyTaskListCard(
+                                title: taskListTitle,
+                                tasks: taskGroup.tasks,
+                                color: taskGroup.color,
+                                rowHeight: min(rowHeight, 80) // Limit individual card height for better display
+                            )
+                        }
                     }
                 }
-            } else if !tasks.isEmpty {
-                // Condensed view: just show task count when collapsed
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                
+                if needsScrolling {
+                    // Scrollable content when optimal height exceeds available space
+                    return AnyView(
+                        ScrollView(.vertical, showsIndicators: false) {
+                            cardsContent
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                        .frame(height: rowHeight)
+                        .clipped()
+                    )
+                } else {
+                    // Non-scrollable content when it fits
+                    return AnyView(
+                        cardsContent
+                            .frame(maxWidth: .infinity, maxHeight: rowHeight, alignment: .top)
+                    )
+                }
+            } else {
+                // Empty state
+                return AnyView(
+                    Spacer()
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                )
+            }
+        } else if rowHeight > 20 {
+            // Reduced height: show condensed cards
+            let groupedTasks = groupTasksByList(tasks, color: color, taskLists: taskLists, tasksDict: tasksDict)
+            
+            let condensedContent = VStack(alignment: .leading, spacing: 1) {
+                ForEach(Array(groupedTasks.keys.sorted()), id: \.self) { taskListTitle in
+                    if let taskGroup = groupedTasks[taskListTitle] {
+                        WeeklyTaskListCard(
+                            title: taskListTitle,
+                            tasks: taskGroup.tasks,
+                            color: taskGroup.color,
+                            rowHeight: rowHeight
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            
+            if needsScrolling {
+                return AnyView(
+                    ScrollView(.vertical, showsIndicators: false) {
+                        condensedContent
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .frame(height: rowHeight)
+                    .clipped()
+                )
+            } else {
+                return AnyView(
+                    condensedContent
+                        .frame(maxWidth: .infinity, maxHeight: rowHeight, alignment: .top)
+                )
+            }
+        } else if !tasks.isEmpty {
+            // Condensed view: just show task count when collapsed
+            return AnyView(
                 HStack(spacing: 4) {
                     Circle()
                         .fill(color)
                         .frame(width: 4, height: 4)
                     
                     Text("\(tasks.count) task\(tasks.count == 1 ? "" : "s")")
-                        .font(.caption2)
+                        .font(.body)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                     
                     Spacer(minLength: 0)
                 }
-            }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            )
+        } else {
+            return AnyView(
+                Spacer()
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            )
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     private func calculateRowHeight(for tasksByDate: [Date: [GoogleTask]]) -> CGFloat {
@@ -350,6 +445,41 @@ struct WeekTimelineComponent: View {
         
         // Ensure minimum height and reasonable maximum
         return max(40, min(calculatedHeight, 200))
+    }
+    
+    private func calculateOptimalRowHeight(for tasksByDate: [Date: [GoogleTask]], isPersonal: Bool, dayColumnWidth: CGFloat) -> CGFloat {
+        let taskLists = isPersonal ? personalTaskLists : professionalTaskLists
+        let tasksDict = isPersonal ? personalTasks : professionalTasks
+        
+        var maxRequiredHeight: CGFloat = minTasksRowHeight
+        
+        // Check each day in the week to find the maximum height needed
+        for date in weekDates {
+            let dayStartDate = Calendar.current.startOfDay(for: date)
+            let dayTasks = tasksByDate[dayStartDate] ?? []
+            
+            if !dayTasks.isEmpty {
+                let groupedTasks = groupTasksByList(dayTasks, color: isPersonal ? personalColor : professionalColor, taskLists: taskLists, tasksDict: tasksDict)
+                
+                var dayHeight: CGFloat = 8 // Base padding
+                
+                for (_, taskGroup) in groupedTasks {
+                    // Calculate height for each task list card
+                    let cardBaseHeight: CGFloat = 35 // Header + padding
+                    let taskRowHeight: CGFloat = 18 // Height per task row
+                    let actualTaskCount = max(1, taskGroup.tasks.count) // Use actual task count
+                    
+                    let cardHeight = cardBaseHeight + (CGFloat(actualTaskCount) * taskRowHeight)
+                    dayHeight += cardHeight + 3 // Add spacing between cards
+                }
+                
+                maxRequiredHeight = max(maxRequiredHeight, dayHeight)
+            }
+        }
+        
+        // Add some buffer and ensure reasonable bounds
+        let bufferedHeight = maxRequiredHeight + 10
+        return max(minTasksRowHeight, min(bufferedHeight, 300)) // Cap at 300pt max
     }
     
     // MARK: - Slider Section
@@ -375,7 +505,7 @@ struct WeekTimelineComponent: View {
                                 .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
                             
                             Image(systemName: "line.3.horizontal")
-                                .font(.caption2)
+                                .font(.caption)
                                 .foregroundColor(isDraggingSlider ? Color(.systemGray2) : Color(.systemGray3))
                                 .scaleEffect(isDraggingSlider ? 1.1 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
@@ -414,7 +544,7 @@ struct WeekTimelineComponent: View {
             HStack(spacing: 0) {
                 // Time column with "All Day" label
                 Text("All Day")
-                    .font(.caption2)
+                    .font(.body)
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)
                     .frame(width: timeColumnWidth, height: sectionHeight)
@@ -473,12 +603,12 @@ struct WeekTimelineComponent: View {
         
         return VStack(spacing: 4) {
             Text(dayFormatter.string(from: data.date))
-                .font(.caption2)
+                .font(.body)
                 .fontWeight(.semibold)
                 .foregroundColor(data.isToday ? .white : .secondary)
             
             Text(dateFormatter.string(from: data.date))
-                .font(.title3)
+                .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(data.isToday ? .white : .primary)
             
@@ -513,7 +643,7 @@ struct WeekTimelineComponent: View {
                 .frame(width: 4, height: 4)
             
             Text(event.summary)
-                .font(.caption2)
+                .font(.body)
                 .fontWeight(.medium)
                 .foregroundColor(.primary)
                 .lineLimit(1)
@@ -541,7 +671,7 @@ struct WeekTimelineComponent: View {
     private func timeSlotLabel(hour: Int) -> some View {
         VStack {
             Text(formatHour(hour))
-                .font(.caption2)
+                .font(.body)
                 .fontWeight(.medium)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -604,14 +734,14 @@ struct WeekTimelineComponent: View {
             .overlay(
                 VStack(alignment: .leading, spacing: 1) {
                     Text(layout.event.summary)
-                        .font(.caption2)
+                        .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
                         .lineLimit(layout.height > 30 ? 2 : 1)
                     
                     if layout.height > 25, let startTime = layout.event.startTime {
                         Text(formatEventTime(startTime))
-                            .font(.caption2)
+                            .font(.body)
                             .foregroundColor(.white.opacity(0.8))
                     }
                     
@@ -674,22 +804,62 @@ struct WeekTimelineComponent: View {
         return hour >= startHour && hour < endHour
     }
     
+    private func isEvent24Hours(_ event: GoogleCalendarEvent) -> Bool {
+        guard let startTime = event.startTime,
+              let endTime = event.endTime else { return false }
+        
+        let duration = endTime.timeIntervalSince(startTime)
+        let twentyFourHours: TimeInterval = 24 * 60 * 60 // 24 hours in seconds
+        
+        // Check if the event duration is exactly 24 hours (with small tolerance for floating point precision)
+        return abs(duration - twentyFourHours) < 60 // Within 1 minute tolerance
+    }
+    
     // MARK: - Task Grouping
     private var personalTasksByDate: [Date: [GoogleTask]] {
         groupTasksByDate(personalTasks)
+    }
+    
+    // MARK: - Task List Grouping
+    private struct TaskGroup {
+        let tasks: [GoogleTask]
+        let color: Color
+    }
+    
+    private func groupTasksByList(_ tasks: [GoogleTask], color: Color, taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]]) -> [String: TaskGroup] {
+        var groupedTasks: [String: [GoogleTask]] = [:]
+        
+        // Group tasks by their actual task list
+        for taskList in taskLists {
+            if let tasksInList = tasksDict[taskList.id] {
+                // Filter the tasks for this specific day that belong to this task list
+                let relevantTasks = tasks.filter { task in
+                    tasksInList.contains { $0.id == task.id }
+                }
+                
+                if !relevantTasks.isEmpty {
+                    groupedTasks[taskList.title] = relevantTasks
+                }
+            }
+        }
+        
+        return groupedTasks.mapValues { TaskGroup(tasks: $0, color: color) }
     }
     
     private var professionalTasksByDate: [Date: [GoogleTask]] {
         groupTasksByDate(professionalTasks)
     }
     
-    private func groupTasksByDate(_ tasks: [GoogleTask]) -> [Date: [GoogleTask]] {
+    private func groupTasksByDate(_ tasksDict: [String: [GoogleTask]]) -> [Date: [GoogleTask]] {
         let calendar = Calendar.current
         var groupedTasks: [Date: [GoogleTask]] = [:]
         
+        // Flatten all tasks from all task lists first
+        let allTasks = tasksDict.values.flatMap { $0 }
+        
         // Group tasks by each day in the week using the same logic as day view
         for date in weekDates {
-            let tasksForDate = filteredTasksForDate(tasks, date: date)
+            let tasksForDate = filteredTasksForDate(allTasks, date: date)
             if !tasksForDate.isEmpty {
                 groupedTasks[calendar.startOfDay(for: date)] = tasksForDate
             }
@@ -822,6 +992,84 @@ struct WeekTimelineComponent: View {
     }
 }
 
+// MARK: - Weekly Task List Card Component
+struct WeeklyTaskListCard: View {
+    let title: String
+    let tasks: [GoogleTask]
+    let color: Color
+    let rowHeight: CGFloat
+    
+
+    
+    private var visibleTasks: [GoogleTask] {
+        return tasks // Show all tasks
+    }
+    
+
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // Card header - always show for identification
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 6, height: 6)
+                
+                Text(title)
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(color)
+                    .lineLimit(1)
+                
+                Spacer(minLength: 0)
+            }
+            
+            // Task list
+            VStack(alignment: .leading, spacing: 1) {
+                ForEach(visibleTasks, id: \.id) { task in
+                    WeeklyTaskRow(task: task, color: color, isCompact: rowHeight <= 60)
+                }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(color.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(color.opacity(0.2), lineWidth: 0.5)
+                )
+        )
+    }
+}
+
+// MARK: - Weekly Task Row Component
+struct WeeklyTaskRow: View {
+    let task: GoogleTask
+    let color: Color
+    let isCompact: Bool
+    
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(task.isCompleted ? Color.gray : color)
+                .frame(width: isCompact ? 3 : 4, height: isCompact ? 3 : 4)
+            
+            Text(task.title)
+                .font(isCompact ? .body : .title3)
+                .foregroundColor(task.isCompleted ? .gray : .primary)
+                .strikethrough(task.isCompleted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            
+            Spacer(minLength: 0)
+        }
+    }
+    
+
+}
+
 // MARK: - Preview
 struct WeekTimelineComponent_Previews: PreviewProvider {
     static var previews: some View {
@@ -832,8 +1080,10 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
             professionalEvents: [],
             personalColor: .purple,
             professionalColor: .green,
-            personalTasks: [],
-            professionalTasks: [],
+            personalTaskLists: [],
+            personalTasks: [:],
+            professionalTaskLists: [],
+            professionalTasks: [:],
             hideCompletedTasks: false,
             hideDailyTasks: false
         )
