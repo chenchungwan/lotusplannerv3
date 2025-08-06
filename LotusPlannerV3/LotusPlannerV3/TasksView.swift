@@ -646,7 +646,6 @@ struct TasksView: View {
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-                // Two equal-width columns (50% each)
                 HStack(spacing: 0) {
                     // Personal Tasks Column
                     if authManager.isLinked(kind: .personal) {
@@ -666,7 +665,7 @@ struct TasksView: View {
                                 showingTaskDetails = true
                             }
                         )
-                        .frame(width: tasksPersonalWidth, alignment: .topLeading)
+                        .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
                     }
                     
                     // Vertical divider (only show if both accounts are linked)
@@ -692,7 +691,7 @@ struct TasksView: View {
                                 showingTaskDetails = true
                             }
                         )
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
                     }
                 }
                 .padding(.horizontal, 0)
