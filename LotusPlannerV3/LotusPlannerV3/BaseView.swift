@@ -134,8 +134,8 @@ struct BaseView: View {
                     // Middle section - Tasks (resizable width, vertical layout)
                     VStack(spacing: 0) {
                         if viewMode == .week {
-                            // Week view - 7-column tasks layout with horizontal scrolling
-                            ScrollView(.horizontal, showsIndicators: true) {
+                            // Week view - 7-column tasks layout with horizontal and vertical scrolling
+                            ScrollView([.horizontal, .vertical], showsIndicators: true) {
                                 weekTasksView
                             }
                             .clipped() // Ensure content stays within bounds
@@ -312,9 +312,9 @@ extension BaseView {
     }
     
     private var weekTasksView: some View {
-        let fixedWidth: CGFloat = 1200 // Same fixed width as timeline
+        let fixedWidth: CGFloat = 1600 // Increased width for wider day columns
         let timeColumnWidth: CGFloat = 50 // Same as timeline
-        let dayColumnWidth = (fixedWidth - timeColumnWidth) / 7 // Same calculation as timeline
+        let dayColumnWidth = (fixedWidth - timeColumnWidth) / 7 // Each day column now ~221 points
         
         return VStack(spacing: 0) {
             // Personal Tasks Row (top 50%)
@@ -348,26 +348,19 @@ extension BaseView {
                         
                         // 7-day task columns with fixed width
                         ForEach(weekDates, id: \.self) { date in
-                            weekTaskColumn(
-                                date: date,
-                                tasks: getTasksForDate(tasksViewModel.personalTasks, date: date),
-                                taskLists: tasksViewModel.personalTaskLists,
-                                color: appPrefs.personalColor,
-                                accountKind: .personal
-                            )
-                            .frame(width: dayColumnWidth) // Fixed width matching timeline
-                            .background(Color(.systemBackground))
-                            .overlay(
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 0.5),
-                                alignment: .trailing
-                            )
+                            weekTaskColumnPersonal(date: date)
+                                .frame(width: dayColumnWidth) // Fixed width matching timeline
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
                         }
                     }
                     .frame(width: fixedWidth) // Total fixed width
                 }
-                .frame(maxHeight: .infinity)
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
             }
@@ -410,26 +403,19 @@ extension BaseView {
                         
                         // 7-day task columns with fixed width
                         ForEach(weekDates, id: \.self) { date in
-                            weekTaskColumn(
-                                date: date,
-                                tasks: getTasksForDate(tasksViewModel.professionalTasks, date: date),
-                                taskLists: tasksViewModel.professionalTaskLists,
-                                color: appPrefs.professionalColor,
-                                accountKind: .professional
-                            )
-                            .frame(width: dayColumnWidth) // Fixed width matching timeline
-                            .background(Color(.systemBackground))
-                            .overlay(
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 0.5),
-                                alignment: .trailing
-                            )
+                            weekTaskColumnProfessional(date: date)
+                                .frame(width: dayColumnWidth) // Fixed width matching timeline
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
                         }
                     }
                     .frame(width: fixedWidth) // Total fixed width
                 }
-                .frame(maxHeight: .infinity)
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
             }
@@ -740,7 +726,7 @@ extension BaseView {
     }
     
     // MARK: - Week Task Functions
-    private func weekTaskColumn(date: Date, tasks: [GoogleTask], taskLists: [GoogleTaskList], color: Color, accountKind: GoogleAuthManager.AccountKind) -> some View {
+    private func weekTaskColumnPersonal(date: Date) -> some View {
         let dayFormatter = DateFormatter()
         dayFormatter.dateFormat = "E" // Mon, Tue, etc.
         
@@ -766,94 +752,128 @@ extension BaseView {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isToday ? color : Color.clear)
+                    .fill(isToday ? appPrefs.personalColor : Color.clear)
             )
             
-            // Tasks for this day
+            // Personal Tasks using day view component
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(tasks, id: \.id) { task in
-                        weekTaskRow(
-                            task: task,
-                            color: color,
-                            accountKind: accountKind
-                        )
-                    }
-                    
-                    if tasks.isEmpty {
-                        Text("No tasks")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
-                    }
+                let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+                if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                    PersonalTasksComponent(
+                        taskLists: tasksViewModel.personalTaskLists,
+                        tasksDict: personalTasksForDate,
+                        accentColor: appPrefs.personalColor,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedAccountKind = .personal
+                            showingTaskDetails = true
+                        }
+                    )
+                } else {
+                    Text("No tasks")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
                 }
-                .padding(.horizontal, 4)
             }
-            .frame(maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
     }
     
-    private func weekTaskRow(task: GoogleTask, color: Color, accountKind: GoogleAuthManager.AccountKind) -> some View {
-        HStack(spacing: 4) {
-            // Task completion indicator
-            Circle()
-                .fill(task.isCompleted ? Color.gray : color)
-                .frame(width: 8, height: 8)
-            
-            // Task title (matching timeline event font)
-            Text(task.title)
-                .font(.body)
-                .fontWeight(.medium)
-                .foregroundColor(task.isCompleted ? .gray : .primary)
-                .strikethrough(task.isCompleted)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(color.opacity(0.1))
-        )
-        .onTapGesture {
-            selectedTask = task
-            selectedTaskListId = findTaskListId(for: task, in: accountKind)
-            selectedAccountKind = accountKind
-            showingTaskDetails = true
-        }
-    }
-    
-    private func getTasksForDate(_ tasksDict: [String: [GoogleTask]], date: Date) -> [GoogleTask] {
-        let calendar = Calendar.current
-        var tasksForDate: [GoogleTask] = []
+    private func weekTaskColumnProfessional(date: Date) -> some View {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "E" // Mon, Tue, etc.
         
-        // Flatten all tasks from all task lists
-        let allTasks = tasksDict.values.flatMap { $0 }
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "d" // 1, 2, 3
         
-        // Filter tasks for the specific date
-        for task in allTasks {
-            // For completed tasks, only show them on their completion date
-            if task.isCompleted {
-                if let completionDate = task.completionDate,
-                   calendar.isDate(completionDate, inSameDayAs: date) {
-                    tasksForDate.append(task)
-                }
-            } else {
-                // For incomplete tasks, only show them on their exact due date
-                if let dueDate = task.dueDate,
-                   calendar.isDate(dueDate, inSameDayAs: date) {
-                    tasksForDate.append(task)
+        let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            // Day header (matching timeline section fonts)
+            VStack(spacing: 4) {
+                Text(dayFormatter.string(from: date))
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isToday ? .white : .secondary)
+                
+                Text(dateFormatter.string(from: date))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(isToday ? .white : .primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isToday ? appPrefs.professionalColor : Color.clear)
+            )
+            
+            // Professional Tasks using day view component
+            ScrollView(.vertical, showsIndicators: false) {
+                let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+                if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                    ProfessionalTasksComponent(
+                        taskLists: tasksViewModel.professionalTaskLists,
+                        tasksDict: professionalTasksForDate,
+                        accentColor: appPrefs.professionalColor,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedAccountKind = .professional
+                            showingTaskDetails = true
+                        }
+                    )
+                } else {
+                    Text("No tasks")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
                 }
             }
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+    
+    // Helper function to get filtered tasks for a specific date (for weekly view)
+    private func getFilteredTasksForSpecificDate(_ tasks: [String: [GoogleTask]], date: Date) -> [String: [GoogleTask]] {
+        var filteredTasks: [String: [GoogleTask]] = [:]
         
-        return tasksForDate
+        for (listId, taskList) in tasks {
+            let dateFilteredTasks = taskList.filter { task in
+                // Only show tasks that have a due date AND it matches the specified date
+                guard let dueDate = task.dueDate else { 
+                    return false // Tasks without due dates are NOT shown
+                }
+                
+                // Check if the due date is the same day as the specified date
+                return Calendar.current.isDate(dueDate, inSameDayAs: date)
+            }
+            
+            // Only include the list if it has tasks after filtering
+            if !dateFilteredTasks.isEmpty {
+                filteredTasks[listId] = dateFilteredTasks
+            }
+        }
+        
+        return filteredTasks
     }
     
     private func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {
@@ -1199,6 +1219,8 @@ extension BaseView {
     }
 
 }
+
+
 
 extension ViewMode {
     var displayName: String {

@@ -112,19 +112,6 @@ struct PersonalTaskRow: View {
     let onToggle: () -> Void
     let onDetails: () -> Void
     
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .none
-        return formatter
-    }()
-    
-    private func isDueDateOverdue(_ dueDate: Date) -> Bool {
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: Date())
-        return dueDate < startOfToday
-    }
-    
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onToggle) {
@@ -144,20 +131,6 @@ struct PersonalTaskRow: View {
                     .truncationMode(.tail)
                 
                 Spacer()
-                
-                if let dueDate = task.dueDate {
-                    HStack(spacing: 2) {
-                        Text(dueDate, formatter: Self.dateFormatter)
-                            .font(.caption2)
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(isDueDateOverdue(dueDate) && !task.isCompleted ? Color.red.opacity(0.1) : Color.secondary.opacity(0.1))
-                    )
-                    .foregroundColor(isDueDateOverdue(dueDate) && !task.isCompleted ? .red : .secondary)
-                }
             }
         }
         .onLongPressGesture {
