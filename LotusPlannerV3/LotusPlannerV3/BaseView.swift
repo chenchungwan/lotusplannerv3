@@ -133,63 +133,15 @@ struct BaseView: View {
                     
                     // Middle section - Tasks (resizable width, vertical layout)
                     VStack(spacing: 0) {
-                        // Personal Tasks (top 50%)
-                        if authManager.isLinked(kind: .personal) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                PersonalTasksComponent(
-                                    taskLists: tasksViewModel.personalTaskLists,
-                                    tasksDict: getFilteredTasksForDate(tasksViewModel.personalTasks),
-                                    accentColor: appPrefs.personalColor,
-                                    onTaskToggle: { task, listId in
-                                        Task {
-                                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                        }
-                                    },
-                                    onTaskDetails: { task, listId in
-                                        selectedTask = task
-                                        selectedTaskListId = listId
-                                        selectedAccountKind = .personal
-                                        showingTaskDetails = true
-                                    }
-                                )
-                                
-                                Spacer(minLength: 0)
+                        if viewMode == .week {
+                            // Week view - 7-column tasks layout with horizontal scrolling
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                weekTasksView
                             }
-                            .frame(maxHeight: personalTasksSectionHeight ?? .infinity)
-                            .padding(.all, 8)
-                        }
-                        
-                        // Divider between tasks (if both accounts are linked)
-                        if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
-                            Rectangle()
-                                .fill(Color(.systemGray4))
-                                .frame(height: 1)
-                        }
-                        
-                        // Professional Tasks (bottom 50%)
-                        if authManager.isLinked(kind: .professional) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                ProfessionalTasksComponent(
-                                    taskLists: tasksViewModel.professionalTaskLists,
-                                    tasksDict: getFilteredTasksForDate(tasksViewModel.professionalTasks),
-                                    accentColor: appPrefs.professionalColor,
-                                    onTaskToggle: { task, listId in
-                                        Task {
-                                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                        }
-                                    },
-                                    onTaskDetails: { task, listId in
-                                        selectedTask = task
-                                        selectedTaskListId = listId
-                                        selectedAccountKind = .professional
-                                        showingTaskDetails = true
-                                    }
-                                )
-                                
-                                Spacer(minLength: 0)
-                            }
-                            .frame(maxHeight: professionalTasksSectionHeight ?? .infinity)
-                            .padding(.all, 8)
+                            .clipped() // Ensure content stays within bounds
+                        } else {
+                            // Day view - single column tasks layout
+                            dayTasksView
                         }
                         
                         // If neither account is linked, show placeholder
@@ -295,6 +247,195 @@ struct BaseView: View {
 // MARK: - Helpers
 
 extension BaseView {
+    // MARK: - Task Views
+    private var dayTasksView: some View {
+        VStack(spacing: 0) {
+            // Personal Tasks (top 50%)
+            if authManager.isLinked(kind: .personal) {
+                VStack(alignment: .leading, spacing: 0) {
+                    PersonalTasksComponent(
+                        taskLists: tasksViewModel.personalTaskLists,
+                        tasksDict: getFilteredTasksForDate(tasksViewModel.personalTasks),
+                        accentColor: appPrefs.personalColor,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedAccountKind = .personal
+                            showingTaskDetails = true
+                        }
+                    )
+                    
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: personalTasksSectionHeight ?? .infinity)
+                .padding(.all, 8)
+            }
+            
+            // Divider between tasks (if both accounts are linked)
+            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+                Rectangle()
+                    .fill(Color(.systemGray4))
+                    .frame(height: 1)
+            }
+            
+            // Professional Tasks (bottom 50%)
+            if authManager.isLinked(kind: .professional) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ProfessionalTasksComponent(
+                        taskLists: tasksViewModel.professionalTaskLists,
+                        tasksDict: getFilteredTasksForDate(tasksViewModel.professionalTasks),
+                        accentColor: appPrefs.professionalColor,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedAccountKind = .professional
+                            showingTaskDetails = true
+                        }
+                    )
+                    
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: professionalTasksSectionHeight ?? .infinity)
+                .padding(.all, 8)
+            }
+        }
+    }
+    
+    private var weekTasksView: some View {
+        let fixedWidth: CGFloat = 1200 // Same fixed width as timeline
+        let timeColumnWidth: CGFloat = 50 // Same as timeline
+        let dayColumnWidth = (fixedWidth - timeColumnWidth) / 7 // Same calculation as timeline
+        
+        return VStack(spacing: 0) {
+            // Personal Tasks Row (top 50%)
+            if authManager.isLinked(kind: .personal) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Header
+                    HStack {
+                        Circle()
+                            .fill(appPrefs.personalColor)
+                            .frame(width: 12, height: 12)
+                        Text("Personal Tasks")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(appPrefs.personalColor)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    
+                    // Fixed-width 7-day task columns
+                    HStack(spacing: 0) {
+                        // Time column placeholder (matching timeline structure)
+                        VStack {
+                            Text("Tasks")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .frame(width: timeColumnWidth)
+                        .background(Color(.systemGray6))
+                        
+                        // 7-day task columns with fixed width
+                        ForEach(weekDates, id: \.self) { date in
+                            weekTaskColumn(
+                                date: date,
+                                tasks: getTasksForDate(tasksViewModel.personalTasks, date: date),
+                                taskLists: tasksViewModel.personalTaskLists,
+                                color: appPrefs.personalColor,
+                                accountKind: .personal
+                            )
+                            .frame(width: dayColumnWidth) // Fixed width matching timeline
+                            .background(Color(.systemBackground))
+                            .overlay(
+                                Rectangle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(width: 0.5),
+                                alignment: .trailing
+                            )
+                        }
+                    }
+                    .frame(width: fixedWidth) // Total fixed width
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.3))
+            }
+            
+            // Divider between task types
+            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+                Rectangle()
+                    .fill(Color(.systemGray4))
+                    .frame(height: 1)
+            }
+            
+            // Professional Tasks Row (bottom 50%)
+            if authManager.isLinked(kind: .professional) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Header
+                    HStack {
+                        Circle()
+                            .fill(appPrefs.professionalColor)
+                            .frame(width: 12, height: 12)
+                        Text("Professional Tasks")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(appPrefs.professionalColor)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    
+                    // Fixed-width 7-day task columns
+                    HStack(spacing: 0) {
+                        // Time column placeholder (matching timeline structure)
+                        VStack {
+                            Text("Tasks")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .frame(width: timeColumnWidth)
+                        .background(Color(.systemGray6))
+                        
+                        // 7-day task columns with fixed width
+                        ForEach(weekDates, id: \.self) { date in
+                            weekTaskColumn(
+                                date: date,
+                                tasks: getTasksForDate(tasksViewModel.professionalTasks, date: date),
+                                taskLists: tasksViewModel.professionalTaskLists,
+                                color: appPrefs.professionalColor,
+                                accountKind: .professional
+                            )
+                            .frame(width: dayColumnWidth) // Fixed width matching timeline
+                            .background(Color(.systemBackground))
+                            .overlay(
+                                Rectangle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(width: 0.5),
+                                alignment: .trailing
+                            )
+                        }
+                    }
+                    .frame(width: fixedWidth) // Total fixed width
+                }
+                .frame(maxHeight: .infinity)
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.3))
+            }
+        }
+    }
+    
     // MARK: - Custom Week Timeline View
     private var customWeekTimelineView: some View {
         let fixedWidth: CGFloat = 1200 // Fixed width regardless of left section size
@@ -596,6 +737,135 @@ extension BaseView {
         let twentyFourHours: TimeInterval = 24 * 60 * 60
         
         return abs(duration - twentyFourHours) < 60
+    }
+    
+    // MARK: - Week Task Functions
+    private func weekTaskColumn(date: Date, tasks: [GoogleTask], taskLists: [GoogleTaskList], color: Color, accountKind: GoogleAuthManager.AccountKind) -> some View {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "E" // Mon, Tue, etc.
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "d" // 1, 2, 3
+        
+        let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            // Day header (matching timeline section fonts)
+            VStack(spacing: 4) {
+                Text(dayFormatter.string(from: date))
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isToday ? .white : .secondary)
+                
+                Text(dateFormatter.string(from: date))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(isToday ? .white : .primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isToday ? color : Color.clear)
+            )
+            
+            // Tasks for this day
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(tasks, id: \.id) { task in
+                        weekTaskRow(
+                            task: task,
+                            color: color,
+                            accountKind: accountKind
+                        )
+                    }
+                    
+                    if tasks.isEmpty {
+                        Text("No tasks")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 8)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 4)
+    }
+    
+    private func weekTaskRow(task: GoogleTask, color: Color, accountKind: GoogleAuthManager.AccountKind) -> some View {
+        HStack(spacing: 4) {
+            // Task completion indicator
+            Circle()
+                .fill(task.isCompleted ? Color.gray : color)
+                .frame(width: 8, height: 8)
+            
+            // Task title (matching timeline event font)
+            Text(task.title)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(task.isCompleted ? .gray : .primary)
+                .strikethrough(task.isCompleted)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(0.1))
+        )
+        .onTapGesture {
+            selectedTask = task
+            selectedTaskListId = findTaskListId(for: task, in: accountKind)
+            selectedAccountKind = accountKind
+            showingTaskDetails = true
+        }
+    }
+    
+    private func getTasksForDate(_ tasksDict: [String: [GoogleTask]], date: Date) -> [GoogleTask] {
+        let calendar = Calendar.current
+        var tasksForDate: [GoogleTask] = []
+        
+        // Flatten all tasks from all task lists
+        let allTasks = tasksDict.values.flatMap { $0 }
+        
+        // Filter tasks for the specific date
+        for task in allTasks {
+            // For completed tasks, only show them on their completion date
+            if task.isCompleted {
+                if let completionDate = task.completionDate,
+                   calendar.isDate(completionDate, inSameDayAs: date) {
+                    tasksForDate.append(task)
+                }
+            } else {
+                // For incomplete tasks, only show them on their exact due date
+                if let dueDate = task.dueDate,
+                   calendar.isDate(dueDate, inSameDayAs: date) {
+                    tasksForDate.append(task)
+                }
+            }
+        }
+        
+        return tasksForDate
+    }
+    
+    private func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {
+        let tasksDict = accountKind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
+        
+        for (listId, tasks) in tasksDict {
+            if tasks.contains(where: { $0.id == task.id }) {
+                return listId
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Week Header Section
