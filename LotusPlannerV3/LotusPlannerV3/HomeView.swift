@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @StateObject private var appPrefs = AppPreferences.shared
 
     var body: some View {
         NavigationStack {
@@ -27,14 +28,24 @@ struct ContentView: View {
             if navigationManager.showTasksView {
                 TasksView()
             } else {
-                CalendarView()
+                // Check if user prefers BaseView for weekly calendar
+                if appPrefs.useBaseViewForWeekly && navigationManager.currentInterval == .week {
+                    BaseView()
+                } else {
+                    CalendarView()
+                }
             }
         case .tasks:
             // Respect navigation manager toggle between Calendar and Tasks
             if navigationManager.showTasksView {
                 TasksView()
             } else {
-                CalendarView()
+                // Check if user prefers BaseView for weekly calendar
+                if appPrefs.useBaseViewForWeekly && navigationManager.currentInterval == .week {
+                    BaseView()
+                } else {
+                    CalendarView()
+                }
             }
 
         case .journal:

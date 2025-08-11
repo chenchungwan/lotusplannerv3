@@ -197,6 +197,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Weekly view preference (true = BaseView layout, false = CalendarView layout)
+    @Published var useBaseViewForWeekly: Bool {
+        didSet {
+            UserDefaults.standard.set(useBaseViewForWeekly, forKey: "useBaseViewForWeekly")
+        }
+    }
+    
 
     
 
@@ -212,6 +219,9 @@ class AppPreferences: ObservableObject {
         // Load day view layout preference
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
         self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
+        
+        // Load weekly view preference (default to BaseView = true)
+        self.useBaseViewForWeekly = UserDefaults.standard.object(forKey: "useBaseViewForWeekly") as? Bool ?? true
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -342,6 +352,24 @@ struct SettingsView: View {
                         }
                     }
                     
+                    // Weekly View Layout Toggle
+                    HStack {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use Enhanced Weekly View")
+                                .font(.body)
+                            Text("Use BaseView layout for weekly calendar (more space for tasks)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: $appPrefs.useBaseViewForWeekly)
+                    }
 
                 }
                 
