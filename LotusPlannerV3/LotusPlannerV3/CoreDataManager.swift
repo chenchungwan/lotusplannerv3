@@ -11,7 +11,14 @@ class CoreDataManager: ObservableObject {
         persistenceController.container.viewContext
     }
     
-    private init() {}
+    private init() {
+        // Migrate any existing categories to have display order
+        migrateExistingCategories()
+    }
+    
+    private func migrateExistingCategories() {
+        // Migration will be handled when Core Data model is updated
+    }
     
     // MARK: - Save Context
     private func save() {
@@ -181,138 +188,7 @@ class CoreDataManager: ObservableObject {
         }
     }
     
-    // MARK: - Goals
-    func saveGoal(_ goal: Goal) {
-        let goalEntity = GoalEntity(context: context)
-        goalEntity.id = goal.id.uuidString
-        goalEntity.desc = goal.description
-        goalEntity.dueDate = goal.dueDate
-        goalEntity.categoryId = goal.categoryId.uuidString
-        goalEntity.isCompleted = goal.isCompleted
-        goalEntity.userId = goal.userId
-        goalEntity.createdAt = goal.createdAt
-        
-        save()
-    }
-    
-    func loadGoals() -> [Goal] {
-        let request: NSFetchRequest<GoalEntity> = GoalEntity.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \GoalEntity.createdAt, ascending: false)]
-        
-        do {
-            let entities = try context.fetch(request)
-            return entities.compactMap { entity in
-                guard let idString = entity.id,
-                      let id = UUID(uuidString: idString),
-                      let description = entity.desc,
-                      let categoryIdString = entity.categoryId,
-                      let categoryId = UUID(uuidString: categoryIdString),
-                      let userId = entity.userId,
-                      let createdAt = entity.createdAt else { return nil }
-                
-                return Goal(
-                    id: id,
-                    description: description,
-                    dueDate: entity.dueDate,
-                    categoryId: categoryId,
-                    isCompleted: entity.isCompleted,
-                    taskLinks: [], // TaskLinks not stored in Core Data yet
-                    userId: userId,
-                    createdAt: createdAt
-                )
-            }
-        } catch {
-            print("❌ Failed to load goals: \(error)")
-            return []
-        }
-    }
-    
-    func updateGoal(_ goal: Goal) {
-        let request: NSFetchRequest<GoalEntity> = GoalEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", goal.id.uuidString)
-        
-        do {
-            let entities = try context.fetch(request)
-            if let entity = entities.first {
-                entity.desc = goal.description
-                entity.dueDate = goal.dueDate
-                entity.categoryId = goal.categoryId.uuidString
-                entity.isCompleted = goal.isCompleted
-                save()
-            }
-        } catch {
-            print("❌ Failed to update goal: \(error)")
-        }
-    }
-    
-    func deleteGoal(_ goal: Goal) {
-        let request: NSFetchRequest<GoalEntity> = GoalEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", goal.id.uuidString)
-        
-        do {
-            let entities = try context.fetch(request)
-            entities.forEach(context.delete)
-            save()
-        } catch {
-            print("❌ Failed to delete goal: \(error)")
-        }
-    }
-    
-    // MARK: - Goal Categories
-    func saveCategory(_ category: GoalCategory) {
-        let categoryEntity = GoalCategoryEntity(context: context)
-        categoryEntity.id = category.id.uuidString
-        categoryEntity.name = category.name
-        
-        save()
-    }
-    
-    func loadCategories() -> [GoalCategory] {
-        let request: NSFetchRequest<GoalCategoryEntity> = GoalCategoryEntity.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \GoalCategoryEntity.name, ascending: true)]
-        
-        do {
-            let entities = try context.fetch(request)
-            return entities.compactMap { entity in
-                guard let idString = entity.id,
-                      let id = UUID(uuidString: idString),
-                      let name = entity.name else { return nil }
-                
-                return GoalCategory(id: id, name: name)
-            }
-        } catch {
-            print("❌ Failed to load categories: \(error)")
-            return []
-        }
-    }
-    
-    func updateCategory(_ category: GoalCategory) {
-        let request: NSFetchRequest<GoalCategoryEntity> = GoalCategoryEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", category.id.uuidString)
-        
-        do {
-            let entities = try context.fetch(request)
-            if let entity = entities.first {
-                entity.name = category.name
-                save()
-            }
-        } catch {
-            print("❌ Failed to update category: \(error)")
-        }
-    }
-    
-    func deleteCategory(_ category: GoalCategory) {
-        let request: NSFetchRequest<GoalCategoryEntity> = GoalCategoryEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", category.id.uuidString)
-        
-        do {
-            let entities = try context.fetch(request)
-            entities.forEach(context.delete)
-            save()
-        } catch {
-            print("❌ Failed to delete category: \(error)")
-        }
-    }
+
 }
 
 // MARK: - Extensions for WeightLogEntry

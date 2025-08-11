@@ -13,7 +13,7 @@ struct WeekTimelineComponent: View {
     let professionalTaskLists: [GoogleTaskList]
     let professionalTasks: [String: [GoogleTask]]
     let hideCompletedTasks: Bool
-    let hideDailyTasks: Bool
+
     
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onDayTap: ((Date) -> Void)?
@@ -36,7 +36,7 @@ struct WeekTimelineComponent: View {
     private let minTimelineHeight: CGFloat = 100 // Minimum height for timeline section
     
     // MARK: - Initializer
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, hideDailyTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
@@ -48,7 +48,7 @@ struct WeekTimelineComponent: View {
         self.professionalTaskLists = professionalTaskLists
         self.professionalTasks = professionalTasks
         self.hideCompletedTasks = hideCompletedTasks
-        self.hideDailyTasks = hideDailyTasks
+
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
     }
@@ -86,13 +86,11 @@ struct WeekTimelineComponent: View {
                 headerSection(dayColumnWidth: dayColumnWidth)
                 
                 // Fixed daily tasks section at top (conditionally shown)
-                if !hideDailyTasks {
-                    dailyTasksSection(dayColumnWidth: dayColumnWidth)
-                        .padding(.top, 2) // Small gap between header and tasks to prevent overlap
-                    
-                    // Slider between tasks and events
-                    sliderSection(maxHeight: maxTasksRowHeight)
-                }
+                dailyTasksSection(dayColumnWidth: dayColumnWidth)
+                    .padding(.top, 2) // Small gap between header and tasks to prevent overlap
+                
+                // Slider between tasks and events
+                sliderSection(maxHeight: maxTasksRowHeight)
                 
                 // Scrollable content (all-day events and timeline)
                 ScrollView(.vertical, showsIndicators: true) {
@@ -1084,8 +1082,7 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
             personalTasks: [:],
             professionalTaskLists: [],
             professionalTasks: [:],
-            hideCompletedTasks: false,
-            hideDailyTasks: false
+            hideCompletedTasks: false
         )
         .previewLayout(.sizeThatFits)
     }

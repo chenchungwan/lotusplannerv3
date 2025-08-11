@@ -278,21 +278,7 @@ private let maxTotalSize = 1_000_000 // 1MB total limit for all keys
         return loadDataFromiCloud(key: "foodEntries", type: [FoodLogEntry].self) ?? []
     }
     
-    func saveGoals(_ goals: [Goal]) {
-        saveDataToiCloud(data: goals, key: "goals")
-    }
-    
-    func loadGoals() -> [Goal] {
-        return loadDataFromiCloud(key: "goals", type: [Goal].self) ?? []
-    }
-    
-    func saveCategories(_ categories: [GoalCategory]) {
-        saveDataToiCloud(data: categories, key: "categories")
-    }
-    
-    func loadCategories() -> [GoalCategory] {
-        return loadDataFromiCloud(key: "categories", type: [GoalCategory].self) ?? []
-    }
+
     
     // MARK: - Sync Methods
     func synchronizeFromiCloud() {
@@ -459,7 +445,7 @@ private let maxTotalSize = 1_000_000 // 1MB total limit for all keys
         print("🔄 Migrating local data to iCloud...")
         
         // Migrate each data type
-        let localKeys = ["weightEntries", "workoutEntries", "foodEntries", "goals", "categories"]
+        let localKeys = ["weightEntries", "workoutEntries", "foodEntries"]
         
         for key in localKeys {
             if let localData = UserDefaults.standard.data(forKey: key) {
@@ -477,7 +463,7 @@ private let maxTotalSize = 1_000_000 // 1MB total limit for all keys
     }
     
     func clearAllCloudData() {
-        let keys = ["weightEntries", "workoutEntries", "foodEntries", "goals", "categories"]
+        let keys = ["weightEntries", "workoutEntries", "foodEntries"]
         
         for key in keys {
             if iCloudAvailable {
@@ -503,7 +489,7 @@ private let maxTotalSize = 1_000_000 // 1MB total limit for all keys
     }
     
     func getCurrentStorageUsage() -> String {
-        let keys = ["weightEntries", "workoutEntries", "foodEntries", "goals", "categories"]
+        let keys = ["weightEntries", "workoutEntries", "foodEntries"]
         var totalSize = 0
         
         for key in keys {

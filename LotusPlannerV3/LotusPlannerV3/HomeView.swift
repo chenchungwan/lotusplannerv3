@@ -36,12 +36,13 @@ struct ContentView: View {
             } else {
                 CalendarView()
             }
-        case .goals:
-            GoalsView()
+
         case .journal:
             JournalView(currentDate: Date())
         case .settings:
             SettingsView()
+        case .base:
+            BaseView()
         }
     }
 }

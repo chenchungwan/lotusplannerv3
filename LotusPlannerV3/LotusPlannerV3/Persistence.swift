@@ -53,6 +53,11 @@ struct PersistenceController {
 
     init(inMemory: Bool = false) {
         container = NSPersistentCloudKitContainer(name: "LotusPlannerV3")
+        
+        // Enable automatic lightweight migration
+        let description = container.persistentStoreDescriptions.first
+        description?.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+        description?.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
 
         // Configure every store description **before** loading the stores.
         for description in container.persistentStoreDescriptions {

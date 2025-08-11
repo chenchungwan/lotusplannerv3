@@ -5,14 +5,12 @@ import UIKit
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
     case expanded = 1
-    case hybrid = 2
 
     var id: Int { rawValue }
     var displayName: String {
         switch self {
         case .compact: "Compact"
         case .expanded: "Expanded"
-        case .hybrid: "Hybrid"
         }
     }
     
@@ -20,7 +18,6 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         switch self {
         case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
         case .expanded: "Three columns: timeline, tasks & logs, and dedicated journal space"
-        case .hybrid: "Timeline on left, full-height journal on right (no tasks)"
         }
     }
 }
@@ -72,9 +69,9 @@ class NavigationManager: ObservableObject {
     enum CurrentView {
         case calendar
         case tasks
-        case goals
         case journal
         case settings
+        case base
     }
     
     @Published var currentView: CurrentView = .calendar
@@ -94,10 +91,7 @@ class NavigationManager: ObservableObject {
         showTasksView = true
     }
     
-    func switchToGoals() {
-        currentView = .goals
-        showTasksView = false
-    }
+
     
     func switchToJournal() {
         currentView = .journal
@@ -106,6 +100,11 @@ class NavigationManager: ObservableObject {
     
     func switchToSettings() {
         currentView = .settings
+        showTasksView = false
+    }
+
+    func switchToBase() {
+        currentView = .base
         showTasksView = false
     }
     
@@ -198,20 +197,7 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Hide weekly bottom section setting
-    @Published var hideWeeklyBottomSection: Bool {
-        didSet {
-            UserDefaults.standard.set(hideWeeklyBottomSection, forKey: "hideWeeklyBottomSection")
-        }
-    }
-    
-    // Hide weekly daily tasks section setting
-    @Published var hideWeeklyDailyTasks: Bool {
-        didSet {
-            UserDefaults.standard.set(hideWeeklyDailyTasks, forKey: "hideWeeklyDailyTasks")
-        }
-    }
-    
+
     
 
     
@@ -221,8 +207,7 @@ class AppPreferences: ObservableObject {
         self.isDarkMode = UserDefaults.standard.bool(forKey: "isDarkMode")
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
-        self.hideWeeklyBottomSection = UserDefaults.standard.bool(forKey: "hideWeeklyBottomSection")
-        self.hideWeeklyDailyTasks = UserDefaults.standard.bool(forKey: "hideWeeklyDailyTasks")
+
         
         // Load day view layout preference
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
@@ -260,13 +245,7 @@ class AppPreferences: ObservableObject {
         dayViewLayout = layout
     }
     
-    func updateHideWeeklyBottomSection(_ value: Bool) {
-        hideWeeklyBottomSection = value
-    }
-    
-    func updateHideWeeklyDailyTasks(_ value: Bool) {
-        hideWeeklyDailyTasks = value
-    }
+
     
 
     
@@ -363,47 +342,7 @@ struct SettingsView: View {
                         }
                     }
                     
-                    HStack {
-                        Image(systemName: "calendar.day.timeline.leading")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hide Weekly Task Section")
-                                .font(.body)
-                            Text("Hide the bottom task management section in weekly view")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: Binding(
-                            get: { appPrefs.hideWeeklyBottomSection },
-                            set: { appPrefs.updateHideWeeklyBottomSection($0) }
-                        ))
-                    }
-                    
-                    HStack {
-                        Image(systemName: "calendar.badge.minus")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hide Daily Tasks Rows")
-                                .font(.body)
-                            Text("Hide the daily task indicator rows above the timeline")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: Binding(
-                            get: { appPrefs.hideWeeklyDailyTasks },
-                            set: { appPrefs.updateHideWeeklyDailyTasks($0) }
-                        ))
-                    }
+
                 }
                 
                 Section("App Preferences") {
@@ -483,17 +422,10 @@ struct SettingsView: View {
     ) -> some View {
         let isLinked = auth.linkedStates[kindEnum] ?? false
         HStack(spacing: 16) {
-            // Eye toggle for show/hide account
-            Button {
-                // TODO: Implement show/hide account functionality
-                isVisible.wrappedValue.toggle()
-                print("\(kind) account visibility toggled to: \(isVisible.wrappedValue)")
-            } label: {
-                Image(systemName: isVisible.wrappedValue ? "eye" : "eye.slash")
-                    .foregroundColor(.secondary)
-                    .font(.title2)
-            }
-            .buttonStyle(.plain)
+            // Account icon
+            Image(systemName: "person.circle.fill")
+                .foregroundColor(.secondary)
+                .font(.title2)
             
             // Color picker circle
             Button {

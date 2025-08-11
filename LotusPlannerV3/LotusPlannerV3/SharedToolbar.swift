@@ -14,16 +14,18 @@ struct SharedNavigationToolbar: View {
                     .frame(width: 20, height: 20)
                     .foregroundColor(.secondary)
             }
-            
-            // Target icon
+
+            // Base view grid icon
             Button(action: {
-                navigationManager.switchToGoals()
+                navigationManager.switchToBase()
             }) {
-                Image(systemName: "target")
+                Image(systemName: "square.grid.2x2")
                     .font(.body)
                     .frame(width: 20, height: 20)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(navigationManager.currentView == .base ? .accentColor : .secondary)
             }
+            
+
             
             // Calendar button
             Button(action: {

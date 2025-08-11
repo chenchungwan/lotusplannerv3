@@ -6,7 +6,6 @@ import PencilKit
 enum JournalLayoutType {
     case compact
     case expanded
-    case hybrid
 }
 
 /// Handles storage & retrieval of the journal background PDF inside the app sandbox.
@@ -15,12 +14,7 @@ struct JournalManager {
     private init() {}
     
     private func fileName(for layoutType: JournalLayoutType) -> String {
-        switch layoutType {
-        case .compact, .expanded:
-            return "journal_background.pdf"
-        case .hybrid:
-            return "journal_background_hybrid.pdf"
-        }
+        return "journal_background.pdf"
     }
 
     // Prefer the app’s iCloud Drive container for user-generated files. If
@@ -76,8 +70,7 @@ struct JournalManager {
         }
 
         // 3. Fallback to bundled default PDF
-        let resourceName = layoutType == .hybrid ? "journal_background_hybrid" : "journal_background"
-        return Bundle.main.url(forResource: resourceName, withExtension: "pdf")
+        return Bundle.main.url(forResource: "journal_background", withExtension: "pdf")
     }
     
     /// Load PDF data if available.

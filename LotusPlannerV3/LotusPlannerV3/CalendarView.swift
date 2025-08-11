@@ -1175,107 +1175,183 @@ struct CalendarView: View {
         navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
     }
     
-    // MARK: - Week View Version 1 (Tasks Rows)
-    private var weekViewV1: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Top section - Week Calendar
-                WeekTimelineComponent(
-                    currentDate: currentDate,
-                    weekEvents: getWeekEventsGroupedByDate(),
-                    personalEvents: calendarViewModel.personalEvents,
-                    professionalEvents: calendarViewModel.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    personalTaskLists: tasksViewModel.personalTaskLists,
-                    personalTasks: tasksViewModel.personalTasks,
-                    professionalTaskLists: tasksViewModel.professionalTaskLists,
-                    professionalTasks: tasksViewModel.professionalTasks,
-                    hideCompletedTasks: appPrefs.hideCompletedTasks,
-                    hideDailyTasks: appPrefs.hideWeeklyDailyTasks,
-                    onEventTap: { ev in
-                        selectedCalendarEvent = ev
-                        showingEventDetails = true
+    // MARK: - Week View Components
+    private struct WeekViewTopSection: View {
+        let currentDate: Date
+        let weekEvents: [Date: [GoogleCalendarEvent]]
+        let calendarViewModel: CalendarViewModel
+        let tasksViewModel: TasksViewModel
+        let appPrefs: AppPreferences
+        let onEventSelect: (GoogleCalendarEvent) -> Void
+        let onDateSelect: (Date) -> Void
+        
+        private func makeTimelineComponent() -> WeekTimelineComponent {
+            WeekTimelineComponent(
+                currentDate: currentDate,
+                weekEvents: weekEvents,
+                personalEvents: calendarViewModel.personalEvents,
+                professionalEvents: calendarViewModel.professionalEvents,
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                personalTasks: tasksViewModel.personalTasks,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                professionalTasks: tasksViewModel.professionalTasks,
+                hideCompletedTasks: appPrefs.hideCompletedTasks,
+                onEventTap: onEventSelect,
+                onDayTap: onDateSelect
+            )
+        }
+        
+        var body: some View {
+            makeTimelineComponent()
+        }
+    }
+    
+    private struct WeekViewBottomSection: View {
+        let geometry: GeometryProxy
+        let tasksViewModel: TasksViewModel
+        let appPrefs: AppPreferences
+        let cachedWeekPersonalTasks: [String: [GoogleTask]]
+        let cachedWeekProfessionalTasks: [String: [GoogleTask]]
+        let onTaskSelect: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
+        let onTaskToggle: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
+        
+        var body: some View {
+            HStack(alignment: .top, spacing: 0) {
+                PersonalTasksComponent(
+                    taskLists: tasksViewModel.personalTaskLists,
+                    tasksDict: cachedWeekPersonalTasks,
+                    accentColor: appPrefs.personalColor,
+                    onTaskToggle: { task, listId in
+                        onTaskToggle(task, listId, .personal)
                     },
-                    onDayTap: { date in
-                        currentDate = date
-                        navigationManager.updateInterval(.day, date: date)
+                    onTaskDetails: { task, listId in
+                        onTaskSelect(task, listId, .personal)
                     }
                 )
-                    .frame(height: appPrefs.hideWeeklyBottomSection ? nil : weekTopSectionHeight)
-                    .frame(maxHeight: appPrefs.hideWeeklyBottomSection ? .infinity : nil)
+                .frame(width: geometry.size.width / 2)
                 
-                // Draggable divider (only show if bottom section is visible)
-                if !appPrefs.hideWeeklyBottomSection {
-                    weekDivider
-                }
-                
-                // Bottom section - Tasks side by side (conditionally shown)
-                if !appPrefs.hideWeeklyBottomSection {
-                    HStack(alignment: .top, spacing: 0) {
-                        // Personal Tasks
-                        PersonalTasksComponent(
-                            taskLists: tasksViewModel.personalTaskLists,
-                            tasksDict: cachedWeekPersonalTasks,
-                            accentColor: appPrefs.personalColor,
-                            onTaskToggle: { task, listId in
-                                Task {
-                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                    updateCachedTasks()
-                                }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedAccountKind = .personal
-                                DispatchQueue.main.async {
-                                    showingTaskDetails = true
-                                }
-                            }
-                        )
-                        .frame(width: geometry.size.width / 2)
-                        
-                        // Professional Tasks
-                        ProfessionalTasksComponent(
-                            taskLists: tasksViewModel.professionalTaskLists,
-                            tasksDict: cachedWeekProfessionalTasks,
-                            accentColor: appPrefs.professionalColor,
-                            onTaskToggle: { task, listId in
-                                Task {
-                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                    updateCachedTasks()
-                                }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedAccountKind = .professional
-                                DispatchQueue.main.async {
-                                    showingTaskDetails = true
-                                }
-                            }
-                        )
-                        .frame(width: geometry.size.width / 2)
+                ProfessionalTasksComponent(
+                    taskLists: tasksViewModel.professionalTaskLists,
+                    tasksDict: cachedWeekProfessionalTasks,
+                    accentColor: appPrefs.professionalColor,
+                    onTaskToggle: { task, listId in
+                        onTaskToggle(task, listId, .professional)
+                    },
+                    onTaskDetails: { task, listId in
+                        onTaskSelect(task, listId, .professional)
                     }
-                    .frame(maxHeight: .infinity)
+                )
+                .frame(width: geometry.size.width / 2)
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+    
+    // MARK: - Week View Version 1 (Tasks Rows)
+    private struct WeekViewContent: View {
+        let currentDate: Date
+        let weekEvents: [Date: [GoogleCalendarEvent]]
+        let calendarViewModel: CalendarViewModel
+        let tasksViewModel: TasksViewModel
+        let appPrefs: AppPreferences
+        let navigationManager: NavigationManager
+        let weekTopSectionHeight: CGFloat
+        
+        @ViewBuilder
+        private var weekDivider: some View {
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 0.5)
+        }
+        
+        let cachedWeekPersonalTasks: [String: [GoogleTask]]
+        let cachedWeekProfessionalTasks: [String: [GoogleTask]]
+        let onEventSelect: (GoogleCalendarEvent) -> Void
+        let onDateSelect: (Date) -> Void
+        let onTaskSelect: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
+        let onTaskToggle: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
+        let onUpdateCachedTasks: () -> Void
+        
+        var body: some View {
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    WeekViewTopSection(
+                        currentDate: currentDate,
+                        weekEvents: weekEvents,
+                        calendarViewModel: calendarViewModel,
+                        tasksViewModel: tasksViewModel,
+                        appPrefs: appPrefs,
+                        onEventSelect: onEventSelect,
+                        onDateSelect: onDateSelect
+                    )
+                    .frame(height: weekTopSectionHeight)
+                    
+                    weekDivider
+                    WeekViewBottomSection(
+                        geometry: geometry,
+                        tasksViewModel: tasksViewModel,
+                        appPrefs: appPrefs,
+                        cachedWeekPersonalTasks: cachedWeekPersonalTasks,
+                        cachedWeekProfessionalTasks: cachedWeekProfessionalTasks,
+                        onTaskSelect: onTaskSelect,
+                        onTaskToggle: onTaskToggle
+                    )
                 }
             }
-        }
-        .background(Color(.systemBackground))
-        .task {
-            await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
-            await tasksViewModel.loadTasks()
-            updateCachedTasks()
-        }
-        .onChange(of: currentDate) { oldValue, newValue in
-            Task {
-                await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
+            .background(Color(.systemBackground))
+            .task {
+                await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
+                await tasksViewModel.loadTasks()
+                onUpdateCachedTasks()
             }
-            updateCachedTasks()
+            .onChange(of: currentDate) { oldValue, newValue in
+                Task {
+                    await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
+                }
+                onUpdateCachedTasks()
+            }
+            .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
+                onUpdateCachedTasks()
+            }
         }
-        .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
-            updateCachedTasks()
-        }
+    }
+    
+    private var weekViewV1: some View {
+        WeekViewContent(
+            currentDate: currentDate,
+            weekEvents: getWeekEventsGroupedByDate(),
+            calendarViewModel: calendarViewModel,
+            tasksViewModel: tasksViewModel,
+            appPrefs: appPrefs,
+            navigationManager: navigationManager,
+            weekTopSectionHeight: weekTopSectionHeight,
+
+            cachedWeekPersonalTasks: cachedWeekPersonalTasks,
+            cachedWeekProfessionalTasks: cachedWeekProfessionalTasks,
+            onEventSelect: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            },
+            onDateSelect: { date in
+                currentDate = date
+                navigationManager.updateInterval(.day, date: date)
+            },
+            onTaskSelect: { task, listId, kind in
+                selectedTask = task
+                selectedTaskListId = listId
+                selectedAccountKind = kind
+                showingTaskDetails = true
+            },
+            onTaskToggle: { task, listId, kind in
+                Task {
+                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: kind)
+                    updateCachedTasks()
+                }
+            },
+            onUpdateCachedTasks: updateCachedTasks
+        )
         .onChange(of: tasksViewModel.professionalTasks) { oldValue, newValue in
             updateCachedTasks()
         }
@@ -1492,8 +1568,6 @@ struct CalendarView: View {
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         if appPrefs.dayViewLayout == .expanded {
             dayViewContentExpanded(geometry: geometry)
-        } else if appPrefs.dayViewLayout == .hybrid {
-            dayViewContentHybrid(geometry: geometry)
         } else {
             dayViewContentCompact(geometry: geometry)
         }
@@ -1553,21 +1627,6 @@ struct CalendarView: View {
         }
     }
     
-    private func dayViewContentHybrid(geometry: GeometryProxy) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Left section (dynamic width) - same as compact
-            leftDaySectionWithDivider(geometry: geometry)
-                .frame(width: dayLeftSectionWidth)
-            
-            // Vertical divider
-            dayVerticalDivider
-
-            // Right section - journal only (no top tasks section)
-            rightDaySectionHybrid(geometry: geometry)
-                .frame(maxWidth: .infinity)
-        }
-    }
-    
     private func rightDaySection(geometry: GeometryProxy) -> some View {
         // The total content width is 100% of device width
         let totalWidth = geometry.size.width
@@ -1594,21 +1653,7 @@ struct CalendarView: View {
         }
     }
     
-    private func rightDaySectionHybrid(geometry: GeometryProxy) -> some View {
-        // The total content width is 100% of device width
-        let totalWidth = geometry.size.width
-        let rightSectionWidth: CGFloat = totalWidth - dayLeftSectionWidth - 8 // divider width
-        
-        return VStack(spacing: 0) {
-            // Journal takes up entire column height - no top tasks section
-            JournalView(currentDate: currentDate, embedded: true, layoutType: .hybrid)
-                .id(currentDate)
-                .frame(maxHeight: .infinity)
-                .padding(.all, 8)
-        }
-    }
-    
-    private func setupDayView() -> some View {
+        private func setupDayView() -> some View {
         dayView
     }
     
