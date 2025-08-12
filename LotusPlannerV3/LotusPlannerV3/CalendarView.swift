@@ -127,12 +127,7 @@ struct GoogleCalendarEventsResponse: Codable {
     let items: [GoogleCalendarEvent]?
 }
 
-enum CalendarError: Error {
-    case noAccessToken
-    case authenticationFailed
-    case accessDenied
-    case apiError(Int)
-}
+
 
 // MARK: - Calendar View Model
 @MainActor
@@ -390,13 +385,9 @@ class CalendarViewModel: ObservableObject {
                         print("📄 Response body: \(responseString)")
                     }
                     
-                    // Throw a more specific error for different status codes
-                    if response.statusCode == 401 {
-                        throw CalendarError.authenticationFailed
-                    } else if response.statusCode == 403 {
-                        throw CalendarError.accessDenied
-                    } else {
-                        throw CalendarError.apiError(response.statusCode)
+                    // Handle HTTP errors
+                    if response.statusCode != 200 {
+                        throw CalendarManager.shared.handleHttpError(response.statusCode)
                     }
                 }
             }
@@ -911,10 +902,11 @@ struct CalendarView: View {
     private var bottomSection: some View {
         HStack(spacing: 0) {
             // Personal Tasks Component
-            PersonalTasksComponent(
+            TasksComponent(
                 taskLists: tasksViewModel.personalTaskLists,
                 tasksDict: cachedMonthPersonalTasks,
                 accentColor: appPrefs.personalColor,
+                accountType: .personal,
                 onTaskToggle: { task, listId in
                     Task {
                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
@@ -934,10 +926,11 @@ struct CalendarView: View {
             .padding(.all, 8)
             
             // Professional Tasks Component  
-            ProfessionalTasksComponent(
+            TasksComponent(
                 taskLists: tasksViewModel.professionalTaskLists,
                 tasksDict: cachedMonthProfessionalTasks,
                 accentColor: appPrefs.professionalColor,
+                accountType: .professional,
                 onTaskToggle: { task, listId in
                     Task {
                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
@@ -988,10 +981,11 @@ struct CalendarView: View {
     private var weekTasksSection: some View {
         HStack(spacing: 0) {
             // Personal Tasks
-            PersonalTasksComponent(
+            TasksComponent(
                 taskLists: tasksViewModel.personalTaskLists,
                 tasksDict: cachedWeekPersonalTasks,
                 accentColor: appPrefs.personalColor,
+                accountType: .personal,
                 onTaskToggle: { task, listId in
                     Task {
                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
@@ -1013,10 +1007,11 @@ struct CalendarView: View {
             weekTasksDivider
             
             // Professional Tasks
-            ProfessionalTasksComponent(
+            TasksComponent(
                 taskLists: tasksViewModel.professionalTaskLists,
                 tasksDict: cachedWeekProfessionalTasks,
                 accentColor: appPrefs.professionalColor,
+                accountType: .professional,
                 onTaskToggle: { task, listId in
                     Task {
                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
@@ -2650,10 +2645,11 @@ struct CalendarView: View {
     private var topLeftDaySection: some View {
         HStack(spacing: 8) {
             // Personal Tasks
-            PersonalTasksComponent(
+            TasksComponent(
                 taskLists: tasksViewModel.personalTaskLists,
                 tasksDict: cachedPersonalTasks,
                 accentColor: appPrefs.personalColor,
+                accountType: .personal,
                 onTaskToggle: { task, listId in
                     Task {
                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
@@ -2672,10 +2668,11 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
             
             // Professional Tasks
-            ProfessionalTasksComponent(
+            TasksComponent(
                 taskLists: tasksViewModel.professionalTaskLists,
                 tasksDict: cachedProfessionalTasks,
                 accentColor: appPrefs.professionalColor,
+                accountType: .professional,
                 onTaskToggle: { task, listId in
                     Task {
                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
@@ -2789,10 +2786,11 @@ struct CalendarView: View {
     }
     
     private var topRightDaySection: some View {
-        ProfessionalTasksComponent(
+        TasksComponent(
             taskLists: tasksViewModel.professionalTaskLists,
             tasksDict: cachedProfessionalTasks,
             accentColor: appPrefs.professionalColor,
+            accountType: .professional,
             onTaskToggle: { task, listId in
                 Task {
                     await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
@@ -3803,7 +3801,7 @@ struct AddItemView: View {
 
                 let (_, response) = try await URLSession.shared.data(for: request)
                 guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-                    throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                    throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
                 }
 
                 // Refresh events
@@ -3860,7 +3858,7 @@ struct AddItemView: View {
 
                 let (_, response) = try await URLSession.shared.data(for: request)
                 guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                    throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
                 }
 
                 // Refresh events
@@ -3888,7 +3886,7 @@ struct AddItemView: View {
 
                 let (_, response) = try await URLSession.shared.data(for: request)
                 guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 204 else {
-                    throw CalendarError.apiError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                    throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
                 }
                 await calendarViewModel.loadCalendarData(for: currentDate)
                 await MainActor.run { dismiss() }

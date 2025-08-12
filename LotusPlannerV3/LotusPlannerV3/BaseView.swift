@@ -551,10 +551,11 @@ extension BaseView {
             // Personal Tasks using day view component
             let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
             if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
-                PersonalTasksComponent(
+                TasksComponent(
                     taskLists: tasksViewModel.personalTaskLists,
                     tasksDict: personalTasksForDate,
                     accentColor: appPrefs.personalColor,
+                    accountType: .personal,
                     onTaskToggle: { task, listId in
                         Task {
                             await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
@@ -585,10 +586,11 @@ extension BaseView {
             // Professional Tasks using day view component
             let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
             if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
-                ProfessionalTasksComponent(
+                TasksComponent(
                     taskLists: tasksViewModel.professionalTaskLists,
                     tasksDict: professionalTasksForDate,
                     accentColor: appPrefs.professionalColor,
+                    accountType: .professional,
                     onTaskToggle: { task, listId in
                         Task {
                             await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)

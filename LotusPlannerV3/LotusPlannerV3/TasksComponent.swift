@@ -1,9 +1,10 @@
 import SwiftUI
 
-struct PersonalTasksComponent: View {
+struct TasksComponent: View {
     let taskLists: [GoogleTaskList]
     let tasksDict: [String: [GoogleTask]]
     let accentColor: Color
+    let accountType: GoogleAuthManager.AccountKind
     let onTaskToggle: (GoogleTask, String) -> Void
     let onTaskDetails: (GoogleTask, String) -> Void
     @ObservedObject private var appPrefs = AppPreferences.shared
@@ -16,7 +17,7 @@ struct PersonalTasksComponent: View {
                         if let tasks = tasksDict[taskList.id] {
                             let filteredTasks = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
                             if !filteredTasks.isEmpty {
-                                PersonalTaskListCard(
+                                TaskComponentListCard(
                                     taskList: taskList,
                                     tasks: filteredTasks,
                                     accentColor: accentColor,
@@ -51,7 +52,7 @@ struct PersonalTasksComponent: View {
     }
 }
 
-struct PersonalTaskListCard: View {
+private struct TaskComponentListCard: View {
     let taskList: GoogleTaskList
     let tasks: [GoogleTask]
     let accentColor: Color
@@ -86,7 +87,7 @@ struct PersonalTaskListCard: View {
             // Tasks for this list
             VStack(spacing: 4) {
                 ForEach(tasks, id: \.id) { task in
-                    PersonalTaskRow(
+                    TaskComponentRow(
                         task: task,
                         accentColor: accentColor,
                         onToggle: { onTaskToggle(task) },
@@ -101,7 +102,7 @@ struct PersonalTaskListCard: View {
     }
 }
 
-struct PersonalTaskRow: View {
+private struct TaskComponentRow: View {
     let task: GoogleTask
     let accentColor: Color
     let onToggle: () -> Void
@@ -135,15 +136,16 @@ struct PersonalTaskRow: View {
 }
 
 // MARK: - Preview
-struct PersonalTasksComponent_Previews: PreviewProvider {
+struct TasksComponent_Previews: PreviewProvider {
     static var previews: some View {
-        PersonalTasksComponent(
+        TasksComponent(
             taskLists: [],
             tasksDict: [:],
             accentColor: .purple,
+            accountType: .personal,
             onTaskToggle: { _, _ in },
             onTaskDetails: { _, _ in }
         )
         .previewLayout(.sizeThatFits)
     }
-} 
+}

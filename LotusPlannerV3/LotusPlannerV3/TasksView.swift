@@ -660,10 +660,11 @@ struct TasksView: View {
                 HStack(spacing: 0) {
                     // Personal Tasks Column
                     if authManager.isLinked(kind: .personal) {
-                        PersonalTasksComponent(
+                        TasksComponent(
                             taskLists: viewModel.personalTaskLists,
                             tasksDict: filteredTasks(viewModel.personalTasks),
                             accentColor: appPrefs.personalColor,
+                            accountType: .personal,
                             onTaskToggle: { task, listId in
                                 Task {
                                     await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
@@ -686,10 +687,11 @@ struct TasksView: View {
                     
                     // Professional Tasks Column
                     if authManager.isLinked(kind: .professional) {
-                        ProfessionalTasksComponent(
+                        TasksComponent(
                             taskLists: viewModel.professionalTaskLists,
                             tasksDict: filteredTasks(viewModel.professionalTasks),
                             accentColor: appPrefs.professionalColor,
+                            accountType: .professional,
                             onTaskToggle: { task, listId in
                                 Task {
                                     await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
