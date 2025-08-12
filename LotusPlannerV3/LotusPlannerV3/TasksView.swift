@@ -594,6 +594,17 @@ enum TaskFilter: String, CaseIterable {
         case .year: return "calendar"
         }
     }
+    
+    // SF Symbol for navigation buttons
+    var sfSymbol: String {
+        switch self {
+        case .day: return "d.circle"
+        case .week: return "w.circle"
+        case .month: return "m.circle"
+        case .year: return "y.circle"
+        case .all: return "line.horizontal.3.decrease.circle"
+        }
+    }
 }
 
 // MARK: - Tasks Error Enum
@@ -863,36 +874,43 @@ struct TasksView: View {
             ToolbarItemGroup(placement: .principal) { EmptyView() }
 
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                // Filter Menu (ordered: Day, Week, Month, Year, All)
-                ForEach([TaskFilter.day, .week, .month, .year, .all], id: \.self) { filter in
-                    Button(filter.rawValue) {
-                        selectedFilter = filter
-                        referenceDate = Date() // reset reference when changing view
-                        
-                        // Sync with NavigationManager if possible
-                        if let timelineInterval = filter.timelineInterval {
-                            navigationManager.updateInterval(timelineInterval, date: Date())
+                HStack(spacing: 12) {
+                    // Filter Menu (ordered: Day, Week, Month, Year, All)
+                    ForEach([TaskFilter.day, .week, .month, .year, .all], id: \.self) { filter in
+                        Button(action: {
+                            selectedFilter = filter
+                            referenceDate = Date() // reset reference when changing view
+                            
+                            // Sync with NavigationManager if possible
+                            if let timelineInterval = filter.timelineInterval {
+                                navigationManager.updateInterval(timelineInterval, date: Date())
+                            }
+                        }) {
+                            Image(systemName: filter.sfSymbol)
+                                .font(.body)
+                                .foregroundColor(filter == selectedFilter ? .accentColor : .secondary)
                         }
                     }
-                        .fontWeight(filter == selectedFilter ? .bold : .regular)
-                }
-                // Toggle Hide Completed Tasks
-                Button(action: {
-                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
-                }) {
-                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
-                        .font(.body)
-                }
+                    
+                    // Toggle Hide Completed Tasks
+                    Button(action: {
+                        appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
+                    }) {
+                        Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
 
-                // Add Task Button
-                Button(action: {
-                    showingNewTask = true
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
+                    // Add Task Button
+                    Button(action: {
+                        showingNewTask = true
+                    }) {
+                        Image(systemName: "plus.circle")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                    .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
                 }
-                .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
             }
         }
         .onAppear {

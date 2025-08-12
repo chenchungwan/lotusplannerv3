@@ -37,6 +37,16 @@ enum TimelineInterval: String, CaseIterable, Identifiable {
         }
     }
     
+    // SF Symbol for navigation buttons
+    var sfSymbol: String {
+        switch self {
+        case .day: return "d.circle"
+        case .week: return "w.circle"
+        case .month: return "m.circle"
+        case .year: return "y.circle"
+        }
+    }
+    
     // Convert to TaskFilter
     var taskFilter: TaskFilter {
         switch self {
@@ -70,14 +80,13 @@ class NavigationManager: ObservableObject {
         case calendar
         case tasks
         case journal
-        case settings
-        case base
     }
     
     @Published var currentView: CurrentView = .calendar
     @Published var showTasksView = false
     @Published var currentInterval: TimelineInterval = .day
     @Published var currentDate: Date = Date()
+    @Published var showingSettings = false
     
     private init() {}
     
@@ -98,15 +107,11 @@ class NavigationManager: ObservableObject {
         showTasksView = false
     }
     
-    func switchToSettings() {
-        currentView = .settings
-        showTasksView = false
+    func showSettings() {
+        showingSettings = true
     }
 
-    func switchToBase() {
-        currentView = .base
-        showTasksView = false
-    }
+
     
     // Update the current interval and date from calendar view
     func updateInterval(_ interval: TimelineInterval, date: Date = Date()) {
@@ -197,12 +202,7 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Weekly view preference (true = BaseView layout, false = CalendarView layout)
-    @Published var useBaseViewForWeekly: Bool {
-        didSet {
-            UserDefaults.standard.set(useBaseViewForWeekly, forKey: "useBaseViewForWeekly")
-        }
-    }
+
     
 
     
@@ -220,8 +220,7 @@ class AppPreferences: ObservableObject {
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
         self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
         
-        // Load weekly view preference (default to BaseView = true)
-        self.useBaseViewForWeekly = UserDefaults.standard.object(forKey: "useBaseViewForWeekly") as? Bool ?? true
+
         
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
@@ -265,6 +264,8 @@ class AppPreferences: ObservableObject {
 struct SettingsView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
+    @Environment(\.dismiss) private var dismiss
     
     // State for show/hide account toggles (placeholder for future implementation)
     @State private var showPersonalAccount = true
@@ -352,24 +353,7 @@ struct SettingsView: View {
                         }
                     }
                     
-                    // Weekly View Layout Toggle
-                    HStack {
-                        Image(systemName: "calendar")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Use Enhanced Weekly View")
-                                .font(.body)
-                            Text("Use BaseView layout for weekly calendar (more space for tasks)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: $appPrefs.useBaseViewForWeekly)
-                    }
+
 
                 }
                 
@@ -423,19 +407,15 @@ struct SettingsView: View {
                 }
                 
             }
-            .navigationTitle("")
-            .toolbarTitleDisplayMode(.inline)
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
-                    HStack(spacing: 8) {
-                        SharedNavigationToolbar()
-                        Text("Settings")
-                            .font(.title2)
-                            .fontWeight(.semibold)
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }
-            .sidebarToggleHidden()
         }
 
     }

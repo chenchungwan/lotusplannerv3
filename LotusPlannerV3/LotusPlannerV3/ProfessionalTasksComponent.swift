@@ -10,11 +10,6 @@ struct ProfessionalTasksComponent: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("Professional Tasks")
-                .font(.headline)
-                .fontWeight(.bold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(taskLists, id: \.id) { taskList in

@@ -11,12 +11,14 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
-    @StateObject private var appPrefs = AppPreferences.shared
 
     var body: some View {
         NavigationStack {
             currentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .sheet(isPresented: $navigationManager.showingSettings) {
+            SettingsView()
         }
     }
 
@@ -28,8 +30,8 @@ struct ContentView: View {
             if navigationManager.showTasksView {
                 TasksView()
             } else {
-                // Check if user prefers BaseView for weekly calendar
-                if appPrefs.useBaseViewForWeekly && navigationManager.currentInterval == .week {
+                // Always use BaseView for weekly calendar
+                if navigationManager.currentInterval == .week {
                     BaseView()
                 } else {
                     CalendarView()
@@ -40,8 +42,8 @@ struct ContentView: View {
             if navigationManager.showTasksView {
                 TasksView()
             } else {
-                // Check if user prefers BaseView for weekly calendar
-                if appPrefs.useBaseViewForWeekly && navigationManager.currentInterval == .week {
+                // Always use BaseView for weekly calendar
+                if navigationManager.currentInterval == .week {
                     BaseView()
                 } else {
                     CalendarView()
@@ -50,10 +52,6 @@ struct ContentView: View {
 
         case .journal:
             JournalView(currentDate: Date())
-        case .settings:
-            SettingsView()
-        case .base:
-            BaseView()
         }
     }
 }

@@ -642,6 +642,8 @@ struct CalendarView: View {
     @State private var leftTimelineHeight: CGFloat = UIScreen.main.bounds.height * 0.6
     @State private var isLeftTimelineDividerDragging = false
     
+
+    
     // Day view right section column widths and divider state
     @State private var dayRightColumn2Width: CGFloat = UIScreen.main.bounds.width * 0.25
     @State private var isDayRightColumnDividerDragging = false
@@ -785,30 +787,31 @@ struct CalendarView: View {
     }
     
     private var trailingToolbarButtons: some View {
-        Group {
+        HStack(spacing: 12) {
             ForEach(TimelineInterval.allCases) { item in
-                Button(item.rawValue) {
+                Button(action: {
                     navigationManager.updateInterval(item, date: Date())
                     currentDate = Date() // reset to today/current period
+                }) {
+                    Image(systemName: item.sfSymbol)
+                        .font(.body)
+                        .foregroundColor(item == navigationManager.currentInterval ? .accentColor : .secondary)
                 }
-                    .fontWeight(item == navigationManager.currentInterval ? .bold : .regular)
             }
 
             // Hide Completed toggle
             Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
-                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
+                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
                     .font(.body)
+                    .foregroundColor(.secondary)
             }
-
-
 
             // Add button (right-most)
             Button(action: { showingAddItem = true }) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-                    .foregroundColor(.accentColor)
+                Image(systemName: "plus.circle")
+                    .font(.body)
+                    .foregroundColor(.secondary)
             }
-            .buttonStyle(PlainButtonStyle())
         }
     }
     
@@ -818,8 +821,6 @@ struct CalendarView: View {
                 yearView
             } else if navigationManager.currentInterval == .month {
                 monthView
-            } else if navigationManager.currentInterval == .week {
-                weekView
             } else if navigationManager.currentInterval == .day {
                 setupDayView()
             } else {
@@ -1175,208 +1176,19 @@ struct CalendarView: View {
         navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
     }
     
-    // MARK: - Week View Components
-    private struct WeekViewTopSection: View {
-        let currentDate: Date
-        let weekEvents: [Date: [GoogleCalendarEvent]]
-        let calendarViewModel: CalendarViewModel
-        let tasksViewModel: TasksViewModel
-        let appPrefs: AppPreferences
-        let onEventSelect: (GoogleCalendarEvent) -> Void
-        let onDateSelect: (Date) -> Void
-        
-        private func makeTimelineComponent() -> WeekTimelineComponent {
-            WeekTimelineComponent(
-                currentDate: currentDate,
-                weekEvents: weekEvents,
-                personalEvents: calendarViewModel.personalEvents,
-                professionalEvents: calendarViewModel.professionalEvents,
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                personalTasks: tasksViewModel.personalTasks,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
-                professionalTasks: tasksViewModel.professionalTasks,
-                hideCompletedTasks: appPrefs.hideCompletedTasks,
-                onEventTap: onEventSelect,
-                onDayTap: onDateSelect
-            )
-        }
-        
-        var body: some View {
-            makeTimelineComponent()
-        }
-    }
-    
-    private struct WeekViewBottomSection: View {
-        let geometry: GeometryProxy
-        let tasksViewModel: TasksViewModel
-        let appPrefs: AppPreferences
-        let cachedWeekPersonalTasks: [String: [GoogleTask]]
-        let cachedWeekProfessionalTasks: [String: [GoogleTask]]
-        let onTaskSelect: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
-        let onTaskToggle: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
-        
-        var body: some View {
-            HStack(alignment: .top, spacing: 0) {
-                PersonalTasksComponent(
-                    taskLists: tasksViewModel.personalTaskLists,
-                    tasksDict: cachedWeekPersonalTasks,
-                    accentColor: appPrefs.personalColor,
-                    onTaskToggle: { task, listId in
-                        onTaskToggle(task, listId, .personal)
-                    },
-                    onTaskDetails: { task, listId in
-                        onTaskSelect(task, listId, .personal)
-                    }
-                )
-                .frame(width: geometry.size.width / 2)
-                
-                ProfessionalTasksComponent(
-                    taskLists: tasksViewModel.professionalTaskLists,
-                    tasksDict: cachedWeekProfessionalTasks,
-                    accentColor: appPrefs.professionalColor,
-                    onTaskToggle: { task, listId in
-                        onTaskToggle(task, listId, .professional)
-                    },
-                    onTaskDetails: { task, listId in
-                        onTaskSelect(task, listId, .professional)
-                    }
-                )
-                .frame(width: geometry.size.width / 2)
-            }
-            .frame(maxHeight: .infinity)
-        }
-    }
-    
-    // MARK: - Week View Version 1 (Tasks Rows)
-    private struct WeekViewContent: View {
-        let currentDate: Date
-        let weekEvents: [Date: [GoogleCalendarEvent]]
-        let calendarViewModel: CalendarViewModel
-        let tasksViewModel: TasksViewModel
-        let appPrefs: AppPreferences
-        let navigationManager: NavigationManager
-        let weekTopSectionHeight: CGFloat
-        
-        @ViewBuilder
-        private var weekDivider: some View {
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(height: 0.5)
-        }
-        
-        let cachedWeekPersonalTasks: [String: [GoogleTask]]
-        let cachedWeekProfessionalTasks: [String: [GoogleTask]]
-        let onEventSelect: (GoogleCalendarEvent) -> Void
-        let onDateSelect: (Date) -> Void
-        let onTaskSelect: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
-        let onTaskToggle: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
-        let onUpdateCachedTasks: () -> Void
-        
-        var body: some View {
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    WeekViewTopSection(
-                        currentDate: currentDate,
-                        weekEvents: weekEvents,
-                        calendarViewModel: calendarViewModel,
-                        tasksViewModel: tasksViewModel,
-                        appPrefs: appPrefs,
-                        onEventSelect: onEventSelect,
-                        onDateSelect: onDateSelect
-                    )
-                    .frame(height: weekTopSectionHeight)
-                    
-                    weekDivider
-                    WeekViewBottomSection(
-                        geometry: geometry,
-                        tasksViewModel: tasksViewModel,
-                        appPrefs: appPrefs,
-                        cachedWeekPersonalTasks: cachedWeekPersonalTasks,
-                        cachedWeekProfessionalTasks: cachedWeekProfessionalTasks,
-                        onTaskSelect: onTaskSelect,
-                        onTaskToggle: onTaskToggle
-                    )
-                }
-            }
-            .background(Color(.systemBackground))
-            .task {
-                await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
-                await tasksViewModel.loadTasks()
-                onUpdateCachedTasks()
-            }
-            .onChange(of: currentDate) { oldValue, newValue in
-                Task {
-                    await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
-                }
-                onUpdateCachedTasks()
-            }
-            .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
-                onUpdateCachedTasks()
-            }
-        }
-    }
-    
-    private var weekViewV1: some View {
-        WeekViewContent(
-            currentDate: currentDate,
-            weekEvents: getWeekEventsGroupedByDate(),
-            calendarViewModel: calendarViewModel,
-            tasksViewModel: tasksViewModel,
-            appPrefs: appPrefs,
-            navigationManager: navigationManager,
-            weekTopSectionHeight: weekTopSectionHeight,
 
-            cachedWeekPersonalTasks: cachedWeekPersonalTasks,
-            cachedWeekProfessionalTasks: cachedWeekProfessionalTasks,
-            onEventSelect: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            },
-            onDateSelect: { date in
-                currentDate = date
-                navigationManager.updateInterval(.day, date: date)
-            },
-            onTaskSelect: { task, listId, kind in
-                selectedTask = task
-                selectedTaskListId = listId
-                selectedAccountKind = kind
-                showingTaskDetails = true
-            },
-            onTaskToggle: { task, listId, kind in
-                Task {
-                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: kind)
-                    updateCachedTasks()
-                }
-            },
-            onUpdateCachedTasks: updateCachedTasks
-        )
-        .onChange(of: tasksViewModel.professionalTasks) { oldValue, newValue in
-            updateCachedTasks()
-        }
-        .onChange(of: appPrefs.hideRecurringEventsInMonth) { oldValue, newValue in
-            Task {
-                await calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
-            }
-        }
-    }
+    
+
+    
+
+    
+
     
 
 
 
     
-    // Week dates helper
-    private var weekDates: [Date] {
-        let cal = Calendar.mondayFirst
-        guard let start = cal.dateInterval(of: .weekOfYear, for: currentDate)?.start else { return [] }
-        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
-    }
-    
-    // MARK: - Selector
-    private var weekView: some View {
-        weekViewV1
-    }
+
     
     private var singleMonthSection: some View {
         MonthTimelineComponent(
@@ -1633,7 +1445,7 @@ struct CalendarView: View {
         let rightSectionWidth: CGFloat = totalWidth - dayLeftSectionWidth - 8 // divider width
         
         return VStack(spacing: 0) {
-            // Top section of right side - split into three columns
+            // Top section - Tasks
             HStack(alignment: .top, spacing: 0) {
                 // Personal & Professional tasks (full width)
                 topLeftDaySection
@@ -1659,22 +1471,18 @@ struct CalendarView: View {
     
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Timeline section (top part)
+            // Timeline section
             leftTimelineSection
                 .frame(height: leftTimelineHeight)
                 .padding(.all, 8)
             
-            // Resizable divider
+            // Draggable divider between timeline and logs
             leftTimelineDivider
             
-            // Logs section (bottom part)
-            VStack(alignment: .leading, spacing: 8) {
-                LogsComponent(currentDate: currentDate, horizontal: false)
-            }
-            .frame(maxHeight: .infinity)
-            .padding(.all, 8)
-            .background(Color(.systemGray6).opacity(0.3))
-            .cornerRadius(8)
+            // Logs section
+            LogsComponent(currentDate: currentDate, horizontal: false)
+                .frame(maxHeight: .infinity)
+                .padding(.all, 8)
         }
         .frame(height: geometry.size.height)
     }
@@ -1719,7 +1527,27 @@ struct CalendarView: View {
             )
     }
     
-
+    private var leftTimelineDivider: some View {
+        Rectangle()
+            .fill(isLeftTimelineDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(height: 8)
+            .overlay(
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundColor(isLeftTimelineDividerDragging ? .white : .gray)
+            )
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isLeftTimelineDividerDragging = true
+                        let newHeight = leftTimelineHeight + value.translation.height
+                        leftTimelineHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
+                    }
+                    .onEnded { _ in
+                        isLeftTimelineDividerDragging = false
+                    }
+            )
+    }
     
     private var weekDivider: some View {
         Rectangle()
@@ -2426,24 +2254,7 @@ struct CalendarView: View {
         }
     }
     
-    // Group week events by date for the WeekTimelineComponent
-    private func getWeekEventsGroupedByDate() -> [Date: [GoogleCalendarEvent]] {
-        let weekDates = getWeekDates()
-        var eventsGroupedByDate: [Date: [GoogleCalendarEvent]] = [:]
-        
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
-        
-        for date in weekDates {
-            let calendar = Calendar.current
-            let eventsForDate = allEvents.filter { event in
-                guard let startTime = event.startTime else { return false }
-                return calendar.isDate(startTime, inSameDayAs: date)
-            }
-            eventsGroupedByDate[date] = eventsForDate
-        }
-        
-        return eventsGroupedByDate
-    }
+
     
     // Group month events by date for the MonthTimelineComponent
     private func getMonthEventsGroupedByDate() -> [Date: [GoogleCalendarEvent]] {
@@ -3148,14 +2959,10 @@ struct CalendarView: View {
     private func updateCachedTasks() {
         cachedPersonalTasks = filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate)
         cachedProfessionalTasks = filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate)
-        updateWeekCachedTasks() // Also update week cached tasks
         updateMonthCachedTasks() // Also update month cached tasks
     }
     
-    private func updateWeekCachedTasks() {
-        cachedWeekPersonalTasks = filteredTasksForWeek(tasksViewModel.personalTasks, date: currentDate)
-        cachedWeekProfessionalTasks = filteredTasksForWeek(tasksViewModel.professionalTasks, date: currentDate)
-    }
+
     
     private func updateMonthCachedTasks() {
         cachedMonthPersonalTasks = filteredTasksForMonth(tasksViewModel.personalTasks, date: currentDate)
@@ -3264,28 +3071,6 @@ struct CalendarView: View {
         selectedCalendarEvent = ev
         showingEventDetails = true
     }
-    
-    private var leftTimelineDivider: some View {
-        Rectangle()
-            .fill(isLeftTimelineDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLeftTimelineDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLeftTimelineDividerDragging = true
-                        let newHeight = leftTimelineHeight + value.translation.height
-                        leftTimelineHeight = max(200, min(UIScreen.main.bounds.height - 300, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLeftTimelineDividerDragging = false
-                    }
-            )
-    }
 }
 
 // MARK: - Week PencilKit View
@@ -3303,98 +3088,7 @@ struct WeekPencilKitView: UIViewRepresentable {
     }
 }
 
-struct WeekCalendarView: View {
-    let currentDate: Date
-    
-    private var weekDates: [Date] {
-        let calendar = Calendar.mondayFirst
-        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: currentDate)?.start else {
-            return []
-        }
-        
-        return (0..<7).compactMap { dayOffset in
-            calendar.date(byAdding: .day, value: dayOffset, to: weekStart)
-        }
-    }
-    
-    private var weekNumber: String {
-        let calendar = Calendar.current
-        let weekOfYear = calendar.component(.weekOfYear, from: currentDate)
-        return "Week \(weekOfYear)"
-    }
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            // Days of week header
-            HStack(spacing: 4) {
-                ForEach(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], id: \.self) { day in
-                    Text(day)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            
-            // Week dates
-            HStack(spacing: 4) {
-                ForEach(weekDates, id: \.self) { date in
-                    weekDayCell(date: date)
-                }
-            }
-            
-            // Time slots (simplified version)
-            VStack(spacing: 8) {
-                ForEach(["9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"], id: \.self) { time in
-                    HStack {
-                        Text(time)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                            .frame(width: 60, alignment: .leading)
-                        
-                        Rectangle()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 1)
-                    }
-                }
-            }
-            .padding(.top, 8)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-    }
-    
-    private func weekDayCell(date: Date) -> some View {
-        let calendar = Calendar.current
-        let dayNumber = calendar.component(.day, from: date)
-        let isToday = calendar.isDate(date, inSameDayAs: Date())
-        
-        return VStack(spacing: 4) {
-            Text("\(dayNumber)")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(isToday ? .white : .primary)
-                .frame(width: 40, height: 40)
-                .background(isToday ? Color.red : Color.clear)
-                .clipShape(Circle())
-            
-            // Placeholder for events/appointments
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color(.systemGray4))
-                .frame(height: 60)
-                .overlay(
-                    Text("Events")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                )
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
+
 
 struct LargeMonthCardView: View {
     let month: Int

@@ -9,6 +9,7 @@ struct BaseView: View {
     @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
     
     @State private var selectedDate = Date()
     @State private var viewMode: ViewMode = .week
@@ -21,60 +22,24 @@ struct BaseView: View {
     
     // Section width management
     @State private var leftSectionWidth: CGFloat = 300
-    @State private var middleSectionWidth: CGFloat = max(600, UIScreen.main.bounds.width * 0.25) // Both task sections combined, minimum 25% device width
-    @State private var rightSectionWidth: CGFloat = UIScreen.main.bounds.width // Journal section width
     @State private var isDraggingLeftSlider = false
-    @State private var isDraggingRightSlider = false
-    
-    // Computed property for minimum middle section width (25% of device width)
-    private var minimumMiddleSectionWidth: CGFloat {
-        UIScreen.main.bounds.width * 0.25
-    }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Global Navigation Bar
-            HStack(spacing: 8) {
-                // Shared toolbar icons (settings, goals, calendar, tasks)
-                SharedNavigationToolbar()
-                
-                // Date navigation arrows and title
-                Button(action: { step(-1) }) {
-                    Image(systemName: "chevron.left")
+        mainContent
+            .sidebarToggleHidden()
+            .navigationTitle("")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
+                    principalToolbarContent
                 }
-                // Date title - clickable to go to today
-                Button(action: { 
-                    selectedDate = Date() // Go to today
-                }) {
-                    Text(titleText)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+
+                ToolbarItemGroup(placement: .principal) { EmptyView() }
+
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    trailingToolbarButtons
                 }
-                Button(action: { step(1) }) {
-                    Image(systemName: "chevron.right")
-                }
-                    
-                    Spacer()
-                    
-                    Text("Week")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                        .frame(width: 300)
-                }
-                .padding(.horizontal)
-                .frame(height: 44)
-                .background(Color(UIColor.systemBackground))
-                .overlay(
-                    Rectangle()
-                        .frame(height: 1)
-                        .foregroundColor(Color.gray.opacity(0.2)),
-                    alignment: .bottom
-                )
-            
-            mainContent
-        }
+            }
         .sheet(item: Binding<GoogleCalendarEvent?>(
             get: { selectedCalendarEvent },
             set: { selectedCalendarEvent = $0 }
@@ -124,6 +89,8 @@ struct BaseView: View {
             }
         }
         .task {
+            // Initialize selectedDate from navigation manager if available
+            selectedDate = navigationManager.currentDate
             await calendarViewModel.loadCalendarData(for: selectedDate)
             await tasksViewModel.loadTasks()
         }
@@ -132,86 +99,119 @@ struct BaseView: View {
                 await calendarViewModel.loadCalendarData(for: newValue)
             }
         }
+        .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+            selectedDate = newValue
+        }
+    }
+    
+    // MARK: - Toolbar Content
+    private var principalToolbarContent: some View {
+        HStack(spacing: 8) {
+            SharedNavigationToolbar()
+            
+            Button(action: { step(-1) }) {
+                Image(systemName: "chevron.left")
+            }
+            
+            Button(action: { 
+                selectedDate = Date() // Go to today
+                navigationManager.updateInterval(.week, date: Date())
+            }) {
+                Text(titleText)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+            }
+            
+            Button(action: { step(1) }) {
+                Image(systemName: "chevron.right")
+            }
+        }
+    }
+    
+    private var trailingToolbarButtons: some View {
+        HStack(spacing: 12) {
+            ForEach(TimelineInterval.allCases) { item in
+                Button(action: {
+                    navigationManager.updateInterval(item, date: selectedDate)
+                    if item != .week {
+                        // If switching away from week, keep the current date
+                        navigationManager.currentDate = selectedDate
+                    }
+                }) {
+                    Image(systemName: item.sfSymbol)
+                        .font(.body)
+                        .foregroundColor(item == navigationManager.currentInterval ? .accentColor : .secondary)
+                }
+            }
+
+            // Hide Completed toggle
+            Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
+                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
     
     // MARK: - Main Content
     private var mainContent: some View {
-        // Main content area divided into 3 horizontal sections with sliders
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    // Left section - Timeline (resizable width)
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Week view - Fixed width scrollable week timeline
-                        ScrollView(.horizontal, showsIndicators: true) {
-                            customWeekTimelineView
-                        }
-                        .clipped() // Ensure content stays within bounds
-                        .task {
-                            await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
-                        }
-                        .onChange(of: selectedDate) { oldValue, newValue in
-                            Task {
-                                await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
-                            }
-                        }
-                        
-                        Spacer(minLength: 0)
-                    }
-                    .frame(width: leftSectionWidth)
-                    .padding(.all, 8)
-                    .background(Color(.systemGray6))
-                    
-                    // Left slider
-                    leftSlider
-                    
-                    // Middle section - Tasks (resizable width, vertical layout)
-                    VStack(spacing: 0) {
-                        // Week view - 7-column tasks layout with horizontal scrolling only
-                        ScrollView(.horizontal, showsIndicators: true) {
-                            weekTasksView
-                        }
-                        .clipped() // Ensure content stays within bounds
-                        
-                        // If neither account is linked, show placeholder
-                        if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
-                            VStack {
-                                Text("No Task Accounts Linked")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
-                                Text("Link your Google accounts in Settings to view tasks")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(.all, 8)
-                        }
-                    }
-                    .frame(width: middleSectionWidth)
-                    .frame(maxHeight: .infinity)
-                    .background(Color(.systemBackground))
-                    
-                    // Right slider
-                    rightSlider
-                    
-                    // Right section - Journal (Scrapbook) - Resizable width
-                    VStack(alignment: .leading, spacing: 0) {
-                        JournalView(
-                            currentDate: selectedDate,
-                            embedded: true,
-                            layoutType: .compact
-                        )
-                        .id(Calendar.current.startOfDay(for: selectedDate)) // Force refresh when date changes
-                        
-                        Spacer(minLength: 0)
-                    }
-                    .frame(width: rightSectionWidth)
-                    .padding(.all, 8)
-                    .background(Color(.systemGray5))
+        // Main content area with fixed left section and scrollable right section
+        HStack(spacing: 0) {
+            // Left section - Timeline (fixed width, non-scrollable)
+            VStack(alignment: .leading, spacing: 0) {
+                // Week view - Fixed width scrollable week timeline
+                ScrollView(.horizontal, showsIndicators: true) {
+                    customWeekTimelineView
                 }
-                .frame(minHeight: 0, maxHeight: .infinity)
+                .clipped() // Ensure content stays within bounds
+                .task {
+                    await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
+                }
+                .onChange(of: selectedDate) { oldValue, newValue in
+                    Task {
+                        await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
+                    }
+                }
+                
+                Spacer(minLength: 0)
             }
+            .frame(width: leftSectionWidth)
+            .padding(.all, 8)
+            .background(Color(.systemGray6))
+            
+            // Left slider
+            leftSlider
+            
+            // Right section - Tasks (scrollable horizontally with sliding effect)
+            ScrollView(.horizontal, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    // Week view - 7-column tasks layout
+                    weekTasksView
+                    
+                    // If neither account is linked, show placeholder
+                    if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+                        VStack {
+                            Text("No Task Accounts Linked")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text("Link your Google accounts in Settings to view tasks")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.all, 8)
+                    }
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemBackground))
+            .clipped() // This creates the sliding effect where content slides under the left section
         }
+        .frame(minHeight: 0, maxHeight: .infinity)
+    }
     }
 
 
@@ -372,16 +372,14 @@ extension BaseView {
                 DragGesture(minimumDistance: 0) // Allow immediate recognition
                     .onChanged { value in
                         isDraggingLeftSlider = true
-                        // Adjust both left and middle sections inversely
+                        // Adjust left section width only (middle section will fill remaining space)
                         let delta = value.translation.width
                         let newLeftWidth = leftSectionWidth + delta
-                        let newMiddleWidth = middleSectionWidth - delta
                         
-                        // Apply constraints - middle section must be at least 25% of device width
+                        // Apply constraints
                         leftSectionWidth = max(200, min(800, newLeftWidth))
-                        middleSectionWidth = max(minimumMiddleSectionWidth, min(1200, newMiddleWidth))
                         
-                        print("Left slider: left=\(leftSectionWidth), middle=\(middleSectionWidth)")
+                        print("Left slider: left=\(leftSectionWidth)")
                     }
                     .onEnded { _ in
                         isDraggingLeftSlider = false
@@ -393,49 +391,7 @@ extension BaseView {
             }
     }
     
-    private var rightSlider: some View {
-        Rectangle()
-            .fill(isDraggingRightSlider ? Color.blue.opacity(0.8) : Color(.systemGray3))
-            .frame(width: 12) // Make wider for easier interaction
-            .contentShape(Rectangle())
-            .overlay(
-                // Visual indicator for draggable area
-                VStack(spacing: 2) {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.8))
-                        .frame(width: 2, height: 8)
-                    Rectangle()
-                        .fill(Color.white.opacity(0.8))
-                        .frame(width: 2, height: 8)
-                    Rectangle()
-                        .fill(Color.white.opacity(0.8))
-                        .frame(width: 2, height: 8)
-                }
-            )
-            .gesture(
-                DragGesture(minimumDistance: 0) // Allow immediate recognition
-                    .onChanged { value in
-                        isDraggingRightSlider = true
-                        // Adjust both middle and right sections inversely
-                        let delta = value.translation.width
-                        let newMiddleWidth = middleSectionWidth + delta
-                        let newRightWidth = rightSectionWidth - delta
-                        
-                        // Apply constraints
-                        middleSectionWidth = max(minimumMiddleSectionWidth, min(1200, newMiddleWidth))
-                        rightSectionWidth = max(200, min(UIScreen.main.bounds.width, newRightWidth))
-                        
-                        print("Right slider: middle=\(middleSectionWidth), right=\(rightSectionWidth)")
-                    }
-                    .onEnded { _ in
-                        isDraggingRightSlider = false
-                    }
-            )
-            .onTapGesture {
-                // Debug tap to ensure slider is interactive
-                print("Right slider tapped")
-            }
-    }
+
     
     private var titleText: String {
         let calendar = Calendar.mondayFirst
@@ -460,6 +416,7 @@ extension BaseView {
         let calendar = Calendar.current
         if let newDate = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) {
             selectedDate = newDate
+            navigationManager.updateInterval(.week, date: newDate)
         }
     }
     

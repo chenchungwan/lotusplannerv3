@@ -10,11 +10,6 @@ struct PersonalTasksComponent: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("Personal Tasks")
-                .font(.headline)
-                .fontWeight(.bold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(taskLists, id: \.id) { taskList in
