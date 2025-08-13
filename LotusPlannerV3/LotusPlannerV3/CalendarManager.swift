@@ -73,4 +73,68 @@ class CalendarManager {
             return .apiError(statusCode)
         }
     }
+
+    // MARK: - Calendar List Loading
+    func fetchCalendars(for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleCalendar] {
+        guard let accessToken = try await getAccessToken(for: kind) else {
+            throw PlannerCalendarError.noAccessToken
+        }
+
+        var request = URLRequest(url: URL(string: "https://www.googleapis.com/calendar/v3/users/me/calendarList")!)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw PlannerCalendarError.invalidResponse }
+        guard httpResponse.statusCode == 200 else { throw handleHttpError(httpResponse.statusCode) }
+
+        let decoded = try JSONDecoder().decode(GoogleCalendarListResponse.self, from: data)
+        return decoded.items ?? []
+    }
+
+    // MARK: - Events Across All Calendars
+    func fetchEvents(for kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws -> [GoogleCalendarEvent] {
+        guard let accessToken = try await getAccessToken(for: kind) else {
+            throw PlannerCalendarError.noAccessToken
+        }
+
+        let calendars = try await fetchCalendars(for: kind)
+        let iso = ISO8601DateFormatter()
+        let timeMin = iso.string(from: startDate)
+        let timeMax = iso.string(from: endDate)
+
+        var allEvents: [GoogleCalendarEvent] = []
+        for cal in calendars {
+            let urlString = "https://www.googleapis.com/calendar/v3/calendars/\(cal.id)/events?timeMin=\(timeMin)&timeMax=\(timeMax)&singleEvents=true&orderBy=startTime"
+            guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else { continue }
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { throw PlannerCalendarError.invalidResponse }
+            guard httpResponse.statusCode == 200 else { throw handleHttpError(httpResponse.statusCode) }
+
+            let resp = try JSONDecoder().decode(GoogleCalendarEventsResponse.self, from: data)
+            if let items = resp.items {
+                let withCalId = items.map { ev in
+                    GoogleCalendarEvent(
+                        id: ev.id,
+                        summary: ev.summary,
+                        description: ev.description,
+                        start: ev.start,
+                        end: ev.end,
+                        location: ev.location,
+                        calendarId: cal.id,
+                        recurringEventId: ev.recurringEventId,
+                        recurrence: ev.recurrence
+                    )
+                }
+                allEvents.append(contentsOf: withCalId)
+            }
+        }
+
+        return allEvents.sorted { a, b in
+            guard let startA = a.startTime, let startB = b.startTime else { return false }
+            return startA < startB
+        }
+    }
 }

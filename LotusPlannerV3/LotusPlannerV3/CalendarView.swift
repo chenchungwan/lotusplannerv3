@@ -321,13 +321,30 @@ class CalendarViewModel: ObservableObject {
         await withTaskGroup(of: Void.self) { group in
             if needsPersonalRefresh {
                 group.addTask {
-                    await self.loadCalendarDataForMonthRange(.personal, startDate: monthStart, endDate: monthEnd)
+                    do {
+                        let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
+                        await MainActor.run {
+                            self.personalEvents = events
+                            self.personalCalendars = calendars
+                        }
+                    } catch {
+                        await MainActor.run { self.errorMessage = error.localizedDescription }
+                    }
                 }
             }
-            
             if needsProfessionalRefresh {
                 group.addTask {
-                    await self.loadCalendarDataForMonthRange(.professional, startDate: monthStart, endDate: monthEnd)
+                    do {
+                        let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
+                        await MainActor.run {
+                            self.professionalEvents = events
+                            self.professionalCalendars = calendars
+                        }
+                    } catch {
+                        await MainActor.run { self.errorMessage = error.localizedDescription }
+                    }
                 }
             }
         }
