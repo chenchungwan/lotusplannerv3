@@ -14,9 +14,6 @@ struct SharedNavigationToolbar: View {
                     .frame(width: 20, height: 20)
                     .foregroundColor(.secondary)
             }
-
-
-
             
             // Tasks checklist button
             Button(action: {

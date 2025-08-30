@@ -154,6 +154,11 @@ struct DayView: View {
                                 Task {
                                     await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                                 }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                                }
                             }
                         )
                     }
@@ -179,6 +184,11 @@ struct DayView: View {
                             onListRename: { listId, newName in
                                 Task {
                                     await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                                 }
                             }
                         )
@@ -234,6 +244,11 @@ struct DayView: View {
                                 Task {
                                     await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                                 }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                                }
                             }
                         )
                     }
@@ -259,6 +274,11 @@ struct DayView: View {
                             onListRename: { listId, newName in
                                 Task {
                                     await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                                 }
                             }
                         )

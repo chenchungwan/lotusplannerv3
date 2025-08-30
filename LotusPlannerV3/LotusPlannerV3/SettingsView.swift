@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 // MARK: - Day View Layout Option Enum
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {

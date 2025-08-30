@@ -2,7 +2,7 @@ import SwiftUI
 import Foundation
 
 // MARK: - Google Tasks Data Models
-struct GoogleTaskList: Identifiable, Codable {
+struct GoogleTaskList: Identifiable, Codable, Equatable {
     let id: String
     let title: String
     let updated: String?
@@ -68,7 +68,9 @@ class TasksViewModel: ObservableObject {
                         let taskLists = try await self.fetchTaskLists(for: .personal)
                         
                         await MainActor.run {
-                            self.personalTaskLists = taskLists
+                            // Apply saved order if available
+                            let orderedTaskLists = self.applySavedOrder(taskLists, for: .personal)
+                            self.personalTaskLists = orderedTaskLists
                         }
                         
                         // Load tasks for each task list
@@ -94,7 +96,9 @@ class TasksViewModel: ObservableObject {
                         let taskLists = try await self.fetchTaskLists(for: .professional)
                         
                         await MainActor.run {
-                            self.professionalTaskLists = taskLists
+                            // Apply saved order if available
+                            let orderedTaskLists = self.applySavedOrder(taskLists, for: .professional)
+                            self.professionalTaskLists = orderedTaskLists
                         }
                         
                         // Load tasks for each task list
@@ -529,9 +533,13 @@ class TasksViewModel: ObservableObject {
                 case .personal:
                     self.personalTaskLists.append(taskList)
                     self.personalTasks[taskList.id] = []
+                    // Save updated order
+                    saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
                 case .professional:
                     self.professionalTaskLists.append(taskList)
                     self.professionalTasks[taskList.id] = []
+                    // Save updated order
+                    saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
                 }
             }
             
@@ -624,6 +632,7 @@ class TasksViewModel: ObservableObject {
     }
     
     func updateTaskListOrder(_ newOrder: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) async {
+        print("Updating task list order for \(kind)")
         await MainActor.run {
             switch kind {
             case .personal:
@@ -632,8 +641,49 @@ class TasksViewModel: ObservableObject {
                 self.professionalTaskLists = newOrder
             }
         }
-        // Here you would typically update the backend with the new order
-        print("Updated task list order for \(kind): \(newOrder.map { $0.title })")
+        print("New order for \(kind): \(newOrder.map { $0.title })")
+
+        // Save the order locally since Google Tasks API doesn't support task list ordering
+        saveTaskListOrder(newOrder.map { $0.id }, for: kind)
+    }
+
+    private func saveTaskListOrder(_ order: [String], for kind: GoogleAuthManager.AccountKind) {
+        let key = "taskListOrder_\(kind.rawValue)"
+        UserDefaults.standard.set(order, forKey: key)
+        print("Saved task list order for \(kind): \(order)")
+    }
+
+    private func loadTaskListOrder(for kind: GoogleAuthManager.AccountKind) -> [String]? {
+        let key = "taskListOrder_\(kind.rawValue)"
+        return UserDefaults.standard.stringArray(forKey: key)
+    }
+
+    private func applySavedOrder(_ taskLists: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) -> [GoogleTaskList] {
+        guard let savedOrder = loadTaskListOrder(for: kind) else {
+            // No saved order, return original order
+            return taskLists
+        }
+
+        // Create a dictionary for quick lookup
+        let taskListDict = Dictionary(uniqueKeysWithValues: taskLists.map { ($0.id, $0) })
+
+        // Reorder based on saved order, keeping any new lists at the end
+        var orderedLists: [GoogleTaskList] = []
+        for listId in savedOrder {
+            if let taskList = taskListDict[listId] {
+                orderedLists.append(taskList)
+            }
+        }
+
+        // Add any new task lists that weren't in the saved order
+        for taskList in taskLists {
+            if !orderedLists.contains(where: { $0.id == taskList.id }) {
+                orderedLists.append(taskList)
+            }
+        }
+
+        print("Applied saved order for \(kind): \(orderedLists.map { $0.title })")
+        return orderedLists
     }
     
     func moveTaskList(_ listId: String, toAccount targetAccount: GoogleAuthManager.AccountKind) async {
@@ -642,13 +692,70 @@ class TasksViewModel: ObservableObject {
                 let taskList = personalTaskLists.remove(at: listIndex)
                 professionalTaskLists.append(taskList)
                 print("Moved task list \(taskList.title) to professional account")
+
+                // Update orders for both accounts
+                saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
+                saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
             } else if let listIndex = professionalTaskLists.firstIndex(where: { $0.id == listId }) {
                 let taskList = professionalTaskLists.remove(at: listIndex)
                 personalTaskLists.append(taskList)
                 print("Moved task list \(taskList.title) to personal account")
+
+                // Update orders for both accounts
+                saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
+                saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
             }
         }
         // Here you would typically update the backend to reflect the account change
+    }
+
+    func deleteTaskList(listId: String, for kind: GoogleAuthManager.AccountKind) async {
+        do {
+            guard let accessToken = try await getAccessTokenThrows(for: kind) else {
+                throw TasksError.notAuthenticated
+            }
+
+            let url = URL(string: "https://tasks.googleapis.com/tasks/v1/users/@me/lists/\(listId)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw TasksError.invalidResponse
+            }
+
+            if httpResponse.statusCode != 204 {
+                throw TasksError.apiError(httpResponse.statusCode)
+            }
+
+            // Update local state
+            await MainActor.run {
+                switch kind {
+                case .personal:
+                    self.personalTaskLists.removeAll { $0.id == listId }
+                    self.personalTasks.removeValue(forKey: listId)
+                    // Save updated order
+                    saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
+                case .professional:
+                    self.professionalTaskLists.removeAll { $0.id == listId }
+                    self.professionalTasks.removeValue(forKey: listId)
+                    // Save updated order
+                    saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Failed to delete task list: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func clearTaskListOrder(for kind: GoogleAuthManager.AccountKind) {
+        let key = "taskListOrder_\(kind.rawValue)"
+        UserDefaults.standard.removeObject(forKey: key)
+        print("Cleared saved task list order for \(kind)")
     }
 }
 
@@ -755,6 +862,11 @@ struct TasksView: View {
                                 Task {
                                     await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                                 }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                                }
                             }
                         )
                         .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
@@ -786,6 +898,11 @@ struct TasksView: View {
                             onListRename: { listId, newName in
                                 Task {
                                     await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await viewModel.updateTaskListOrder(newOrder, for: .professional)
                                 }
                             }
                         )

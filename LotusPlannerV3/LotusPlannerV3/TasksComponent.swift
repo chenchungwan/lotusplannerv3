@@ -8,12 +8,13 @@ struct TasksComponent: View {
     let onTaskToggle: (GoogleTask, String) -> Void
     let onTaskDetails: (GoogleTask, String) -> Void
     let onListRename: ((String, String) -> Void)? // listId, newName
+    let onOrderChanged: (([GoogleTaskList]) -> Void)? // callback to update parent state
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @State private var localTaskLists: [GoogleTaskList] = []
     @State private var dragOver = false
     
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -21,6 +22,7 @@ struct TasksComponent: View {
         self.onTaskToggle = onTaskToggle
         self.onTaskDetails = onTaskDetails
         self.onListRename = onListRename
+        self.onOrderChanged = onOrderChanged
         self._localTaskLists = State(initialValue: taskLists)
     }
     
@@ -42,6 +44,16 @@ struct TasksComponent: View {
                     .fontWeight(.bold)
                     .foregroundColor(accentColor)
                 Spacer()
+                // Debug indicator
+                if dragOver {
+                    Text("DROP HERE")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(4)
+                }
             }
             .padding(.horizontal, 4)
             
@@ -69,10 +81,20 @@ struct TasksComponent: View {
                                     NSItemProvider(object: taskList.id as NSString)
                                 }
                                 .onDrop(of: ["public.text"], isTargeted: $dragOver) { providers in
-                                    guard let provider = providers.first else { return false }
+                                    print("onDrop triggered for taskList: \(taskList.title)")
+                                    guard let provider = providers.first else { print("No provider found"); return false }
                                     provider.loadItem(forTypeIdentifier: "public.text", options: nil) { (item, error) in
+                                        if let error = error {
+                                            print("Error loading item: \(error)")
+                                            return
+                                        }
                                         if let data = item as? Data, let id = String(data: data, encoding: .utf8) {
-                                            handleDrop(from: id, to: taskList.id)
+                                            print("Loaded item ID: \(id)")
+                                            DispatchQueue.main.async {
+                                                handleDrop(from: id, to: taskList.id)
+                                            }
+                                        } else {
+                                            print("Failed to load item as string")
                                         }
                                     }
                                     return true
@@ -101,15 +123,29 @@ struct TasksComponent: View {
     }
     
     private func handleDrop(from sourceId: String, to destinationId: String) {
+        print("handleDrop function triggered")
+        print("Handling drop from \(sourceId) to \(destinationId)")
         guard let sourceIndex = localTaskLists.firstIndex(where: { $0.id == sourceId }),
-              let destinationIndex = localTaskLists.firstIndex(where: { $0.id == destinationId }) else { return }
+              let destinationIndex = localTaskLists.firstIndex(where: { $0.id == destinationId }) else {
+            print("Invalid indices for source or destination")
+            return
+        }
         
+        print("Source index: \(sourceIndex), Destination index: \(destinationIndex)")
         let movedTaskList = localTaskLists.remove(at: sourceIndex)
         localTaskLists.insert(movedTaskList, at: destinationIndex)
-        
+
+        print("Updated localTaskLists order: \(localTaskLists.map { $0.title })")
+        // Force UI update
+        dragOver = false
+
+        // Notify parent of order change
+        onOrderChanged?(localTaskLists)
+
         // Update the order in the view model
         Task {
             await tasksViewModel.updateTaskListOrder(localTaskLists, for: accountType)
+            print("Called updateTaskListOrder in viewModel with order: \(localTaskLists.map { $0.title })")
         }
         print("Moved task list from \(sourceId) to \(destinationId)")
     }
@@ -132,7 +168,6 @@ private struct TaskComponentListCard: View {
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
-    @State private var dragOver = false
     
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -207,22 +242,12 @@ private struct TaskComponentListCard: View {
         .background(Color(.systemBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(dragOver ? Color.blue : Color(.systemGray4), lineWidth: 1)
+                .stroke(Color(.systemGray4), lineWidth: 1)
         )
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         .onDrag {
             NSItemProvider(object: taskList.id as NSString)
-        }
-        .onDrop(of: ["public.text"], isTargeted: $dragOver) { providers in
-            guard let provider = providers.first else { return false }
-            provider.loadItem(forTypeIdentifier: "public.text", options: nil) { (item, error) in
-                if let data = item as? Data, let id = String(data: data, encoding: .utf8) {
-                    // Handle drop logic here
-                    print("Dropped item with id: \(id)")
-                }
-            }
-            return true
         }
     }
     
@@ -288,7 +313,8 @@ struct TasksComponent_Previews: PreviewProvider {
             accountType: .personal,
             onTaskToggle: { _, _ in },
             onTaskDetails: { _, _ in },
-            onListRename: { _, _ in }
+            onListRename: { _, _ in },
+            onOrderChanged: { _ in }
         )
         .previewLayout(.sizeThatFits)
     }

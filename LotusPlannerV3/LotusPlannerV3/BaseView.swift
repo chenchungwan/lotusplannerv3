@@ -571,6 +571,11 @@ extension BaseView {
                         Task {
                             await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                         }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                        }
                     }
                 )
             } else {
@@ -610,6 +615,11 @@ extension BaseView {
                     onListRename: { listId, newName in
                         Task {
                             await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                         }
                     }
                 )

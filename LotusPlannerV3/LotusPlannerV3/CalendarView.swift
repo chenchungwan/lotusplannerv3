@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import PencilKit
 import PhotosUI
 import Foundation
@@ -942,6 +941,11 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                     }
+                },
+                onOrderChanged: { newOrder in
+                    Task {
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                    }
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -970,6 +974,11 @@ struct CalendarView: View {
                 onListRename: { listId, newName in
                     Task {
                         await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                    }
+                },
+                onOrderChanged: { newOrder in
+                    Task {
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
                 }
             )
@@ -1031,6 +1040,11 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                     }
+                },
+                onOrderChanged: { newOrder in
+                    Task {
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                    }
                 }
             )
             .frame(width: weekTasksPersonalWidth, alignment: .topLeading)
@@ -1061,6 +1075,11 @@ struct CalendarView: View {
                 onListRename: { listId, newName in
                     Task {
                         await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                    }
+                },
+                onOrderChanged: { newOrder in
+                    Task {
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
                 }
             )
@@ -2705,6 +2724,11 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
                     }
+                },
+                onOrderChanged: { newOrder in
+                    Task {
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                    }
                 }
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -2732,6 +2756,11 @@ struct CalendarView: View {
                 onListRename: { listId, newName in
                     Task {
                         await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                    }
+                },
+                onOrderChanged: { newOrder in
+                    Task {
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
                 }
             )
@@ -2855,6 +2884,11 @@ struct CalendarView: View {
             onListRename: { listId, newName in
                 Task {
                     await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                }
+            },
+            onOrderChanged: { newOrder in
+                Task {
+                    await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                 }
             }
         )
