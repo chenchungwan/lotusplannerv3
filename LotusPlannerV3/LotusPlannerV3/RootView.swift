@@ -75,6 +75,10 @@ struct RootView: View {
         // Remove the cover after the slide-out animation finishes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isCoverOpened = true
+            // Set default view to Tasks with day filter for current date
+            let navigationManager = NavigationManager.shared
+            navigationManager.switchToTasks()
+            navigationManager.updateInterval(.day, date: Date())
         }
     }
     

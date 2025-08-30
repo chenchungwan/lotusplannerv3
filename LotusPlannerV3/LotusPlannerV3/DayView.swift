@@ -149,6 +149,11 @@ struct DayView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .personal
                                 showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                }
                             }
                         )
                     }
@@ -170,6 +175,11 @@ struct DayView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .professional
                                 showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
                             }
                         )
                     }
@@ -219,6 +229,11 @@ struct DayView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .personal
                                 showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                }
                             }
                         )
                     }
@@ -240,6 +255,11 @@ struct DayView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .professional
                                 showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
                             }
                         )
                     }

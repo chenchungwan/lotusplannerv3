@@ -937,6 +937,11 @@ struct CalendarView: View {
                     DispatchQueue.main.async {
                         showingTaskDetails = true
                     }
+                },
+                onListRename: { listId, newName in
+                    Task {
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                    }
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -960,6 +965,11 @@ struct CalendarView: View {
                     selectedAccountKind = .professional
                     DispatchQueue.main.async {
                         showingTaskDetails = true
+                    }
+                },
+                onListRename: { listId, newName in
+                    Task {
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
                     }
                 }
             )
@@ -1016,6 +1026,11 @@ struct CalendarView: View {
                     DispatchQueue.main.async {
                         showingTaskDetails = true
                     }
+                },
+                onListRename: { listId, newName in
+                    Task {
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                    }
                 }
             )
             .frame(width: weekTasksPersonalWidth, alignment: .topLeading)
@@ -1041,6 +1056,11 @@ struct CalendarView: View {
                     selectedAccountKind = .professional
                     DispatchQueue.main.async {
                         showingTaskDetails = true
+                    }
+                },
+                onListRename: { listId, newName in
+                    Task {
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
                     }
                 }
             )
@@ -2680,6 +2700,11 @@ struct CalendarView: View {
                     DispatchQueue.main.async {
                         showingTaskDetails = true
                     }
+                },
+                onListRename: { listId, newName in
+                    Task {
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                    }
                 }
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -2702,6 +2727,11 @@ struct CalendarView: View {
                     selectedAccountKind = .professional
                     DispatchQueue.main.async {
                         showingTaskDetails = true
+                    }
+                },
+                onListRename: { listId, newName in
+                    Task {
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
                     }
                 }
             )
@@ -2820,6 +2850,11 @@ struct CalendarView: View {
                 selectedAccountKind = .professional
                 DispatchQueue.main.async {
                     showingTaskDetails = true
+                }
+            },
+            onListRename: { listId, newName in
+                Task {
+                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
                 }
             }
         )

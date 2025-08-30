@@ -566,6 +566,11 @@ extension BaseView {
                         selectedTaskListId = listId
                         selectedAccountKind = .personal
                         showingTaskDetails = true
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        }
                     }
                 )
             } else {
@@ -601,6 +606,11 @@ extension BaseView {
                         selectedTaskListId = listId
                         selectedAccountKind = .professional
                         showingTaskDetails = true
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        }
                     }
                 )
             } else {

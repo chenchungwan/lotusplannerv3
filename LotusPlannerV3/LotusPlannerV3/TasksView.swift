@@ -544,6 +544,53 @@ class TasksViewModel: ObservableObject {
         }
     }
     
+    func renameTaskList(listId: String, newTitle: String, for kind: GoogleAuthManager.AccountKind) async {
+        do {
+            guard let accessToken = try await getAccessTokenThrows(for: kind) else {
+                throw TasksError.notAuthenticated
+            }
+            
+            let url = URL(string: "https://tasks.googleapis.com/tasks/v1/users/@me/lists/\(listId)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let requestBody: [String: Any] = ["title": newTitle]
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw TasksError.invalidResponse
+            }
+            
+            if httpResponse.statusCode != 200 {
+                throw TasksError.apiError(httpResponse.statusCode)
+            }
+            
+            // Update local state
+            await MainActor.run {
+                switch kind {
+                case .personal:
+                    if let index = self.personalTaskLists.firstIndex(where: { $0.id == listId }) {
+                        let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.personalTaskLists[index].updated)
+                        self.personalTaskLists[index] = updatedList
+                    }
+                case .professional:
+                    if let index = self.professionalTaskLists.firstIndex(where: { $0.id == listId }) {
+                        let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.professionalTaskLists[index].updated)
+                        self.professionalTaskLists[index] = updatedList
+                    }
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Failed to rename task list: \(error.localizedDescription)"
+            }
+        }
+    }
+    
     func createTask(title: String, notes: String?, dueDate: Date?, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
         let dueDateString: String?
         if let dueDate = dueDate {
@@ -574,6 +621,34 @@ class TasksViewModel: ObservableObject {
                 self.errorMessage = "Failed to create task: \(error.localizedDescription)"
             }
         }
+    }
+    
+    func updateTaskListOrder(_ newOrder: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) async {
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                self.personalTaskLists = newOrder
+            case .professional:
+                self.professionalTaskLists = newOrder
+            }
+        }
+        // Here you would typically update the backend with the new order
+        print("Updated task list order for \(kind): \(newOrder.map { $0.title })")
+    }
+    
+    func moveTaskList(_ listId: String, toAccount targetAccount: GoogleAuthManager.AccountKind) async {
+        await MainActor.run {
+            if let listIndex = personalTaskLists.firstIndex(where: { $0.id == listId }) {
+                let taskList = personalTaskLists.remove(at: listIndex)
+                professionalTaskLists.append(taskList)
+                print("Moved task list \(taskList.title) to professional account")
+            } else if let listIndex = professionalTaskLists.firstIndex(where: { $0.id == listId }) {
+                let taskList = professionalTaskLists.remove(at: listIndex)
+                personalTaskLists.append(taskList)
+                print("Moved task list \(taskList.title) to personal account")
+            }
+        }
+        // Here you would typically update the backend to reflect the account change
     }
 }
 
@@ -675,6 +750,11 @@ struct TasksView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .personal
                                 showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                }
                             }
                         )
                         .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
@@ -702,6 +782,11 @@ struct TasksView: View {
                                 selectedTaskListId = listId
                                 selectedAccountKind = .professional
                                 showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
                             }
                         )
                         .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
