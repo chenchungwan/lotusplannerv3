@@ -15,6 +15,8 @@ struct BaseView: View {
     @State private var viewMode: ViewMode = .week
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var showingEventDetails = false
+    @State private var showingAddEvent = false
+    @State private var showingNewTask = false
     // Task-related state removed since this view only shows calendar events
     
     // Section width management removed since we only show calendar events now
@@ -42,6 +44,45 @@ struct BaseView: View {
             CalendarEventDetailsView(event: event) {
                 // Handle event deletion if needed
             }
+        }
+        .sheet(isPresented: $showingAddEvent) {
+            AddItemView(
+                currentDate: selectedDate,
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs
+            )
+        }
+        .sheet(isPresented: $showingNewTask) {
+            // Create-task UI matching TasksView create flow
+            let personalLinked = authManager.isLinked(kind: .personal)
+            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
+            let defaultLists = defaultAccount == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let defaultListId = defaultLists.first?.id ?? ""
+            let newTask = GoogleTask(
+                id: UUID().uuidString,
+                title: "",
+                notes: nil,
+                status: "needsAction",
+                due: nil,
+                completed: nil,
+                updated: nil
+            )
+            TaskDetailsView(
+                task: newTask,
+                taskListId: defaultListId,
+                accountKind: defaultAccount,
+                accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { _ in },
+                onDelete: {},
+                onMove: { _, _ in },
+                onCrossAccountMove: { _, _, _ in },
+                isNew: true
+            )
         }
         // Task details sheet removed since this view only shows calendar events
         .task {
@@ -145,11 +186,10 @@ struct BaseView: View {
             // Add menu (Event or Task)
             Menu {
                 Button("Event") { 
-                    // Show event creation within BaseView context
-                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAddEvent"), object: nil)
+                    showingAddEvent = true
                 }
                 Button("Task") {
-                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAddTask"), object: nil)
+                    showingNewTask = true
                 }
             } label: {
                 Image(systemName: "plus.circle")

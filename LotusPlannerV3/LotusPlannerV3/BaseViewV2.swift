@@ -19,6 +19,8 @@ struct BaseViewV2: View {
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails = false
+    @State private var showingAddEvent = false
+    @State private var showingNewTask = false
     
     // No section width management needed since we removed the events section
     
@@ -45,6 +47,14 @@ struct BaseViewV2: View {
             CalendarEventDetailsView(event: event) {
                 // Handle event deletion if needed
             }
+        }
+        .sheet(isPresented: $showingAddEvent) {
+            AddItemView(
+                currentDate: selectedDate,
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs
+            )
         }
         .sheet(isPresented: $showingTaskDetails) {
             if let task = selectedTask,
@@ -85,6 +95,38 @@ struct BaseViewV2: View {
                     }
                 )
             }
+        }
+        .sheet(isPresented: $showingNewTask) {
+            // Create-task UI matching TasksView create flow
+            let personalLinked = authManager.isLinked(kind: .personal)
+            let professionalLinked = authManager.isLinked(kind: .professional)
+            let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (personalLinked ? .personal : .professional)
+            let defaultLists = defaultAccount == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let defaultListId = defaultLists.first?.id ?? ""
+            let newTask = GoogleTask(
+                id: UUID().uuidString,
+                title: "",
+                notes: nil,
+                status: "needsAction",
+                due: nil,
+                completed: nil,
+                updated: nil
+            )
+            TaskDetailsView(
+                task: newTask,
+                taskListId: defaultListId,
+                accountKind: defaultAccount,
+                accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { _ in },
+                onDelete: {},
+                onMove: { _, _ in },
+                onCrossAccountMove: { _, _, _ in },
+                isNew: true
+            )
         }
         .task {
             // Initialize selectedDate from navigation manager if available
@@ -182,10 +224,10 @@ struct BaseViewV2: View {
             // Add menu (Event or Task)
             Menu {
                 Button("Event") { 
-                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAddEvent"), object: nil)
+                    showingAddEvent = true
                 }
                 Button("Task") {
-                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAddTask"), object: nil)
+                    showingNewTask = true
                 }
             } label: {
                 Image(systemName: "plus.circle")

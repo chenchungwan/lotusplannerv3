@@ -334,6 +334,9 @@ class TasksViewModel: ObservableObject {
                 } else {
                     requestBody["due"] = due
                 }
+            } else {
+                // Explicitly clear due date on the server
+                requestBody["due"] = NSNull()
             }
             
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
