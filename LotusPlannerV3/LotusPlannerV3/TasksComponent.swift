@@ -12,7 +12,6 @@ struct TasksComponent: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @State private var localTaskLists: [GoogleTaskList] = []
-    @State private var dragOver = false
     
     init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil) {
         self.taskLists = taskLists
@@ -30,22 +29,6 @@ struct TasksComponent: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            // Debug indicator (only show when dragging)
-            if dragOver {
-                HStack {
-                    Spacer()
-                    Text("DROP HERE")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(4)
-                    Spacer()
-                }
-                .padding(.horizontal, 4)
-            }
-            
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(localTaskLists, id: \.id) { taskList in
@@ -66,28 +49,6 @@ struct TasksComponent: View {
                                         onListRename?(taskList.id, newName)
                                     }
                                 )
-                                .onDrag {
-                                    NSItemProvider(object: taskList.id as NSString)
-                                }
-                                .onDrop(of: ["public.text"], isTargeted: $dragOver) { providers in
-                                    print("onDrop triggered for taskList: \(taskList.title)")
-                                    guard let provider = providers.first else { print("No provider found"); return false }
-                                    provider.loadItem(forTypeIdentifier: "public.text", options: nil) { (item, error) in
-                                        if let error = error {
-                                            print("Error loading item: \(error)")
-                                            return
-                                        }
-                                        if let data = item as? Data, let id = String(data: data, encoding: .utf8) {
-                                            print("Loaded item ID: \(id)")
-                                            DispatchQueue.main.async {
-                                                handleDrop(from: id, to: taskList.id)
-                                            }
-                                        } else {
-                                            print("Failed to load item as string")
-                                        }
-                                    }
-                                    return true
-                                }
                             }
                         }
                     }
@@ -119,40 +80,7 @@ struct TasksComponent: View {
         }
     }
     
-    private func handleDrop(from sourceId: String, to destinationId: String) {
-        print("handleDrop function triggered")
-        print("Handling drop from \(sourceId) to \(destinationId)")
-        guard let sourceIndex = localTaskLists.firstIndex(where: { $0.id == sourceId }),
-              let destinationIndex = localTaskLists.firstIndex(where: { $0.id == destinationId }) else {
-            print("Invalid indices for source or destination")
-            return
-        }
-        
-        print("Source index: \(sourceIndex), Destination index: \(destinationIndex)")
-        let movedTaskList = localTaskLists.remove(at: sourceIndex)
-        localTaskLists.insert(movedTaskList, at: destinationIndex)
-
-        print("Updated localTaskLists order: \(localTaskLists.map { $0.title })")
-        // Force UI update
-        dragOver = false
-
-        // Notify parent of order change
-        onOrderChanged?(localTaskLists)
-
-        // Update the order in the view model
-        Task {
-            await tasksViewModel.updateTaskListOrder(localTaskLists, for: accountType)
-            print("Called updateTaskListOrder in viewModel with order: \(localTaskLists.map { $0.title })")
-        }
-        print("Moved task list from \(sourceId) to \(destinationId)")
-    }
-    
-    private func handleCrossAccountDrop(from sourceId: String, toAccount targetAccount: GoogleAuthManager.AccountKind) {
-        Task {
-            await tasksViewModel.moveTaskList(sourceId, toAccount: targetAccount)
-        }
-        print("Moved task list \(sourceId) to \(targetAccount)")
-    }
+    // Drag-and-drop removed per request
 }
 
 private struct TaskComponentListCard: View {
