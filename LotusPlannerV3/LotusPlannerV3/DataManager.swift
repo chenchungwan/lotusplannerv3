@@ -32,11 +32,18 @@ class DataManager: ObservableObject {
     }
     
     private func initializeData() async {
-        // Load initial calendar data for current month
-        await calendarViewModel.loadCalendarDataForMonth(containing: Date())
+        // Only load data if accounts are linked to avoid unnecessary error alerts
+        let authManager = GoogleAuthManager.shared
         
-        // Load tasks data
-        await tasksViewModel.loadTasks()
+        // Load initial calendar data for current month only if accounts are linked
+        if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+            await calendarViewModel.loadCalendarDataForMonth(containing: Date())
+        }
+        
+        // Load tasks data only if accounts are linked
+        if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+            await tasksViewModel.loadTasks()
+        }
         
         isInitializing = false
     }

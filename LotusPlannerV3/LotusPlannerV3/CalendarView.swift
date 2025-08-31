@@ -317,6 +317,9 @@ class CalendarViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
+        var personalError: Error?
+        var professionalError: Error?
+        
         await withTaskGroup(of: Void.self) { group in
             if needsPersonalRefresh {
                 group.addTask {
@@ -328,7 +331,10 @@ class CalendarViewModel: ObservableObject {
                             self.personalCalendars = calendars
                         }
                     } catch {
-                        await MainActor.run { self.errorMessage = error.localizedDescription }
+                        print("❌ Calendar loading error for personal account: \(error)")
+                        print("   Error type: \(type(of: error))")
+                        print("   Localized description: \(error.localizedDescription)")
+                        personalError = error
                     }
                 }
             }
@@ -342,9 +348,31 @@ class CalendarViewModel: ObservableObject {
                             self.professionalCalendars = calendars
                         }
                     } catch {
-                        await MainActor.run { self.errorMessage = error.localizedDescription }
+                        print("❌ Calendar loading error for professional account: \(error)")
+                        print("   Error type: \(type(of: error))")
+                        print("   Localized description: \(error.localizedDescription)")
+                        professionalError = error
                     }
                 }
+            }
+        }
+        
+        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
+        await MainActor.run {
+            let personalLinked = authManager.isLinked(kind: .personal)
+            let professionalLinked = authManager.isLinked(kind: .professional)
+            
+            if personalLinked && professionalLinked {
+                // Both accounts linked - only show error if both failed
+                if personalError != nil && professionalError != nil {
+                    self.errorMessage = "Failed to load calendar data for both accounts"
+                }
+            } else if personalLinked && personalError != nil {
+                // Only personal linked and it failed
+                self.errorMessage = personalError!.localizedDescription
+            } else if professionalLinked && professionalError != nil {
+                // Only professional linked and it failed
+                self.errorMessage = professionalError!.localizedDescription
             }
         }
         
@@ -371,6 +399,8 @@ class CalendarViewModel: ObservableObject {
                 }
             }
         } catch {
+            print("❌ Failed to load \(kind.rawValue) calendar data: \(error)")
+            print("   Error type: \(type(of: error))")
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) calendar data: \(error.localizedDescription)"
             }
@@ -3083,11 +3113,11 @@ struct CalendarView: View {
                     
                     return isOnSameDay ? task : nil
                 } else {
-                    // For incomplete tasks, only show them on their exact due date
+                    // For incomplete tasks, show them on due date OR if overdue
                     guard let dueDate = task.dueDate else { return nil }
                     
-                    // Only show tasks on their exact due date (not on future dates)
-                    return calendar.isDate(dueDate, inSameDayAs: date) ? task : nil
+                    // Show tasks on their due date OR if they're overdue (due date <= current date)
+                    return (calendar.isDate(dueDate, inSameDayAs: date) || dueDate <= date) ? task : nil
                 }
             }
             
@@ -3849,10 +3879,15 @@ struct AddItemView: View {
                     dismiss()
                 }
             } catch {
+                print("❌ Failed to create task: \(error)")
+                print("   Error type: \(type(of: error))")
+                print("   Account: \(accountKind)")
+                print("   Title: '\(itemTitle)'")
+                print("   List ID: '\(selectedTaskListId)'")
+                print("   Creating new list: \(isCreatingNewList)")
                 await MainActor.run {
                     isCreating = false
                     // Handle error (could show alert)
-                    print("Failed to create task: \(error)")
                 }
             }
         }
@@ -3860,11 +3895,14 @@ struct AddItemView: View {
     
     private func createEvent() {
         guard let accountKind = selectedAccountKind else { return }
+        print("🔄 Creating calendar event: '\(itemTitle)' for \(accountKind)")
         isCreating = true
 
         Task {
             do {
                 let accessToken = try await authManager.getAccessToken(for: accountKind)
+                print("🔑 Got access token for \(accountKind)")
+                
                 let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
@@ -3895,19 +3933,39 @@ struct AddItemView: View {
                 ]
                 if !itemNotes.isEmpty { body["description"] = itemNotes }
 
+                print("📤 Event request body: \(body)")
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-                let (_, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-                    throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("❌ Invalid response type")
+                    throw PlannerCalendarError.invalidResponse
+                }
+                
+                print("📥 Event response status: \(httpResponse.statusCode)")
+                
+                guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+                    print("❌ Event API error - Status: \(httpResponse.statusCode)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("   Response body: \(responseString)")
+                    }
+                    throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
                 }
 
+                print("✅ Event created successfully, refreshing calendar data...")
                 // Refresh events
                 await calendarViewModel.loadCalendarData(for: eventStart)
 
                 await MainActor.run { dismiss() }
             } catch {
-                print("Failed to create calendar event: \(error)")
+                print("❌ Failed to create calendar event: \(error)")
+                print("   Error type: \(type(of: error))")
+                print("   Account: \(accountKind)")
+                print("   Title: '\(itemTitle)'")
+                print("   Start: \(eventStart)")
+                print("   End: \(eventEnd)")
+                print("   All day: \(isAllDay)")
                 await MainActor.run { isCreating = false }
             }
         }
@@ -3915,58 +3973,185 @@ struct AddItemView: View {
     
     // MARK: - Update existing event
     private func updateEvent() {
-        guard let ev = existingEvent, let accountKind = existingEventAccountKind ?? selectedAccountKind else { return }
+        guard let ev = existingEvent else { return }
+        guard let originalAccountKind = existingEventAccountKind,
+              let targetAccountKind = selectedAccountKind else { return }
+        
+        print("🔄 Updating event: '\(itemTitle)'")
+        print("   Original account: \(originalAccountKind)")
+        print("   Target account: \(targetAccountKind)")
+        
         isCreating = true
 
         Task {
             do {
-                let accessToken = try await authManager.getAccessToken(for: accountKind)
-                let calId = ev.calendarId ?? "primary"
-                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(ev.id)")!
-                var request = URLRequest(url: url)
-                request.httpMethod = "PATCH"
-                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.timeZone = TimeZone.current
-
-                var startDict: [String: String] = [:]
-                var endDict: [String: String] = [:]
-                if isAllDay {
-                    let startDate = Calendar.current.startOfDay(for: eventStart)
-                    let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "yyyy-MM-dd"
-                    startDict["date"] = dateFormatter.string(from: startDate)
-                    endDict["date"] = dateFormatter.string(from: endDate)
+                // Check if we're moving between accounts
+                if originalAccountKind != targetAccountKind {
+                    print("🔄 Cross-account move detected, creating new event and deleting old one")
+                    
+                    // First create the event in the new account
+                    try await createEventInAccount(targetAccountKind)
+                    
+                    // Then delete the event from the original account
+                    try await deleteEventFromAccount(ev, from: originalAccountKind)
+                    
+                    print("✅ Cross-account event move completed")
                 } else {
-                    startDict["dateTime"] = isoFormatter.string(from: eventStart)
-                    endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+                    print("🔄 Same account update")
+                    // Same account - just update the existing event
+                    try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
 
-                var body: [String: Any] = [
-                    "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-                    "start": startDict,
-                    "end": endDict
-                ]
-                if !itemNotes.isEmpty { body["description"] = itemNotes }
-
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-                let (_, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                    throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                // Refresh events for both accounts if cross-account move
+                if originalAccountKind != targetAccountKind {
+                    await calendarViewModel.loadCalendarData(for: eventStart)
+                } else {
+                    await calendarViewModel.loadCalendarData(for: eventStart)
                 }
-
-                // Refresh events
-                await calendarViewModel.loadCalendarData(for: eventStart)
+                
                 await MainActor.run { dismiss() }
             } catch {
-                print("Failed to update event: \(error)")
+                print("❌ Failed to update event: \(error)")
+                print("   Error type: \(type(of: error))")
                 await MainActor.run { isCreating = false }
             }
         }
+    }
+    
+    private func createEventInAccount(_ accountKind: GoogleAuthManager.AccountKind) async throws {
+        print("🌐 Creating event in \(accountKind) account")
+        
+        let accessToken = try await authManager.getAccessToken(for: accountKind)
+        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.timeZone = TimeZone.current
+
+        var startDict: [String: String] = [:]
+        var endDict: [String: String] = [:]
+        if isAllDay {
+            let startDate = Calendar.current.startOfDay(for: eventStart)
+            let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            startDict["date"] = dateFormatter.string(from: startDate)
+            endDict["date"] = dateFormatter.string(from: endDate)
+        } else {
+            startDict["dateTime"] = isoFormatter.string(from: eventStart)
+            endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+        }
+
+        var body: [String: Any] = [
+            "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            "start": startDict,
+            "end": endDict
+        ]
+        if !itemNotes.isEmpty { body["description"] = itemNotes }
+
+        print("📤 Create event request body: \(body)")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PlannerCalendarError.invalidResponse
+        }
+        
+        print("📥 Create event response status: \(httpResponse.statusCode)")
+        
+        guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Response body: \(responseString)")
+            }
+            throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
+        }
+        
+        print("✅ Event created successfully in \(accountKind) account")
+    }
+    
+    private func deleteEventFromAccount(_ event: GoogleCalendarEvent, from accountKind: GoogleAuthManager.AccountKind) async throws {
+        print("🗑️ Deleting event from \(accountKind) account")
+        
+        let accessToken = try await authManager.getAccessToken(for: accountKind)
+        let calId = event.calendarId ?? "primary"
+        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(event.id)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PlannerCalendarError.invalidResponse
+        }
+        
+        print("📥 Delete event response status: \(httpResponse.statusCode)")
+        
+        guard httpResponse.statusCode == 204 || httpResponse.statusCode == 200 else {
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Response body: \(responseString)")
+            }
+            throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
+        }
+        
+        print("✅ Event deleted successfully from \(accountKind) account")
+    }
+    
+    private func updateEventInSameAccount(_ event: GoogleCalendarEvent, accountKind: GoogleAuthManager.AccountKind) async throws {
+        print("🔄 Updating event in same account: \(accountKind)")
+        
+        let accessToken = try await authManager.getAccessToken(for: accountKind)
+        let calId = event.calendarId ?? "primary"
+        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(event.id)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.timeZone = TimeZone.current
+
+        var startDict: [String: String] = [:]
+        var endDict: [String: String] = [:]
+        if isAllDay {
+            let startDate = Calendar.current.startOfDay(for: eventStart)
+            let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            startDict["date"] = dateFormatter.string(from: startDate)
+            endDict["date"] = dateFormatter.string(from: endDate)
+        } else {
+            startDict["dateTime"] = isoFormatter.string(from: eventStart)
+            endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+        }
+
+        var body: [String: Any] = [
+            "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            "start": startDict,
+            "end": endDict
+        ]
+        if !itemNotes.isEmpty { body["description"] = itemNotes }
+
+        print("📤 Update event request body: \(body)")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PlannerCalendarError.invalidResponse
+        }
+        
+        print("📥 Update event response status: \(httpResponse.statusCode)")
+        
+        guard httpResponse.statusCode == 200 else {
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Response body: \(responseString)")
+            }
+            throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
+        }
+        
+        print("✅ Event updated successfully in \(accountKind) account")
     }
     
     // MARK: - Delete Event

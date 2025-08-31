@@ -884,11 +884,11 @@ struct WeekTimelineComponent: View {
                 guard let completionDate = task.completionDate else { return nil }
                 return calendar.isDate(completionDate, inSameDayAs: date) ? task : nil
             } else {
-                // For incomplete tasks, only show them on their exact due date
+                // For incomplete tasks, show them on due date OR if overdue
                 guard let dueDate = task.dueDate else { return nil }
                 
-                // Only show tasks on their exact due date (not on future dates)
-                return calendar.isDate(dueDate, inSameDayAs: date) ? task : nil
+                // Show tasks on their due date OR if they're overdue (due date <= current date)
+                return (calendar.isDate(dueDate, inSameDayAs: date) || dueDate <= date) ? task : nil
             }
         }
         

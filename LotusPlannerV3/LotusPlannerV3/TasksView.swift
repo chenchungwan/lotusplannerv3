@@ -147,8 +147,6 @@ class TasksViewModel: ObservableObject {
     
     private func loadTasksForAccount(_ kind: GoogleAuthManager.AccountKind) async {
         print("🔄 Loading tasks for \(kind) account...")
-        print("  Account linked status: \(authManager.isLinked(kind: kind))")
-        print("  Account email: \(authManager.getEmail(for: kind))")
         
         do {
             print("🔄 Fetching task lists for \(kind)...")
@@ -188,8 +186,6 @@ class TasksViewModel: ObservableObject {
             }
         } catch {
             print("❌ Failed to load \(kind) tasks: \(error)")
-            print("  Error type: \(type(of: error))")
-            print("  Error description: \(error.localizedDescription)")
             
             if let tasksError = error as? TasksError {
                 print("  TasksError details: \(tasksError)")
@@ -283,8 +279,6 @@ class TasksViewModel: ObservableObject {
             let now = Date()
             completedTimestamp = formatter.string(from: now)
             print("🔄 Task '\(task.title)' marked completed at: \(completedTimestamp ?? "nil")")
-            print("🕐 Local time: \(now)")
-            print("🌍 User timezone: \(TimeZone.current.identifier)")
             
             // Debug: Show what day this will appear on
             let calendar = Calendar.current
@@ -504,7 +498,10 @@ class TasksViewModel: ObservableObject {
     }
     
     func createTaskOnServer(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async throws {
+        print("🌐 Creating task on server: '\(task.title)' in list '\(listId)'")
+        
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
+            print("❌ No access token available for \(kind)")
             throw TasksError.notAuthenticated
         }
         
@@ -532,17 +529,27 @@ class TasksViewModel: ObservableObject {
             }
         }
         
+        print("📤 Request body: \(requestBody)")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ Invalid response type")
             throw TasksError.invalidResponse
         }
         
+        print("📥 Response status: \(httpResponse.statusCode)")
+        
         if httpResponse.statusCode != 200 {
+            print("❌ API error - Status: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Response body: \(responseString)")
+            }
             throw TasksError.apiError(httpResponse.statusCode)
         }
+        
+        print("✅ Task created successfully on server")
     }
     
     func createTaskList(title: String, for kind: GoogleAuthManager.AccountKind) async -> String? {
@@ -645,11 +652,14 @@ class TasksViewModel: ObservableObject {
     }
     
     func createTask(title: String, notes: String?, dueDate: Date?, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
+        print("🔄 Creating task: '\(title)' in list '\(listId)' for \(kind)")
+        
         let dueDateString: String?
         if let dueDate = dueDate {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             dueDateString = formatter.string(from: dueDate)
+            print("   Due date: \(dueDateString ?? "nil")")
         } else {
             dueDateString = nil
         }
@@ -666,10 +676,13 @@ class TasksViewModel: ObservableObject {
         
         do {
             try await createTaskOnServer(task, in: listId, for: kind)
+            print("✅ Task created successfully, reloading tasks...")
             
             // Reload tasks to get the actual task from server with correct ID
             await loadTasks()
         } catch {
+            print("❌ Failed to create task: \(error)")
+            print("   Error type: \(type(of: error))")
             await MainActor.run {
                 self.errorMessage = "Failed to create task: \(error.localizedDescription)"
             }
@@ -1207,7 +1220,7 @@ struct TasksView: View {
     
     // MARK: - Helper Methods
     private func filteredTasks(_ tasksDict: [String: [GoogleTask]]) -> [String: [GoogleTask]] {
-        let calendar = Calendar.current // Use current calendar with user's timezone
+        let calendar = Calendar.mondayFirst // Use consistent calendar
         let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
         
@@ -1221,6 +1234,7 @@ struct TasksView: View {
             
             // Then apply time-based filter if not "all"
             if selectedFilter != .all {
+                print("🔍 Filtering tasks for \(selectedFilter.rawValue) view on \(referenceDate)")
                 filteredTasks = filteredTasks.filter { task in
                     // For completed tasks, check completion date
                     if task.isCompleted {
@@ -1249,12 +1263,12 @@ struct TasksView: View {
                             print("🐛 TasksView: Completed task '\(task.title)' completed at \(formatter.string(from: completionDate)) not showing on \(formatter.string(from: referenceDate))")
                             print("   Raw completed string: '\(task.completed ?? "nil")'")
                             print("   Parsed completion date: \(completionDate)")
-                            print("   Reference date: \(referenceDate)")
                         }
                         
                         return isMatch
                     } else {
                         // For incomplete tasks, check due date
+                        print("🔍 Processing incomplete task: '\(task.title)' due: '\(task.due ?? "nil")'")
                         guard let dueDate = task.dueDate else { 
                             print("🐛 Incomplete task '\(task.title)' has no due date")
                             return false 
@@ -1262,7 +1276,10 @@ struct TasksView: View {
                         let isMatch: Bool
                         switch selectedFilter {
                         case .day:
-                            isMatch = calendar.isDate(dueDate, inSameDayAs: referenceDate)
+                            // Show task on due date OR if it's overdue (due date < start of reference date)
+                            let startOfReferenceDate = calendar.startOfDay(for: referenceDate)
+                            let startOfDueDate = calendar.startOfDay(for: dueDate)
+                            isMatch = calendar.isDate(dueDate, inSameDayAs: referenceDate) || startOfDueDate < startOfReferenceDate
                         case .week:
                             isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
                         case .month:
@@ -1277,17 +1294,23 @@ struct TasksView: View {
                             let formatter = DateFormatter()
                             formatter.dateStyle = .full
                             formatter.timeStyle = .none
+                            let debugStartOfReferenceDate = calendar.startOfDay(for: referenceDate)
+                            let debugStartOfDueDate = calendar.startOfDay(for: dueDate)
                             print("🐛 TasksView: Task '\(task.title)' due \(formatter.string(from: dueDate)) not showing on view date \(formatter.string(from: referenceDate))")
                             print("   Raw due string: '\(task.due ?? "nil")'")
                             print("   Parsed due date: \(dueDate)")
-                            print("   Reference date: \(referenceDate)")
                             print("   Calendar comparison result: \(calendar.isDate(dueDate, inSameDayAs: referenceDate))")
+                            print("   Overdue check: \(debugStartOfDueDate) < \(debugStartOfReferenceDate) = \(debugStartOfDueDate < debugStartOfReferenceDate)")
                             
                             // Show day components for debugging
                             let dueComponents = calendar.dateComponents([.year, .month, .day], from: dueDate)
                             let refComponents = calendar.dateComponents([.year, .month, .day], from: referenceDate)
                             print("   Due date components: \(dueComponents)")
                             print("   Reference components: \(refComponents)")
+                        }
+                        
+                        if isMatch {
+                            print("✅ Task '\(task.title)' matches filter criteria")
                         }
                         
                         return isMatch
