@@ -297,7 +297,8 @@ private struct TaskComponentRow: View {
                 Spacer()
             }
         }
-        .onLongPressGesture {
+        .contentShape(Rectangle())
+        .onTapGesture {
             onDetails()
         }
     }
