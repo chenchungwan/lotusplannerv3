@@ -1551,12 +1551,14 @@ struct CalendarView: View {
     @ViewBuilder
     private var eventDetailsSheet: some View {
         if let ev = selectedCalendarEvent {
-            CalendarEventDetailsView(
-                event: ev,
-                onDelete: {
-                    // Close the sheet; deletion handling can be expanded if needed
-                    showingEventDetails = false
-                }
+            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind
             )
         }
     }
@@ -3790,7 +3792,7 @@ struct AddItemView: View {
                 }
                 .pickerStyle(SegmentedPickerStyle())
                 .padding()
-                
+
                 Form {
                     Section("Basic Information") {
                         HStack {
@@ -3798,14 +3800,14 @@ struct AddItemView: View {
                             TextField("Enter title", text: $itemTitle)
                                 .multilineTextAlignment(.trailing)
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 8) {
                             Text(selectedTab == 0 ? "Notes" : "Description")
                             TextField("Add notes (optional)", text: $itemNotes, axis: .vertical)
                                 .lineLimit(2...4)
                         }
                     }
-                    
+
                     Section("Account") {
                         HStack(spacing: 12) {
                             if authManager.isLinked(kind: .personal) {
@@ -3832,7 +3834,7 @@ struct AddItemView: View {
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
-                            
+
                             if authManager.isLinked(kind: .professional) {
                                 Button(action: {
                                     selectedAccountKind = .professional
@@ -3859,7 +3861,7 @@ struct AddItemView: View {
                             }
                         }
                     }
-                    
+
                     if selectedTab == 0 {
                         // Task-specific fields
                         if selectedAccountKind != nil {
@@ -3882,13 +3884,13 @@ struct AddItemView: View {
                                         .buttonStyle(PlainButtonStyle())
                                         Spacer()
                                     }
-                                    
+
                                     if isCreatingNewList {
                                         TextField("New list name", text: $newTaskListName)
                                             .textFieldStyle(RoundedBorderTextFieldStyle())
                                             .padding(.leading, 28)
                                     }
-                                    
+
                                     // Existing Lists
                                     if !isCreatingNewList && !availableTaskLists.isEmpty {
                                         ForEach(availableTaskLists) { taskList in
@@ -3910,7 +3912,7 @@ struct AddItemView: View {
                                 }
                             }
                         }
-                        
+
                         Section("Due Date") {
                             HStack {
                                 Button(action: {
@@ -3930,7 +3932,7 @@ struct AddItemView: View {
                                 .buttonStyle(PlainButtonStyle())
                                 Spacer()
                             }
-                            
+
                             if hasDueDate {
                                 DatePicker("Due Date", selection: Binding(
                                     get: { dueDate ?? currentDate },
@@ -3980,19 +3982,18 @@ struct AddItemView: View {
                 
                 // Removed delete button from top toolbar
             }
-        }
-        
-        // Add Delete section at bottom for editing event
-        .safeAreaInset(edge: .bottom) {
-            if isEditingEvent {
-                Button(role: .destructive) {
-                    deleteEvent()
-                } label: {
-                    Text("Delete Event")
-                        .frame(maxWidth: .infinity)
+            // Add Delete section at bottom for editing event
+            .safeAreaInset(edge: .bottom) {
+                if isEditingEvent {
+                    Button(role: .destructive) {
+                        deleteEvent()
+                    } label: {
+                        Text("Delete Event")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding()
                 }
-                .buttonStyle(.bordered)
-                .padding()
             }
         }
     }
