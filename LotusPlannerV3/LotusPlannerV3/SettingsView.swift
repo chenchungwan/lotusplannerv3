@@ -79,6 +79,7 @@ class NavigationManager: ObservableObject {
         case calendar
         case tasks
         case journal
+        case baseViewV2
     }
     
     @Published var currentView: CurrentView = .calendar
@@ -104,6 +105,12 @@ class NavigationManager: ObservableObject {
     func switchToJournal() {
         currentView = .journal
         showTasksView = false
+    }
+    
+    func switchToBaseViewV2() {
+        currentView = .baseViewV2
+        showTasksView = false
+        currentInterval = .week // BaseViewV2 is always week view
     }
     
     func showSettings() {

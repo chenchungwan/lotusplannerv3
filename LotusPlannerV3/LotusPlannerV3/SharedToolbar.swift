@@ -34,6 +34,8 @@ struct SharedNavigationToolbar: View {
                     .frame(width: 20, height: 20)
                     .foregroundColor(navigationManager.currentView == .calendar || navigationManager.currentView == .tasks && !navigationManager.showTasksView ? .accentColor : .secondary)
             }
+            
+
         }
     }
 } 

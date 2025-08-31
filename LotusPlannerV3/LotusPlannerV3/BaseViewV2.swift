@@ -1,0 +1,572 @@
+import SwiftUI
+
+enum ViewModeV2: String, CaseIterable, Hashable {
+    case week
+}
+
+struct BaseViewV2: View {
+    @EnvironmentObject var appPrefs: AppPreferences
+    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
+    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var authManager = GoogleAuthManager.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
+    
+    @State private var selectedDate = Date()
+    @State private var viewMode: ViewModeV2 = .week
+    @State private var selectedCalendarEvent: GoogleCalendarEvent?
+    @State private var showingEventDetails = false
+    @State private var selectedTask: GoogleTask?
+    @State private var selectedTaskListId: String?
+    @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    @State private var showingTaskDetails = false
+    
+    // No section width management needed since we removed the events section
+    
+    var body: some View {
+        mainContent
+            .sidebarToggleHidden()
+            .navigationTitle("")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
+                    principalToolbarContent
+                }
+
+                ToolbarItemGroup(placement: .principal) { EmptyView() }
+
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    trailingToolbarButtons
+                }
+            }
+        .sheet(item: Binding<GoogleCalendarEvent?>(
+            get: { selectedCalendarEvent },
+            set: { selectedCalendarEvent = $0 }
+        )) { event in
+            CalendarEventDetailsView(event: event) {
+                // Handle event deletion if needed
+            }
+        }
+        .sheet(isPresented: $showingTaskDetails) {
+            if let task = selectedTask,
+               let listId = selectedTaskListId,
+               let accountKind = selectedAccountKind {
+                TaskDetailsView(
+                    task: task,
+                    taskListId: listId,
+                    accountKind: accountKind,
+                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    personalTaskLists: tasksViewModel.personalTaskLists,
+                    professionalTaskLists: tasksViewModel.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: tasksViewModel,
+                    onSave: { updatedTask in
+                        Task {
+                            await tasksViewModel.updateTask(updatedTask, in: listId, for: accountKind)
+                        }
+                        showingTaskDetails = false
+                    },
+                    onDelete: {
+                        Task {
+                            await tasksViewModel.deleteTask(task, from: listId, for: accountKind)
+                        }
+                        showingTaskDetails = false
+                    },
+                    onMove: { task, newListId in
+                        Task {
+                            await tasksViewModel.moveTask(task, from: listId, to: newListId, for: accountKind)
+                        }
+                        showingTaskDetails = false
+                    },
+                    onCrossAccountMove: { task, newAccountKind, newListId in
+                        Task {
+                            await tasksViewModel.crossAccountMoveTask(task, from: (accountKind, listId), to: (newAccountKind, newListId))
+                        }
+                        showingTaskDetails = false
+                    }
+                )
+            }
+        }
+        .task {
+            // Initialize selectedDate from navigation manager if available
+            selectedDate = navigationManager.currentDate
+            await tasksViewModel.loadTasks()
+        }
+        .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+            selectedDate = newValue
+        }
+    }
+    
+    // MARK: - Toolbar Content
+    private var principalToolbarContent: some View {
+        HStack(spacing: 8) {
+            SharedNavigationToolbar()
+            
+            Button(action: { step(-1) }) {
+                Image(systemName: "chevron.left")
+            }
+            
+            Button(action: { 
+                selectedDate = Date() // Go to today
+                navigationManager.updateInterval(.week, date: Date())
+            }) {
+                Text(titleText)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+            }
+            
+            Button(action: { step(1) }) {
+                Image(systemName: "chevron.right")
+            }
+        }
+    }
+    
+    private var trailingToolbarButtons: some View {
+        HStack(spacing: 12) {
+            // Day button
+            Button(action: {
+                navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.day, date: selectedDate)
+            }) {
+                Image(systemName: "d.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // Week button (original BaseView)
+            Button(action: {
+                navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.week, date: selectedDate)
+            }) {
+                Image(systemName: "w.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .week && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // BaseViewV2 button (immediately after w.circle)
+            Button(action: {
+                navigationManager.switchToBaseViewV2()
+            }) {
+                Image(systemName: "v.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // Month button
+            Button(action: {
+                navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.month, date: selectedDate)
+            }) {
+                Image(systemName: "m.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .month && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // Year button
+            Button(action: {
+                navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.year, date: selectedDate)
+            }) {
+                Image(systemName: "y.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .year && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+
+            // Hide Completed toggle
+            Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
+                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+
+            // Add button
+            Button(action: { 
+                // Add functionality would go here
+            }) {
+                Image(systemName: "plus.circle")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    // MARK: - Main Content
+    private var mainContent: some View {
+        // Main content area with only tasks section (no events section)
+        VStack(spacing: 0) {
+            // Tasks section - Full width
+            ScrollView(.horizontal, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    // Week view - 7-column tasks layout
+                    weekTasksView
+                    
+                    // If neither account is linked, show placeholder
+                    if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+                        VStack {
+                            Text("No Task Accounts Linked")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text("Link your Google accounts in Settings to view tasks")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.all, 8)
+                    }
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemBackground))
+            .padding(.all, 8)
+        }
+        .frame(minHeight: 0, maxHeight: .infinity)
+    }
+    }
+
+
+// MARK: - Helpers
+
+extension BaseViewV2 {
+    // MARK: - Task Views
+
+    
+    private var weekTasksView: some View {
+        let fixedWidth: CGFloat = 1600 // Increased width for wider day columns
+        let timeColumnWidth: CGFloat = 50 // Same as timeline (kept for timeline compatibility)
+        let dayColumnWidth = fixedWidth / 7 // Each day column now ~228 points (no time column)
+        
+        return VStack(spacing: 0) {
+            // Shared Date Header Row (always at top)
+            weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: timeColumnWidth)
+            
+            // Divider below date header
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 1)
+            // Personal Tasks Row (top 50%)
+            if authManager.isLinked(kind: .personal) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Header
+                    HStack {
+                        Circle()
+                            .fill(appPrefs.personalColor)
+                            .frame(width: 12, height: 12)
+                        Text("Personal Tasks")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(appPrefs.personalColor)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    
+                    // Fixed-width 7-day task columns
+                    HStack(spacing: 0) {
+                        // 7-day task columns with fixed width
+                        ForEach(weekDates, id: \.self) { date in
+                            weekTaskColumnPersonal(date: date)
+                                .frame(width: dayColumnWidth) // Fixed width matching timeline
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                        }
+                    }
+                    .frame(width: fixedWidth) // Total fixed width
+                }
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.3))
+            }
+            
+            // Divider between task types
+            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+                Rectangle()
+                    .fill(Color(.systemGray4))
+                    .frame(height: 1)
+            }
+            
+            // Professional Tasks Row (bottom 50%)
+            if authManager.isLinked(kind: .professional) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Header
+                    HStack {
+                        Circle()
+                            .fill(appPrefs.professionalColor)
+                            .frame(width: 12, height: 12)
+                        Text("Professional Tasks")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(appPrefs.professionalColor)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    
+                    // Fixed-width 7-day task columns
+                    HStack(spacing: 0) {
+                        // 7-day task columns with fixed width
+                        ForEach(weekDates, id: \.self) { date in
+                            weekTaskColumnProfessional(date: date)
+                                .frame(width: dayColumnWidth) // Fixed width matching timeline
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                        }
+                    }
+                    .frame(width: fixedWidth) // Total fixed width
+                }
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.3))
+            }
+        }
+    }
+    
+    // Calendar-related views removed since we only show tasks now
+    
+
+    
+    private var titleText: String {
+        let calendar = Calendar.mondayFirst
+        guard
+            let weekStart = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start,
+            let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart)
+        else { return "Week V2" }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        let startString = formatter.string(from: weekStart)
+        let endString = formatter.string(from: weekEnd)
+        
+        let yearFormatter = DateFormatter()
+        yearFormatter.dateFormat = "yyyy"
+        let year = yearFormatter.string(from: selectedDate)
+        
+        return "\(startString) - \(endString), \(year) V2"
+    }
+    
+    private func step(_ offset: Int) {
+        let calendar = Calendar.current
+        if let newDate = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) {
+            selectedDate = newDate
+            navigationManager.updateInterval(.week, date: newDate)
+        }
+    }
+    
+    // Calendar event functions removed - only tasks are displayed now
+    
+    private var weekDates: [Date] {
+        let calendar = Calendar.mondayFirst
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: selectedDate) else {
+            return []
+        }
+        
+        var days: [Date] = []
+        var date = weekInterval.start
+        
+        // Get Monday to Sunday (7 days)
+        for _ in 0..<7 {
+            days.append(date)
+            date = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+        }
+        
+        return days
+    }
+    
+    // Calendar event helper functions removed since we only show tasks now
+    
+    // MARK: - Week Task Functions
+    private func weekTasksDateHeader(dayColumnWidth: CGFloat, timeColumnWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            // Day headers
+            ForEach(weekDates, id: \.self) { date in
+                weekTaskDateHeaderView(date: date)
+                    .frame(width: dayColumnWidth, height: 60)
+                    .background(Color(.systemGray6))
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(width: 0.5),
+                        alignment: .trailing
+                    )
+            }
+        }
+        .background(Color(.systemBackground))
+    }
+    
+    private func weekTaskDateHeaderView(date: Date) -> some View {
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "E" // Mon, Tue, etc.
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "d" // 1, 2, 3
+        
+        let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
+        
+        return VStack(spacing: 4) {
+            Text(dayFormatter.string(from: date))
+                .font(.body)
+                .fontWeight(.semibold)
+                .foregroundColor(isToday ? .white : .secondary)
+            
+            Text(dateFormatter.string(from: date))
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(isToday ? .white : .primary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(isToday ? Color.blue : Color.clear)
+        .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture { 
+            selectedDate = date 
+        }
+    }
+    
+    private func weekTaskColumnPersonal(date: Date) -> some View {
+        return VStack(alignment: .leading, spacing: 4) {
+            // Personal Tasks using day view component
+            let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+            if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                TasksComponent(
+                    taskLists: tasksViewModel.personalTaskLists,
+                    tasksDict: personalTasksForDate,
+                    accentColor: appPrefs.personalColor,
+                    accountType: .personal,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedAccountKind = .personal
+                        showingTaskDetails = true
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                        }
+                    }
+                )
+            } else {
+                Text("No tasks")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .italic()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+    
+    private func weekTaskColumnProfessional(date: Date) -> some View {
+        return VStack(alignment: .leading, spacing: 4) {
+            // Professional Tasks using day view component
+            let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+            if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                TasksComponent(
+                    taskLists: tasksViewModel.professionalTaskLists,
+                    tasksDict: professionalTasksForDate,
+                    accentColor: appPrefs.professionalColor,
+                    accountType: .professional,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedAccountKind = .professional
+                        showingTaskDetails = true
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                        }
+                    }
+                )
+            } else {
+                Text("No tasks")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .italic()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+    
+    // Helper function to get filtered tasks for a specific date (for weekly view)
+    private func getFilteredTasksForSpecificDate(_ tasks: [String: [GoogleTask]], date: Date) -> [String: [GoogleTask]] {
+        var filteredTasks: [String: [GoogleTask]] = [:]
+        
+        for (listId, taskList) in tasks {
+            let dateFilteredTasks = taskList.filter { task in
+                // Only show tasks that have a due date AND it matches the specified date
+                guard let dueDate = task.dueDate else { 
+                    return false // Tasks without due dates are NOT shown
+                }
+                
+                // Check if the due date is the same day as the specified date
+                return Calendar.current.isDate(dueDate, inSameDayAs: date)
+            }
+            
+            // Only include the list if it has tasks after filtering
+            if !dateFilteredTasks.isEmpty {
+                filteredTasks[listId] = dateFilteredTasks
+            }
+        }
+        
+        return filteredTasks
+    }
+    
+    private func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {
+        let tasksDict = accountKind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
+        
+        for (listId, tasks) in tasksDict {
+            if tasks.contains(where: { $0.id == task.id }) {
+                return listId
+            }
+        }
+        
+        return nil
+    }
+    
+    // Calendar header functions removed since we only show tasks now
+    
+    // All calendar-related timeline functions removed since we only show tasks now
+
+}
+
+
+
+extension ViewModeV2 {
+    var displayName: String {
+        switch self {
+        case .week: return "Week V2"
+        }
+    }
+}

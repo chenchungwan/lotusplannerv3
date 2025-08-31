@@ -825,15 +825,53 @@ struct CalendarView: View {
     
     private var trailingToolbarButtons: some View {
         HStack(spacing: 12) {
-            ForEach(TimelineInterval.allCases) { item in
-                Button(action: {
-                    navigationManager.updateInterval(item, date: Date())
-                    currentDate = Date() // reset to today/current period
-                }) {
-                    Image(systemName: item.sfSymbol)
-                        .font(.body)
-                        .foregroundColor(item == navigationManager.currentInterval ? .accentColor : .secondary)
-                }
+            // Day button
+            Button(action: {
+                navigationManager.updateInterval(.day, date: Date())
+                currentDate = Date()
+            }) {
+                Image(systemName: "d.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // Week button (original BaseView)
+            Button(action: {
+                navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.week, date: Date())
+            }) {
+                Image(systemName: "w.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .week && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // BaseViewV2 button (immediately after w.circle)
+            Button(action: {
+                navigationManager.switchToBaseViewV2()
+            }) {
+                Image(systemName: "v.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // Month button
+            Button(action: {
+                navigationManager.updateInterval(.month, date: Date())
+                currentDate = Date()
+            }) {
+                Image(systemName: "m.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .month && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+            }
+            
+            // Year button
+            Button(action: {
+                navigationManager.updateInterval(.year, date: Date())
+                currentDate = Date()
+            }) {
+                Image(systemName: "y.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentInterval == .year && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
             }
 
             // Hide Completed toggle

@@ -52,6 +52,8 @@ struct ContentView: View {
 
         case .journal:
             JournalView(currentDate: Date())
+        case .baseViewV2:
+            BaseViewV2()
         }
     }
 }
