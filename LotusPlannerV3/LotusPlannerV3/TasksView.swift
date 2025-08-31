@@ -23,16 +23,37 @@ struct GoogleTask: Identifiable, Codable, Equatable {
     
     var dueDate: Date? {
         guard let due = due else { return nil }
+        
+        // Extract just the date part from Google's response (ignore time completely)
+        let dateOnly = String(due.prefix(10)) // Get "yyyy-MM-dd" part only
+        
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-        return formatter.date(from: due)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current // Use local timezone for date-only parsing
+        let parsedDate = formatter.date(from: dateOnly)
+        print("📅 Due date: '\(due)' -> date part: '\(dateOnly)' -> \(parsedDate?.description ?? "nil")")
+        return parsedDate
     }
     
     var completionDate: Date? {
         guard let completed = completed else { return nil }
+        
+        // Google Tasks completion dates: RFC 3339 format with full timestamp
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-        return formatter.date(from: completed)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC") // Parse as UTC
+        
+        if let utcDate = formatter.date(from: completed) {
+            // Convert to local timezone for day comparison
+            let localFormatter = DateFormatter()
+            localFormatter.dateStyle = .full
+            localFormatter.timeZone = TimeZone.current
+            print("📅 Completion: '\(completed)' UTC: \(utcDate) -> Local day: \(localFormatter.string(from: utcDate))")
+            return utcDate
+        }
+        return nil
     }
 }
 
@@ -251,13 +272,37 @@ class TasksViewModel: ObservableObject {
     
     func toggleTaskCompletion(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
         let newStatus = task.isCompleted ? "needsAction" : "completed"
+        
+        // Set completion timestamp when marking as completed, clear when marking incomplete
+        let completedTimestamp: String?
+        if newStatus == "completed" {
+            // Google Tasks API expects RFC 3339 format in UTC
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+            formatter.timeZone = TimeZone(identifier: "UTC")
+            let now = Date()
+            completedTimestamp = formatter.string(from: now)
+            print("🔄 Task '\(task.title)' marked completed at: \(completedTimestamp ?? "nil")")
+            print("🕐 Local time: \(now)")
+            print("🌍 User timezone: \(TimeZone.current.identifier)")
+            
+            // Debug: Show what day this will appear on
+            let calendar = Calendar.current
+            let localDayFormatter = DateFormatter()
+            localDayFormatter.dateStyle = .full
+            print("📅 Should appear on: \(localDayFormatter.string(from: now))")
+        } else {
+            completedTimestamp = nil
+            print("🔄 Task '\(task.title)' marked incomplete")
+        }
+        
         let updatedTask = GoogleTask(
             id: task.id,
             title: task.title,
             notes: task.notes,
             status: newStatus,
             due: task.due,
-            completed: task.completed,
+            completed: completedTimestamp,
             updated: task.updated
         )
         
@@ -1162,7 +1207,7 @@ struct TasksView: View {
     
     // MARK: - Helper Methods
     private func filteredTasks(_ tasksDict: [String: [GoogleTask]]) -> [String: [GoogleTask]] {
-        let calendar = Calendar.mondayFirst
+        let calendar = Calendar.current // Use current calendar with user's timezone
         let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
         
@@ -1177,18 +1222,75 @@ struct TasksView: View {
             // Then apply time-based filter if not "all"
             if selectedFilter != .all {
                 filteredTasks = filteredTasks.filter { task in
-                    guard let dueDate = task.dueDate else { return false }
-                    switch selectedFilter {
-                    case .day:
-                        return calendar.isDate(dueDate, inSameDayAs: referenceDate)
-                    case .week:
-                        return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
-                    case .month:
-                        return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .month)
-                    case .year:
-                        return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .year)
-                    case .all:
-                        return true
+                    // For completed tasks, check completion date
+                    if task.isCompleted {
+                        guard let completionDate = task.completionDate else { 
+                            print("🐛 Completed task '\(task.title)' has no completion date")
+                            return false 
+                        }
+                        let isMatch: Bool
+                        switch selectedFilter {
+                        case .day:
+                            isMatch = calendar.isDate(completionDate, inSameDayAs: referenceDate)
+                        case .week:
+                            isMatch = calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .weekOfYear)
+                        case .month:
+                            isMatch = calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .month)
+                        case .year:
+                            isMatch = calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .year)
+                        case .all:
+                            isMatch = true
+                        }
+                        
+                        if selectedFilter == .day && !isMatch {
+                            let formatter = DateFormatter()
+                            formatter.dateStyle = .short
+                            formatter.timeStyle = .short
+                            print("🐛 TasksView: Completed task '\(task.title)' completed at \(formatter.string(from: completionDate)) not showing on \(formatter.string(from: referenceDate))")
+                            print("   Raw completed string: '\(task.completed ?? "nil")'")
+                            print("   Parsed completion date: \(completionDate)")
+                            print("   Reference date: \(referenceDate)")
+                        }
+                        
+                        return isMatch
+                    } else {
+                        // For incomplete tasks, check due date
+                        guard let dueDate = task.dueDate else { 
+                            print("🐛 Incomplete task '\(task.title)' has no due date")
+                            return false 
+                        }
+                        let isMatch: Bool
+                        switch selectedFilter {
+                        case .day:
+                            isMatch = calendar.isDate(dueDate, inSameDayAs: referenceDate)
+                        case .week:
+                            isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
+                        case .month:
+                            isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .month)
+                        case .year:
+                            isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .year)
+                        case .all:
+                            isMatch = true
+                        }
+                        
+                        if selectedFilter == .day && !isMatch {
+                            let formatter = DateFormatter()
+                            formatter.dateStyle = .full
+                            formatter.timeStyle = .none
+                            print("🐛 TasksView: Task '\(task.title)' due \(formatter.string(from: dueDate)) not showing on view date \(formatter.string(from: referenceDate))")
+                            print("   Raw due string: '\(task.due ?? "nil")'")
+                            print("   Parsed due date: \(dueDate)")
+                            print("   Reference date: \(referenceDate)")
+                            print("   Calendar comparison result: \(calendar.isDate(dueDate, inSameDayAs: referenceDate))")
+                            
+                            // Show day components for debugging
+                            let dueComponents = calendar.dateComponents([.year, .month, .day], from: dueDate)
+                            let refComponents = calendar.dateComponents([.year, .month, .day], from: referenceDate)
+                            print("   Due date components: \(dueComponents)")
+                            print("   Reference components: \(refComponents)")
+                        }
+                        
+                        return isMatch
                     }
                 }
             }

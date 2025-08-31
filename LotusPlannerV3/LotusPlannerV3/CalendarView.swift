@@ -3069,7 +3069,19 @@ struct CalendarView: View {
                 // For completed tasks, only show them on their completion date
                 if task.isCompleted {
                     guard let completionDate = task.completionDate else { return nil }
-                    return calendar.isDate(completionDate, inSameDayAs: date) ? task : nil
+                    let isOnSameDay = calendar.isDate(completionDate, inSameDayAs: date)
+                    
+                    // Debug logging for completion date issues
+                    if !isOnSameDay {
+                        let formatter = DateFormatter()
+                        formatter.dateStyle = .short
+                        formatter.timeStyle = .short
+                        print("🐛 Task '\(task.title)' completed at \(formatter.string(from: completionDate)) not showing on \(formatter.string(from: date))")
+                        print("   Completion date timezone: \(completionDate)")
+                        print("   Display date timezone: \(date)")
+                    }
+                    
+                    return isOnSameDay ? task : nil
                 } else {
                     // For incomplete tasks, only show them on their exact due date
                     guard let dueDate = task.dueDate else { return nil }
