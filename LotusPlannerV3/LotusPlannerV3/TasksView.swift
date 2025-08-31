@@ -898,6 +898,7 @@ struct TasksView: View {
     @State private var isTasksDividerDragging = false
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
+    @State private var showingAddEvent = false
     @State private var allSubfilter: AllTaskSubfilter = .all
     
     // Navigation date picker state
@@ -1082,11 +1083,35 @@ struct TasksView: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            AddItemView(
-                currentDate: referenceDate,
-                tasksViewModel: viewModel,
-                calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs
+            // Use the same UI as Task Details for creating a task
+            let personalLinked = authManager.isLinked(kind: .personal)
+            let professionalLinked = authManager.isLinked(kind: .professional)
+            let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (personalLinked ? .personal : .professional)
+            let defaultLists = defaultAccount == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
+            let defaultListId = defaultLists.first?.id ?? ""
+            let newTask = GoogleTask(
+                id: UUID().uuidString,
+                title: "",
+                notes: nil,
+                status: "needsAction",
+                due: nil,
+                completed: nil,
+                updated: nil
+            )
+            TaskDetailsView(
+                task: newTask,
+                taskListId: defaultListId,
+                accountKind: defaultAccount,
+                accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: viewModel.personalTaskLists,
+                professionalTaskLists: viewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: viewModel,
+                onSave: { _ in },
+                onDelete: {},
+                onMove: { _, _ in },
+                onCrossAccountMove: { _, _, _ in },
+                isNew: true
             )
         }
         .sheet(isPresented: $showingNavigationDatePicker) {
@@ -1200,10 +1225,15 @@ struct TasksView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    // Add Task Button
-                    Button(action: {
-                        showingNewTask = true
-                    }) {
+                    // Add menu: Event or Task
+                    Menu {
+                        Button("Event") {
+                            showingAddEvent = true
+                        }
+                        Button("Task") {
+                            showingNewTask = true
+                        }
+                    } label: {
                         Image(systemName: "plus.circle")
                             .font(.body)
                             .foregroundColor(.secondary)
@@ -1212,10 +1242,23 @@ struct TasksView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingAddEvent) {
+            // Launch event creation modal from Tasks view
+            AddItemView(
+                currentDate: referenceDate,
+                tasksViewModel: viewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs
+            )
+        }
         .onAppear {
             // Sync with NavigationManager's current interval when view appears
             selectedFilter = navigationManager.currentInterval.taskFilter
             referenceDate = navigationManager.currentDate
+            // Listen for external requests to show Add Task so behavior matches Calendar
+            NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
+                showingNewTask = true
+            }
         }
     }
     
@@ -1815,6 +1858,7 @@ struct TaskDetailsView: View {
     @State private var showingDatePicker = false
     @State private var showingDeleteAlert = false
     @State private var isSaving = false
+    @State private var tempDueDate: Date = Date()
     
     private let dueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -1874,151 +1918,115 @@ struct TaskDetailsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Task Details") {
-                    HStack {
-                        Text("Title")
-                        TextField("Task title", text: $editedTitle)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Notes")
-                        TextField("Add notes...", text: $editedNotes, axis: .vertical)
-                            .lineLimit(3...6)
-                    }
+                // Title only (no section header, no label)
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Task title", text: $editedTitle)
+                        .font(.title3)
                 }
                 
-                Section("Account & Task List") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Radio-style buttons for account selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \..self) { kind in
-                                if GoogleAuthManager.shared.isLinked(kind: kind) {
+                // Notes (no label)
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Add description", text: $editedNotes, axis: .vertical)
+                        .lineLimit(1...6)
+                }
+                
+                // Account & Task List (no section title/subtitle)
+                VStack(alignment: .leading, spacing: 12) {
+                        // Two rows: Personal and Professional, each with its own current list on the same line
+                        ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
+                            if GoogleAuthManager.shared.isLinked(kind: kind) {
+                                let lists: [GoogleTaskList] = (kind == .personal) ? personalTaskLists : professionalTaskLists
+                                let currentId: String = (selectedAccountKind == kind ? selectedListId : lists.first?.id) ?? lists.first?.id ?? ""
+                                let currentTitle: String = lists.first(where: { $0.id == currentId })?.title ?? (lists.first?.title ?? "Select list")
+
+                                HStack(spacing: 10) {
                                     Button {
                                         selectedAccountKind = kind
-                                        // Reset list selection when account changes
-                                        if let firstList = availableTaskLists.first {
-                                            selectedListId = firstList.id
-                                        }
+                                        if let first = lists.first { selectedListId = first.id }
                                         isCreatingNewList = false
                                         newListName = ""
                                     } label: {
-                                        HStack {
+                                        HStack(spacing: 6) {
                                             Image(systemName: selectedAccountKind == kind ? "largecircle.fill.circle" : "circle")
                                                 .foregroundColor(selectedAccountKind == kind ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .secondary)
-                                            Text(kind == .personal ? "Personal" : "Professional")
+                                            Text((kind == .personal ? "Personal" : "Professional") + ":")
                                         }
                                     }
                                     .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        
-                        // Task List Selection
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Move to List")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            // Create New List Option
-                            HStack {
-                                Button(action: {
-                                    isCreatingNewList.toggle()
-                                    if isCreatingNewList {
-                                        selectedListId = taskListId // Keep original if creating new
-                                    }
-                                }) {
-                                    HStack {
-                                        Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
-                                            .foregroundColor(isCreatingNewList ? currentAccentColor : .secondary)
-                                        Text("Create new list")
-                                    }
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                Spacer()
-                            }
-                            
-                            if isCreatingNewList {
-                                TextField("New list name", text: $newListName)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .padding(.leading, 28)
-                            }
-                            
-                            // Existing Lists
-                            if !isCreatingNewList && availableTaskLists.count > 1 {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Current List: \(currentTaskListName)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                        .padding(.leading, 28)
-                                    
-                                    ForEach(availableTaskLists) { taskList in
-                                        HStack {
-                                            Button(action: {
-                                                selectedListId = taskList.id
-                                            }) {
-                                                HStack {
-                                                    Image(systemName: selectedListId == taskList.id ? "checkmark.circle.fill" : "circle")
-                                                        .foregroundColor(selectedListId == taskList.id ? currentAccentColor : .secondary)
-                                                    Text(taskList.title)
-                                                    if taskList.id == taskListId {
-                                                        Text("(current)")
-                                                            .font(.caption2)
-                                                            .foregroundColor(.secondary)
-                                                    }
+
+                                    // Place the list immediately after the account name and colon
+                                    if selectedAccountKind == kind {
+                                        Menu(currentTitle) {
+                                            Button("Create new list") {
+                                                selectedAccountKind = kind
+                                                isCreatingNewList = true
+                                                newListName = ""
+                                            }
+                                            ForEach(lists) { taskList in
+                                                Button(taskList.title) {
+                                                    selectedAccountKind = kind
+                                                    selectedListId = taskList.id
+                                                    isCreatingNewList = false
                                                 }
                                             }
-                                            .buttonStyle(PlainButtonStyle())
-                                            Spacer()
                                         }
-                                        .padding(.leading, 28)
                                     }
+
+                                    Spacer(minLength: 8)
                                 }
                             }
                         }
-                    }
-                }
-                
-                Section("Due Date") {
-                    HStack {
-                        Text("Due Date")
-                        Spacer()
-                        if let dueDate = editedDueDate {
-                            Text(dueDate, formatter: dueDateFormatter)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("None")
-                                .foregroundColor(.secondary)
-                        }
-                        Button(action: {
-                            if editedDueDate == nil {
-                                // Initialize with today so a value is captured even if the user doesn't tap a specific date
-                                editedDueDate = Date()
+
+                        // Inline new list name input when requested
+                        if isCreatingNewList {
+                            HStack(spacing: 8) {
+                                TextField("New list name", text: $newListName)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                Button("Create") {
+                                    Task {
+                                        if let newId = await viewModel.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: selectedAccountKind) {
+                                            selectedListId = newId
+                                            isCreatingNewList = false
+                                            newListName = ""
+                                        }
+                                    }
+                                }
+                                .disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             }
-                            showingDatePicker = true
-                        }) {
+                        }
+                    }
+                
+                // Inline Due Date row (no section, no label)
+                HStack(spacing: 12) {
+                    Button(action: {
+                        // Initialize temp picker date but do not change the actual due date yet
+                        tempDueDate = editedDueDate ?? Date()
+                        showingDatePicker = true
+                    }) {
+                        HStack(spacing: 8) {
                             Image(systemName: "calendar")
                                 .foregroundColor(accentColor)
+                            if let dueDate = editedDueDate {
+                                Text(dueDate, formatter: dueDateFormatter)
+                                    .foregroundColor(.primary)
+                            } else {
+                                Text("Add due date")
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
-                    
+                    .buttonStyle(.plain)
+                    Spacer()
                     if editedDueDate != nil {
-                        Button("Remove Due Date") {
-                            editedDueDate = nil
+                        Button(action: { editedDueDate = nil }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
                         }
-                        .foregroundColor(.red)
+                        .buttonStyle(.plain)
                     }
                 }
                 
-                Section("Task Status") {
-                    HStack {
-                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(task.isCompleted ? accentColor : .secondary)
-                        Text(task.isCompleted ? "Completed" : "Pending")
-                            .foregroundColor(task.isCompleted ? .secondary : .primary)
-                        Spacer()
-                    }
-                }
+                // Removed Task Status section per request
                 
                 if !isNew {
                     Section {
@@ -2051,10 +2059,7 @@ struct TaskDetailsView: View {
         }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
-                DatePicker("Due Date", selection: Binding(
-                    get: { editedDueDate ?? Date() },
-                    set: { editedDueDate = $0 }
-                ), displayedComponents: .date)
+                DatePicker("Due Date", selection: $tempDueDate, displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .environment(\.calendar, Calendar.mondayFirst)
                 .navigationTitle("Set Due Date")
@@ -2068,6 +2073,8 @@ struct TaskDetailsView: View {
                     
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
+                            // Apply selected date to actual due date only on Done
+                            editedDueDate = tempDueDate
                             showingDatePicker = false
                         }
                         .fontWeight(.semibold)
@@ -2145,17 +2152,17 @@ struct TaskDetailsView: View {
                         dismiss()
                     }
                 } else {
-                    await MainActor.run {
-                        // Editing path
-                        if selectedAccountKind != accountKind {
-                            onCrossAccountMove(updatedTask, selectedAccountKind, targetListId)
-                        } else if targetListId != taskListId {
-                            onMove(updatedTask, targetListId)
-                        } else {
-                            onSave(updatedTask)
-                        }
-                        dismiss()
+                    // Editing path (perform updates directly to ensure they complete)
+                    if selectedAccountKind != accountKind {
+                        await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (selectedAccountKind, targetListId))
+                    } else if targetListId != taskListId {
+                        await viewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: selectedAccountKind)
+                    } else {
+                        await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
                     }
+                    // Reload to ensure UI reflects server state
+                    await viewModel.loadTasks()
+                    await MainActor.run { dismiss() }
                 }
             } catch {
                 await MainActor.run {

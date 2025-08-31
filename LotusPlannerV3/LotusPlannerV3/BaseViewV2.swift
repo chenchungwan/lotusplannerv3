@@ -179,10 +179,15 @@ struct BaseViewV2: View {
                     .foregroundColor(.secondary)
             }
 
-            // Add button
-            Button(action: { 
-                // Add functionality would go here
-            }) {
+            // Add menu (Event or Task)
+            Menu {
+                Button("Event") { 
+                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAddEvent"), object: nil)
+                }
+                Button("Task") {
+                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAddTask"), object: nil)
+                }
+            } label: {
                 Image(systemName: "plus.circle")
                     .font(.body)
                     .foregroundColor(.secondary)

@@ -926,8 +926,27 @@ struct CalendarView: View {
                     .foregroundColor(.secondary)
             }
 
-            // Add button (right-most)
-            Button(action: { showingAddItem = true }) {
+            // Add menu (Event or Task)
+            Menu {
+                Button("Event") {
+                    showingAddItem = true
+                }
+                Button("Task") {
+                    // Open a create-task sheet inline, matching Tasks view behavior
+                    selectedTask = GoogleTask(
+                        id: UUID().uuidString,
+                        title: "",
+                        notes: nil,
+                        status: "needsAction",
+                        due: nil,
+                        completed: nil,
+                        updated: nil
+                    )
+                    selectedTaskListId = tasksViewModel.personalTaskLists.first?.id ?? tasksViewModel.professionalTaskLists.first?.id
+                    selectedAccountKind = (tasksViewModel.personalTaskLists.first != nil) ? .personal : .professional
+                    showingTaskDetails = true
+                }
+            } label: {
                 Image(systemName: "plus.circle")
                     .font(.body)
                     .foregroundColor(.secondary)
@@ -1426,6 +1445,13 @@ struct CalendarView: View {
                 startCurrentTimeTimer()
                 // Ensure tasks are cached when view appears
                 updateCachedTasks()
+                // Listen for external add requests
+                NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
+                    navigationManager.switchToTasks()
+                }
+                NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddEvent"), object: nil, queue: .main) { _ in
+                    showingAddItem = true
+                }
             }
             .onDisappear {
                 stopCurrentTimeTimer()
@@ -1525,14 +1551,12 @@ struct CalendarView: View {
     @ViewBuilder
     private var eventDetailsSheet: some View {
         if let ev = selectedCalendarEvent {
-            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
-            AddItemView(
-                currentDate: ev.startTime ?? Date(),
-                tasksViewModel: tasksViewModel,
-                calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs,
-                existingEvent: ev,
-                accountKind: accountKind
+            CalendarEventDetailsView(
+                event: ev,
+                onDelete: {
+                    // Close the sheet; deletion handling can be expanded if needed
+                    showingEventDetails = false
+                }
             )
         }
     }
