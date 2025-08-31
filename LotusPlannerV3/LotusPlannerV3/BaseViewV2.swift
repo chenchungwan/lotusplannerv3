@@ -248,18 +248,6 @@ extension BaseViewV2 {
             // Personal Tasks Row (top 50%)
             if authManager.isLinked(kind: .personal) {
                 VStack(alignment: .leading, spacing: 4) {
-                    // Header
-                    HStack {
-                        Circle()
-                            .fill(appPrefs.personalColor)
-                            .frame(width: 12, height: 12)
-                        Text("Personal Tasks")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(appPrefs.personalColor)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
                     
                     // Fixed-width 7-day task columns
                     HStack(spacing: 0) {
@@ -292,18 +280,6 @@ extension BaseViewV2 {
             // Professional Tasks Row (bottom 50%)
             if authManager.isLinked(kind: .professional) {
                 VStack(alignment: .leading, spacing: 4) {
-                    // Header
-                    HStack {
-                        Circle()
-                            .fill(appPrefs.professionalColor)
-                            .frame(width: 12, height: 12)
-                        Text("Professional Tasks")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(appPrefs.professionalColor)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
                     
                     // Fixed-width 7-day task columns
                     HStack(spacing: 0) {
@@ -337,7 +313,7 @@ extension BaseViewV2 {
         guard
             let weekStart = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start,
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart)
-        else { return "Week V2" }
+        else { return "Week" }
         
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
@@ -348,7 +324,7 @@ extension BaseViewV2 {
         yearFormatter.dateFormat = "yyyy"
         let year = yearFormatter.string(from: selectedDate)
         
-        return "\(startString) - \(endString), \(year) V2"
+        return "\(startString) - \(endString), \(year)"
     }
     
     private func step(_ offset: Int) {
@@ -566,7 +542,7 @@ extension BaseViewV2 {
 extension ViewModeV2 {
     var displayName: String {
         switch self {
-        case .week: return "Week V2"
+        case .week: return "Week"
         }
     }
 }

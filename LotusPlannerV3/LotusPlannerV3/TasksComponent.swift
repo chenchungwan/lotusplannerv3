@@ -26,26 +26,14 @@ struct TasksComponent: View {
         self._localTaskLists = State(initialValue: taskLists)
     }
     
-    private var accountTitle: String {
-        switch accountType {
-        case .personal:
-            return "Personal"
-        case .professional:
-            return "Professional"
-        }
-    }
+    // Account title removed as requested
     
     var body: some View {
         VStack(spacing: 12) {
-            // Account Title Header
-            HStack {
-                Text(accountTitle)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(accentColor)
-                Spacer()
-                // Debug indicator
-                if dragOver {
+            // Debug indicator (only show when dragging)
+            if dragOver {
+                HStack {
+                    Spacer()
                     Text("DROP HERE")
                         .font(.caption)
                         .foregroundColor(.blue)
@@ -53,9 +41,10 @@ struct TasksComponent: View {
                         .padding(.vertical, 4)
                         .background(Color.blue.opacity(0.1))
                         .cornerRadius(4)
+                    Spacer()
                 }
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
             
             ScrollView {
                 VStack(spacing: 16) {
@@ -285,7 +274,7 @@ private struct TaskComponentRow: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Text(task.title)
                     .font(.body)
                     .fontWeight(.medium)
@@ -295,11 +284,62 @@ private struct TaskComponentRow: View {
                     .truncationMode(.tail)
                 
                 Spacer()
+                
+                // Due date tag
+                if let dateTag = dueDateTag(for: task) {
+                    Text(dateTag.text)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(dateTag.textColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(dateTag.backgroundColor)
+                        )
+                }
             }
         }
         .contentShape(Rectangle())
         .onTapGesture {
             onDetails()
+        }
+    }
+    
+    private func dueDateTag(for task: GoogleTask) -> (text: String, textColor: Color, backgroundColor: Color)? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        if task.isCompleted {
+            // Show completion date for completed tasks
+            guard let completionDate = task.completionDate else { return nil }
+            let completionDay = calendar.startOfDay(for: completionDate)
+            
+            if calendar.isDate(completionDay, inSameDayAs: today) {
+                return ("Completed Today", .white, .green)
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "M/d/yy"
+                return ("Completed \(formatter.string(from: completionDate))", .white, .green)
+            }
+        } else {
+            // Show due date for incomplete tasks
+            guard let dueDate = task.dueDate else { return nil }
+            let dueDay = calendar.startOfDay(for: dueDate)
+            
+            if calendar.isDate(dueDay, inSameDayAs: today) {
+                return ("Today", .white, accentColor)
+            } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+                      calendar.isDate(dueDay, inSameDayAs: tomorrow) {
+                return ("Tomorrow", .white, .orange)
+            } else if dueDay < today {
+                return ("Overdue", .white, .red)
+            } else {
+                // Future date
+                let formatter = DateFormatter()
+                formatter.dateFormat = "M/d/yy"
+                return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
+            }
         }
     }
 }
