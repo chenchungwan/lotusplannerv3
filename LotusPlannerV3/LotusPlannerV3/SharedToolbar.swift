@@ -5,11 +5,21 @@ struct SharedNavigationToolbar: View {
     
     var body: some View {
         HStack(spacing: 8) {
-            // Settings gear icon
-            Button(action: {
-                navigationManager.showSettings()
-            }) {
-                Image(systemName: "gearshape")
+            // Hamburger menu with common actions
+            Menu {
+                Button("Settings") {
+                    navigationManager.showSettings()
+                }
+                Button("About") {
+                    // Placeholder: could present an About sheet
+                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAbout"), object: nil)
+                }
+                Button("Report Issue / Request Features") {
+                    // Placeholder: could open email or feedback form
+                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowFeedback"), object: nil)
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal")
                     .font(.body)
                     .frame(width: 20, height: 20)
                     .foregroundColor(.secondary)
@@ -35,7 +45,6 @@ struct SharedNavigationToolbar: View {
                     .foregroundColor(navigationManager.currentView == .calendar || navigationManager.currentView == .tasks && !navigationManager.showTasksView ? .accentColor : .secondary)
             }
             
-
         }
     }
 } 

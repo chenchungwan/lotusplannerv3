@@ -770,7 +770,8 @@ struct CalendarView: View {
                 currentDate: currentDate,
                 tasksViewModel: tasksViewModel,
                 calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs
+                appPrefs: appPrefs,
+                showEventOnly: true
             )
         }
         .sheet(isPresented: $showingDatePicker) {
@@ -3720,6 +3721,7 @@ struct AddItemView: View {
     let appPrefs: AppPreferences
     let existingEvent: GoogleCalendarEvent?
     let existingEventAccountKind: GoogleAuthManager.AccountKind?
+    let showEventOnly: Bool
     
     private let authManager = GoogleAuthManager.shared
     
@@ -3757,13 +3759,15 @@ struct AddItemView: View {
          calendarViewModel: CalendarViewModel,
          appPrefs: AppPreferences,
          existingEvent: GoogleCalendarEvent? = nil,
-         accountKind: GoogleAuthManager.AccountKind? = nil) {
+         accountKind: GoogleAuthManager.AccountKind? = nil,
+         showEventOnly: Bool = false) {
         self.currentDate = currentDate
         self.tasksViewModel = tasksViewModel
         self.calendarViewModel = calendarViewModel
         self.appPrefs = appPrefs
         self.existingEvent = existingEvent
         self.existingEventAccountKind = accountKind
+        self.showEventOnly = showEventOnly
         // default times
         let cal = Calendar.current
         if let ev = existingEvent {
@@ -3779,19 +3783,24 @@ struct AddItemView: View {
             let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
             _eventStart = State(initialValue: rounded)
             _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
+            if showEventOnly {
+                _selectedTab = State(initialValue: 1)
+            }
         }
     }
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Tab selector
-                Picker("Type", selection: $selectedTab) {
-                    Text("Task").tag(0)
-                    Text("Calendar Event").tag(1)
+                // Tab selector (hidden when creating event-only)
+                if !showEventOnly {
+                    Picker("Type", selection: $selectedTab) {
+                        Text("Task").tag(0)
+                        Text("Calendar Event").tag(1)
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .padding()
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding()
 
                 Form {
                     Section("Basic Information") {
