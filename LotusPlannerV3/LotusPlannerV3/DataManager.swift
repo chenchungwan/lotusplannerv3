@@ -26,6 +26,7 @@ class DataManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                // Cache-only preloading to avoid clobbering live state at launch
                 await self?.preloadAdjacentMonths(around: Date())
             }
         }
@@ -35,14 +36,16 @@ class DataManager: ObservableObject {
         // Only load data if accounts are linked to avoid unnecessary error alerts
         let authManager = GoogleAuthManager.shared
         
-        // Load initial calendar data for current month only if accounts are linked
+        // Preload month cache only (do not mutate published arrays) if accounts are linked
         if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-            await calendarViewModel.loadCalendarDataForMonth(containing: Date())
+            await calendarViewModel.preloadMonthIntoCache(containing: Date())
         }
         
         // Load tasks data only if accounts are linked
         if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+            print("📋 DataManager: Loading tasks during initialization...")
             await tasksViewModel.loadTasks()
+            print("📋 DataManager: Tasks loading complete")
         }
         
         isInitializing = false

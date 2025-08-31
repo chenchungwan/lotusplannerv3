@@ -200,22 +200,66 @@ class CalendarViewModel: ObservableObject {
         let calendar = Calendar.mondayFirst
         
         await withTaskGroup(of: Void.self) { group in
-            // Preload previous month
+            // Preload previous month (cache-only; do not mutate live arrays)
             if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
-                group.addTask { 
-                    await self.loadCalendarDataForMonth(containing: prevMonth)
+                group.addTask {
+                    await self.preloadMonthIntoCache(containing: prevMonth)
                 }
             }
             
-            // Preload next month
+            // Preload next month (cache-only)
             if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
-                group.addTask { 
-                    await self.loadCalendarDataForMonth(containing: nextMonth)
+                group.addTask {
+                    await self.preloadMonthIntoCache(containing: nextMonth)
                 }
             }
         }
         
-        print("✅ Preloaded adjacent months around \(date)")
+        print("✅ Preloaded adjacent months (cache-only) around \(date)")
+    }
+
+    // Preload a month's calendars/events into cache without updating published state
+    func preloadMonthIntoCache(containing date: Date) async {
+        let calendar = Calendar.mondayFirst
+        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
+              let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+            return
+        }
+        
+        await withTaskGroup(of: Void.self) { group in
+            if authManager.isLinked(kind: .personal) {
+                group.addTask {
+                    do {
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
+                        let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
+                        await MainActor.run {
+                            let key = self.monthCacheKey(for: date, accountKind: .personal)
+                            self.cacheCalendars(calendars, for: key)
+                            self.cacheEvents(events, for: key)
+                            print("💾 Cached personal month preload: \(events.count) events")
+                        }
+                    } catch {
+                        print("❌ Failed to preload personal month into cache: \(error)")
+                    }
+                }
+            }
+            if authManager.isLinked(kind: .professional) {
+                group.addTask {
+                    do {
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
+                        let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
+                        await MainActor.run {
+                            let key = self.monthCacheKey(for: date, accountKind: .professional)
+                            self.cacheCalendars(calendars, for: key)
+                            self.cacheEvents(events, for: key)
+                            print("💾 Cached professional month preload: \(events.count) events")
+                        }
+                    } catch {
+                        print("❌ Failed to preload professional month into cache: \(error)")
+                    }
+                }
+            }
+        }
     }
     
     func loadCalendarData(for date: Date) async {
@@ -637,6 +681,7 @@ class CalendarViewModel: ObservableObject {
 struct CalendarView: View {
     @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var dataManager = DataManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var currentDate = Date()
@@ -1339,21 +1384,39 @@ struct CalendarView: View {
     private var dayView: some View {
         dayViewBase
             .task {
+                print("📅 Day view .task block starting...")
+                print("📅 DataManager isInitializing: \(dataManager.isInitializing)")
+                
                 await calendarViewModel.loadCalendarData(for: currentDate)
+                print("📅 Calendar data loaded, now loading tasks...")
                 await tasksViewModel.loadTasks()
-                updateCachedTasks()
+                print("📅 Tasks loaded, now updating cached tasks...")
+                await MainActor.run {
+                    updateCachedTasks()
+                }
+                print("📅 Day view initialization complete")
             }
             .onChange(of: currentDate) { oldValue, newValue in
                 Task {
                     await calendarViewModel.loadCalendarData(for: newValue)
+                    await MainActor.run {
+                        updateCachedTasks()
+                    }
                 }
-                updateCachedTasks()
             }
             .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
+                print("📋 Personal tasks changed, updating cache...")
                 updateCachedTasks()
             }
             .onChange(of: tasksViewModel.professionalTasks) { oldValue, newValue in
+                print("📋 Professional tasks changed, updating cache...")
                 updateCachedTasks()
+            }
+            .onChange(of: dataManager.isInitializing) { oldValue, newValue in
+                if !newValue {
+                    print("📋 DataManager finished initializing, updating cached tasks...")
+                    updateCachedTasks()
+                }
             }
             .onChange(of: appPrefs.hideCompletedTasks) { oldValue, newValue in
                 updateCachedTasks()
@@ -1361,6 +1424,8 @@ struct CalendarView: View {
 
             .onAppear {
                 startCurrentTimeTimer()
+                // Ensure tasks are cached when view appears
+                updateCachedTasks()
             }
             .onDisappear {
                 stopCurrentTimeTimer()
@@ -2771,7 +2836,7 @@ struct CalendarView: View {
             // Personal Tasks
             TasksComponent(
                 taskLists: tasksViewModel.personalTaskLists,
-                tasksDict: cachedPersonalTasks,
+                tasksDict: filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate),
                 accentColor: appPrefs.personalColor,
                 accountType: .personal,
                 onTaskToggle: { task, listId in
@@ -2804,7 +2869,7 @@ struct CalendarView: View {
             // Professional Tasks
             TasksComponent(
                 taskLists: tasksViewModel.professionalTaskLists,
-                tasksDict: cachedProfessionalTasks,
+                tasksDict: filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate),
                 accentColor: appPrefs.professionalColor,
                 accountType: .professional,
                 onTaskToggle: { task, listId in
@@ -2932,7 +2997,7 @@ struct CalendarView: View {
     private var topRightDaySection: some View {
         TasksComponent(
             taskLists: tasksViewModel.professionalTaskLists,
-            tasksDict: cachedProfessionalTasks,
+            tasksDict: filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate),
             accentColor: appPrefs.professionalColor,
             accountType: .professional,
             onTaskToggle: { task, listId in
@@ -3109,8 +3174,27 @@ struct CalendarView: View {
     
     // MARK: - Helper Methods for Real Tasks
     private func updateCachedTasks() {
+        print("🔄 Updating cached tasks for date: \(currentDate)")
+        print("   Personal task lists: \(tasksViewModel.personalTasks.keys.count)")
+        print("   Professional task lists: \(tasksViewModel.professionalTasks.keys.count)")
+        
         cachedPersonalTasks = filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate)
         cachedProfessionalTasks = filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate)
+        
+        print("   Cached personal tasks: \(cachedPersonalTasks.values.flatMap { $0 }.count)")
+        print("   Cached professional tasks: \(cachedProfessionalTasks.values.flatMap { $0 }.count)")
+        
+        // Debug: Print first few task titles to verify content
+        let personalTaskTitles = cachedPersonalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
+        let professionalTaskTitles = cachedProfessionalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
+        print("   Sample personal task titles: \(personalTaskTitles)")
+        print("   Sample professional task titles: \(professionalTaskTitles)")
+        
+        // Force UI update
+        DispatchQueue.main.async {
+            // This should trigger a UI refresh
+        }
+        
         updateMonthCachedTasks() // Also update month cached tasks
     }
     
@@ -3154,8 +3238,19 @@ struct CalendarView: View {
                     // For incomplete tasks, show them on due date OR if overdue
                     guard let dueDate = task.dueDate else { return nil }
                     
-                    // Show tasks on their due date OR if they're overdue (due date <= current date)
-                    return (calendar.isDate(dueDate, inSameDayAs: date) || dueDate <= date) ? task : nil
+                    // Show tasks on their due date OR if they're overdue (due date < start of current date)
+                    let startOfCurrentDate = calendar.startOfDay(for: date)
+                    let startOfDueDate = calendar.startOfDay(for: dueDate)
+                    let isOverdue = startOfDueDate < startOfCurrentDate
+                    let isDueToday = calendar.isDate(dueDate, inSameDayAs: date)
+                    
+                    if isDueToday || isOverdue {
+                        print("✅ Task '\(task.title)' showing: isDueToday=\(isDueToday), isOverdue=\(isOverdue)")
+                    } else {
+                        print("❌ Task '\(task.title)' hidden: due=\(startOfDueDate), current=\(startOfCurrentDate)")
+                    }
+                    
+                    return (isDueToday || isOverdue) ? task : nil
                 }
             }
             

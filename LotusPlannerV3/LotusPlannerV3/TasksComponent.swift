@@ -109,6 +109,14 @@ struct TasksComponent: View {
         .padding()
         .background(Color(.tertiarySystemBackground))
         .cornerRadius(12)
+        .onAppear {
+            // Sync local copy with upstream lists on first render
+            localTaskLists = taskLists
+        }
+        .onChange(of: taskLists) { oldValue, newValue in
+            // Keep local ordering in sync when parent updates task lists (e.g., after initial load)
+            localTaskLists = newValue
+        }
     }
     
     private func handleDrop(from sourceId: String, to destinationId: String) {
