@@ -299,6 +299,7 @@ private struct TaskComponentRow: View {
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(dateTag.textColor)
+                        .strikethrough(task.isCompleted)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
@@ -319,17 +320,11 @@ private struct TaskComponentRow: View {
         let today = calendar.startOfDay(for: Date())
         
         if task.isCompleted {
-            // Show completion date for completed tasks
+            // Show completion date for completed tasks (same colors as future due tasks)
             guard let completionDate = task.completionDate else { return nil }
-            let completionDay = calendar.startOfDay(for: completionDate)
-            
-            if calendar.isDate(completionDay, inSameDayAs: today) {
-                return ("Completed Today", .white, .green)
-            } else {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "M/d/yy"
-                return ("Completed \(formatter.string(from: completionDate))", .white, .green)
-            }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d/yy"
+            return (formatter.string(from: completionDate), .primary, Color(.systemGray5))
         } else {
             // Show due date for incomplete tasks
             guard let dueDate = task.dueDate else { return nil }

@@ -847,6 +847,15 @@ enum TaskFilter: String, CaseIterable {
     }
 }
 
+// MARK: - "All" Subfilter
+enum AllTaskSubfilter: String, CaseIterable {
+    case all = "All"
+    case hasDueDate = "Has Due Date"
+    case noDueDate = "No Due Date"
+    case pastDue = "Past Due"
+    case completed = "Completed"
+}
+
 // MARK: - Tasks Error Enum
 enum TasksError: Error {
     case notAuthenticated
@@ -889,6 +898,7 @@ struct TasksView: View {
     @State private var isTasksDividerDragging = false
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
+    @State private var allSubfilter: AllTaskSubfilter = .all
     
     // Navigation date picker state
     @State private var showingNavigationDatePicker = false
@@ -1137,8 +1147,8 @@ struct TasksView: View {
 
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 HStack(spacing: 12) {
-                    // Filter Menu (ordered: Day, Week, Month, Year, All)
-                    ForEach([TaskFilter.day, .week, .month, .year, .all], id: \.self) { filter in
+                    // Filter Menu (ordered: Day, Week, Month, Year) + All dropdown
+                    ForEach([TaskFilter.day, .week, .month, .year], id: \.self) { filter in
                         Button(action: {
                             selectedFilter = filter
                             referenceDate = Date() // reset reference when changing view
@@ -1152,6 +1162,33 @@ struct TasksView: View {
                                 .font(.body)
                                 .foregroundColor(filter == selectedFilter ? .accentColor : .secondary)
                         }
+                    }
+                    // All dropdown menu
+                    Menu {
+                        Button("All") {
+                            selectedFilter = .all
+                            allSubfilter = .all
+                        }
+                        Button("Has Due Date") {
+                            selectedFilter = .all
+                            allSubfilter = .hasDueDate
+                        }
+                        Button("No Due Date") {
+                            selectedFilter = .all
+                            allSubfilter = .noDueDate
+                        }
+                        Button("Past Due") {
+                            selectedFilter = .all
+                            allSubfilter = .pastDue
+                        }
+                        Button("Completed") {
+                            selectedFilter = .all
+                            allSubfilter = .completed
+                        }
+                    } label: {
+                        Image(systemName: TaskFilter.all.sfSymbol)
+                            .font(.body)
+                            .foregroundColor(selectedFilter == .all ? .accentColor : .secondary)
                     }
                     
                     // Toggle Hide Completed Tasks
@@ -1232,8 +1269,29 @@ struct TasksView: View {
                 filteredTasks = filteredTasks.filter { !$0.isCompleted }
             }
             
-            // Then apply time-based filter if not "all"
-            if selectedFilter != .all {
+            // Apply subfilter when in "All"
+            if selectedFilter == .all {
+                switch allSubfilter {
+                case .all:
+                    break
+                case .hasDueDate:
+                    filteredTasks = filteredTasks.filter { $0.dueDate != nil }
+                case .noDueDate:
+                    filteredTasks = filteredTasks.filter { $0.dueDate == nil }
+                case .pastDue:
+                    let cal = Calendar.mondayFirst
+                    let startOfToday = cal.startOfDay(for: Date())
+                    filteredTasks = filteredTasks.filter { task in
+                        if let due = task.dueDate {
+                            return cal.startOfDay(for: due) < startOfToday && !task.isCompleted
+                        }
+                        return false
+                    }
+                case .completed:
+                    filteredTasks = filteredTasks.filter { $0.isCompleted }
+                }
+            } else {
+                // Then apply time-based filter if not "all"
                 print("🔍 Filtering tasks for \(selectedFilter.rawValue) view on \(referenceDate)")
                 filteredTasks = filteredTasks.filter { task in
                     // For completed tasks, check completion date
