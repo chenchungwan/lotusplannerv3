@@ -18,7 +18,13 @@ struct BaseViewV2: View {
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
-    @State private var showingTaskDetails = false
+    struct BaseV2TaskSelection: Identifiable {
+        let id = UUID()
+        let task: GoogleTask
+        let listId: String
+        let accountKind: GoogleAuthManager.AccountKind
+    }
+    @State private var taskSheetSelection: BaseV2TaskSelection?
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
     
@@ -56,47 +62,37 @@ struct BaseViewV2: View {
                 appPrefs: appPrefs
             )
         }
-        .sheet(isPresented: $showingTaskDetails) {
-            if let task = selectedTask,
-               let listId = selectedTaskListId,
-               let accountKind = selectedAccountKind {
-                TaskDetailsView(
-                    task: task,
-                    taskListId: listId,
-                    accountKind: accountKind,
-                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: tasksViewModel.personalTaskLists,
-                    professionalTaskLists: tasksViewModel.professionalTaskLists,
-                    appPrefs: appPrefs,
-                    viewModel: tasksViewModel,
-                    onSave: { updatedTask in
-                        Task {
-                            await tasksViewModel.updateTask(updatedTask, in: listId, for: accountKind)
-                        }
-                        showingTaskDetails = false
-                    },
-                    onDelete: {
-                        Task {
-                            await tasksViewModel.deleteTask(task, from: listId, for: accountKind)
-                            await MainActor.run {
-                                showingTaskDetails = false
-                            }
-                        }
-                    },
-                    onMove: { task, newListId in
-                        Task {
-                            await tasksViewModel.moveTask(task, from: listId, to: newListId, for: accountKind)
-                        }
-                        showingTaskDetails = false
-                    },
-                    onCrossAccountMove: { task, newAccountKind, newListId in
-                        Task {
-                            await tasksViewModel.crossAccountMoveTask(task, from: (accountKind, listId), to: (newAccountKind, newListId))
-                        }
-                        showingTaskDetails = false
+        .sheet(item: $taskSheetSelection) { sel in
+            TaskDetailsView(
+                task: sel.task,
+                taskListId: sel.listId,
+                accountKind: sel.accountKind,
+                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { updatedTask in
+                    Task {
+                        await tasksViewModel.updateTask(updatedTask, in: sel.listId, for: sel.accountKind)
                     }
-                )
-            }
+                },
+                onDelete: {
+                    Task {
+                        await tasksViewModel.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
+                    }
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await tasksViewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                    Task {
+                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
+                    }
+                }
+            )
         }
         .sheet(isPresented: $showingNewTask) {
             // Create-task UI matching TasksView create flow
@@ -461,10 +457,7 @@ extension BaseViewV2 {
                         }
                     },
                     onTaskDetails: { task, listId in
-                        selectedTask = task
-                        selectedTaskListId = listId
-                        selectedAccountKind = .personal
-                        showingTaskDetails = true
+                        taskSheetSelection = BaseV2TaskSelection(task: task, listId: listId, accountKind: .personal)
                     },
                     onListRename: { listId, newName in
                         Task {
@@ -506,10 +499,7 @@ extension BaseViewV2 {
                         }
                     },
                     onTaskDetails: { task, listId in
-                        selectedTask = task
-                        selectedTaskListId = listId
-                        selectedAccountKind = .professional
-                        showingTaskDetails = true
+                        taskSheetSelection = BaseV2TaskSelection(task: task, listId: listId, accountKind: .professional)
                     },
                     onListRename: { listId, newName in
                         Task {

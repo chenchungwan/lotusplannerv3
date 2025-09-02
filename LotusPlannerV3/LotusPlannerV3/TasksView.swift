@@ -1087,6 +1087,14 @@ struct TasksView: View {
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    // Use an item-bound sheet selection to avoid first-click blank sheet
+    struct TasksViewTaskSelection: Identifiable {
+        let id = UUID()
+        let task: GoogleTask
+        let listId: String
+        let accountKind: GoogleAuthManager.AccountKind
+    }
+    @State private var taskSheetSelection: TasksViewTaskSelection?
     @State private var showingAddItem = false
     // Personal/Professional task divider
     @State private var tasksPersonalWidth: CGFloat = UIScreen.main.bounds.width * 0.5
@@ -1117,10 +1125,8 @@ struct TasksView: View {
                                 }
                             },
                             onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedAccountKind = .personal
-                                showingTaskDetails = true
+                                // Set selection first, present sheet after state updates
+                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
                             },
                             onListRename: { listId, newName in
                                 Task {
@@ -1154,10 +1160,7 @@ struct TasksView: View {
                                 }
                             },
                             onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedAccountKind = .professional
-                                showingTaskDetails = true
+                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
                             },
                             onListRename: { listId, newName in
                                 Task {
@@ -1242,40 +1245,38 @@ struct TasksView: View {
                 await viewModel.loadTasks()
             }
         }
-        .sheet(isPresented: $showingTaskDetails) {
-            if let task = selectedTask, let listId = selectedTaskListId, let accountKind = selectedAccountKind {
-                TaskDetailsView(
-                    task: task,
-                    taskListId: listId,
-                    accountKind: accountKind,
-                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: viewModel.personalTaskLists,
-                    professionalTaskLists: viewModel.professionalTaskLists,
-                    appPrefs: appPrefs,
-                    viewModel: viewModel,
-                    onSave: { updatedTask in
-                        Task {
-                            await viewModel.updateTask(updatedTask, in: listId, for: accountKind)
-                        }
-                    },
-                    onDelete: {
-                        Task {
-                            await viewModel.deleteTask(task, from: listId, for: accountKind)
-                        }
-                    },
-                    onMove: { updatedTask, targetListId in
-                        Task {
-                            await viewModel.moveTask(updatedTask, from: listId, to: targetListId, for: accountKind)
-                        }
-                    },
-                    onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
-                        Task {
-                            await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, listId), to: (targetAccountKind, targetListId))
-                        }
-                    },
-                    isNew: false
-                )
-            }
+        .sheet(item: $taskSheetSelection) { sel in
+            TaskDetailsView(
+                task: sel.task,
+                taskListId: sel.listId,
+                accountKind: sel.accountKind,
+                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: viewModel.personalTaskLists,
+                professionalTaskLists: viewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: viewModel,
+                onSave: { updatedTask in
+                    Task {
+                        await viewModel.updateTask(updatedTask, in: sel.listId, for: sel.accountKind)
+                    }
+                },
+                onDelete: {
+                    Task {
+                        await viewModel.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
+                    }
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await viewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                    Task {
+                        await viewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
+                    }
+                },
+                isNew: false
+            )
         }
         .sheet(isPresented: $showingNewTask) {
             // Use the same UI as Task Details for creating a task

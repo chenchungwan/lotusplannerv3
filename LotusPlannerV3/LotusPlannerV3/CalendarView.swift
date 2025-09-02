@@ -781,6 +781,13 @@ struct CalendarView: View {
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    struct CalendarTaskSelection: Identifiable {
+        let id = UUID()
+        let task: GoogleTask
+        let listId: String
+        let accountKind: GoogleAuthManager.AccountKind
+    }
+    @State private var taskSheetSelection: CalendarTaskSelection?
     @State private var showingAddItem = false
     @State private var currentTimeTimer: Timer?
     @State private var currentTimeSlot: Double = 0
@@ -839,11 +846,55 @@ struct CalendarView: View {
                 trailingToolbarButtons
             }
         }
-        .sheet(isPresented: $showingEventDetails) {
-            eventDetailsSheet
+        .sheet(item: Binding<GoogleCalendarEvent?>(
+            get: { selectedCalendarEvent },
+            set: { selectedCalendarEvent = $0 }
+        )) { ev in
+            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind
+            )
         }
-        .sheet(isPresented: $showingTaskDetails) {
-            taskDetailsSheet
+        .sheet(item: $taskSheetSelection) { sel in
+            TaskDetailsView(
+                task: sel.task,
+                taskListId: sel.listId,
+                accountKind: sel.accountKind,
+                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { updatedTask in
+                    Task {
+                        await tasksViewModel.updateTask(updatedTask, in: sel.listId, for: sel.accountKind)
+                        updateCachedTasks()
+                    }
+                },
+                onDelete: {
+                    Task {
+                        await tasksViewModel.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
+                        updateCachedTasks()
+                    }
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await tasksViewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
+                        updateCachedTasks()
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                    Task {
+                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
+                        updateCachedTasks()
+                    }
+                }
+            )
         }
         .sheet(isPresented: $showingAddItem) {
             AddItemView(
@@ -1014,7 +1065,7 @@ struct CalendarView: View {
                 }
                 Button("Task") {
                     // Open a create-task sheet inline, matching Tasks view behavior
-                    selectedTask = GoogleTask(
+                    let newTask = GoogleTask(
                         id: UUID().uuidString,
                         title: "",
                         notes: nil,
@@ -1023,9 +1074,9 @@ struct CalendarView: View {
                         completed: nil,
                         updated: nil
                     )
-                    selectedTaskListId = tasksViewModel.personalTaskLists.first?.id ?? tasksViewModel.professionalTaskLists.first?.id
-                    selectedAccountKind = (tasksViewModel.personalTaskLists.first != nil) ? .personal : .professional
-                    showingTaskDetails = true
+                    let defaultListId = tasksViewModel.personalTaskLists.first?.id ?? tasksViewModel.professionalTaskLists.first?.id ?? ""
+                    let defaultKind: GoogleAuthManager.AccountKind = (tasksViewModel.personalTaskLists.first != nil) ? .personal : .professional
+                    taskSheetSelection = CalendarTaskSelection(task: newTask, listId: defaultListId, accountKind: defaultKind)
                 }
             } label: {
                 Image(systemName: "plus.circle")
@@ -1143,12 +1194,7 @@ struct CalendarView: View {
                     }
                 },
                 onTaskDetails: { task, listId in
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedAccountKind = .personal
-                    DispatchQueue.main.async {
-                        showingTaskDetails = true
-                    }
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
                 },
                 onListRename: { listId, newName in
                     Task {
@@ -1177,12 +1223,7 @@ struct CalendarView: View {
                     }
                 },
                 onTaskDetails: { task, listId in
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedAccountKind = .professional
-                    DispatchQueue.main.async {
-                        showingTaskDetails = true
-                    }
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
                 },
                 onListRename: { listId, newName in
                     Task {
@@ -1242,12 +1283,7 @@ struct CalendarView: View {
                     }
                 },
                 onTaskDetails: { task, listId in
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedAccountKind = .personal
-                    DispatchQueue.main.async {
-                        showingTaskDetails = true
-                    }
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
                 },
                 onListRename: { listId, newName in
                     Task {
@@ -1278,12 +1314,7 @@ struct CalendarView: View {
                     }
                 },
                 onTaskDetails: { task, listId in
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedAccountKind = .professional
-                    DispatchQueue.main.async {
-                        showingTaskDetails = true
-                    }
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
                 },
                 onListRename: { listId, newName in
                     Task {
@@ -2950,12 +2981,7 @@ struct CalendarView: View {
                     }
                 },
                 onTaskDetails: { task, listId in
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedAccountKind = .personal
-                    DispatchQueue.main.async {
-                        showingTaskDetails = true
-                    }
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
                 },
                 onListRename: { listId, newName in
                     Task {
@@ -2983,12 +3009,7 @@ struct CalendarView: View {
                     }
                 },
                 onTaskDetails: { task, listId in
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedAccountKind = .professional
-                    DispatchQueue.main.async {
-                        showingTaskDetails = true
-                    }
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
                 },
                 onListRename: { listId, newName in
                     Task {

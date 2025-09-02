@@ -238,9 +238,9 @@ private struct TaskComponentRow: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            onDetails()
-        }
+        .onTapGesture { onDetails() }
+        .highPriorityGesture(TapGesture().onEnded { onDetails() })
+        .allowsHitTesting(true)
     }
     
     private func dueDateTag(for task: GoogleTask) -> (text: String, textColor: Color, backgroundColor: Color)? {
