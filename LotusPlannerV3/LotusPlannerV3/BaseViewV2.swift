@@ -283,16 +283,28 @@ extension BaseViewV2 {
         let timeColumnWidth: CGFloat = 50 // Same as timeline (kept for timeline compatibility)
         let dayColumnWidth = fixedWidth / 7 // Each day column now ~228 points (no time column)
         
+        // Determine whether there are any tasks to show this week for each account
+        let personalHasAny = weekDates.contains { date in
+            let dict = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+            return !dict.allSatisfy { $0.value.isEmpty }
+        }
+        let professionalHasAny = weekDates.contains { date in
+            let dict = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+            return !dict.allSatisfy { $0.value.isEmpty }
+        }
+
         return VStack(spacing: 0) {
-            // Shared Date Header Row (always at top)
-            weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: timeColumnWidth)
-            
-            // Divider below date header
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(height: 1)
+            if personalHasAny || professionalHasAny {
+                // Shared Date Header Row (only when there is at least one row to show)
+                weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: timeColumnWidth)
+                // Divider below date header
+                Rectangle()
+                    .fill(Color(.systemGray4))
+                    .frame(height: 1)
+            }
+
             // Personal Tasks Row (top 50%)
-            if authManager.isLinked(kind: .personal) {
+            if authManager.isLinked(kind: .personal) && personalHasAny {
                 VStack(alignment: .leading, spacing: 4) {
                     
                     // Fixed-width 7-day task columns
@@ -317,14 +329,14 @@ extension BaseViewV2 {
             }
             
             // Divider between task types
-            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && personalHasAny && professionalHasAny {
                 Rectangle()
                     .fill(Color(.systemGray4))
                     .frame(height: 1)
             }
             
             // Professional Tasks Row (bottom 50%)
-            if authManager.isLinked(kind: .professional) {
+            if authManager.isLinked(kind: .professional) && professionalHasAny {
                 VStack(alignment: .leading, spacing: 4) {
                     
                     // Fixed-width 7-day task columns
@@ -469,15 +481,12 @@ extension BaseViewV2 {
                         Task {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                         }
-                    }
+                    },
+                    hideDueDateTag: true,
+                    showEmptyState: false
                 )
             } else {
-                Text("No tasks")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
+                EmptyView()
             }
         }
         .frame(maxWidth: .infinity)
@@ -511,15 +520,12 @@ extension BaseViewV2 {
                         Task {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                         }
-                    }
+                    },
+                    hideDueDateTag: true,
+                    showEmptyState: false
                 )
             } else {
-                Text("No tasks")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
+                EmptyView()
             }
         }
         .frame(maxWidth: .infinity)

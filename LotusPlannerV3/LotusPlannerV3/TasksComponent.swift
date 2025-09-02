@@ -9,11 +9,13 @@ struct TasksComponent: View {
     let onTaskDetails: (GoogleTask, String) -> Void
     let onListRename: ((String, String) -> Void)? // listId, newName
     let onOrderChanged: (([GoogleTaskList]) -> Void)? // callback to update parent state
+    let hideDueDateTag: Bool
+    let showEmptyState: Bool
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @State private var localTaskLists: [GoogleTaskList] = []
     
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -22,6 +24,8 @@ struct TasksComponent: View {
         self.onTaskDetails = onTaskDetails
         self.onListRename = onListRename
         self.onOrderChanged = onOrderChanged
+        self.hideDueDateTag = hideDueDateTag
+        self.showEmptyState = showEmptyState
         self._localTaskLists = State(initialValue: taskLists)
     }
     
@@ -33,31 +37,27 @@ struct TasksComponent: View {
                 VStack(spacing: 16) {
                     ForEach(localTaskLists, id: \.id) { taskList in
                         if let tasks = tasksDict[taskList.id] {
-                            let filteredTasks = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
+                            let filteredTasks: [GoogleTask] = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
                             if !filteredTasks.isEmpty {
                                 TaskComponentListCard(
                                     taskList: taskList,
                                     tasks: filteredTasks,
                                     accentColor: accentColor,
-                                    onTaskToggle: { task in
-                                        onTaskToggle(task, taskList.id)
-                                    },
-                                    onTaskDetails: { task in
-                                        onTaskDetails(task, taskList.id)
-                                    },
-                                    onListRename: { newName in
-                                        onListRename?(taskList.id, newName)
-                                    }
+                                    onTaskToggle: { task in onTaskToggle(task, taskList.id) },
+                                    onTaskDetails: { task in onTaskDetails(task, taskList.id) },
+                                    onListRename: { newName in onListRename?(taskList.id, newName) },
+                                    hideDueDateTag: hideDueDateTag
                                 )
                             }
                         }
                     }
-                    
-                    if tasksDict.allSatisfy({ tasks in
-                        let filteredTasks = appPrefs.hideCompletedTasks ? tasks.value.filter { !$0.isCompleted } : tasks.value
-                        return filteredTasks.isEmpty
-                    }) {
-                        Text("No tasks for today")
+
+                    let noVisibleTasks: Bool = tasksDict.allSatisfy { entry in
+                        let visible = appPrefs.hideCompletedTasks ? entry.value.filter { !$0.isCompleted } : entry.value
+                        return visible.isEmpty
+                    }
+                    if showEmptyState && noVisibleTasks {
+                        Text("No tasks")
                             .font(.body)
                             .foregroundColor(.secondary)
                             .italic()
@@ -90,6 +90,7 @@ private struct TaskComponentListCard: View {
     let onTaskToggle: (GoogleTask) -> Void
     let onTaskDetails: (GoogleTask) -> Void
     let onListRename: (String) -> Void
+    let hideDueDateTag: Bool
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -160,6 +161,7 @@ private struct TaskComponentListCard: View {
                         onToggle: { onTaskToggle(task) },
                         onDetails: { onTaskDetails(task) }
                     )
+                    .environment(\.hideDueDate, hideDueDateTag)
                 }
             }
         }
@@ -200,6 +202,7 @@ private struct TaskComponentRow: View {
     let accentColor: Color
     let onToggle: () -> Void
     let onDetails: () -> Void
+    @Environment(\.hideDueDate) private var hideDueDate: Bool
     
     var body: some View {
         HStack(spacing: 8) {
@@ -222,7 +225,7 @@ private struct TaskComponentRow: View {
                 Spacer()
 
                 // Due date tag
-                if let dateTag = dueDateTag(for: task) {
+                if !hideDueDate, let dateTag = dueDateTag(for: task) {
                     Text(dateTag.text)
                         .font(.caption)
                         .fontWeight(.medium)
@@ -270,6 +273,17 @@ private struct TaskComponentRow: View {
                 return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
             }
         }
+    }
+}
+
+private struct HideDueDateKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var hideDueDate: Bool {
+        get { self[HideDueDateKey.self] }
+        set { self[HideDueDateKey.self] = newValue }
     }
 }
 
