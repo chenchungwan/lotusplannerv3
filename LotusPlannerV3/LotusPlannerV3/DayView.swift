@@ -75,6 +75,9 @@ struct DayView: View {
                     onDelete: {
                         Task {
                             await tasksViewModel.deleteTask(task, from: listId, for: accountKind)
+                            await MainActor.run {
+                                showingTaskDetails = false
+                            }
                         }
                     },
                     onMove: { task, newListId in

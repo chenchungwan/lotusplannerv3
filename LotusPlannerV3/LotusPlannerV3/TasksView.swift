@@ -307,92 +307,167 @@ class TasksViewModel: ObservableObject {
     }
     
     func updateTask(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
-        do {
-            guard let accessToken = try await getAccessTokenThrows(for: kind) else {
-                throw TasksError.notAuthenticated
-            }
-            
-            let url = URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listId)/tasks/\(task.id)")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "PATCH"
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            
-            var requestBody: [String: Any] = [
-                "title": task.title,
-                "status": task.status
-            ]
-            
-            if let notes = task.notes {
-                requestBody["notes"] = notes
-            }
-            
-            if let due = task.due {
-                // Ensure due date is in RFC 3339 format
-                if due.count == 10 && due.contains("-") && !due.contains("T") {
-                    requestBody["due"] = "\(due)T00:00:00.000Z"
+        print("🔄 Optimistic update for task: '\(task.title)' (ID: \(task.id))")
+        
+        // OPTIMISTIC UPDATE: Update UI immediately for instant feedback
+        let originalTask = await getOriginalTask(task.id, from: listId, for: kind)
+        print("📋 Original task found: \(originalTask?.title ?? "nil")")
+        
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                if var tasks = self.personalTasks[listId] {
+                    if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                        print("✅ Updating personal task at index \(index)")
+                        tasks[index] = task
+                        self.personalTasks[listId] = tasks
+                    } else {
+                        print("⚠️ Personal task not found for ID: \(task.id)")
+                    }
                 } else {
-                    requestBody["due"] = due
+                    print("⚠️ Personal task list not found: \(listId)")
                 }
-            } else {
-                // Explicitly clear due date on the server
-                requestBody["due"] = NSNull()
-            }
-            
-            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-            
-            let (_, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw TasksError.invalidResponse
-            }
-            
-            if httpResponse.statusCode != 200 {
-                throw TasksError.apiError(httpResponse.statusCode)
-            }
-            
-            // Update local state
-            await MainActor.run {
-                switch kind {
-                case .personal:
-                    if var tasks = self.personalTasks[listId] {
-                        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                            tasks[index] = task
-                            self.personalTasks[listId] = tasks
-                        }
+            case .professional:
+                if var tasks = self.professionalTasks[listId] {
+                    if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                        print("✅ Updating professional task at index \(index)")
+                        tasks[index] = task
+                        self.professionalTasks[listId] = tasks
+                    } else {
+                        print("⚠️ Professional task not found for ID: \(task.id)")
                     }
-                case .professional:
-                    if var tasks = self.professionalTasks[listId] {
-                        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                            tasks[index] = task
-                            self.professionalTasks[listId] = tasks
-                        }
-                    }
+                } else {
+                    print("⚠️ Professional task list not found: \(listId)")
                 }
             }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to update task: \(error.localizedDescription)"
+        }
+        
+        // BACKGROUND SYNC: Update server in background
+        Task {
+            do {
+                guard let accessToken = try await getAccessTokenThrows(for: kind) else {
+                    throw TasksError.notAuthenticated
+                }
+                
+                let url = URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listId)/tasks/\(task.id)")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "PATCH"
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                var requestBody: [String: Any] = [
+                    "title": task.title,
+                    "status": task.status
+                ]
+                
+                if let notes = task.notes {
+                    requestBody["notes"] = notes
+                }
+                
+                if let due = task.due {
+                    // Ensure due date is in RFC 3339 format
+                    if due.count == 10 && due.contains("-") && !due.contains("T") {
+                        requestBody["due"] = "\(due)T00:00:00.000Z"
+                    } else {
+                        requestBody["due"] = due
+                    }
+                } else {
+                    // Explicitly clear due date on the server
+                    requestBody["due"] = NSNull()
+                }
+                
+                request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+                
+                let (_, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw TasksError.invalidResponse
+                }
+                
+                if httpResponse.statusCode != 200 {
+                    throw TasksError.apiError(httpResponse.statusCode)
+                }
+                
+                print("✅ Task update synced to server successfully")
+                
+            } catch {
+                print("❌ Failed to sync task update to server: \(error)")
+                // REVERT OPTIMISTIC UPDATE on error
+                if let original = originalTask {
+                    await MainActor.run {
+                        switch kind {
+                        case .personal:
+                            if var tasks = self.personalTasks[listId] {
+                                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                    tasks[index] = original
+                                    self.personalTasks[listId] = tasks
+                                }
+                            }
+                        case .professional:
+                            if var tasks = self.professionalTasks[listId] {
+                                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                    tasks[index] = original
+                                    self.professionalTasks[listId] = tasks
+                                }
+                            }
+                        }
+                    }
+                }
+                await MainActor.run {
+                    self.errorMessage = "Failed to update task: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    // Helper method to get original task for rollback
+    private func getOriginalTask(_ taskId: String, from listId: String, for kind: GoogleAuthManager.AccountKind) async -> GoogleTask? {
+        return await MainActor.run {
+            switch kind {
+            case .personal:
+                return personalTasks[listId]?.first { $0.id == taskId }
+            case .professional:
+                return professionalTasks[listId]?.first { $0.id == taskId }
             }
         }
     }
     
     func deleteTask(_ task: GoogleTask, from listId: String, for kind: GoogleAuthManager.AccountKind) async {
-        do {
-            try await deleteTaskFromServer(task, from: listId, for: kind)
-            
-            // Update local state
-            await MainActor.run {
-                switch kind {
-                case .personal:
-                    self.personalTasks[listId]?.removeAll { $0.id == task.id }
-                case .professional:
-                    self.professionalTasks[listId]?.removeAll { $0.id == task.id }
-                }
+        // OPTIMISTIC DELETE: Remove from UI immediately
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                self.personalTasks[listId]?.removeAll { $0.id == task.id }
+            case .professional:
+                self.professionalTasks[listId]?.removeAll { $0.id == task.id }
             }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to delete task: \(error.localizedDescription)"
+        }
+        
+        // BACKGROUND SYNC: Delete from server in background
+        Task {
+            do {
+                try await deleteTaskFromServer(task, from: listId, for: kind)
+                print("✅ Task deletion synced to server successfully")
+            } catch {
+                print("❌ Failed to sync task deletion to server: \(error)")
+                // REVERT OPTIMISTIC DELETE on error - restore the task
+                await MainActor.run {
+                    switch kind {
+                    case .personal:
+                        if self.personalTasks[listId] != nil {
+                            self.personalTasks[listId]?.append(task)
+                        } else {
+                            self.personalTasks[listId] = [task]
+                        }
+                    case .professional:
+                        if self.professionalTasks[listId] != nil {
+                            self.professionalTasks[listId]?.append(task)
+                        } else {
+                            self.professionalTasks[listId] = [task]
+                        }
+                    }
+                    self.errorMessage = "Failed to delete task: \(error.localizedDescription)"
+                }
             }
         }
     }
@@ -460,47 +535,116 @@ class TasksViewModel: ObservableObject {
     }
     
     func crossAccountMoveTask(_ updatedTask: GoogleTask, from source: (GoogleAuthManager.AccountKind, String), to target: (GoogleAuthManager.AccountKind, String)) async {
-        do {
-            // Create task in target account
-            try await createTaskOnServer(updatedTask, in: target.1, for: target.0)
+        print("🔄 Cross-account move: '\(updatedTask.title)' from \(source.0) to \(target.0)")
+        
+        // Store original task for potential rollback
+        let originalTask = await MainActor.run {
+            switch source.0 {
+            case .personal:
+                return personalTasks[source.1]?.first { $0.id == updatedTask.id }
+            case .professional:
+                return professionalTasks[source.1]?.first { $0.id == updatedTask.id }
+            }
+        }
+        
+        // OPTIMISTIC MOVE: Update UI immediately
+        await MainActor.run {
+            // Remove from source account
+            switch source.0 {
+            case .personal:
+                self.personalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
+                print("✅ Removed from personal account")
+            case .professional:
+                self.professionalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
+                print("✅ Removed from professional account")
+            }
             
-            // Delete from source account
-            try await deleteTaskFromServer(updatedTask, from: source.1, for: source.0)
-            
-            // Update local state
-            await MainActor.run {
-                // Remove from source
-                switch source.0 {
-                case .personal:
-                    self.personalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
-                case .professional:
-                    self.professionalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
+            // Add to target account
+            switch target.0 {
+            case .personal:
+                if self.personalTasks[target.1] != nil {
+                    self.personalTasks[target.1]?.append(updatedTask)
+                } else {
+                    self.personalTasks[target.1] = [updatedTask]
+                }
+                print("✅ Added to personal account")
+            case .professional:
+                if self.professionalTasks[target.1] != nil {
+                    self.professionalTasks[target.1]?.append(updatedTask)
+                } else {
+                    self.professionalTasks[target.1] = [updatedTask]
+                }
+                print("✅ Added to professional account")
+            }
+        }
+        
+        // BACKGROUND SYNC: Perform server operations in background
+        Task {
+            do {
+                // Create task in target account
+                let serverTask = try await createTaskOnServer(updatedTask, in: target.1, for: target.0)
+                
+                // Delete from source account
+                try await deleteTaskFromServer(updatedTask, from: source.1, for: source.0)
+                
+                // Replace temporary task with server task (correct ID)
+                await MainActor.run {
+                    switch target.0 {
+                    case .personal:
+                        if var tasks = personalTasks[target.1] {
+                            if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
+                                tasks[index] = serverTask
+                                personalTasks[target.1] = tasks
+                            }
+                        }
+                    case .professional:
+                        if var tasks = professionalTasks[target.1] {
+                            if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
+                                tasks[index] = serverTask
+                                professionalTasks[target.1] = tasks
+                            }
+                        }
+                    }
                 }
                 
-                // Add to target
-                switch target.0 {
-                case .personal:
-                    if self.personalTasks[target.1] != nil {
-                        self.personalTasks[target.1]?.append(updatedTask)
-                    } else {
-                        self.personalTasks[target.1] = [updatedTask]
-                    }
-                case .professional:
-                    if self.professionalTasks[target.1] != nil {
-                        self.professionalTasks[target.1]?.append(updatedTask)
-                    } else {
-                        self.professionalTasks[target.1] = [updatedTask]
+                print("✅ Cross-account move synced to server successfully")
+            } catch {
+                print("❌ Failed to sync cross-account move to server: \(error)")
+                // REVERT OPTIMISTIC MOVE on error
+                if let original = originalTask {
+                    await MainActor.run {
+                        // Remove from target (rollback addition)
+                        switch target.0 {
+                        case .personal:
+                            self.personalTasks[target.1]?.removeAll { $0.id == updatedTask.id }
+                        case .professional:
+                            self.professionalTasks[target.1]?.removeAll { $0.id == updatedTask.id }
+                        }
+                        
+                        // Restore to source (rollback removal)
+                        switch source.0 {
+                        case .personal:
+                            if self.personalTasks[source.1] != nil {
+                                self.personalTasks[source.1]?.append(original)
+                            } else {
+                                self.personalTasks[source.1] = [original]
+                            }
+                        case .professional:
+                            if self.professionalTasks[source.1] != nil {
+                                self.professionalTasks[source.1]?.append(original)
+                            } else {
+                                self.professionalTasks[source.1] = [original]
+                            }
+                        }
+                        
+                        self.errorMessage = "Failed to move task across accounts: \(error.localizedDescription)"
                     }
                 }
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to move task across accounts: \(error.localizedDescription)"
             }
         }
     }
     
-    func createTaskOnServer(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async throws {
+    func createTaskOnServer(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async throws -> GoogleTask {
         print("🌐 Creating task on server: '\(task.title)' in list '\(listId)'")
         
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
@@ -553,6 +697,10 @@ class TasksViewModel: ObservableObject {
         }
         
         print("✅ Task created successfully on server")
+        
+        // Parse response to get the created task with server ID
+        let createdTask = try JSONDecoder().decode(GoogleTask.self, from: data)
+        return createdTask
     }
     
     func createTaskList(title: String, for kind: GoogleAuthManager.AccountKind) async -> String? {
@@ -677,17 +825,61 @@ class TasksViewModel: ObservableObject {
             updated: nil
         )
         
-        do {
-            try await createTaskOnServer(task, in: listId, for: kind)
-            print("✅ Task created successfully, reloading tasks...")
-            
-            // Reload tasks to get the actual task from server with correct ID
-            await loadTasks()
-        } catch {
-            print("❌ Failed to create task: \(error)")
-            print("   Error type: \(type(of: error))")
-            await MainActor.run {
-                self.errorMessage = "Failed to create task: \(error.localizedDescription)"
+        // OPTIMISTIC CREATE: Add to UI immediately for instant feedback
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                if personalTasks[listId] != nil {
+                    personalTasks[listId]?.append(task)
+                } else {
+                    personalTasks[listId] = [task]
+                }
+            case .professional:
+                if professionalTasks[listId] != nil {
+                    professionalTasks[listId]?.append(task)
+                } else {
+                    professionalTasks[listId] = [task]
+                }
+            }
+        }
+        
+        // BACKGROUND SYNC: Create on server in background
+        Task {
+            do {
+                let serverTask = try await createTaskOnServer(task, in: listId, for: kind)
+                print("✅ Task created successfully on server")
+                
+                // Replace temporary task with server task (has correct ID)
+                await MainActor.run {
+                    switch kind {
+                    case .personal:
+                        if var tasks = personalTasks[listId] {
+                            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                tasks[index] = serverTask
+                                personalTasks[listId] = tasks
+                            }
+                        }
+                    case .professional:
+                        if var tasks = professionalTasks[listId] {
+                            if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                                tasks[index] = serverTask
+                                professionalTasks[listId] = tasks
+                            }
+                        }
+                    }
+                }
+            } catch {
+                print("❌ Failed to sync task creation to server: \(error)")
+                // REVERT OPTIMISTIC CREATE on error - remove the temporary task
+                await MainActor.run {
+                    switch kind {
+                    case .personal:
+                        personalTasks[listId]?.removeAll { $0.id == task.id }
+                    case .professional:
+                        professionalTasks[listId]?.removeAll { $0.id == task.id }
+                    }
+                    self.errorMessage = "Failed to create task: \(error.localizedDescription)"
+                }
             }
         }
     }
@@ -2163,8 +2355,7 @@ struct TaskDetailsView: View {
                     } else {
                         await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
                     }
-                    // Reload to ensure UI reflects server state
-                    await viewModel.loadTasks()
+                    // No need to reload all tasks - individual methods update local state
                     await MainActor.run { dismiss() }
                 }
             } catch {

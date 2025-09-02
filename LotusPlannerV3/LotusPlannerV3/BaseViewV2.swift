@@ -78,8 +78,10 @@ struct BaseViewV2: View {
                     onDelete: {
                         Task {
                             await tasksViewModel.deleteTask(task, from: listId, for: accountKind)
+                            await MainActor.run {
+                                showingTaskDetails = false
+                            }
                         }
-                        showingTaskDetails = false
                     },
                     onMove: { task, newListId in
                         Task {

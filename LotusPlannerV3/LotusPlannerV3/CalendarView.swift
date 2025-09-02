@@ -4121,8 +4121,10 @@ struct AddItemView: View {
                 }
 
                 print("✅ Event created successfully, refreshing calendar data...")
-                // Refresh events
-                await calendarViewModel.loadCalendarData(for: eventStart)
+                // Refresh events in background for better UX
+                Task {
+                    await calendarViewModel.loadCalendarData(for: eventStart)
+                }
 
                 await MainActor.run { dismiss() }
             } catch {
@@ -4169,10 +4171,8 @@ struct AddItemView: View {
                     try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
 
-                // Refresh events for both accounts if cross-account move
-                if originalAccountKind != targetAccountKind {
-                    await calendarViewModel.loadCalendarData(for: eventStart)
-                } else {
+                // Refresh events in background (optimized - non-blocking)
+                Task {
                     await calendarViewModel.loadCalendarData(for: eventStart)
                 }
                 
