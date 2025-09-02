@@ -1454,7 +1454,8 @@ struct TasksView: View {
                 currentDate: referenceDate,
                 tasksViewModel: viewModel,
                 calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs
+                appPrefs: appPrefs,
+                showEventOnly: true
             )
         }
         .onAppear {

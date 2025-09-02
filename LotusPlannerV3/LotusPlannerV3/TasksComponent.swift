@@ -209,7 +209,7 @@ private struct TaskComponentRow: View {
                     .foregroundColor(task.isCompleted ? accentColor : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
-            
+
             HStack(spacing: 8) {
                 Text(task.title)
                     .font(.body)
@@ -218,9 +218,9 @@ private struct TaskComponentRow: View {
                     .strikethrough(task.isCompleted)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                
+
                 Spacer()
-                
+
                 // Due date tag
                 if let dateTag = dueDateTag(for: task) {
                     Text(dateTag.text)
@@ -236,11 +236,9 @@ private struct TaskComponentRow: View {
                         )
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { onDetails() }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onDetails() }
-        .highPriorityGesture(TapGesture().onEnded { onDetails() })
-        .allowsHitTesting(true)
     }
     
     private func dueDateTag(for task: GoogleTask) -> (text: String, textColor: Color, backgroundColor: Color)? {

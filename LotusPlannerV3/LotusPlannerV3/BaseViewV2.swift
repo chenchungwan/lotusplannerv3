@@ -59,7 +59,8 @@ struct BaseViewV2: View {
                 currentDate: selectedDate,
                 tasksViewModel: tasksViewModel,
                 calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs
+                appPrefs: appPrefs,
+                showEventOnly: true
             )
         }
         .sheet(item: $taskSheetSelection) { sel in

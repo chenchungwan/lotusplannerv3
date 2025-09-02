@@ -283,12 +283,16 @@ struct TimelineBaseView: View {
     
     // MARK: - Helper Methods
     private func formatHour(_ hour: Int) -> String {
+        let normalizedHour = ((hour % 24) + 24) % 24 // ensures 0-23
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
-        let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
-        let timeString = formatter.string(from: date).lowercased()
+        let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
+        var timeString = formatter.string(from: date).lowercased()
         // Remove the "m" from "am/pm" to show "6a" instead of "6am"
-        return timeString.replacingOccurrences(of: "m", with: "")
+        timeString = timeString.replacingOccurrences(of: "m", with: "")
+        // Special-case 24 -> 12a (end-of-day label)
+        if hour == 24 { return "12a" }
+        return timeString
     }
     
     private func formatEventTime(_ time: Date) -> String {

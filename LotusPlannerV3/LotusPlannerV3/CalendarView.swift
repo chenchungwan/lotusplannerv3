@@ -857,7 +857,8 @@ struct CalendarView: View {
                 calendarViewModel: calendarViewModel,
                 appPrefs: appPrefs,
                 existingEvent: ev,
-                accountKind: accountKind
+                accountKind: accountKind,
+                showEventOnly: true
             )
         }
         .sheet(item: $taskSheetSelection) { sel in
@@ -3890,8 +3891,8 @@ struct AddItemView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Tab selector (hidden when creating event-only)
-                if !showEventOnly {
+                // Tab selector (hidden when creating event-only, or editing an existing event)
+                if !(showEventOnly || isEditingEvent) {
                     Picker("Type", selection: $selectedTab) {
                         Text("Task").tag(0)
                         Text("Calendar Event").tag(1)
@@ -4061,6 +4062,25 @@ struct AddItemView: View {
                         }
                     }
                 }
+                .onChange(of: isAllDay) { oldValue, newValue in
+                    let cal = Calendar.current
+                    if newValue {
+                        let startDate = cal.startOfDay(for: eventStart)
+                        eventStart = startDate
+                        eventEnd = cal.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24*3600)
+                    } else {
+                        let base = eventStart > Date.distantPast ? eventStart : Date()
+                        let minute = cal.component(.minute, from: base)
+                        let rounded = cal.nextDate(
+                            after: base,
+                            matching: DateComponents(minute: minute < 30 ? 30 : 0),
+                            matchingPolicy: .nextTime,
+                            direction: .forward
+                        ) ?? base
+                        eventStart = rounded
+                        eventEnd = cal.date(byAdding: .minute, value: 30, to: rounded) ?? rounded.addingTimeInterval(1800)
+                    }
+                }
             }
             .navigationTitle(selectedTab == 0 ? "New Task" : (isEditingEvent ? "Edit Event" : "New Event"))
             .navigationBarTitleDisplayMode(.inline)
@@ -4189,6 +4209,9 @@ struct AddItemView: View {
                 } else {
                     startDict["dateTime"] = isoFormatter.string(from: eventStart)
                     endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+                    // Provide explicit timeZone to satisfy Google Calendar API
+                    startDict["timeZone"] = TimeZone.current.identifier
+                    endDict["timeZone"] = TimeZone.current.identifier
                 }
 
                 var body: [String: Any] = [
@@ -4308,6 +4331,8 @@ struct AddItemView: View {
         } else {
             startDict["dateTime"] = isoFormatter.string(from: eventStart)
             endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+            startDict["timeZone"] = TimeZone.current.identifier
+            endDict["timeZone"] = TimeZone.current.identifier
         }
 
         var body: [String: Any] = [
@@ -4390,6 +4415,8 @@ struct AddItemView: View {
         } else {
             startDict["dateTime"] = isoFormatter.string(from: eventStart)
             endDict["dateTime"] = isoFormatter.string(from: eventEnd)
+            startDict["timeZone"] = TimeZone.current.identifier
+            endDict["timeZone"] = TimeZone.current.identifier
         }
 
         var body: [String: Any] = [

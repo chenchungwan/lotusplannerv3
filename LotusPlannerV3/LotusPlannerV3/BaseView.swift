@@ -41,16 +41,24 @@ struct BaseView: View {
             get: { selectedCalendarEvent },
             set: { selectedCalendarEvent = $0 }
         )) { event in
-            CalendarEventDetailsView(event: event) {
-                // Handle event deletion if needed
-            }
+            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == event.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: event.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: event,
+                accountKind: accountKind,
+                showEventOnly: true
+            )
         }
         .sheet(isPresented: $showingAddEvent) {
             AddItemView(
                 currentDate: selectedDate,
                 tasksViewModel: tasksViewModel,
                 calendarViewModel: calendarViewModel,
-                appPrefs: appPrefs
+                appPrefs: appPrefs,
+                showEventOnly: true
             )
         }
         .sheet(isPresented: $showingNewTask) {
@@ -558,11 +566,11 @@ extension BaseView {
     }
     
     private func formatHour(_ hour: Int) -> String {
+        let normalizedHour = ((hour % 24) + 24) % 24
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
-        let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
+        let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
         let timeString = formatter.string(from: date).lowercased()
-        // Remove the "m" from "am/pm" to show "6a" instead of "6am"
         return timeString.replacingOccurrences(of: "m", with: "")
     }
     
