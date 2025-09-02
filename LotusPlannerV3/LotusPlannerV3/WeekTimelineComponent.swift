@@ -27,8 +27,8 @@ struct WeekTimelineComponent: View {
     
     // MARK: - Constants
     private let hourHeight: CGFloat = 80
-    private let defaultStartHour = 6
-    private let defaultEndHour = 22
+    private let defaultStartHour = 0
+    private let defaultEndHour = 24
     private let timeColumnWidth: CGFloat = 50
     private let dayHeaderHeight: CGFloat = 60
     private let allDayEventHeight: CGFloat = 24
@@ -593,22 +593,18 @@ struct WeekTimelineComponent: View {
     
     // MARK: - Individual Components
     private func dayHeaderView(data: DayData) -> some View {
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "E" // Mon, Tue, etc.
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "d" // 1, 2, 3
-        
         return VStack(spacing: 4) {
-            Text(dayFormatter.string(from: data.date))
-                .font(.body)
+            // Standardized day of week format: MON, TUE, etc.
+            Text(DateFormatter.standardDayOfWeek.string(from: data.date).uppercased())
+                .font(DateDisplayStyle.bodyFont)
                 .fontWeight(.semibold)
-                .foregroundColor(data.isToday ? .white : .secondary)
+                .foregroundColor(data.isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
             
-            Text(dateFormatter.string(from: data.date))
-                .font(.title2)
+            // Standardized date format: m/d/yy
+            Text(DateFormatter.standardDate.string(from: data.date))
+                .font(DateDisplayStyle.subtitleFont)
                 .fontWeight(.bold)
-                .foregroundColor(data.isToday ? .white : .primary)
+                .foregroundColor(data.isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
             
 
         }
@@ -663,6 +659,15 @@ struct WeekTimelineComponent: View {
                 timeSlotLabel(hour: hour)
                     .frame(height: hourHeight)
             }
+            
+            // Final 12a label at the end of the day
+            Text(formatHour(endHour))
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, 8)
+                .frame(height: 20) // Small height for the final label
         }
     }
     
@@ -720,6 +725,11 @@ struct WeekTimelineComponent: View {
                         }
                     )
             }
+            
+            // Final 12a line at the end of the day
+            Rectangle()
+                .fill(Color(.systemGray5))
+                .frame(height: 0.5)
         }
     }
     
@@ -785,7 +795,9 @@ struct WeekTimelineComponent: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
-        return formatter.string(from: date).lowercased()
+        let timeString = formatter.string(from: date).lowercased()
+        // Remove the "m" from "am/pm" to show "6a" instead of "6am"
+        return timeString.replacingOccurrences(of: "m", with: "")
     }
     
     private func formatEventTime(_ time: Date) -> String {

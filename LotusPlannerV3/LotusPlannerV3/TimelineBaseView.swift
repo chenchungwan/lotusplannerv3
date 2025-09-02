@@ -10,8 +10,8 @@ struct TimelineConfig {
     let showAllDayEvents: Bool
     
     static let `default` = TimelineConfig(
-        startHour: 6,
-        endHour: 22,
+        startHour: 0,
+        endHour: 24,
         hourHeight: 80,
         timeColumnWidth: 50,
         showCurrentTime: true,
@@ -54,13 +54,16 @@ struct TimelineBaseView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            if config.showAllDayEvents {
-                allDayEventsSection
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 0) {
+                if config.showAllDayEvents {
+                    allDayEventsSection
+                }
+                
+                timelineSection
             }
-            
-            timelineSection
         }
+        .padding(.leading, 2) // Add 2px left padding
         .onAppear {
             startTimer()
         }
@@ -143,6 +146,14 @@ struct TimelineBaseView: View {
                 }
                 .frame(height: config.hourHeight)
             }
+            
+            // Final 12a label at the end of the day
+            Text(formatHour(config.endHour))
+                .font(.body)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, 8)
+                .frame(height: 20) // Small height for the final label
         }
     }
     
@@ -166,6 +177,11 @@ struct TimelineBaseView: View {
                 .frame(height: config.hourHeight)
                 .background(Color(.systemBackground))
             }
+            
+            // Final 12a line at the end of the day
+            Rectangle()
+                .fill(Color(.systemGray5))
+                .frame(height: 0.5)
         }
     }
     
@@ -270,7 +286,9 @@ struct TimelineBaseView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
-        return formatter.string(from: date).lowercased()
+        let timeString = formatter.string(from: date).lowercased()
+        // Remove the "m" from "am/pm" to show "6a" instead of "6am"
+        return timeString.replacingOccurrences(of: "m", with: "")
     }
     
     private func formatEventTime(_ time: Date) -> String {

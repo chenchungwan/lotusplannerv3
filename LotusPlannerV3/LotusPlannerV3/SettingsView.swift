@@ -280,6 +280,8 @@ struct SettingsView: View {
     // State for color picker modals
     @State private var showingPersonalColorPicker = false
     @State private var showingProfessionalColorPicker = false
+    
+
 
 
     var body: some View {
@@ -412,6 +414,7 @@ struct SettingsView: View {
                     }
                 }
                 
+
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -423,7 +426,6 @@ struct SettingsView: View {
                 }
             }
         }
-
     }
     
     @ViewBuilder

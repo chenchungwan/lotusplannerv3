@@ -272,16 +272,11 @@ extension BaseView {
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart)
         else { return "Week" }
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        let startString = formatter.string(from: weekStart)
-        let endString = formatter.string(from: weekEnd)
+        // Standardized format: 12/25/24 - 12/31/24
+        let startString = DateFormatter.standardDate.string(from: weekStart)
+        let endString = DateFormatter.standardDate.string(from: weekEnd)
         
-        let yearFormatter = DateFormatter()
-        yearFormatter.dateFormat = "yyyy"
-        let year = yearFormatter.string(from: selectedDate)
-        
-        return "\(startString) - \(endString), \(year)"
+        return "\(startString) - \(endString)"
     }
     
     private func step(_ offset: Int) {
@@ -514,8 +509,8 @@ extension BaseView {
     // MARK: - Week Timeline Section
     private func weekTimelineSection(dayColumnWidth: CGFloat, timeColumnWidth: CGFloat) -> some View {
         let weekEvents = getWeekEventsGroupedByDate()
-        let startHour = 6
-        let endHour = 22
+        let startHour = 0
+        let endHour = 24
         let hourHeight: CGFloat = 80
         
         return HStack(spacing: 0) {
@@ -566,7 +561,9 @@ extension BaseView {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
-        return formatter.string(from: date).lowercased()
+        let timeString = formatter.string(from: date).lowercased()
+        // Remove the "m" from "am/pm" to show "6a" instead of "6am"
+        return timeString.replacingOccurrences(of: "m", with: "")
     }
     
     private func weekDayTimelineColumn(date: Date, weekEvents: [Date: [GoogleCalendarEvent]], dayColumnWidth: CGFloat, startHour: Int, endHour: Int, hourHeight: CGFloat) -> some View {

@@ -1,5 +1,7 @@
 import SwiftUI
 
+
+
 struct CalendarMonthView: View {
     let currentDate: Date
     let onDateSelected: (Date) -> Void
@@ -11,6 +13,7 @@ struct CalendarMonthView: View {
     @State private var monthEvents: [Date: [GoogleCalendarEvent]] = [:]
     @State private var personalEvents: [GoogleCalendarEvent] = []
     @State private var professionalEvents: [GoogleCalendarEvent] = []
+    @State private var isLoadingEvents = false // PERFORMANCE ENHANCEMENT: Loading state
     
     private let calendar = Calendar.mondayFirst
     
@@ -19,12 +22,12 @@ struct CalendarMonthView: View {
             VStack(spacing: 0) {
                 // Month grid
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 0) {
-                    // Day headers
-                    ForEach(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], id: \.self) { day in
+                    // Day headers - Standardized format
+                    ForEach(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"], id: \.self) { day in
                         Text(day)
-                            .font(.caption)
+                            .font(DateDisplayStyle.subtitleFont)
                             .fontWeight(.bold)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(DateDisplayStyle.secondaryColor)
                             .frame(height: 30)
                     }
                     
@@ -41,11 +44,17 @@ struct CalendarMonthView: View {
             }
         }
         .task {
-            // Load events with filtering options
+            // PERFORMANCE ENHANCEMENT: Progressive loading with loading state
+            isLoadingEvents = true
+            
             let options = EventFilterOptions(hideRecurringEvents: appPrefs.hideRecurringEventsInMonth)
+            
+            // FUNCTIONALITY PRESERVED: Same loading logic with loading state
             monthEvents = await eventManager.getEvents(for: .month(currentDate), options: options)
             personalEvents = await eventManager.getPersonalEvents(for: .month(currentDate), options: options)
             professionalEvents = await eventManager.getProfessionalEvents(for: .month(currentDate), options: options)
+            
+            isLoadingEvents = false
         }
         .sheet(item: $selectedEvent) { event in
             CalendarEventDetailsView(event: event) {
@@ -82,24 +91,31 @@ struct CalendarMonthView: View {
         let events = monthEvents[calendar.startOfDay(for: date)] ?? []
         
         return VStack(spacing: 2) {
-            // Day number
+            // Day number - FUNCTIONALITY PRESERVED with standardized styling
             Text("\(calendar.component(.day, from: date))")
-                .font(.callout)
+                .font(DateDisplayStyle.bodyFont)
                 .fontWeight(isToday ? .bold : .regular)
-                .foregroundColor(isToday ? .white : (isCurrentMonth ? .primary : .secondary))
+                .foregroundColor(DateDisplayStyle.dateColor(isToday: isToday, isCurrentPeriod: isCurrentMonth))
                 .frame(width: 24, height: 24)
                 .background(isToday ? Circle().fill(Color.blue) : nil)
             
-            // Events
+            // Events with loading state - PERFORMANCE ENHANCEMENT
             VStack(spacing: 1) {
-                ForEach(events.prefix(3)) { event in
-                    monthEventDot(for: event)
-                }
-                
-                if events.count > 3 {
-                    Text("+\(events.count - 3)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                if isLoadingEvents && events.isEmpty && isCurrentMonth {
+                    // Subtle loading indicator for current month days only
+                    ProgressView()
+                        .scaleEffect(0.3)
+                        .opacity(0.5)
+                } else {
+                    ForEach(events.prefix(3)) { event in
+                        monthEventDot(for: event)
+                    }
+                    
+                    if events.count > 3 {
+                        Text("+\(events.count - 3)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             

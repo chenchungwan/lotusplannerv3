@@ -13,8 +13,8 @@ struct TimelineComponent: View {
     @State private var currentTimeTimer: Timer?
     
     private let hourHeight: CGFloat = 100
-    private let startHour = 6
-    private let endHour = 23
+    private let startHour = 0
+    private let endHour = 24
     
     // Separate all-day events from timed events
     private var allDayEvents: [GoogleCalendarEvent] {
@@ -55,13 +55,28 @@ struct TimelineComponent: View {
                 
                 // Main timeline with hour grid and timed events
                 ZStack(alignment: .topLeading) {
-                    // Background grid
-                    VStack(spacing: 0) {
-                        ForEach(startHour..<endHour, id: \.self) { hour in
-                            timeSlot(hour: hour)
-                                .frame(height: hourHeight)
+                                            // Background grid
+                        VStack(spacing: 0) {
+                            ForEach(startHour..<endHour, id: \.self) { hour in
+                                timeSlot(hour: hour)
+                                    .frame(height: hourHeight)
+                            }
+                            
+                            // Final 12a line at the end of the day
+                            HStack(spacing: 0) {
+                                // Time label
+                                Text(formatHour(endHour))
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 50, alignment: .trailing)
+                                
+                                // Hour line
+                                Rectangle()
+                                    .fill(Color(.systemGray5))
+                                    .frame(height: 1)
+                            }
+                            .frame(height: 20)
                         }
-                    }
                     
                     // Timed events overlay
                     ForEach(timedEvents, id: \.id) { event in
@@ -75,6 +90,7 @@ struct TimelineComponent: View {
                 }
             }
         }
+        .padding(.leading, 2) // Add 2px left padding
         .onAppear {
             startCurrentTimeTimer()
         }
@@ -176,7 +192,9 @@ struct TimelineComponent: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date()) ?? Date()
-        return formatter.string(from: date).lowercased()
+        let timeString = formatter.string(from: date).lowercased()
+        // Remove the "m" from "am/pm" to show "6a" instead of "6am"
+        return timeString.replacingOccurrences(of: "m", with: "")
     }
     
     @ViewBuilder

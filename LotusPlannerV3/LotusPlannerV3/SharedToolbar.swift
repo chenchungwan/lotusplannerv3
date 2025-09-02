@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SharedNavigationToolbar: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @State private var showingAbout = false
+    @State private var showingReportIssues = false
     
     var body: some View {
         HStack(spacing: 8) {
@@ -11,12 +13,10 @@ struct SharedNavigationToolbar: View {
                     navigationManager.showSettings()
                 }
                 Button("About") {
-                    // Placeholder: could present an About sheet
-                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowAbout"), object: nil)
+                    showingAbout = true
                 }
                 Button("Report Issue / Request Features") {
-                    // Placeholder: could open email or feedback form
-                    NotificationCenter.default.post(name: Notification.Name("LPV3_ShowFeedback"), object: nil)
+                    showingReportIssues = true
                 }
             } label: {
                 Image(systemName: "line.3.horizontal")
@@ -45,6 +45,12 @@ struct SharedNavigationToolbar: View {
                     .foregroundColor(navigationManager.currentView == .calendar || navigationManager.currentView == .tasks && !navigationManager.showTasksView ? .accentColor : .secondary)
             }
             
+        }
+        .sheet(isPresented: $showingAbout) {
+            AboutView()
+        }
+        .sheet(isPresented: $showingReportIssues) {
+            ReportIssuesView()
         }
     }
 } 

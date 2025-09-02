@@ -53,10 +53,21 @@ class EventManager: ObservableObject {
     func getEvents(for range: EventRangeType, options: EventFilterOptions = EventFilterOptions()) async -> [Date: [GoogleCalendarEvent]] {
         guard let interval = range.dateInterval else { return [:] }
         
+        // DEBUG: Print range information
+        if case .week(_) = range {
+            print("📅 EventManager.getEvents for week:")
+            print("  Interval: \(interval.start) to \(interval.end)")
+            print("  Duration: \(interval.duration / (24*3600)) days")
+        }
+        
         // Check cache first
         let cacheKey = generateCacheKey(for: range, options: options)
         if let cachedEvents = eventCache[cacheKey] {
-            return groupEventsByDate(cachedEvents, in: interval)
+            let grouped = groupEventsByDate(cachedEvents, in: interval)
+            if case .week(_) = range {
+                print("  Using cached events: \(cachedEvents.count) total, grouped into \(grouped.count) days")
+            }
+            return grouped
         }
         
         // Load events if needed
@@ -69,7 +80,11 @@ class EventManager: ObservableObject {
         eventCache[cacheKey] = events
         
         // Group by date and return
-        return groupEventsByDate(events, in: interval)
+        let grouped = groupEventsByDate(events, in: interval)
+        if case .week(_) = range {
+            print("  Loaded fresh events: \(events.count) total, grouped into \(grouped.count) days")
+        }
+        return grouped
     }
     
     /// Gets all events for a specific date
@@ -79,7 +94,8 @@ class EventManager: ObservableObject {
     /// - Returns: Array of events for the specified date
     func getEventsForDate(_ date: Date, options: EventFilterOptions = EventFilterOptions()) async -> [GoogleCalendarEvent] {
         let events = await getEvents(for: .day(date), options: options)
-        return events[Calendar.current.startOfDay(for: date)] ?? []
+        // FIX: Use mondayFirst calendar to match other calendar views
+        return events[Calendar.mondayFirst.startOfDay(for: date)] ?? []
     }
     
     /// Gets all personal events within a date range
@@ -139,16 +155,24 @@ class EventManager: ObservableObject {
     // MARK: - Private Methods
     
     private func loadEventsIfNeeded(for interval: DateInterval) async {
-        // Check if we need to load more events
-        let calendar = Calendar.current
-        let buffer = TimeInterval(7 * 24 * 3600) // 1 week buffer
+        // Check if we need to load more events  
+        let calendar = Calendar.mondayFirst // FIX: Use consistent calendar
+        let buffer = TimeInterval(14 * 24 * 3600) // 2 week buffer for better caching
         
         let extendedStart = interval.start.addingTimeInterval(-buffer)
         let extendedEnd = interval.end.addingTimeInterval(buffer)
         
-        // Load events if we don't have enough coverage
-        if needsEventReload(for: DateInterval(start: extendedStart, end: extendedEnd)) {
-            await loadEvents(from: extendedStart, to: extendedEnd)
+        // PERFORMANCE OPTIMIZATION: More intelligent cache checking
+        let extendedInterval = DateInterval(start: extendedStart, end: extendedEnd)
+        
+        // Check if we have sufficient coverage for both account types
+        let needsPersonalReload = needsEventReload(for: extendedInterval, accountType: .personal)
+        let needsProfessionalReload = needsEventReload(for: extendedInterval, accountType: .professional)
+        
+        if needsPersonalReload || needsProfessionalReload {
+            await loadEvents(from: extendedStart, to: extendedEnd, 
+                           loadPersonal: needsPersonalReload, 
+                           loadProfessional: needsProfessionalReload)
         }
     }
     
@@ -164,19 +188,53 @@ class EventManager: ObservableObject {
         return earliestEvent > interval.start || latestEvent < interval.end
     }
     
+    // PERFORMANCE OPTIMIZATION: Account-specific reload checking
+    private func needsEventReload(for interval: DateInterval, accountType: GoogleAuthManager.AccountKind) -> Bool {
+        let accountEvents = accountType == .personal ? personalEvents : professionalEvents
+        guard !accountEvents.isEmpty else { return true }
+        
+        // Check if we have events covering the entire interval for this account
+        let eventDates = accountEvents.compactMap { $0.startTime }
+        guard let earliestEvent = eventDates.min(),
+              let latestEvent = eventDates.max() else { return true }
+        
+        return earliestEvent > interval.start || latestEvent < interval.end
+    }
+    
     private func loadEvents(from startDate: Date, to endDate: Date) async {
-        do {
-            // Load personal events
-            if let personalEvents = try await CalendarManager.shared.loadEvents(for: .personal, from: startDate, to: endDate) {
-                self.personalEvents = personalEvents
+        await loadEvents(from: startDate, to: endDate, loadPersonal: true, loadProfessional: true)
+    }
+    
+    // PERFORMANCE OPTIMIZATION: Selective account loading
+    private func loadEvents(from startDate: Date, to endDate: Date, loadPersonal: Bool, loadProfessional: Bool) async {
+        await withTaskGroup(of: Void.self) { group in
+            if loadPersonal && GoogleAuthManager.shared.isLinked(kind: .personal) {
+                group.addTask {
+                    do {
+                        if let personalEvents = try await CalendarManager.shared.loadEvents(for: .personal, from: startDate, to: endDate) {
+                            await MainActor.run {
+                                self.personalEvents = personalEvents
+                            }
+                        }
+                    } catch {
+                        print("Failed to load personal events: \(error)")
+                    }
+                }
             }
             
-            // Load professional events
-            if let professionalEvents = try await CalendarManager.shared.loadEvents(for: .professional, from: startDate, to: endDate) {
-                self.professionalEvents = professionalEvents
+            if loadProfessional && GoogleAuthManager.shared.isLinked(kind: .professional) {
+                group.addTask {
+                    do {
+                        if let professionalEvents = try await CalendarManager.shared.loadEvents(for: .professional, from: startDate, to: endDate) {
+                            await MainActor.run {
+                                self.professionalEvents = professionalEvents
+                            }
+                        }
+                    } catch {
+                        print("Failed to load professional events: \(error)")
+                    }
+                }
             }
-        } catch {
-            print("Failed to load events: \(error)")
         }
     }
     
@@ -205,7 +263,7 @@ class EventManager: ObservableObject {
             // Filter by time range if specified
             if let startHour = options.startHour,
                let endHour = options.endHour {
-                let eventHour = Calendar.current.component(.hour, from: eventStart)
+                let eventHour = Calendar.mondayFirst.component(.hour, from: eventStart) // FIX: Use consistent calendar
                 return eventHour >= startHour && eventHour <= endHour
             }
             
@@ -215,7 +273,8 @@ class EventManager: ObservableObject {
     
     private func groupEventsByDate(_ events: [GoogleCalendarEvent], in interval: DateInterval) -> [Date: [GoogleCalendarEvent]] {
         var groupedEvents: [Date: [GoogleCalendarEvent]] = [:]
-        let calendar = Calendar.current
+        // FIX: Use mondayFirst calendar to match CalendarWeekView and other calendar views
+        let calendar = Calendar.mondayFirst
         
         // Pre-populate all dates in the range
         var currentDate = interval.start

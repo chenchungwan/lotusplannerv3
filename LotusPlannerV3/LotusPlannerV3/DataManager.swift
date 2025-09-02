@@ -26,8 +26,20 @@ class DataManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                // Cache-only preloading to avoid clobbering live state at launch
+                // FUNCTIONALITY PRESERVED: Same cache-only preloading behavior
                 await self?.preloadAdjacentMonths(around: Date())
+            }
+        }
+        
+        // PERFORMANCE ENHANCEMENT: Background refresh when app enters foreground
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                // Only refresh if accounts are linked to avoid unnecessary calls
+                await self?.refreshCalendarDataInBackground()
             }
         }
     }
@@ -53,5 +65,36 @@ class DataManager: ObservableObject {
     
     func preloadAdjacentMonths(around date: Date) async {
         await calendarViewModel.preloadAdjacentMonths(around: date)
+    }
+    
+    // MARK: - Background Refresh
+    private func refreshCalendarDataInBackground() async {
+        let authManager = GoogleAuthManager.shared
+        
+        // FUNCTIONALITY PRESERVED: Only refresh if accounts are actually linked
+        guard authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) else {
+            print("📱 DataManager: No accounts linked, skipping background refresh")
+            return
+        }
+        
+        print("📱 DataManager: Starting background calendar refresh...")
+        
+        // Refresh current month data in background (non-blocking)
+        Task.detached(priority: .background) {
+            await self.calendarViewModel.preloadMonthIntoCache(containing: Date())
+            
+            // Preload adjacent months for smoother navigation
+            let calendar = Calendar.mondayFirst
+            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: Date()) {
+                await self.calendarViewModel.preloadMonthIntoCache(containing: prevMonth)
+            }
+            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: Date()) {
+                await self.calendarViewModel.preloadMonthIntoCache(containing: nextMonth)
+            }
+            
+            await MainActor.run {
+                print("✅ DataManager: Background calendar refresh completed")
+            }
+        }
     }
 }

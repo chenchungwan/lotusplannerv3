@@ -364,16 +364,11 @@ extension BaseViewV2 {
             let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart)
         else { return "Week" }
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        let startString = formatter.string(from: weekStart)
-        let endString = formatter.string(from: weekEnd)
+        // Standardized format: 12/25/24 - 12/31/24
+        let startString = DateFormatter.standardDate.string(from: weekStart)
+        let endString = DateFormatter.standardDate.string(from: weekEnd)
         
-        let yearFormatter = DateFormatter()
-        yearFormatter.dateFormat = "yyyy"
-        let year = yearFormatter.string(from: selectedDate)
-        
-        return "\(startString) - \(endString), \(year)"
+        return "\(startString) - \(endString)"
     }
     
     private func step(_ offset: Int) {
@@ -426,24 +421,20 @@ extension BaseViewV2 {
     }
     
     private func weekTaskDateHeaderView(date: Date) -> some View {
-        let dayFormatter = DateFormatter()
-        dayFormatter.dateFormat = "E" // Mon, Tue, etc.
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "d" // 1, 2, 3
-        
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
         
         return VStack(spacing: 4) {
-            Text(dayFormatter.string(from: date))
-                .font(.body)
+            // Standardized day of week format: MON, TUE, etc.
+            Text(DateFormatter.standardDayOfWeek.string(from: date).uppercased())
+                .font(DateDisplayStyle.bodyFont)
                 .fontWeight(.semibold)
-                .foregroundColor(isToday ? .white : .secondary)
+                .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
             
-            Text(dateFormatter.string(from: date))
-                .font(.title2)
+            // Standardized date format: m/d/yy
+            Text(DateFormatter.standardDate.string(from: date))
+                .font(DateDisplayStyle.titleFont)
                 .fontWeight(.bold)
-                .foregroundColor(isToday ? .white : .primary)
+                .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(isToday ? Color.blue : Color.clear)

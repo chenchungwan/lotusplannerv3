@@ -144,7 +144,11 @@ class CalendarViewModel: ObservableObject {
     private var cachedEvents: [String: [GoogleCalendarEvent]] = [:]
     private var cachedCalendars: [String: [GoogleCalendar]] = [:]
     private var cacheTimestamps: [String: Date] = [:]
-    private let cacheTimeout: TimeInterval = 300 // 5 minutes
+    private let cacheTimeout: TimeInterval = 1800 // 30 minutes - longer cache for better performance
+    
+    // MARK: - Persistent Cache Keys
+    private let diskCacheKeyPrefix = "CalendarCache_"
+    private let diskCacheTimestampPrefix = "CacheTimestamp_"
     
     // Track current loaded range to avoid unnecessary reloads
     private var currentLoadedRange: (start: Date, end: Date, accountKind: GoogleAuthManager.AccountKind)?
@@ -169,17 +173,33 @@ class CalendarViewModel: ObservableObject {
     }
     
     private func getCachedEvents(for key: String) -> [GoogleCalendarEvent]? {
-        guard isCacheValid(for: key) else {
-            cachedEvents.removeValue(forKey: key)
-            cacheTimestamps.removeValue(forKey: key)
-            return nil
+        // First check memory cache
+        if isCacheValid(for: key), let memoryCache = cachedEvents[key] {
+            return memoryCache
         }
-        return cachedEvents[key]
+        
+        // Then check disk cache - FUNCTIONALITY PRESERVED: Only if memory cache invalid
+        if let diskCache = loadEventsFromDisk(for: key), isDiskCacheValid(for: key) {
+            // Restore to memory cache for faster access
+            cachedEvents[key] = diskCache
+            cacheTimestamps[key] = Date()
+            return diskCache
+        }
+        
+        // Clean up invalid cache
+        cachedEvents.removeValue(forKey: key)
+        cacheTimestamps.removeValue(forKey: key)
+        clearDiskCache(for: key)
+        return nil
     }
     
     private func cacheEvents(_ events: [GoogleCalendarEvent], for key: String) {
+        // FUNCTIONALITY PRESERVED: Same memory caching behavior
         cachedEvents[key] = events
         cacheTimestamps[key] = Date()
+        
+        // PERFORMANCE ENHANCEMENT: Also save to disk for persistence
+        saveEventsToDisk(events, for: key)
     }
     
     private func getCachedCalendars(for key: String) -> [GoogleCalendar]? {
@@ -193,6 +213,48 @@ class CalendarViewModel: ObservableObject {
     private func cacheCalendars(_ calendars: [GoogleCalendar], for key: String) {
         cachedCalendars[key] = calendars
         cacheTimestamps[key] = Date()
+    }
+    
+    // MARK: - Persistent Disk Cache Methods
+    private func saveEventsToDisk(_ events: [GoogleCalendarEvent], for key: String) {
+        guard !events.isEmpty else { return }
+        
+        do {
+            let data = try JSONEncoder().encode(events)
+            UserDefaults.standard.set(data, forKey: diskCacheKeyPrefix + key)
+            UserDefaults.standard.set(Date(), forKey: diskCacheTimestampPrefix + key)
+        } catch {
+            print("⚠️ Failed to save events to disk cache: \(error)")
+        }
+    }
+    
+    private func loadEventsFromDisk(for key: String) -> [GoogleCalendarEvent]? {
+        guard let data = UserDefaults.standard.data(forKey: diskCacheKeyPrefix + key) else {
+            return nil
+        }
+        
+        do {
+            let events = try JSONDecoder().decode([GoogleCalendarEvent].self, from: data)
+            return events
+        } catch {
+            print("⚠️ Failed to load events from disk cache: \(error)")
+            // Clean up corrupted cache
+            clearDiskCache(for: key)
+            return nil
+        }
+    }
+    
+    private func isDiskCacheValid(for key: String) -> Bool {
+        guard let timestamp = UserDefaults.standard.object(forKey: diskCacheTimestampPrefix + key) as? Date else {
+            return false
+        }
+        // Disk cache valid for 24 hours (longer than memory cache)
+        return Date().timeIntervalSince(timestamp) < 86400
+    }
+    
+    private func clearDiskCache(for key: String) {
+        UserDefaults.standard.removeObject(forKey: diskCacheKeyPrefix + key)
+        UserDefaults.standard.removeObject(forKey: diskCacheTimestampPrefix + key)
     }
     
     // MARK: - Preloading Methods
@@ -226,33 +288,51 @@ class CalendarViewModel: ObservableObject {
             return
         }
         
+        // PERFORMANCE OPTIMIZATION: Check cache first to avoid unnecessary API calls
+        let personalKey = monthCacheKey(for: date, accountKind: .personal)
+        let professionalKey = monthCacheKey(for: date, accountKind: .professional)
+        
+        let needsPersonalPreload = authManager.isLinked(kind: .personal) && !isCacheValid(for: personalKey)
+        let needsProfessionalPreload = authManager.isLinked(kind: .professional) && !isCacheValid(for: professionalKey)
+        
+        guard needsPersonalPreload || needsProfessionalPreload else {
+            print("💾 All month data already cached for \(date)")
+            return
+        }
+        
         await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
+            if needsPersonalPreload {
                 group.addTask {
                     do {
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
-                        let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
+                        // Fetch calendars and events in parallel
+                        async let calendars = CalendarManager.shared.fetchCalendars(for: .personal)
+                        async let events = CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
+                        
+                        let (fetchedCalendars, fetchedEvents) = try await (calendars, events)
+                        
                         await MainActor.run {
-                            let key = self.monthCacheKey(for: date, accountKind: .personal)
-                            self.cacheCalendars(calendars, for: key)
-                            self.cacheEvents(events, for: key)
-                            print("💾 Cached personal month preload: \(events.count) events")
+                            self.cacheCalendars(fetchedCalendars, for: personalKey)
+                            self.cacheEvents(fetchedEvents, for: personalKey)
+                            print("💾 Cached personal month preload: \(fetchedEvents.count) events")
                         }
                     } catch {
                         print("❌ Failed to preload personal month into cache: \(error)")
                     }
                 }
             }
-            if authManager.isLinked(kind: .professional) {
+            if needsProfessionalPreload {
                 group.addTask {
                     do {
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
-                        let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
+                        // Fetch calendars and events in parallel
+                        async let calendars = CalendarManager.shared.fetchCalendars(for: .professional)
+                        async let events = CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
+                        
+                        let (fetchedCalendars, fetchedEvents) = try await (calendars, events)
+                        
                         await MainActor.run {
-                            let key = self.monthCacheKey(for: date, accountKind: .professional)
-                            self.cacheCalendars(calendars, for: key)
-                            self.cacheEvents(events, for: key)
-                            print("💾 Cached professional month preload: \(events.count) events")
+                            self.cacheCalendars(fetchedCalendars, for: professionalKey)
+                            self.cacheEvents(fetchedEvents, for: professionalKey)
+                            print("💾 Cached professional month preload: \(fetchedEvents.count) events")
                         }
                     } catch {
                         print("❌ Failed to preload professional month into cache: \(error)")
@@ -828,9 +908,9 @@ struct CalendarView: View {
                     showingDatePicker = true
                 }) {
                     Text(String(Calendar.current.component(.year, from: currentDate)))
-                        .font(.title2)
+                        .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DateDisplayStyle.primaryColor)
                 }
             } else if navigationManager.currentInterval == .month {
                 Button(action: {
@@ -838,9 +918,9 @@ struct CalendarView: View {
                     showingDatePicker = true
                 }) {
                     Text(monthYearTitle)
-                        .font(.title2)
+                        .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DateDisplayStyle.primaryColor)
                 }
             } else if navigationManager.currentInterval == .week {
                 Button(action: {
@@ -848,9 +928,9 @@ struct CalendarView: View {
                     showingDatePicker = true
                 }) {
                     Text(weekTitle)
-                        .font(.title2)
+                        .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DateDisplayStyle.primaryColor)
                 }
             } else if navigationManager.currentInterval == .day {
                 Button(action: {
@@ -858,9 +938,9 @@ struct CalendarView: View {
                     showingDatePicker = true
                 }) {
                     Text(dayTitle)
-                        .font(.title2)
+                        .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(DateDisplayStyle.primaryColor)
                 }
             }
             Button(action: { step(1) }) {
@@ -1289,9 +1369,8 @@ struct CalendarView: View {
     }
 
     private var monthYearTitle: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: currentDate)
+        // Updated format: January 2025
+        return DateFormatter.standardMonthYear.string(from: currentDate)
     }
     
 
@@ -1303,22 +1382,20 @@ struct CalendarView: View {
             return "Week"
         }
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        let startString = formatter.string(from: weekStart)
-        let endString = formatter.string(from: weekEnd)
+        // Standardized format: 12/25/24 - 12/31/24
+        let startString = DateFormatter.standardDate.string(from: weekStart)
+        let endString = DateFormatter.standardDate.string(from: weekEnd)
+        let result = "\(startString) - \(endString)"
         
-        let yearFormatter = DateFormatter()
-        yearFormatter.dateFormat = "yyyy"
-        let year = yearFormatter.string(from: currentDate)
-        
-        return "\(startString) - \(endString), \(year)"
+        print("📅 CalendarView weekTitle: \(result)")
+        return result
     }
     
     private var dayTitle: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d, yyyy"
-        return formatter.string(from: currentDate)
+        // Standardized format: MON 12/25/24
+        let dayOfWeek = DateFormatter.standardDayOfWeek.string(from: currentDate).uppercased()
+        let date = DateFormatter.standardDate.string(from: currentDate)
+        return "\(dayOfWeek) \(date)"
     }
     
     private func navigateToDate(_ selectedDate: Date) {

@@ -20,10 +20,12 @@ final class GoogleAuthManager: ObservableObject {
     private let accessTokenKeyPrefix = "google_access_token_"
     private let tokenExpiryKeyPrefix = "google_token_expiry_"
     private let emailKeyPrefix = "google_email_"
+    private let customNameKeyPrefix = "google_custom_name_"
 
     // Published map to drive UI updates
     @Published private(set) var linkedStates: [AccountKind: Bool] = [:]
     @Published private(set) var accountEmails: [AccountKind: String] = [:]
+    @Published private(set) var customAccountNames: [AccountKind: String] = [:]
 
     func isLinked(kind: AccountKind) -> Bool {
         linkedStates[kind] ?? false
@@ -31,6 +33,25 @@ final class GoogleAuthManager: ObservableObject {
     
     func getEmail(for kind: AccountKind) -> String {
         return accountEmails[kind] ?? ""
+    }
+    
+    func getCustomName(for kind: AccountKind) -> String {
+        return customAccountNames[kind] ?? defaultName(for: kind)
+    }
+    
+    func setCustomName(_ name: String, for kind: AccountKind) {
+        let trimmedName = String(name.prefix(25)).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        
+        UserDefaults.standard.set(trimmedName, forKey: customNameKeyPrefix + kind.rawValue)
+        updateStates()
+    }
+    
+    private func defaultName(for kind: AccountKind) -> String {
+        switch kind {
+        case .personal: return "Personal"
+        case .professional: return "Professional"
+        }
     }
 
     // MARK: - Public API
@@ -126,6 +147,7 @@ final class GoogleAuthManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: accessTokenKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: tokenExpiryKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: emailKeyPrefix + kind.rawValue)
+        UserDefaults.standard.removeObject(forKey: customNameKeyPrefix + kind.rawValue)
         updateStates()
     }
     
@@ -270,7 +292,10 @@ final class GoogleAuthManager: ObservableObject {
             .professional: UserDefaults.standard.string(forKey: emailKeyPrefix + AccountKind.professional.rawValue) ?? ""
         ]
         
-
+        customAccountNames = [
+            .personal: UserDefaults.standard.string(forKey: customNameKeyPrefix + AccountKind.personal.rawValue) ?? defaultName(for: .personal),
+            .professional: UserDefaults.standard.string(forKey: customNameKeyPrefix + AccountKind.professional.rawValue) ?? defaultName(for: .professional)
+        ]
     }
 
     // Traverse windows to find top view controller

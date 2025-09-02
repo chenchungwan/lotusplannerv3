@@ -1367,7 +1367,7 @@ struct TasksView: View {
 
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 HStack(spacing: 12) {
-                    // Filter Menu (ordered: Day, Week, Month, Year) + All dropdown
+                    // Filter Menu (ordered: Day, Week, Month, Year)
                     ForEach([TaskFilter.day, .week, .month, .year], id: \.self) { filter in
                         Button(action: {
                             selectedFilter = filter
@@ -1383,7 +1383,17 @@ struct TasksView: View {
                                 .foregroundColor(filter == selectedFilter ? .accentColor : .secondary)
                         }
                     }
-                    // All dropdown menu
+                    
+                    // Show All Tasks (positioned after y.circle)
+                    Button(action: {
+                        showAllTasks()
+                    }) {
+                        Image(systemName: "a.circle")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // All filter dropdown menu with subfilters
                     Menu {
                         Button("All") {
                             selectedFilter = .all
@@ -1410,7 +1420,7 @@ struct TasksView: View {
                             .font(.body)
                             .foregroundColor(selectedFilter == .all ? .accentColor : .secondary)
                     }
-                    
+
                     // Toggle Hide Completed Tasks
                     Button(action: {
                         appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
@@ -1627,29 +1637,28 @@ struct TasksView: View {
     // MARK: - Subtitle helper
     private func subtitleForFilter(_ filter: TaskFilter) -> String {
         let cal = Calendar.mondayFirst
-        let now = Date()
-        let formatter = DateFormatter()
         switch filter {
         case .all:
             return ""
         case .day:
-            formatter.dateFormat = "MMM d, yyyy"
-            return formatter.string(from: referenceDate)
+            // Standardized format: MON 12/25/24
+            let dayOfWeek = DateFormatter.standardDayOfWeek.string(from: referenceDate).uppercased()
+            let date = DateFormatter.standardDate.string(from: referenceDate)
+            return "\(dayOfWeek) \(date)"
         case .week:
             guard let weekStart = cal.dateInterval(of: .weekOfYear, for: referenceDate)?.start,
                   let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return "" }
-            formatter.dateFormat = "MMM d"
-            let startStr = formatter.string(from: weekStart)
-            let endStr = formatter.string(from: weekEnd)
-            formatter.dateFormat = "yyyy"
-            let yearStr = formatter.string(from: referenceDate)
-            return "\(startStr) - \(endStr), \(yearStr)"
+            // Standardized format: 12/25/24 - 12/31/24
+            let startStr = DateFormatter.standardDate.string(from: weekStart)
+            let endStr = DateFormatter.standardDate.string(from: weekEnd)
+            return "\(startStr) - \(endStr)"
         case .month:
-            formatter.dateFormat = "MMMM yyyy"
-            return formatter.string(from: referenceDate)
+            // Updated format: January 2025
+            return DateFormatter.standardMonthYear.string(from: referenceDate)
         case .year:
-            formatter.dateFormat = "yyyy"
-            return formatter.string(from: referenceDate)
+            // Standardized format: 2024
+            let year = cal.component(.year, from: referenceDate)
+            return "\(year)"
         }
     }
     
@@ -1716,6 +1725,16 @@ struct TasksView: View {
         case .all:
             break
         }
+    }
+    
+    // MARK: - Show All Tasks
+    private func showAllTasks() {
+        // Set filter to show all tasks
+        selectedFilter = .all
+        allSubfilter = .all
+        referenceDate = Date()
+        
+        print("📋 Showing all tasks")
     }
 }
 
@@ -2002,8 +2021,9 @@ struct TaskRow: View {
             
             // Due Date
             if let dueDate = task.dueDate {
-                Text(dueDate, style: .date)
-                    .font(.caption)
+                Text(DateFormatter.standardDate.string(from: dueDate))
+                    .font(DateDisplayStyle.subtitleFont)
+                    .foregroundColor(DateDisplayStyle.secondaryColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(
@@ -2202,11 +2222,13 @@ struct TaskDetailsView: View {
                             Image(systemName: "calendar")
                                 .foregroundColor(accentColor)
                             if let dueDate = editedDueDate {
-                                Text(dueDate, formatter: dueDateFormatter)
-                                    .foregroundColor(.primary)
+                                Text(DateFormatter.standardDate.string(from: dueDate))
+                                    .font(DateDisplayStyle.bodyFont)
+                                    .foregroundColor(DateDisplayStyle.primaryColor)
                             } else {
                                 Text("Add due date")
-                                    .foregroundColor(.secondary)
+                                    .font(DateDisplayStyle.bodyFont)
+                                    .foregroundColor(DateDisplayStyle.secondaryColor)
                             }
                         }
                     }

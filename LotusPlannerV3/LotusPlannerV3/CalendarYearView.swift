@@ -1,5 +1,7 @@
 import SwiftUI
 
+
+
 struct CalendarYearView: View {
     let currentDate: Date
     let onDateSelected: (Date) -> Void
@@ -23,19 +25,21 @@ struct CalendarYearView: View {
     
     private func monthView(for monthIndex: Int) -> some View {
         let monthDate = calendar.date(byAdding: .month, value: monthIndex, to: yearStart)!
+        let isCurrentMonth = calendar.isDate(monthDate, equalTo: Date(), toGranularity: .month)
+        let isCurrentYear = calendar.isDate(currentDate, equalTo: Date(), toGranularity: .year)
         
         return VStack(spacing: 4) {
-            // Month header
+            // Month header - Standardized styling
             Text(monthNames[monthIndex])
-                .font(.headline)
-                .foregroundColor(.primary)
+                .font(DateDisplayStyle.titleFont)
+                .foregroundColor(DateDisplayStyle.dateColor(isToday: false, isCurrentPeriod: isCurrentMonth && isCurrentYear))
             
             // Week day headers
             HStack(spacing: 4) {
                 ForEach(weekDaySymbols, id: \.self) { symbol in
                     Text(symbol)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .font(DateDisplayStyle.subtitleFont)
+                        .foregroundColor(DateDisplayStyle.secondaryColor)
                         .frame(width: 20)
                 }
             }
@@ -66,7 +70,7 @@ struct CalendarYearView: View {
         let isSelected = calendar.isDate(date, inSameDayAs: currentDate)
         
         return Text("\(calendar.component(.day, from: date))")
-            .font(.caption2)
+            .font(DateDisplayStyle.subtitleFont)
             .foregroundColor(cellTextColor(for: date))
             .frame(width: 20, height: 20)
             .background(cellBackground(isToday: isToday, isSelected: isSelected))
