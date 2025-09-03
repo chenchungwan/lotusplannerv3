@@ -1730,14 +1730,26 @@ struct CalendarView: View {
 
         return HStack(alignment: .top, spacing: 0) {
             // Column 1 – timeline (25% device width)
-            leftTimelineSection
-                .frame(width: column1Width)
-                .padding(.all, 8)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Events")
+                    .font(.headline)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 8)
+                leftTimelineSection
+            }
+            .frame(width: column1Width)
+            .padding(.all, 8)
 
             dayVerticalDivider
 
             // Column 2 – Tasks + Logs (75% device width)
             VStack(spacing: 0) {
+                HStack {
+                    Text("Tasks")
+                        .font(.headline)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
                 topLeftDaySection
                     .frame(height: rightSectionTopHeight)
                     .padding(.all, 8)
@@ -1753,12 +1765,19 @@ struct CalendarView: View {
             dayVerticalDivider
 
             // Column 3 – Journal (100% device width)
-            JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
-                .id(currentDate)
-                .frame(width: column3Width)
-                .padding(.all, 8)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Notes")
+                    .font(.headline)
+                    .padding(.horizontal, 8)
+                JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+            }
+            .id(currentDate)
+            .frame(width: column3Width)
+            .padding(.all, 8)
         }
     }
+    
+    // vertical layout removed
     
     private func rightDaySection(geometry: GeometryProxy) -> some View {
         // The total content width is 100% of device width
@@ -1767,7 +1786,13 @@ struct CalendarView: View {
         
         return VStack(spacing: 0) {
             // Top section - Tasks
-            HStack(alignment: .top, spacing: 0) {
+            VStack(spacing: 6) {
+                HStack {
+                    Text("Tasks")
+                        .font(.headline)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
                 // Personal & Professional tasks (full width)
                 topLeftDaySection
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1779,10 +1804,18 @@ struct CalendarView: View {
             rightSectionDivider
             
             // Bottom section - Journal
-            JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
-                .id(currentDate)
-                .frame(maxHeight: .infinity)
-                .padding(.all, 8)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Notes")
+                        .font(.headline)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+            }
+            .id(currentDate)
+            .frame(maxHeight: .infinity)
+            .padding(.all, 8)
         }
     }
     
@@ -1793,9 +1826,18 @@ struct CalendarView: View {
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
             // Timeline section
-            leftTimelineSection
-                .frame(height: leftTimelineHeight)
-                .padding(.all, 8)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Events")
+                    .font(.headline)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 8)
+                leftTimelineSection
+            }
+            .frame(height: leftTimelineHeight, alignment: .top)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+            .padding(.trailing, 8)
+            .padding(.leading, 8 + geometry.safeAreaInsets.leading)
             
             // Draggable divider between timeline and logs
             leftTimelineDivider
@@ -1809,20 +1851,88 @@ struct CalendarView: View {
     }
     
     private var leftTimelineSection: some View {
-        TimelineComponent(
-            date: currentDate,
-            events: getAllEventsForDate(currentDate),
-            personalEvents: calendarViewModel.personalEvents,
-            professionalEvents: calendarViewModel.professionalEvents,
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor,
-            onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
+        Group {
+            if appPrefs.showEventsAsListInDay {
+                dayEventsList
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.6), lineWidth: 1)
+                    )
+            } else {
+                TimelineComponent(
+                    date: currentDate,
+                    events: getAllEventsForDate(currentDate),
+                    personalEvents: calendarViewModel.personalEvents,
+                    professionalEvents: calendarViewModel.professionalEvents,
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    onEventTap: { ev in
+                        selectedCalendarEvent = ev
+                        showingEventDetails = true
+                    }
+                )
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.blue.opacity(0.6), lineWidth: 1)
+                )
             }
-        )
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        }
+    }
+    
+    private var dayEventsList: some View {
+        let events = getAllEventsForDate(currentDate)
+            .sorted { (a, b) in
+                let aDate = a.startTime ?? Date.distantPast
+                let bDate = b.startTime ?? Date.distantPast
+                return aDate < bDate
+            }
+        return VStack(alignment: .leading, spacing: 8) {
+            if events.isEmpty {
+                Text("No events today")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 20)
+            } else {
+                ForEach(events, id: \.id) { ev in
+                    Button(action: {
+                        selectedCalendarEvent = ev
+                        showingEventDetails = true
+                    }) {
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(formatEventTime(ev))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(width: 52, alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(ev.summary)
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(2)
+                                if let location = ev.location, !location.isEmpty {
+                                    Text(location)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            Spacer()
+                            let isPersonal = calendarViewModel.personalEvents.contains { $0.id == ev.id }
+                            Circle()
+                                .fill(isPersonal ? appPrefs.personalColor : appPrefs.professionalColor)
+                                .frame(width: 8, height: 8)
+                        }
+                        .padding(10)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
     }
     
     private var rightSectionDivider: some View {
@@ -3475,6 +3585,8 @@ struct WeekPencilKitView: UIViewRepresentable {
 }
 
 
+
+// GameChanger removed
 
 struct LargeMonthCardView: View {
     let month: Int

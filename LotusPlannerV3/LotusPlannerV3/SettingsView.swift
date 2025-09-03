@@ -208,6 +208,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Show events as list vs timeline in Day view
+    @Published var showEventsAsListInDay: Bool {
+        didSet {
+            UserDefaults.standard.set(showEventsAsListInDay, forKey: "showEventsAsListInDay")
+        }
+    }
+    
 
     
 
@@ -226,6 +233,9 @@ class AppPreferences: ObservableObject {
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
         self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
         
+        // Load events-as-list preference (default false)
+        self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
+
 
         
         // Load colors from UserDefaults or use defaults
@@ -258,6 +268,10 @@ class AppPreferences: ObservableObject {
     
     func updateDayViewLayout(_ layout: DayViewLayoutOption) {
         dayViewLayout = layout
+    }
+    
+    func updateShowEventsAsListInDay(_ value: Bool) {
+        showEventsAsListInDay = value
     }
     
 
@@ -305,32 +319,6 @@ struct SettingsView: View {
                 }
                 
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
-                
-                Section("Calendar Management") {
-                    HStack {
-                        Image(systemName: "repeat")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hide Recurring Events in Month View")
-                                .font(.body)
-                            Text("Hide likely recurring events in month calendar view")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Toggle("", isOn: Binding(
-                            get: { appPrefs.hideRecurringEventsInMonth },
-                            set: { appPrefs.updateHideRecurringEventsInMonth($0) }
-                        ))
-                    }
-                    
-
-                }
-                
 
                 Section("View Layout") {
                     // Day View Layout Options with Radio Buttons
@@ -361,8 +349,18 @@ struct SettingsView: View {
                         }
                     }
                     
-
-
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showEventsAsListInDay },
+                        set: { appPrefs.updateShowEventsAsListInDay($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show Events as List in Day View")
+                                .font(.body)
+                            Text("Replaces timeline with a simple chronological list")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 
                 Section("App Preferences") {

@@ -25,9 +25,11 @@ struct SharedNavigationToolbar: View {
                     .foregroundColor(.secondary)
             }
             
-            // Tasks checklist button
+            // Tasks checklist button (always go to Tasks view with All filter)
             Button(action: {
                 navigationManager.switchToTasks()
+                // Attempt to broadcast desired filter change via NotificationCenter
+                NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
             }) {
                 Image(systemName: "checklist")
                     .font(.body)
@@ -35,9 +37,10 @@ struct SharedNavigationToolbar: View {
                     .foregroundColor(navigationManager.currentView == .tasks && navigationManager.showTasksView ? .accentColor : .secondary)
             }
             
-            // Calendar button
+            // Calendar button (always go to Day view)
             Button(action: {
                 navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.day, date: Date())
             }) {
                 Image(systemName: "calendar")
                     .font(.body)

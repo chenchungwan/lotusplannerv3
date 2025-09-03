@@ -1459,12 +1459,19 @@ struct TasksView: View {
             )
         }
         .onAppear {
-            // Sync with NavigationManager's current interval when view appears
-            selectedFilter = navigationManager.currentInterval.taskFilter
-            referenceDate = navigationManager.currentDate
+            // Always show All when entering Tasks from toggle
+            selectedFilter = .all
+            allSubfilter = .all
+            referenceDate = Date()
             // Listen for external requests to show Add Task so behavior matches Calendar
             NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
                 showingNewTask = true
+            }
+            // Listen for request to switch to All
+            NotificationCenter.default.addObserver(forName: Notification.Name("ShowAllTasksRequested"), object: nil, queue: .main) { _ in
+                selectedFilter = .all
+                allSubfilter = .all
+                referenceDate = Date()
             }
         }
     }

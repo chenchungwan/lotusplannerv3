@@ -14,7 +14,7 @@ struct LogsComponent: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
-                Text("Daily Logs")
+                Text("Logs")
                     .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
