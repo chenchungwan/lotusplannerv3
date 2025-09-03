@@ -403,7 +403,7 @@ class CalendarViewModel: ObservableObject {
         print("  Personal account linked: \(authManager.isLinked(kind: .personal))")
         print("  Professional account linked: \(authManager.isLinked(kind: .professional))")
         
-        var hasValidCache = false
+        // removed hasValidCache unused flag
         
         // Check cache first - if we have valid cached data, use it immediately
         if authManager.isLinked(kind: .personal) {
@@ -412,7 +412,6 @@ class CalendarViewModel: ObservableObject {
                let cachedCalendars = getCachedCalendars(for: personalKey) {
                 personalEvents = cachedEvents
                 personalCalendars = cachedCalendars
-                hasValidCache = true
                 print("💾 Using cached personal data (\(cachedEvents.count) events)")
             }
         }
@@ -423,7 +422,6 @@ class CalendarViewModel: ObservableObject {
                let cachedCalendars = getCachedCalendars(for: professionalKey) {
                 professionalEvents = cachedEvents
                 professionalCalendars = cachedCalendars
-                hasValidCache = true
                 print("💾 Using cached professional data (\(cachedEvents.count) events)")
             }
         }
@@ -764,6 +762,7 @@ struct CalendarView: View {
     @ObservedObject private var dataManager = DataManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var currentDate = Date()
     @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
     @State private var rightSectionTopHeight: CGFloat = UIScreen.main.bounds.height * 0.6
@@ -827,6 +826,8 @@ struct CalendarView: View {
     // Date picker state
     @State private var showingDatePicker = false
     @State private var selectedDateForPicker = Date()
+    @State private var showingAddEvent = false
+    @State private var showingNewTask = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -904,6 +905,46 @@ struct CalendarView: View {
                 calendarViewModel: calendarViewModel,
                 appPrefs: appPrefs,
                 showEventOnly: true
+            )
+        }
+        .sheet(isPresented: $showingAddEvent) {
+            AddItemView(
+                currentDate: currentDate,
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                showEventOnly: true
+            )
+        }
+        .sheet(isPresented: $showingNewTask) {
+            // Create-task UI matching TasksView create flow
+            let personalLinked = authManager.isLinked(kind: GoogleAuthManager.AccountKind.personal)
+            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? GoogleAuthManager.AccountKind.personal : GoogleAuthManager.AccountKind.professional
+            let defaultLists = defaultAccount == GoogleAuthManager.AccountKind.personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let defaultListId = defaultLists.first?.id ?? ""
+            let newTask = GoogleTask(
+                id: UUID().uuidString,
+                title: "",
+                notes: nil,
+                status: "needsAction",
+                due: nil,
+                completed: nil,
+                updated: nil
+            )
+            TaskDetailsView(
+                task: newTask,
+                taskListId: defaultListId,
+                accountKind: defaultAccount,
+                accentColor: defaultAccount == GoogleAuthManager.AccountKind.personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { _ in },
+                onDelete: {},
+                onMove: { _, _ in },
+                onCrossAccountMove: { _, _, _ in },
+                isNew: true
             )
         }
         .sheet(isPresented: $showingDatePicker) {
@@ -1013,17 +1054,7 @@ struct CalendarView: View {
                     .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
             }
             
-            // Week button (original BaseView)
-            Button(action: {
-                navigationManager.switchToCalendar()
-                navigationManager.updateInterval(.week, date: Date())
-            }) {
-                Image(systemName: "w.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .week && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
-            }
-            
-            // BaseViewV2 button (immediately after w.circle)
+            // BaseViewV2 button (keep V only)
             Button(action: {
                 navigationManager.switchToBaseViewV2()
             }) {
@@ -1032,57 +1063,28 @@ struct CalendarView: View {
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
             
-            // Month button
-            Button(action: {
-                navigationManager.updateInterval(.month, date: Date())
-                currentDate = Date()
-            }) {
-                Image(systemName: "m.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .month && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
-            }
-            
-            // Year button
-            Button(action: {
-                navigationManager.updateInterval(.year, date: Date())
-                currentDate = Date()
-            }) {
-                Image(systemName: "y.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .year && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
-            }
-
-            // Hide Completed toggle
-            Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
-                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-
-            // Add menu (Event or Task)
-            Menu {
-                Button("Event") {
-                    showingAddItem = true
+            // Show eye and plus only in Day view
+            if navigationManager.currentInterval == .day {
+                // Hide Completed toggle
+                Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
+                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                        .font(.body)
+                        .foregroundColor(.secondary)
                 }
-                Button("Task") {
-                    // Open a create-task sheet inline, matching Tasks view behavior
-                    let newTask = GoogleTask(
-                        id: UUID().uuidString,
-                        title: "",
-                        notes: nil,
-                        status: "needsAction",
-                        due: nil,
-                        completed: nil,
-                        updated: nil
-                    )
-                    let defaultListId = tasksViewModel.personalTaskLists.first?.id ?? tasksViewModel.professionalTaskLists.first?.id ?? ""
-                    let defaultKind: GoogleAuthManager.AccountKind = (tasksViewModel.personalTaskLists.first != nil) ? .personal : .professional
-                    taskSheetSelection = CalendarTaskSelection(task: newTask, listId: defaultListId, accountKind: defaultKind)
+                
+                // Add menu (Event or Task) for Day view
+                Menu {
+                    Button("Event") { 
+                        showingAddEvent = true
+                    }
+                    Button("Task") {
+                        showingNewTask = true
+                    }
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.body)
+                        .foregroundColor(.secondary)
                 }
-            } label: {
-                Image(systemName: "plus.circle")
-                    .font(.body)
-                    .foregroundColor(.secondary)
             }
         }
     }
@@ -1238,7 +1240,6 @@ struct CalendarView: View {
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.all, 8)
             
             // Bottom section - Journal
             JournalView(currentDate: currentDate, embedded: true)
@@ -3745,7 +3746,7 @@ struct MonthCardView: View {
 struct PencilKitView: UIViewRepresentable {
     @Binding var canvasView: PKCanvasView
     /// Controls whether the system PKToolPicker is visible. Defaults to `true` to
-    /// keep existing behaviour for call-sites that don’t specify the argument.
+    /// keep existing behaviour for call-sites that don't specify the argument.
     var showsToolPicker: Bool = true
     
     func makeUIView(context: Context) -> PKCanvasView {

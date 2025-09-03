@@ -174,17 +174,7 @@ struct BaseViewV2: View {
                     .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
             }
             
-            // Week button (original BaseView)
-            Button(action: {
-                navigationManager.switchToCalendar()
-                navigationManager.updateInterval(.week, date: selectedDate)
-            }) {
-                Image(systemName: "w.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .week && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
-            }
-            
-            // BaseViewV2 button (immediately after w.circle)
+            // BaseViewV2 button (keep V only)
             Button(action: {
                 navigationManager.switchToBaseViewV2()
             }) {
@@ -193,26 +183,6 @@ struct BaseViewV2: View {
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
             
-            // Month button
-            Button(action: {
-                navigationManager.switchToCalendar()
-                navigationManager.updateInterval(.month, date: selectedDate)
-            }) {
-                Image(systemName: "m.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .month && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
-            }
-            
-            // Year button
-            Button(action: {
-                navigationManager.switchToCalendar()
-                navigationManager.updateInterval(.year, date: selectedDate)
-            }) {
-                Image(systemName: "y.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .year && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
-            }
-
             // Hide Completed toggle
             Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
                 Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
