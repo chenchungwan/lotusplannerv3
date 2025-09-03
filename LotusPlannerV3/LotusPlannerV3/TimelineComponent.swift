@@ -19,14 +19,6 @@ struct TimelineComponent: View {
     // Separate all-day events from timed events
     private var allDayEvents: [GoogleCalendarEvent] {
         let filtered = events.filter { $0.isAllDay }
-        print("📅 TimelineComponent Debug:")
-        print("  Total events: \(events.count)")
-        print("  All-day events found: \(filtered.count)")
-        for event in events {
-            print("  Event: '\(event.summary)' - isAllDay: \(event.isAllDay)")
-            print("    Start.date: \(event.start.date?.description ?? "nil")")
-            print("    Start.dateTime: \(event.start.dateTime?.description ?? "nil")")
-        }
         return filtered
     }
     

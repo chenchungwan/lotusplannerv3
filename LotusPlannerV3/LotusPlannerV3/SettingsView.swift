@@ -490,101 +490,59 @@ struct SettingsView: View {
 
     private func handleTap(_ kind: GoogleAuthManager.AccountKind) {
         if auth.isLinked(kind: kind) {
-            print("🔓 Unlinking \(kind) account")
             auth.unlink(kind: kind)
         } else {
-            print("🔗 Linking \(kind) account...")
             Task {
                 do {
                     try await auth.link(kind: kind, presenting: nil)
-                    print("✅ Successfully linked \(kind) account")
                 } catch GoogleAuthManager.AuthError.missingClientID {
-                    print("❌ Failed to link \(kind) account: Missing Client ID in Info.plist")
                     // Show user-friendly error message
                 } catch GoogleAuthManager.AuthError.noRefreshToken {
-                    print("❌ Failed to link \(kind) account: No refresh token available")
                 } catch GoogleAuthManager.AuthError.tokenRefreshFailed {
-                    print("❌ Failed to link \(kind) account: Token refresh failed")
                 } catch {
-                    print("❌ Failed to link \(kind) account: \(error)")
-                    print("❌ Error type: \(type(of: error))")
-                    print("❌ Error description: \(error.localizedDescription)")
-                    
-                    // If it's a Google Sign-In error, try to provide more details
-                    if let nsError = error as NSError? {
-                        print("❌ NSError domain: \(nsError.domain)")
-                        print("❌ NSError code: \(nsError.code)")
-                        print("❌ NSError userInfo: \(nsError.userInfo)")
-                    }
                 }
             }
         }
     }
     
     private func testGoogleSignInConfig() {
-        print("🧪 Testing Google Sign-In Configuration...")
         
         // Check Info.plist configuration
-        if let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String {
-            print("✅ GIDClientID found: \(clientID)")
-        } else {
-            print("❌ GIDClientID not found in Info.plist")
-        }
+        _ = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String
         
-        if let googleClientID = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLIENT_ID") as? String {
-            print("✅ GOOGLE_CLIENT_ID found: \(googleClientID)")
-        } else {
-            print("❌ GOOGLE_CLIENT_ID not found in Info.plist")
-        }
+        _ = Bundle.main.object(forInfoDictionaryKey: "GOOGLE_CLIENT_ID") as? String
         
         // Check URL schemes
-        if let urlTypes = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] {
-            print("✅ Found \(urlTypes.count) URL types")
-            for (index, urlType) in urlTypes.enumerated() {
-                if let schemes = urlType["CFBundleURLSchemes"] as? [String] {
-                    print("  URL Type \(index): \(schemes)")
-                }
-            }
-        } else {
-            print("❌ No CFBundleURLTypes found in Info.plist")
-        }
+        _ = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
         
         // Check current authentication states
-        print("📊 Current auth states:")
-        print("  Personal linked: \(auth.isLinked(kind: .personal))")
-        print("  Personal email: \(auth.getEmail(for: .personal))")
-        print("  Professional linked: \(auth.isLinked(kind: .professional))")
-        print("  Professional email: \(auth.getEmail(for: .professional))")
+        _ = auth.isLinked(kind: .personal)
+        _ = auth.getEmail(for: .personal)
+        _ = auth.isLinked(kind: .professional)
+        _ = auth.getEmail(for: .professional)
         
         // Check UserDefaults for tokens
-        print("🔍 Checking UserDefaults for stored tokens...")
-        let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.contains("google") }
-        print("  Found \(keys.count) Google-related keys: \(keys.sorted())")
+        let _ = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.contains("google") }
         
-        print("✅ Google Sign-In configuration test completed!")
+        // Completed test
     }
     
     private func clearAllAuthTokens() {
-        print("🗑️ Clearing all Google authentication tokens...")
         
         // Get all Google-related UserDefaults keys
         let allKeys = UserDefaults.standard.dictionaryRepresentation().keys
         let googleKeys = allKeys.filter { $0.contains("google") }
         
-        print("🔍 Found \(googleKeys.count) Google-related keys to clear: \(googleKeys.sorted())")
-        
         // Remove all Google-related keys
         for key in googleKeys {
             UserDefaults.standard.removeObject(forKey: key)
-            print("  🗑️ Removed key: \(key)")
         }
         
         // Force update authentication states
         auth.unlink(kind: .personal)
         auth.unlink(kind: .professional)
         
-        print("✅ All Google authentication tokens cleared!")
-        print("📝 You can now try linking accounts again.")
+        // Cleared tokens
     }
 }
 

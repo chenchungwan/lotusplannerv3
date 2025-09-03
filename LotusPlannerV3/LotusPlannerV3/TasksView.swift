@@ -16,6 +16,7 @@ struct GoogleTask: Identifiable, Codable, Equatable {
     var due: String?
     var completed: String?
     var updated: String?
+    var position: String? = nil
     
     var isCompleted: Bool {
         return status == "completed"
@@ -32,7 +33,6 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current // Use local timezone for date-only parsing
         let parsedDate = formatter.date(from: dateOnly)
-        print("📅 Due date: '\(due)' -> date part: '\(dateOnly)' -> \(parsedDate?.description ?? "nil")")
         return parsedDate
     }
     
@@ -50,7 +50,6 @@ struct GoogleTask: Identifiable, Codable, Equatable {
             let localFormatter = DateFormatter()
             localFormatter.dateStyle = .full
             localFormatter.timeZone = TimeZone.current
-            print("📅 Completion: '\(completed)' UTC: \(utcDate) -> Local day: \(localFormatter.string(from: utcDate))")
             return utcDate
         }
         return nil
@@ -89,9 +88,8 @@ class TasksViewModel: ObservableObject {
                         let taskLists = try await self.fetchTaskLists(for: .personal)
                         
                         await MainActor.run {
-                            // Apply saved order if available
-                            let orderedTaskLists = self.applySavedOrder(taskLists, for: .personal)
-                            self.personalTaskLists = orderedTaskLists
+                            // Use the order returned by Google API
+                            self.personalTaskLists = taskLists
                         }
                         
                         // Load tasks for each task list
@@ -117,9 +115,8 @@ class TasksViewModel: ObservableObject {
                         let taskLists = try await self.fetchTaskLists(for: .professional)
                         
                         await MainActor.run {
-                            // Apply saved order if available
-                            let orderedTaskLists = self.applySavedOrder(taskLists, for: .professional)
-                            self.professionalTaskLists = orderedTaskLists
+                            // Use the order returned by Google API
+                            self.professionalTaskLists = taskLists
                         }
                         
                         // Load tasks for each task list
@@ -146,54 +143,34 @@ class TasksViewModel: ObservableObject {
     }
     
     private func loadTasksForAccount(_ kind: GoogleAuthManager.AccountKind) async {
-        print("🔄 Loading tasks for \(kind) account...")
-        
         do {
-            print("🔄 Fetching task lists for \(kind)...")
             let taskLists = try await fetchTaskLists(for: kind)
-            print("✅ Fetched \(taskLists.count) task lists for \(kind)")
             
             await MainActor.run {
                 switch kind {
                 case .personal:
                     self.personalTaskLists = taskLists
-                    print("📝 Updated personal task lists: \(taskLists.map { $0.title })")
                 case .professional:
                     self.professionalTaskLists = taskLists
-                    print("📝 Updated professional task lists: \(taskLists.map { $0.title })")
                 }
             }
             
             // Fetch tasks for each task list
             for taskList in taskLists {
-                print("🔄 Fetching tasks for list '\(taskList.title)' (ID: \(taskList.id))")
                 let tasks = try await fetchTasks(for: kind, taskListId: taskList.id)
-                print("✅ Fetched \(tasks.count) tasks for list '\(taskList.title)'")
-                if !tasks.isEmpty {
-                    print("  Task titles: \(tasks.map { $0.title })")
-                }
                 
                 await MainActor.run {
                     switch kind {
                     case .personal:
                         self.personalTasks[taskList.id] = tasks
-                        print("📝 Updated personal tasks for list '\(taskList.title)': \(tasks.count) tasks")
                     case .professional:
                         self.professionalTasks[taskList.id] = tasks
-                        print("📝 Updated professional tasks for list '\(taskList.title)': \(tasks.count) tasks")
                     }
                 }
             }
         } catch {
-            print("❌ Failed to load \(kind) tasks: \(error)")
-            
-            if let tasksError = error as? TasksError {
-                print("  TasksError details: \(tasksError)")
-            }
-            
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) tasks: \(error.localizedDescription)"
-                print("🚨 Set error message: '\(self.errorMessage)'")
             }
         }
     }
@@ -223,6 +200,19 @@ class TasksViewModel: ObservableObject {
         decoder.dateDecodingStrategy = .formatted(dateFormatter)
         
         let taskListsResponse = try decoder.decode(GoogleTaskListsResponse.self, from: data)
+        
+        // Log raw JSON response for visibility
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("[Tasks] Lists API response for \(kind): \n\(jsonString)")
+        }
+        
+        // Log parsed summary (count, titles, ids)
+        if let items = taskListsResponse.items {
+            let summaries = items.map { "\($0.title) (\($0.id))" }
+            print("[Tasks] Parsed lists for \(kind): count=\(items.count) -> \(summaries)")
+        } else {
+            print("[Tasks] Parsed lists for \(kind): count=0")
+        }
         
         return taskListsResponse.items ?? []
     }
@@ -278,16 +268,8 @@ class TasksViewModel: ObservableObject {
             formatter.timeZone = TimeZone(identifier: "UTC")
             let now = Date()
             completedTimestamp = formatter.string(from: now)
-            print("🔄 Task '\(task.title)' marked completed at: \(completedTimestamp ?? "nil")")
-            
-            // Debug: Show what day this will appear on
-            let calendar = Calendar.current
-            let localDayFormatter = DateFormatter()
-            localDayFormatter.dateStyle = .full
-            print("📅 Should appear on: \(localDayFormatter.string(from: now))")
         } else {
             completedTimestamp = nil
-            print("🔄 Task '\(task.title)' marked incomplete")
         }
         
         let updatedTask = GoogleTask(
@@ -307,37 +289,24 @@ class TasksViewModel: ObservableObject {
     }
     
     func updateTask(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
-        print("🔄 Optimistic update for task: '\(task.title)' (ID: \(task.id))")
-        
         // OPTIMISTIC UPDATE: Update UI immediately for instant feedback
         let originalTask = await getOriginalTask(task.id, from: listId, for: kind)
-        print("📋 Original task found: \(originalTask?.title ?? "nil")")
         
         await MainActor.run {
             switch kind {
             case .personal:
                 if var tasks = self.personalTasks[listId] {
                     if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                        print("✅ Updating personal task at index \(index)")
                         tasks[index] = task
                         self.personalTasks[listId] = tasks
-                    } else {
-                        print("⚠️ Personal task not found for ID: \(task.id)")
                     }
-                } else {
-                    print("⚠️ Personal task list not found: \(listId)")
                 }
             case .professional:
                 if var tasks = self.professionalTasks[listId] {
                     if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                        print("✅ Updating professional task at index \(index)")
                         tasks[index] = task
                         self.professionalTasks[listId] = tasks
-                    } else {
-                        print("⚠️ Professional task not found for ID: \(task.id)")
                     }
-                } else {
-                    print("⚠️ Professional task list not found: \(listId)")
                 }
             }
         }
@@ -388,10 +357,7 @@ class TasksViewModel: ObservableObject {
                     throw TasksError.apiError(httpResponse.statusCode)
                 }
                 
-                print("✅ Task update synced to server successfully")
-                
             } catch {
-                print("❌ Failed to sync task update to server: \(error)")
                 // REVERT OPTIMISTIC UPDATE on error
                 if let original = originalTask {
                     await MainActor.run {
@@ -447,9 +413,7 @@ class TasksViewModel: ObservableObject {
         Task {
             do {
                 try await deleteTaskFromServer(task, from: listId, for: kind)
-                print("✅ Task deletion synced to server successfully")
             } catch {
-                print("❌ Failed to sync task deletion to server: \(error)")
                 // REVERT OPTIMISTIC DELETE on error - restore the task
                 await MainActor.run {
                     switch kind {
@@ -535,7 +499,6 @@ class TasksViewModel: ObservableObject {
     }
     
     func crossAccountMoveTask(_ updatedTask: GoogleTask, from source: (GoogleAuthManager.AccountKind, String), to target: (GoogleAuthManager.AccountKind, String)) async {
-        print("🔄 Cross-account move: '\(updatedTask.title)' from \(source.0) to \(target.0)")
         
         // Store original task for potential rollback
         let originalTask = await MainActor.run {
@@ -553,10 +516,10 @@ class TasksViewModel: ObservableObject {
             switch source.0 {
             case .personal:
                 self.personalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
-                print("✅ Removed from personal account")
+                
             case .professional:
                 self.professionalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
-                print("✅ Removed from professional account")
+                
             }
             
             // Add to target account
@@ -567,14 +530,14 @@ class TasksViewModel: ObservableObject {
                 } else {
                     self.personalTasks[target.1] = [updatedTask]
                 }
-                print("✅ Added to personal account")
+                
             case .professional:
                 if self.professionalTasks[target.1] != nil {
                     self.professionalTasks[target.1]?.append(updatedTask)
                 } else {
                     self.professionalTasks[target.1] = [updatedTask]
                 }
-                print("✅ Added to professional account")
+                
             }
         }
         
@@ -607,9 +570,7 @@ class TasksViewModel: ObservableObject {
                     }
                 }
                 
-                print("✅ Cross-account move synced to server successfully")
             } catch {
-                print("❌ Failed to sync cross-account move to server: \(error)")
                 // REVERT OPTIMISTIC MOVE on error
                 if let original = originalTask {
                     await MainActor.run {
@@ -645,10 +606,8 @@ class TasksViewModel: ObservableObject {
     }
     
     func createTaskOnServer(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async throws -> GoogleTask {
-        print("🌐 Creating task on server: '\(task.title)' in list '\(listId)'")
         
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
-            print("❌ No access token available for \(kind)")
             throw TasksError.notAuthenticated
         }
         
@@ -676,27 +635,18 @@ class TasksViewModel: ObservableObject {
             }
         }
         
-        print("📤 Request body: \(requestBody)")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ Invalid response type")
             throw TasksError.invalidResponse
         }
         
-        print("📥 Response status: \(httpResponse.statusCode)")
-        
         if httpResponse.statusCode != 200 {
-            print("❌ API error - Status: \(httpResponse.statusCode)")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("   Response body: \(responseString)")
-            }
             throw TasksError.apiError(httpResponse.statusCode)
         }
         
-        print("✅ Task created successfully on server")
         
         // Parse response to get the created task with server ID
         let createdTask = try JSONDecoder().decode(GoogleTask.self, from: data)
@@ -803,14 +753,13 @@ class TasksViewModel: ObservableObject {
     }
     
     func createTask(title: String, notes: String?, dueDate: Date?, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
-        print("🔄 Creating task: '\(title)' in list '\(listId)' for \(kind)")
         
         let dueDateString: String?
         if let dueDate = dueDate {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             dueDateString = formatter.string(from: dueDate)
-            print("   Due date: \(dueDateString ?? "nil")")
+            
         } else {
             dueDateString = nil
         }
@@ -847,7 +796,6 @@ class TasksViewModel: ObservableObject {
         Task {
             do {
                 let serverTask = try await createTaskOnServer(task, in: listId, for: kind)
-                print("✅ Task created successfully on server")
                 
                 // Replace temporary task with server task (has correct ID)
                 await MainActor.run {
@@ -869,7 +817,6 @@ class TasksViewModel: ObservableObject {
                     }
                 }
             } catch {
-                print("❌ Failed to sync task creation to server: \(error)")
                 // REVERT OPTIMISTIC CREATE on error - remove the temporary task
                 await MainActor.run {
                     switch kind {
@@ -885,7 +832,7 @@ class TasksViewModel: ObservableObject {
     }
     
     func updateTaskListOrder(_ newOrder: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) async {
-        print("Updating task list order for \(kind)")
+        
         await MainActor.run {
             switch kind {
             case .personal:
@@ -894,49 +841,24 @@ class TasksViewModel: ObservableObject {
                 self.professionalTaskLists = newOrder
             }
         }
-        print("New order for \(kind): \(newOrder.map { $0.title })")
+        
 
         // Save the order locally since Google Tasks API doesn't support task list ordering
         saveTaskListOrder(newOrder.map { $0.id }, for: kind)
     }
 
     private func saveTaskListOrder(_ order: [String], for kind: GoogleAuthManager.AccountKind) {
-        let key = "taskListOrder_\(kind.rawValue)"
-        UserDefaults.standard.set(order, forKey: key)
-        print("Saved task list order for \(kind): \(order)")
+        // No-op: we now rely on the Google API's array order
     }
 
     private func loadTaskListOrder(for kind: GoogleAuthManager.AccountKind) -> [String]? {
-        let key = "taskListOrder_\(kind.rawValue)"
-        return UserDefaults.standard.stringArray(forKey: key)
+        // No-op: no saved order used
+        return nil
     }
 
     private func applySavedOrder(_ taskLists: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) -> [GoogleTaskList] {
-        guard let savedOrder = loadTaskListOrder(for: kind) else {
-            // No saved order, return original order
-            return taskLists
-        }
-
-        // Create a dictionary for quick lookup
-        let taskListDict = Dictionary(uniqueKeysWithValues: taskLists.map { ($0.id, $0) })
-
-        // Reorder based on saved order, keeping any new lists at the end
-        var orderedLists: [GoogleTaskList] = []
-        for listId in savedOrder {
-            if let taskList = taskListDict[listId] {
-                orderedLists.append(taskList)
-            }
-        }
-
-        // Add any new task lists that weren't in the saved order
-        for taskList in taskLists {
-            if !orderedLists.contains(where: { $0.id == taskList.id }) {
-                orderedLists.append(taskList)
-            }
-        }
-
-        print("Applied saved order for \(kind): \(orderedLists.map { $0.title })")
-        return orderedLists
+        // No-op: keep API order
+        return taskLists
     }
     
     func moveTaskList(_ listId: String, toAccount targetAccount: GoogleAuthManager.AccountKind) async {
@@ -944,7 +866,7 @@ class TasksViewModel: ObservableObject {
             if let listIndex = personalTaskLists.firstIndex(where: { $0.id == listId }) {
                 let taskList = personalTaskLists.remove(at: listIndex)
                 professionalTaskLists.append(taskList)
-                print("Moved task list \(taskList.title) to professional account")
+                
 
                 // Update orders for both accounts
                 saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
@@ -952,7 +874,7 @@ class TasksViewModel: ObservableObject {
             } else if let listIndex = professionalTaskLists.firstIndex(where: { $0.id == listId }) {
                 let taskList = professionalTaskLists.remove(at: listIndex)
                 personalTaskLists.append(taskList)
-                print("Moved task list \(taskList.title) to personal account")
+                
 
                 // Update orders for both accounts
                 saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
@@ -1008,7 +930,6 @@ class TasksViewModel: ObservableObject {
     private func clearTaskListOrder(for kind: GoogleAuthManager.AccountKind) {
         let key = "taskListOrder_\(kind.rawValue)"
         UserDefaults.standard.removeObject(forKey: key)
-        print("Cleared saved task list order for \(kind)")
     }
 }
 
@@ -1549,12 +1470,10 @@ struct TasksView: View {
                 }
             } else {
                 // Then apply time-based filter if not "all"
-                print("🔍 Filtering tasks for \(selectedFilter.rawValue) view on \(referenceDate)")
                 filteredTasks = filteredTasks.filter { task in
                     // For completed tasks, check completion date
                     if task.isCompleted {
                         guard let completionDate = task.completionDate else { 
-                            print("🐛 Completed task '\(task.title)' has no completion date")
                             return false 
                         }
                         let isMatch: Bool
@@ -1572,20 +1491,12 @@ struct TasksView: View {
                         }
                         
                         if selectedFilter == .day && !isMatch {
-                            let formatter = DateFormatter()
-                            formatter.dateStyle = .short
-                            formatter.timeStyle = .short
-                            print("🐛 TasksView: Completed task '\(task.title)' completed at \(formatter.string(from: completionDate)) not showing on \(formatter.string(from: referenceDate))")
-                            print("   Raw completed string: '\(task.completed ?? "nil")'")
-                            print("   Parsed completion date: \(completionDate)")
                         }
                         
                         return isMatch
                     } else {
                         // For incomplete tasks, check due date
-                        print("🔍 Processing incomplete task: '\(task.title)' due: '\(task.due ?? "nil")'")
                         guard let dueDate = task.dueDate else { 
-                            print("🐛 Incomplete task '\(task.title)' has no due date")
                             return false 
                         }
                         let isMatch: Bool
@@ -1608,26 +1519,9 @@ struct TasksView: View {
                         }
                         
                         if selectedFilter == .day && !isMatch {
-                            let formatter = DateFormatter()
-                            formatter.dateStyle = .full
-                            formatter.timeStyle = .none
-                            let debugStartOfReferenceDate = calendar.startOfDay(for: referenceDate)
-                            let debugStartOfDueDate = calendar.startOfDay(for: dueDate)
-                            print("🐛 TasksView: Task '\(task.title)' due \(formatter.string(from: dueDate)) not showing on view date \(formatter.string(from: referenceDate))")
-                            print("   Raw due string: '\(task.due ?? "nil")'")
-                            print("   Parsed due date: \(dueDate)")
-                            print("   Calendar comparison result: \(calendar.isDate(dueDate, inSameDayAs: referenceDate))")
-                            print("   Overdue check: \(debugStartOfDueDate) < \(debugStartOfReferenceDate) = \(debugStartOfDueDate < debugStartOfReferenceDate)")
-                            
-                            // Show day components for debugging
-                            let dueComponents = calendar.dateComponents([.year, .month, .day], from: dueDate)
-                            let refComponents = calendar.dateComponents([.year, .month, .day], from: referenceDate)
-                            print("   Due date components: \(dueComponents)")
-                            print("   Reference components: \(refComponents)")
                         }
                         
                         if isMatch {
-                            print("✅ Task '\(task.title)' matches filter criteria")
                         }
                         
                         return isMatch
@@ -1745,7 +1639,7 @@ struct TasksView: View {
         allSubfilter = .all
         referenceDate = Date()
         
-        print("📋 Showing all tasks")
+        
     }
 }
 
@@ -2395,7 +2289,7 @@ struct TaskDetailsView: View {
                 await MainActor.run {
                     isSaving = false
                     // Handle error (could show alert)
-                    print("Failed to save task: \(error)")
+                    
                 }
             }
         }

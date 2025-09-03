@@ -53,7 +53,6 @@ class CalendarManager {
             let calendarResponse = try decoder.decode(GoogleCalendarEventsResponse.self, from: data)
             return calendarResponse.items
         } catch {
-            print("Failed to load calendar events: \(error)")
             throw PlannerCalendarError.networkError(error)
         }
     }

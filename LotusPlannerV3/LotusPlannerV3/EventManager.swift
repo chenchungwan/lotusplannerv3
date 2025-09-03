@@ -53,20 +53,12 @@ class EventManager: ObservableObject {
     func getEvents(for range: EventRangeType, options: EventFilterOptions = EventFilterOptions()) async -> [Date: [GoogleCalendarEvent]] {
         guard let interval = range.dateInterval else { return [:] }
         
-        // DEBUG: Print range information
-        if case .week(_) = range {
-            print("📅 EventManager.getEvents for week:")
-            print("  Interval: \(interval.start) to \(interval.end)")
-            print("  Duration: \(interval.duration / (24*3600)) days")
-        }
+        // DEBUG: removed
         
         // Check cache first
         let cacheKey = generateCacheKey(for: range, options: options)
         if let cachedEvents = eventCache[cacheKey] {
             let grouped = groupEventsByDate(cachedEvents, in: interval)
-            if case .week(_) = range {
-                print("  Using cached events: \(cachedEvents.count) total, grouped into \(grouped.count) days")
-            }
             return grouped
         }
         
@@ -81,9 +73,6 @@ class EventManager: ObservableObject {
         
         // Group by date and return
         let grouped = groupEventsByDate(events, in: interval)
-        if case .week(_) = range {
-            print("  Loaded fresh events: \(events.count) total, grouped into \(grouped.count) days")
-        }
         return grouped
     }
     
@@ -217,7 +206,6 @@ class EventManager: ObservableObject {
                             }
                         }
                     } catch {
-                        print("Failed to load personal events: \(error)")
                     }
                 }
             }
@@ -231,7 +219,6 @@ class EventManager: ObservableObject {
                             }
                         }
                     } catch {
-                        print("Failed to load professional events: \(error)")
                     }
                 }
             }

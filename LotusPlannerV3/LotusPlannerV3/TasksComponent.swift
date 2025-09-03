@@ -37,7 +37,20 @@ struct TasksComponent: View {
                 VStack(spacing: 16) {
                     ForEach(localTaskLists, id: \.id) { taskList in
                         if let tasks = tasksDict[taskList.id] {
-                            let filteredTasks: [GoogleTask] = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
+                            // Sort by Google's position string (lexicographic) to match API ordering
+                            let sortedByPosition = tasks.sorted { (a, b) in
+                                switch (a.position, b.position) {
+                                case let (pa?, pb?):
+                                    return pa < pb
+                                case (nil, _?):
+                                    return false // place tasks without position after those with position
+                                case (_?, nil):
+                                    return true
+                                case (nil, nil):
+                                    return a.id < b.id // stable fallback
+                                }
+                            }
+                            let filteredTasks: [GoogleTask] = appPrefs.hideCompletedTasks ? sortedByPosition.filter { !$0.isCompleted } : sortedByPosition
                             if !filteredTasks.isEmpty {
                                 TaskComponentListCard(
                                     taskList: taskList,
@@ -94,6 +107,10 @@ private struct TaskComponentListCard: View {
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
+    
+    private var isTopPriority: Bool {
+        taskList.title.localizedCaseInsensitiveContains("Top Priority")
+    }
     
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -169,7 +186,7 @@ private struct TaskComponentListCard: View {
         .background(Color(.systemBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(.systemGray4), lineWidth: 1)
+                .stroke(isTopPriority ? .red : Color(.systemGray4), lineWidth: isTopPriority ? 2 : 1)
         )
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
