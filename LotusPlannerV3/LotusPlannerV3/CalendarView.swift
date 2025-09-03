@@ -3474,22 +3474,26 @@ struct CalendarView: View {
                     
                     return isOnSameDay ? task : nil
                 } else {
-                    // For incomplete tasks, show them on due date OR if overdue
+                    // For incomplete tasks, show them on due date OR, if viewing today, show overdue
                     guard let dueDate = task.dueDate else { return nil }
-                    
-                    // Show tasks on their due date OR if they're overdue (due date < start of current date)
-                    let startOfCurrentDate = calendar.startOfDay(for: date)
+
+                    let startOfViewedDate = calendar.startOfDay(for: date)
                     let startOfDueDate = calendar.startOfDay(for: dueDate)
-                    let isOverdue = startOfDueDate < startOfCurrentDate
-                    let isDueToday = calendar.isDate(dueDate, inSameDayAs: date)
-                    
-                    if isDueToday || isOverdue {
-                        print("✅ Task '\(task.title)' showing: isDueToday=\(isDueToday), isOverdue=\(isOverdue)")
+                    let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: date)
+                    let isViewingToday = calendar.isDate(date, inSameDayAs: Date())
+                    let startOfToday = calendar.startOfDay(for: Date())
+                    let isOverdueRelativeToToday = startOfDueDate < startOfToday
+
+                    // Include if due on the viewed date, or if we're looking at today and the task is overdue relative to today
+                    let include = isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday)
+
+                    if include {
+                        print("✅ Task '\(task.title)' showing: isDueOnViewedDate=\(isDueOnViewedDate), isOverdueRelativeToToday=\(isOverdueRelativeToToday), isViewingToday=\(isViewingToday)")
                     } else {
-                        print("❌ Task '\(task.title)' hidden: due=\(startOfDueDate), current=\(startOfCurrentDate)")
+                        print("❌ Task '\(task.title)' hidden: due=\(startOfDueDate), viewed=\(startOfViewedDate), today=\(startOfToday)")
                     }
-                    
-                    return (isDueToday || isOverdue) ? task : nil
+
+                    return include ? task : nil
                 }
             }
             

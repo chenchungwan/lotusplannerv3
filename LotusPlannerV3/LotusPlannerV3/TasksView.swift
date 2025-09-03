@@ -1591,10 +1591,12 @@ struct TasksView: View {
                         let isMatch: Bool
                         switch selectedFilter {
                         case .day:
-                            // Show task on due date OR if it's overdue (due date < start of reference date)
-                            let startOfReferenceDate = calendar.startOfDay(for: referenceDate)
+                            // Show task on due date OR, if viewing today, show overdue (relative to today)
+                            let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: referenceDate)
+                            let isViewingToday = calendar.isDate(referenceDate, inSameDayAs: now)
                             let startOfDueDate = calendar.startOfDay(for: dueDate)
-                            isMatch = calendar.isDate(dueDate, inSameDayAs: referenceDate) || startOfDueDate < startOfReferenceDate
+                            let isOverdueRelativeToToday = startOfDueDate < startOfToday
+                            isMatch = isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday)
                         case .week:
                             isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
                         case .month:
