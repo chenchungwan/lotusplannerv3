@@ -27,6 +27,10 @@ struct BaseViewV2: View {
     @State private var taskSheetSelection: BaseV2TaskSelection?
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
+    @State private var showingDatePicker = false
+    @State private var selectedDateForPicker = Date()
+    @State private var v2TopTasksHeight: CGFloat = 300
+    @State private var isV2DividerDragging: Bool = false
     
     // No section width management needed since we removed the events section
     
@@ -146,9 +150,9 @@ struct BaseViewV2: View {
                 Image(systemName: "chevron.left")
             }
             
-            Button(action: { 
-                selectedDate = Date() // Go to today
-                navigationManager.updateInterval(.week, date: Date())
+            Button(action: {
+                selectedDateForPicker = selectedDate
+                showingDatePicker = true
             }) {
                 Text(titleText)
                     .font(.title2)
@@ -159,6 +163,32 @@ struct BaseViewV2: View {
             Button(action: { step(1) }) {
                 Image(systemName: "chevron.right")
             }
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                DatePicker(
+                    "Select Date",
+                    selection: $selectedDateForPicker,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .navigationTitle("Select Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") { showingDatePicker = false }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            selectedDate = selectedDateForPicker
+                            navigationManager.switchToBaseViewV2()
+                            navigationManager.updateInterval(.week, date: selectedDateForPicker)
+                            showingDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.large])
         }
     }
     
@@ -174,11 +204,15 @@ struct BaseViewV2: View {
                     .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
             }
             
-            // BaseViewV2 button (keep V only)
+            // BaseViewV2 button
             Button(action: {
+                let now = Date()
+                selectedDate = now
                 navigationManager.switchToBaseViewV2()
+                navigationManager.updateInterval(.week, date: now)
+                Task { await tasksViewModel.loadTasks() }
             }) {
-                Image(systemName: "v.circle")
+                Image(systemName: "7.circle")
                     .font(.body)
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
@@ -296,13 +330,33 @@ extension BaseViewV2 {
                 }
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
+                .frame(height: (authManager.isLinked(kind: .professional) && professionalHasAny) ? v2TopTasksHeight : nil, alignment: .top)
+                .clipped()
             }
             
-            // Divider between task types
+            // Draggable divider between task types (only when both present)
             if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && personalHasAny && professionalHasAny {
                 Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(height: 1)
+                    .fill(isV2DividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                    .frame(height: 8)
+                    .overlay(
+                        Image(systemName: "line.3.horizontal")
+                            .font(.caption)
+                            .foregroundColor(isV2DividerDragging ? .white : .gray)
+                    )
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isV2DividerDragging = true
+                                let newHeight = v2TopTasksHeight + value.translation.height
+                                let minHeight: CGFloat = 150
+                                let maxHeight: CGFloat = max(250, UIScreen.main.bounds.height - 350)
+                                v2TopTasksHeight = max(minHeight, min(maxHeight, newHeight))
+                            }
+                            .onEnded { _ in
+                                isV2DividerDragging = false
+                            }
+                    )
             }
             
             // Professional Tasks Row (bottom 50%)
@@ -328,6 +382,7 @@ extension BaseViewV2 {
                 }
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
+                .frame(maxHeight: .infinity, alignment: .top)
             }
         }
     }

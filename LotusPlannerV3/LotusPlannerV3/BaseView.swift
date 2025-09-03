@@ -145,11 +145,13 @@ struct BaseView: View {
                     .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
             }
             
-            // BaseViewV2 button (keep V only)
+            // BaseViewV2 button
             Button(action: {
+                let now = Date()
                 navigationManager.switchToBaseViewV2()
+                navigationManager.updateInterval(.week, date: now)
             }) {
-                Image(systemName: "v.circle")
+                Image(systemName: "7.circle")
                     .font(.body)
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
