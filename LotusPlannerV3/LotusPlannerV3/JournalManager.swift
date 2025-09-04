@@ -79,6 +79,13 @@ struct JournalManager {
         return try? Data(contentsOf: url)
     }
 
+    /// Remove any stored background PDF and legacy paths so the journal uses a blank background.
+    func clearBackgroundPDF(layoutType: JournalLayoutType = .compact) {
+        let targetURL = storedURL(for: layoutType)
+        try? FileManager.default.removeItem(at: targetURL)
+        UserDefaults.standard.removeObject(forKey: "journalBackgroundPDFPath_\(layoutType)")
+    }
+
     // MARK: - Drawing Storage
     private var drawingsDirectory: URL {
         let dir = docsURL.appendingPathComponent("journal_drawings", isDirectory: true)

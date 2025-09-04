@@ -461,7 +461,7 @@ struct SettingsView: View {
                             handleDeleteAllData()
                         }
                     } message: {
-                        Text("This action will unlink all your linked Google accounts but will not delete the events or tasks data from your Google accounts. \n\nLogs data, however, will be dteled from your iCloud and cannot be undone.")
+                        Text("This action will unlink all your linked Google accounts but will not delete the events or tasks data from your Google accounts. \n\nLogs data, however, will be deleted from your iCloud and cannot be undone.")
                     }
                 }
                 

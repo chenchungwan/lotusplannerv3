@@ -137,11 +137,13 @@ struct JournalView: View {
         ZStack {
             // Observe photo picker selection
         
-            // PDF background
+            // PDF background (fallback to blank when file missing)
             if let url = JournalManager.shared.backgroundPDFURL(for: layoutType),
                let doc = PDFDocument(url: url) {
                 PDFKitView(document: doc)
                     .ignoresSafeArea()
+            } else {
+                Color.clear
             }
 
             // PencilKit canvas overlay
@@ -177,7 +179,7 @@ struct JournalView: View {
             }
             // Eraser button – shows confirmation before clearing
             Button(action: { showingEraseConfirmation = true }) {
-                Image(systemName: "eraser")
+                Image(systemName: "trash")
                     .padding(10)
                     .background(Color(.systemBackground).opacity(0.8))
                     .clipShape(Circle())

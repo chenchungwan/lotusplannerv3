@@ -2152,7 +2152,13 @@ struct CalendarView: View {
                                 .frame(width: 8, height: 8)
                         }
                         .padding(10)
-                        .background(Color(.secondarySystemBackground))
+                        .background(
+                            (
+                                calendarViewModel.personalEvents.contains { $0.id == ev.id }
+                                ? appPrefs.personalColor.opacity(0.12)
+                                : appPrefs.professionalColor.opacity(0.12)
+                            )
+                        )
                         .cornerRadius(8)
                     }
                     .buttonStyle(PlainButtonStyle())

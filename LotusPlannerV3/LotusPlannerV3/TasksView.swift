@@ -1020,7 +1020,7 @@ struct TasksView: View {
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
-    @State private var selectedFilter: TaskFilter = .all
+    @State private var selectedFilter: TaskFilter = .day
     @State private var referenceDate: Date = Date()
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
@@ -1091,7 +1091,8 @@ struct TasksView: View {
                                         },
                                         onOrderChanged: { newOrder in
                                             Task { await viewModel.updateTaskListOrder(newOrder, for: .personal) }
-                                        }
+                                        },
+                                        horizontalCards: true
                                     )
                                     .frame(width: max(geometry.size.width - 32, 600), alignment: .top)
                                 }
@@ -1119,7 +1120,8 @@ struct TasksView: View {
                                         },
                                         onOrderChanged: { newOrder in
                                             Task { await viewModel.updateTaskListOrder(newOrder, for: .professional) }
-                                        }
+                                        },
+                                        horizontalCards: true
                                     )
                                     .frame(width: max(geometry.size.width - 32, 600), alignment: .top)
                                 }
@@ -1494,9 +1496,8 @@ struct TasksView: View {
             )
         }
         .onAppear {
-            // Always show All when entering Tasks from toggle
-            selectedFilter = .all
-            allSubfilter = .all
+            // Default to current day when entering Tasks view
+            selectedFilter = .day
             referenceDate = Date()
             // Listen for external requests to show Add Task so behavior matches Calendar
             NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
@@ -1514,7 +1515,7 @@ struct TasksView: View {
     private var tasksViewDivider: some View {
         Rectangle()
             .fill(isTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(width: 8)
+            .frame(width: 4)
             .overlay(
                 Image(systemName: "line.3.vertical")
                     .font(.caption)

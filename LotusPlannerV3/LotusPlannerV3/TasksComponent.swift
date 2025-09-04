@@ -11,12 +11,13 @@ struct TasksComponent: View {
     let onOrderChanged: (([GoogleTaskList]) -> Void)? // callback to update parent state
     let hideDueDateTag: Bool
     let showEmptyState: Bool
+    let horizontalCards: Bool
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
     
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -27,6 +28,7 @@ struct TasksComponent: View {
         self.onOrderChanged = onOrderChanged
         self.hideDueDateTag = hideDueDateTag
         self.showEmptyState = showEmptyState
+        self.horizontalCards = horizontalCards
         self._localTaskLists = State(initialValue: taskLists)
     }
     
@@ -37,57 +39,7 @@ struct TasksComponent: View {
         if !authManager.isLinked(kind: accountType) {
             EmptyView()
         } else {
-            VStack(spacing: 12) {
-            ScrollView {
-                VStack(spacing: 16) {
-                    ForEach(localTaskLists, id: \.id) { taskList in
-                        if let tasks = tasksDict[taskList.id] {
-                            // Sort by Google's position string (lexicographic) to match API ordering
-                            let sortedByPosition = tasks.sorted { (a, b) in
-                                switch (a.position, b.position) {
-                                case let (pa?, pb?):
-                                    return pa < pb
-                                case (nil, _?):
-                                    return false // place tasks without position after those with position
-                                case (_?, nil):
-                                    return true
-                                case (nil, nil):
-                                    return a.id < b.id // stable fallback
-                                }
-                            }
-                            let filteredTasks: [GoogleTask] = appPrefs.hideCompletedTasks ? sortedByPosition.filter { !$0.isCompleted } : sortedByPosition
-                            if !filteredTasks.isEmpty {
-                                TaskComponentListCard(
-                                    taskList: taskList,
-                                    tasks: filteredTasks,
-                                    accentColor: accentColor,
-                                    onTaskToggle: { task in onTaskToggle(task, taskList.id) },
-                                    onTaskDetails: { task in onTaskDetails(task, taskList.id) },
-                                    onListRename: { newName in onListRename?(taskList.id, newName) },
-                                    hideDueDateTag: hideDueDateTag
-                                )
-                            }
-                        }
-                    }
-
-                    let noVisibleTasks: Bool = tasksDict.allSatisfy { entry in
-                        let visible = appPrefs.hideCompletedTasks ? entry.value.filter { !$0.isCompleted } : entry.value
-                        return visible.isEmpty
-                    }
-                    if showEmptyState && noVisibleTasks {
-                        Text("No tasks")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
-                    }
-                }
-            }
-            }
-            .padding()
-            .background(Color(.tertiarySystemBackground))
-            .cornerRadius(12)
+            contentView
             .onAppear {
                 // Sync local copy with upstream lists on first render
                 localTaskLists = taskLists
@@ -102,6 +54,93 @@ struct TasksComponent: View {
     // Drag-and-drop removed per request
 }
 
+// MARK: - Decomposition to simplify type-checker
+extension TasksComponent {
+    @ViewBuilder
+    private var contentView: some View {
+        if horizontalCards {
+            horizontalCardsView
+        } else {
+            verticalCardsView
+        }
+    }
+
+    private func filteredTasksForList(_ taskList: GoogleTaskList) -> [GoogleTask] {
+        let tasks = tasksDict[taskList.id] ?? []
+        let sortedByPosition: [GoogleTask] = tasks.sorted { (a, b) in
+            switch (a.position, b.position) {
+            case let (pa?, pb?): return pa < pb
+            case (nil, _?): return false
+            case (_?, nil): return true
+            case (nil, nil): return a.id < b.id
+            }
+        }
+        return appPrefs.hideCompletedTasks ? sortedByPosition.filter { !$0.isCompleted } : sortedByPosition
+    }
+
+    @ViewBuilder
+    private func card(for taskList: GoogleTaskList, enableScroll: Bool, maxHeight: CGFloat?) -> some View {
+        let filtered = filteredTasksForList(taskList)
+        if !filtered.isEmpty {
+            TaskComponentListCard(
+                taskList: taskList,
+                tasks: filtered,
+                accentColor: accentColor,
+                onTaskToggle: { task in onTaskToggle(task, taskList.id) },
+                onTaskDetails: { task in onTaskDetails(task, taskList.id) },
+                onListRename: { newName in onListRename?(taskList.id, newName) },
+                hideDueDateTag: hideDueDateTag,
+                enableScroll: enableScroll,
+                maxTasksAreaHeight: maxHeight
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var horizontalCardsView: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            HStack(alignment: .top, spacing: 3) {
+                ForEach(localTaskLists, id: \.id) { list in
+                    card(for: list, enableScroll: true, maxHeight: UIScreen.main.bounds.height * 0.35)
+                        .frame(width: UIScreen.main.bounds.width * 0.3, alignment: .top)
+                }
+            }
+            .padding(.horizontal, 3)
+        }
+    }
+
+    @ViewBuilder
+    private var verticalCardsView: some View {
+        VStack(spacing: 3) {
+            ScrollView {
+                VStack(spacing: 3) {
+                    ForEach(localTaskLists, id: \.id) { list in
+                        card(for: list, enableScroll: false, maxHeight: nil)
+                    }
+                    if showEmptyState && noVisibleTasks {
+                        Text("No tasks")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 20)
+                    }
+                }
+            }
+        }
+        .padding(3)
+        .background(Color(.tertiarySystemBackground))
+        .cornerRadius(12)
+    }
+
+    private var noVisibleTasks: Bool {
+        tasksDict.allSatisfy { entry in
+            let visible = appPrefs.hideCompletedTasks ? entry.value.filter { !$0.isCompleted } : entry.value
+            return visible.isEmpty
+        }
+    }
+}
+
 private struct TaskComponentListCard: View {
     let taskList: GoogleTaskList
     let tasks: [GoogleTask]
@@ -110,6 +149,8 @@ private struct TaskComponentListCard: View {
     let onTaskDetails: (GoogleTask) -> Void
     let onListRename: (String) -> Void
     let hideDueDateTag: Bool
+    let enableScroll: Bool
+    let maxTasksAreaHeight: CGFloat?
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -129,6 +170,28 @@ private struct TaskComponentListCard: View {
         let calendar = Calendar.current
         let startOfToday = calendar.startOfDay(for: Date())
         return dueDate < startOfToday
+    }
+    
+    init(
+        taskList: GoogleTaskList,
+        tasks: [GoogleTask],
+        accentColor: Color,
+        onTaskToggle: @escaping (GoogleTask) -> Void,
+        onTaskDetails: @escaping (GoogleTask) -> Void,
+        onListRename: @escaping (String) -> Void,
+        hideDueDateTag: Bool,
+        enableScroll: Bool = false,
+        maxTasksAreaHeight: CGFloat? = nil
+    ) {
+        self.taskList = taskList
+        self.tasks = tasks
+        self.accentColor = accentColor
+        self.onTaskToggle = onTaskToggle
+        self.onTaskDetails = onTaskDetails
+        self.onListRename = onListRename
+        self.hideDueDateTag = hideDueDateTag
+        self.enableScroll = enableScroll
+        self.maxTasksAreaHeight = maxTasksAreaHeight
     }
     
     var body: some View {
@@ -176,15 +239,35 @@ private struct TaskComponentListCard: View {
             }
             
             // Tasks for this list
-            VStack(spacing: 4) {
-                ForEach(tasks, id: \.id) { task in
-                    TaskComponentRow(
-                        task: task,
-                        accentColor: accentColor,
-                        onToggle: { onTaskToggle(task) },
-                        onDetails: { onTaskDetails(task) }
-                    )
-                    .environment(\.hideDueDate, hideDueDateTag)
+            Group {
+                if enableScroll {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(spacing: 4) {
+                            ForEach(tasks, id: \.id) { task in
+                                TaskComponentRow(
+                                    task: task,
+                                    accentColor: accentColor,
+                                    onToggle: { onTaskToggle(task) },
+                                    onDetails: { onTaskDetails(task) }
+                                )
+                                .environment(\.hideDueDate, hideDueDateTag)
+                            }
+                        }
+                    }
+                    .frame(height: (maxTasksAreaHeight ?? 260))
+                    .clipped()
+                } else {
+                    VStack(spacing: 4) {
+                        ForEach(tasks, id: \.id) { task in
+                            TaskComponentRow(
+                                task: task,
+                                accentColor: accentColor,
+                                onToggle: { onTaskToggle(task) },
+                                onDetails: { onTaskDetails(task) }
+                            )
+                            .environment(\.hideDueDate, hideDueDateTag)
+                        }
+                    }
                 }
             }
         }

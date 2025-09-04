@@ -328,12 +328,12 @@ struct ScrapbookComponent: View {
                                 .clipShape(Circle())
                         }
 
-                        // Toggle Eraser tool
+                        // Toggle Eraser tool (trash icon)
                         Button(action: {
                             isUsingEraser = true
                             canvasView.tool = PKEraserTool(.vector)
                         }) {
-                            Image(systemName: "eraser")
+                            Image(systemName: "trash")
                                 .padding(10)
                                 .background(Color(.systemBackground).opacity(0.8))
                                 .clipShape(Circle())
