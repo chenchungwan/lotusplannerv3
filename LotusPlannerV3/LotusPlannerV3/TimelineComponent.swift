@@ -41,8 +41,9 @@ struct TimelineComponent: View {
     }
     
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 0) {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 0) {
                 // All-day events section (only show if there are any)
                 if !allDayEvents.isEmpty {
                     allDayEventsSection
@@ -56,6 +57,7 @@ struct TimelineComponent: View {
                             ForEach(startHour..<endHour, id: \.self) { hour in
                                 timeSlot(hour: hour)
                                     .frame(height: hourHeight)
+                                    .id(hour)
                             }
                             
                             // Final 12a line at the end of the day
@@ -85,14 +87,25 @@ struct TimelineComponent: View {
                     }
                 }
                 // debug border removed
+                }
             }
-        }
-        // Removed extra left padding to minimize gap next to time column
-        .onAppear {
-            startCurrentTimeTimer()
-        }
-        .onDisappear {
-            stopCurrentTimeTimer()
+            // Removed extra left padding to minimize gap next to time column
+            .onAppear {
+                startCurrentTimeTimer()
+                // Auto-scroll to current hour when viewing today
+                if Calendar.current.isDate(date, inSameDayAs: Date()) {
+                    let currentHour = Calendar.current.component(.hour, from: Date())
+                    let targetHour = min(max(currentHour, startHour), endHour - 1)
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(targetHour, anchor: .top)
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                stopCurrentTimeTimer()
+            }
         }
     }
     

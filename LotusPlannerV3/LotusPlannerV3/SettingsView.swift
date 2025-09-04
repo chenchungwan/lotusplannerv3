@@ -312,6 +312,7 @@ struct SettingsView: View {
     @State private var showingPersonalColorPicker = false
     @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
+    @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     
 
 
@@ -338,7 +339,7 @@ struct SettingsView: View {
                 
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
 
-                Section("View Layout") {
+                Section("Daily View Preference") {
                     // Day View Layout Options with Radio Buttons
                     ForEach(DayViewLayoutOption.allCases) { option in
                         HStack {
@@ -379,7 +380,9 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                }
 
+                Section("Tasks View Preference") {
                     Toggle(isOn: Binding(
                         get: { appPrefs.tasksLayoutTwoRows },
                         set: { appPrefs.tasksLayoutTwoRows = $0 }
@@ -421,29 +424,7 @@ struct SettingsView: View {
                 
                 // Components Visibility section removed: Logs and Journal are always visible
                 
-                Section("Debug & Auth Issues") {
-                    HStack {
-                        Image(systemName: "key.slash")
-                            .foregroundColor(.secondary)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Clear Auth State")
-                                .font(.body)
-                            Text("Fix keychain errors by clearing all Google auth data")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Clear") {
-                            GoogleAuthManager.shared.clearAllAuthState()
-                        }
-                        .buttonStyle(.bordered)
-                        .foregroundColor(.red)
-                    }
-                }
+                
                 
                 Section("Danger Zone") {
                     Button(role: .destructive) {
@@ -475,6 +456,23 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+            }
+            .alert(
+                "Unlink Account?",
+                isPresented: Binding(
+                    get: { pendingUnlink != nil },
+                    set: { if !$0 { pendingUnlink = nil } }
+                )
+            ) {
+                Button("Cancel", role: .cancel) { pendingUnlink = nil }
+                Button("Unlink", role: .destructive) {
+                    if let kind = pendingUnlink {
+                        handleTap(kind)
+                        pendingUnlink = nil
+                    }
+                }
+            } message: {
+                Text("You will stop syncing data for this account. You can re-link anytime in Settings.")
             }
         }
     }
@@ -535,7 +533,11 @@ struct SettingsView: View {
             
             // Link/Unlink button
             Button(isLinked ? "Unlink" : "Link") {
-                handleTap(kindEnum)
+                if isLinked {
+                    pendingUnlink = kindEnum
+                } else {
+                    handleTap(kindEnum)
+                }
             }
             .buttonStyle(.borderedProminent)
         }
