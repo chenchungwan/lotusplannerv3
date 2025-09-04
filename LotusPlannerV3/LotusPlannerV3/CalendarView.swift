@@ -159,6 +159,22 @@ class CalendarViewModel: ObservableObject {
         formatter.dateFormat = "yyyy-MM-dd"
         return "\(accountKind.rawValue)_\(formatter.string(from: startDate))_\(formatter.string(from: endDate))"
     }
+
+    // Expose a way to clear all caches and published arrays
+    func clearAllData() {
+        cachedEvents.removeAll()
+        cachedCalendars.removeAll()
+        cacheTimestamps.removeAll()
+        personalEvents = []
+        professionalEvents = []
+        personalCalendars = []
+        professionalCalendars = []
+        // Clear disk cache keys as well
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(diskCacheKeyPrefix) || key.hasPrefix(diskCacheTimestampPrefix) {
+            defaults.removeObject(forKey: key)
+        }
+    }
     
     private func monthCacheKey(for date: Date, accountKind: GoogleAuthManager.AccountKind) -> String {
         let calendar = Calendar.mondayFirst
@@ -898,6 +914,30 @@ struct CalendarView: View {
                 }
             )
         }
+        .onChange(of: authManager.linkedStates) { oldValue, newValue in
+            // When an account is unlinked, clear associated tasks and refresh caches
+            if !(newValue[.personal] ?? false) {
+                tasksViewModel.clearTasks(for: .personal)
+            }
+            if !(newValue[.professional] ?? false) {
+                tasksViewModel.clearTasks(for: .professional)
+            }
+            // When an account becomes linked, load tasks immediately
+            let personalJustLinked = (newValue[.personal] ?? false) && !(oldValue[.personal] ?? false)
+            let professionalJustLinked = (newValue[.professional] ?? false) && !(oldValue[.professional] ?? false)
+            if personalJustLinked || professionalJustLinked {
+                Task {
+                    await tasksViewModel.loadTasks()
+                    await MainActor.run {
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
+                    }
+                }
+            } else {
+                updateCachedTasks()
+                updateMonthCachedTasks()
+            }
+        }
         .sheet(isPresented: $showingAddItem) {
             AddItemView(
                 currentDate: currentDate,
@@ -1003,7 +1043,7 @@ struct CalendarView: View {
                     Text(String(Calendar.current.component(.year, from: currentDate)))
                         .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(DateDisplayStyle.primaryColor)
+                        .foregroundColor(isCurrentYear ? DateDisplayStyle.currentPeriodColor : DateDisplayStyle.primaryColor)
                 }
             } else if navigationManager.currentInterval == .month {
                 Button(action: {
@@ -1013,7 +1053,7 @@ struct CalendarView: View {
                     Text(monthYearTitle)
                         .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(DateDisplayStyle.primaryColor)
+                        .foregroundColor(isCurrentMonth ? DateDisplayStyle.currentPeriodColor : DateDisplayStyle.primaryColor)
                 }
             } else if navigationManager.currentInterval == .week {
                 Button(action: {
@@ -1023,7 +1063,7 @@ struct CalendarView: View {
                     Text(weekTitle)
                         .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(DateDisplayStyle.primaryColor)
+                        .foregroundColor(isCurrentWeek ? DateDisplayStyle.currentPeriodColor : DateDisplayStyle.primaryColor)
                 }
             } else if navigationManager.currentInterval == .day {
                 Button(action: {
@@ -1033,7 +1073,7 @@ struct CalendarView: View {
                     Text(dayTitle)
                         .font(DateDisplayStyle.titleFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(DateDisplayStyle.primaryColor)
+                        .foregroundColor(isToday ? DateDisplayStyle.currentPeriodColor : DateDisplayStyle.primaryColor)
                 }
             }
             Button(action: { step(1) }) {
@@ -1060,7 +1100,7 @@ struct CalendarView: View {
                 navigationManager.switchToBaseViewV2()
                 navigationManager.updateInterval(.week, date: now)
             }) {
-                Image(systemName: "7.circle")
+                Image(systemName: "w.circle")
                     .font(.body)
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
@@ -1084,6 +1124,19 @@ struct CalendarView: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+
+                // Refresh button
+                Button(action: {
+                    Task {
+                        await calendarViewModel.loadCalendarData(for: currentDate)
+                        await tasksViewModel.loadTasks()
+                        await MainActor.run { updateCachedTasks() }
+                    }
+                }) {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                         .font(.body)
                         .foregroundColor(.secondary)
                 }
@@ -1243,7 +1296,7 @@ struct CalendarView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             
-            // Bottom section - Journal
+            // Bottom section - Journal (always visible)
             JournalView(currentDate: currentDate, embedded: true)
                 .id(currentDate)
                 .frame(maxHeight: .infinity)
@@ -1256,17 +1309,38 @@ struct CalendarView: View {
     
     private var weekBottomSection: some View {
         GeometryReader { geometry in
-            HStack(spacing: 0) {
-                // Tasks section (personal and professional columns)
-                weekTasksSection
-                    .frame(width: weekTasksSectionWidth)
-                
-                // Resizable divider
-                weekTasksDivider
-                
-                // Apple Pencil section
-                weekPencilSection
-                    .frame(width: geometry.size.width - weekTasksSectionWidth - 8)
+            if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+                // Centered empty state for weekly view
+                Button(action: { NavigationManager.shared.showSettings() }) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        Text("Link Your Google Account")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                        Text("Connect your Google account to view weekly tasks")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 40)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+            } else {
+                HStack(spacing: 0) {
+                    // Tasks section (personal and professional columns)
+                    weekTasksSection
+                        .frame(width: weekTasksSectionWidth)
+                    
+                    // Resizable divider
+                    weekTasksDivider
+                    
+                    // Apple Pencil section
+                    weekPencilSection
+                        .frame(width: geometry.size.width - weekTasksSectionWidth - 8)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1431,6 +1505,25 @@ struct CalendarView: View {
         let dayOfWeek = DateFormatter.standardDayOfWeek.string(from: currentDate).uppercased()
         let date = DateFormatter.standardDate.string(from: currentDate)
         return "\(dayOfWeek) \(date)"
+    }
+
+    private var isToday: Bool {
+        Calendar.current.isDate(currentDate, inSameDayAs: Date())
+    }
+    private var isCurrentWeek: Bool {
+        let calendar = Calendar.mondayFirst
+        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: Date())?.start,
+              let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) else { return false }
+        return currentDate >= weekStart && currentDate <= weekEnd
+    }
+    private var isCurrentMonth: Bool {
+        let calendar = Calendar.current
+        let todayComponents = calendar.dateComponents([.year, .month], from: Date())
+        let currentComponents = calendar.dateComponents([.year, .month], from: currentDate)
+        return todayComponents.year == currentComponents.year && todayComponents.month == currentComponents.month
+    }
+    private var isCurrentYear: Bool {
+        Calendar.current.component(.year, from: Date()) == Calendar.current.component(.year, from: currentDate)
     }
     
     private func navigateToDate(_ selectedDate: Date) {
@@ -1732,15 +1825,18 @@ struct CalendarView: View {
 
         return HStack(alignment: .top, spacing: 0) {
             // Column 1 – timeline (25% device width)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Events")
-                    .font(.headline)
-                    .padding(.leading, 12)
-                    .padding(.trailing, 8)
-                leftTimelineSection
-            }
-            .frame(width: column1Width)
-            .padding(.all, 8)
+            eventsTimelineCard()
+                .frame(width: column1Width)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .padding(.trailing, 8)
+                .padding(.leading, 8 + geometry.safeAreaInsets.leading)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color(.systemGray4), lineWidth: 1)
+            )
 
             dayVerticalDivider
 
@@ -1844,12 +1940,22 @@ struct CalendarView: View {
             // Draggable divider between timeline and logs
             leftTimelineDivider
             
-            // Logs section
+            // Logs section (always visible)
             LogsComponent(currentDate: currentDate, horizontal: false)
                 .frame(maxHeight: .infinity)
                 .padding(.all, 8)
         }
         .frame(height: geometry.size.height)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .padding(.trailing, 8)
+        .padding(.leading, 16 + geometry.safeAreaInsets.leading)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray4), lineWidth: 1)
+        )
     }
     
     private var leftTimelineSection: some View {
@@ -1883,6 +1989,27 @@ struct CalendarView: View {
                 )
             }
         }
+    }
+
+    // Shared Events timeline card used by both compact and expanded layouts
+    private func eventsTimelineCard(height: CGFloat? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Events")
+                .font(.headline)
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+            leftTimelineSection
+        }
+        .frame(height: height, alignment: .topLeading)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .padding(.horizontal, 8)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray4), lineWidth: 1)
+        )
     }
     
     private var dayEventsList: some View {
@@ -2694,7 +2821,13 @@ struct CalendarView: View {
         let monthDates = getMonthDates()
         var eventsGroupedByDate: [Date: [GoogleCalendarEvent]] = [:]
         
-        var allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        var allEvents: [GoogleCalendarEvent] = []
+        if authManager.isLinked(kind: .personal) {
+            allEvents += calendarViewModel.personalEvents
+        }
+        if authManager.isLinked(kind: .professional) {
+            allEvents += calendarViewModel.professionalEvents
+        }
         
         // Debug: Print event counts to help diagnose the issue
         print("🗓️ Month Events Debug:")
@@ -2835,7 +2968,8 @@ struct CalendarView: View {
     
     private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
+                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
         
         return allEvents.filter { event in
             // Skip all-day events for now (they are shown in the header)
@@ -2849,7 +2983,8 @@ struct CalendarView: View {
     // New function that includes ALL events (both all-day and timed) for the TimelineComponent
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
+                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
         
         return allEvents.filter { event in
             guard let startTime = event.startTime else { return false }
@@ -2859,7 +2994,8 @@ struct CalendarView: View {
     
     private func getAllDayEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
+                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
         
         return allEvents.filter { event in
             guard event.isAllDay else { return false }
@@ -3047,7 +3183,8 @@ struct CalendarView: View {
     }
     
     private func getAllDayEvents() -> [GoogleCalendarEvent] {
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
+                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
         return allEvents.filter { $0.isAllDay }
     }
     
@@ -3083,60 +3220,85 @@ struct CalendarView: View {
     private var topLeftDaySection: some View {
         HStack(spacing: 8) {
             // Personal Tasks
-            TasksComponent(
-                taskLists: tasksViewModel.personalTaskLists,
-                tasksDict: filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate),
-                accentColor: appPrefs.personalColor,
-                accountType: .personal,
-                onTaskToggle: { task, listId in
-                    Task {
-                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                        updateCachedTasks()
+            let personalFiltered = filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate)
+            if authManager.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
+                TasksComponent(
+                    taskLists: tasksViewModel.personalTaskLists,
+                    tasksDict: personalFiltered,
+                    accentColor: appPrefs.personalColor,
+                    accountType: .personal,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            updateCachedTasks()
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                        }
                     }
-                },
-                onTaskDetails: { task, listId in
-                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
-                },
-                onListRename: { listId, newName in
-                    Task {
-                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                    }
-                },
-                onOrderChanged: { newOrder in
-                    Task {
-                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            } else if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+                // Empty state in Day view, placed in Tasks area
+                Button(action: { NavigationManager.shared.showSettings() }) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary)
+                        Text("Link Your Google Account")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Text("Connect your Google account to view and manage your tasks")
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 24)
                     }
                 }
-            )
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
             
             // Professional Tasks
-            TasksComponent(
-                taskLists: tasksViewModel.professionalTaskLists,
-                tasksDict: filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate),
-                accentColor: appPrefs.professionalColor,
-                accountType: .professional,
-                onTaskToggle: { task, listId in
-                    Task {
-                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                        updateCachedTasks()
+            let professionalFiltered = filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate)
+            if authManager.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
+                TasksComponent(
+                    taskLists: tasksViewModel.professionalTaskLists,
+                    tasksDict: professionalFiltered,
+                    accentColor: appPrefs.professionalColor,
+                    accountType: .professional,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            updateCachedTasks()
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                        }
                     }
-                },
-                onTaskDetails: { task, listId in
-                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
-                },
-                onListRename: { listId, newName in
-                    Task {
-                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                    }
-                },
-                onOrderChanged: { newOrder in
-                    Task {
-                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
-                    }
-                }
-            )
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
@@ -3417,8 +3579,8 @@ struct CalendarView: View {
         print("   Personal task lists: \(tasksViewModel.personalTasks.keys.count)")
         print("   Professional task lists: \(tasksViewModel.professionalTasks.keys.count)")
         
-        cachedPersonalTasks = filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate)
-        cachedProfessionalTasks = filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate)
+        cachedPersonalTasks = authManager.isLinked(kind: .personal) ? filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate) : [:]
+        cachedProfessionalTasks = authManager.isLinked(kind: .professional) ? filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate) : [:]
         
         print("   Cached personal tasks: \(cachedPersonalTasks.values.flatMap { $0 }.count)")
         print("   Cached professional tasks: \(cachedProfessionalTasks.values.flatMap { $0 }.count)")
@@ -3440,8 +3602,8 @@ struct CalendarView: View {
 
     
     private func updateMonthCachedTasks() {
-        cachedMonthPersonalTasks = filteredTasksForMonth(tasksViewModel.personalTasks, date: currentDate)
-        cachedMonthProfessionalTasks = filteredTasksForMonth(tasksViewModel.professionalTasks, date: currentDate)
+        cachedMonthPersonalTasks = authManager.isLinked(kind: .personal) ? filteredTasksForMonth(tasksViewModel.personalTasks, date: currentDate) : [:]
+        cachedMonthProfessionalTasks = authManager.isLinked(kind: .professional) ? filteredTasksForMonth(tasksViewModel.professionalTasks, date: currentDate) : [:]
     }
     
     private func filteredTasksForDate(_ tasksDict: [String: [GoogleTask]], date: Date) -> [String: [GoogleTask]] {

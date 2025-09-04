@@ -82,7 +82,7 @@ struct TimelineComponent: View {
                 }
             }
         }
-        .padding(.leading, 2) // Add 2px left padding
+        .padding(.horizontal, 12) // symmetric inset to match card
         .onAppear {
             startCurrentTimeTimer()
         }

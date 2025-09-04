@@ -12,6 +12,7 @@ struct DayView: View {
     @ObservedObject private var eventManager = EventManager.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var authManager = GoogleAuthManager.shared
     
 	// State for events
 	@State private var dayEvents: [GoogleCalendarEvent] = []
@@ -92,6 +93,24 @@ struct DayView: View {
                 }
             )
         }
+        .onChange(of: authManager.linkedStates) { oldValue, newValue in
+            // Clear unlinked account data and reload current day
+            if !(newValue[.personal] ?? false) {
+                tasksViewModel.clearTasks(for: .personal)
+                eventManager.clearEvents(for: .personal)
+            }
+            if !(newValue[.professional] ?? false) {
+                tasksViewModel.clearTasks(for: .professional)
+                eventManager.clearEvents(for: .professional)
+            }
+            eventManager.invalidateCache()
+            Task {
+                await tasksViewModel.loadTasks()
+                dayEvents = await eventManager.getEventsForDate(currentDate)
+                dayPersonalEvents = await eventManager.getPersonalEvents(for: .day(currentDate))
+                dayProfessionalEvents = await eventManager.getProfessionalEvents(for: .day(currentDate))
+            }
+        }
     }
     
     // MARK: - Compact Layout
@@ -135,7 +154,7 @@ struct DayView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Personal Tasks
-                    if !personalTasks.isEmpty {
+                    if authManager.isLinked(kind: .personal) && !personalTasks.isEmpty {
                         TasksComponent(
                             taskLists: tasksViewModel.personalTaskLists,
                             tasksDict: personalTasks,
@@ -163,7 +182,7 @@ struct DayView: View {
                     }
                     
                     // Professional Tasks
-                    if !professionalTasks.isEmpty {
+                    if authManager.isLinked(kind: .professional) && !professionalTasks.isEmpty {
                         TasksComponent(
                             taskLists: tasksViewModel.professionalTaskLists,
                             tasksDict: professionalTasks,
@@ -219,7 +238,7 @@ struct DayView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Personal Tasks
-                    if !personalTasks.isEmpty {
+                    if authManager.isLinked(kind: .personal) && !personalTasks.isEmpty {
                         TasksComponent(
                             taskLists: tasksViewModel.personalTaskLists,
                             tasksDict: personalTasks,
@@ -247,7 +266,7 @@ struct DayView: View {
                     }
                     
                     // Professional Tasks
-                    if !professionalTasks.isEmpty {
+                    if authManager.isLinked(kind: .professional) && !professionalTasks.isEmpty {
                         TasksComponent(
                             taskLists: tasksViewModel.professionalTaskLists,
                             tasksDict: professionalTasks,
@@ -278,7 +297,7 @@ struct DayView: View {
             }
             .frame(width: UIScreen.main.bounds.width * 0.35)
             
-            // Right section - Journal
+            // Right section - Journal (always visible)
             JournalView(currentDate: currentDate, embedded: true)
                 .frame(maxWidth: .infinity)
         }
@@ -287,6 +306,7 @@ struct DayView: View {
 	// MARK: - Computed Properties
     
     private var personalTasks: [String: [GoogleTask]] {
+        guard authManager.isLinked(kind: .personal) else { return [:] }
         let calendar = Calendar.current
         return tasksViewModel.personalTasks.mapValues { tasks in
             tasks.filter { task in
@@ -299,6 +319,7 @@ struct DayView: View {
     }
     
     private var professionalTasks: [String: [GoogleTask]] {
+        guard authManager.isLinked(kind: .professional) else { return [:] }
         let calendar = Calendar.current
         return tasksViewModel.professionalTasks.mapValues { tasks in
             tasks.filter { task in

@@ -13,6 +13,7 @@ struct TasksComponent: View {
     let showEmptyState: Bool
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
     
     init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true) {
@@ -32,7 +33,11 @@ struct TasksComponent: View {
     // Account title removed as requested
     
     var body: some View {
-        VStack(spacing: 12) {
+        // Hide entirely if the corresponding account is not linked
+        if !authManager.isLinked(kind: accountType) {
+            EmptyView()
+        } else {
+            VStack(spacing: 12) {
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(localTaskLists, id: \.id) { taskList in
@@ -79,17 +84,18 @@ struct TasksComponent: View {
                     }
                 }
             }
-        }
-        .padding()
-        .background(Color(.tertiarySystemBackground))
-        .cornerRadius(12)
-        .onAppear {
-            // Sync local copy with upstream lists on first render
-            localTaskLists = taskLists
-        }
-        .onChange(of: taskLists) { oldValue, newValue in
-            // Keep local ordering in sync when parent updates task lists (e.g., after initial load)
-            localTaskLists = newValue
+            }
+            .padding()
+            .background(Color(.tertiarySystemBackground))
+            .cornerRadius(12)
+            .onAppear {
+                // Sync local copy with upstream lists on first render
+                localTaskLists = taskLists
+            }
+            .onChange(of: taskLists) { oldValue, newValue in
+                // Keep local ordering in sync when parent updates task lists (e.g., after initial load)
+                localTaskLists = newValue
+            }
         }
     }
     

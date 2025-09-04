@@ -157,7 +157,7 @@ struct BaseViewV2: View {
                 Text(titleText)
                     .font(.title2)
                     .fontWeight(.semibold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(isCurrentWeekTitle ? DateDisplayStyle.currentPeriodColor : .primary)
             }
             
             Button(action: { step(1) }) {
@@ -192,6 +192,13 @@ struct BaseViewV2: View {
         }
     }
     
+    private var isCurrentWeekTitle: Bool {
+        let cal = Calendar.mondayFirst
+        guard let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start,
+              let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return false }
+        return selectedDate >= weekStart && selectedDate <= weekEnd
+    }
+    
     private var trailingToolbarButtons: some View {
         HStack(spacing: 12) {
             // Day button
@@ -212,7 +219,7 @@ struct BaseViewV2: View {
                 navigationManager.updateInterval(.week, date: now)
                 Task { await tasksViewModel.loadTasks() }
             }) {
-                Image(systemName: "7.circle")
+                Image(systemName: "w.circle")
                     .font(.body)
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
@@ -237,6 +244,17 @@ struct BaseViewV2: View {
                     .font(.body)
                     .foregroundColor(.secondary)
             }
+
+            // Refresh button
+            Button(action: {
+                Task {
+                    await tasksViewModel.loadTasks()
+                }
+            }) {
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
         }
     }
     
@@ -252,15 +270,21 @@ struct BaseViewV2: View {
                     
                     // If neither account is linked, show placeholder
                     if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
-                        VStack {
-                            Text("No Task Accounts Linked")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            Text("Link your Google accounts in Settings to view tasks")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
+                        Button(action: { NavigationManager.shared.showSettings() }) {
+                            VStack(spacing: 8) {
+                                Image(systemName: "person.badge.plus")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.secondary)
+                                Text("No Task Accounts Linked")
+                                    .font(.headline)
+                                    .foregroundColor(.secondary)
+                                Text("Link your Google accounts in Settings to view tasks")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
                         }
+                        .buttonStyle(.plain)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.all, 8)
                     }

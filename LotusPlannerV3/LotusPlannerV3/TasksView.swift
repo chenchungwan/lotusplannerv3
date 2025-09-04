@@ -141,6 +141,23 @@ class TasksViewModel: ObservableObject {
             self.isLoading = false
         }
     }
+
+    /// Clears tasks and lists for the specified account kind (or all if nil)
+    func clearTasks(for kind: GoogleAuthManager.AccountKind? = nil) {
+        switch kind {
+        case .some(.personal):
+            personalTaskLists = []
+            personalTasks = [:]
+        case .some(.professional):
+            professionalTaskLists = []
+            professionalTasks = [:]
+        case .none:
+            personalTaskLists = []
+            professionalTaskLists = []
+            personalTasks = [:]
+            professionalTasks = [:]
+        }
+    }
     
     private func loadTasksForAccount(_ kind: GoogleAuthManager.AccountKind) async {
         do {
@@ -1029,6 +1046,26 @@ struct TasksView: View {
     @State private var showingNavigationDatePicker = false
     @State private var selectedDateForNavigation = Date()
     
+    private var isCurrentToolbarPeriod: Bool {
+        let cal = Calendar.mondayFirst
+        switch selectedFilter {
+        case .day:
+            return cal.isDate(referenceDate, inSameDayAs: Date())
+        case .week:
+            if let start = cal.dateInterval(of: .weekOfYear, for: Date())?.start,
+               let end = cal.date(byAdding: .day, value: 6, to: start) {
+                return referenceDate >= start && referenceDate <= end
+            }
+            return false
+        case .month:
+            return cal.isDate(referenceDate, equalTo: Date(), toGranularity: .month)
+        case .year:
+            return cal.isDate(referenceDate, equalTo: Date(), toGranularity: .year)
+        case .all:
+            return false
+        }
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
@@ -1133,21 +1170,24 @@ struct TasksView: View {
                     }
                 }
             } else {
-                // No accounts linked
-                VStack(spacing: 24) {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 60))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Link Your Google Account")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                    
-                    Text("Connect your Google account to view and manage your tasks")
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 40)
+                // No accounts linked - tappable empty state to open Settings
+                VStack(spacing: 16) {
+                    Button(action: { NavigationManager.shared.showSettings() }) {
+                        VStack(spacing: 12) {
+                            Image(systemName: "person.badge.plus")
+                                .font(.system(size: 60))
+                                .foregroundColor(.secondary)
+                            Text("Link Your Google Account")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Text("Connect your Google account to view and manage your tasks")
+                                .multilineTextAlignment(.center)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 40)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1278,7 +1318,7 @@ struct TasksView: View {
                             Text(subtitleForFilter(selectedFilter))
                                 .font(.title3)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.primary)
+                                .foregroundColor(isCurrentToolbarPeriod ? DateDisplayStyle.currentPeriodColor : .primary)
                         }
                         Button(action: { step(1) }) { Image(systemName: "chevron.right") }
                     }
@@ -1366,6 +1406,17 @@ struct TasksView: View {
                             .foregroundColor(.secondary)
                     }
                     .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
+
+                    // Refresh button
+                    Button(action: {
+                        Task {
+                            await viewModel.loadTasks()
+                        }
+                    }) {
+                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
         }
@@ -1657,24 +1708,66 @@ struct TasksSectionView: View {
     let onTaskDetails: (GoogleTask, String) -> Void
     let width: CGFloat
     
+    private var isCurrentToolbarPeriod: Bool {
+        let cal = Calendar.mondayFirst
+        let refDate = NavigationManager.shared.currentDate
+        switch filter {
+        case .day:
+            return cal.isDate(refDate, inSameDayAs: Date())
+        case .week:
+            if let start = cal.dateInterval(of: .weekOfYear, for: Date())?.start,
+               let end = cal.date(byAdding: .day, value: 6, to: start) {
+                return refDate >= start && refDate <= end
+            }
+            return false
+        case .month:
+            return cal.isDate(refDate, equalTo: Date(), toGranularity: .month)
+        case .year:
+            return cal.isDate(refDate, equalTo: Date(), toGranularity: .year)
+        case .all:
+            return false
+        }
+    }
+
+    private var isCurrentPeriod: Bool {
+        let cal = Calendar.mondayFirst
+        let refDate = NavigationManager.shared.currentDate
+        switch filter {
+        case .day:
+            return cal.isDate(refDate, inSameDayAs: Date())
+        case .week:
+            if let start = cal.dateInterval(of: .weekOfYear, for: Date())?.start,
+               let end = cal.date(byAdding: .day, value: 6, to: start) {
+                return refDate >= start && refDate <= end
+            }
+            return false
+        case .month:
+            return cal.isDate(refDate, equalTo: Date(), toGranularity: .month)
+        case .year:
+            return cal.isDate(refDate, equalTo: Date(), toGranularity: .year)
+        case .all:
+            return false
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Section Header
             HStack {
                 Image(systemName: icon)
-                    .foregroundColor(accentColor)
+                    .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor)
                     .font(.title2)
                 Text(title)
                     .font(.title)
                     .fontWeight(.bold)
-                    .foregroundColor(accentColor)
+                    .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor)
                 Spacer()
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(accentColor.opacity(0.1))
+                    .fill((isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor).opacity(0.1))
             )
             
             // Content Area

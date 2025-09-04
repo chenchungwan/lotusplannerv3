@@ -215,6 +215,8 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Visibility toggles removed: Logs and Journal always shown
+    
 
     
 
@@ -274,6 +276,8 @@ class AppPreferences: ObservableObject {
         showEventsAsListInDay = value
     }
     
+    // Removed visibility update methods
+    
 
     
 
@@ -294,6 +298,7 @@ struct SettingsView: View {
     // State for color picker modals
     @State private var showingPersonalColorPicker = false
     @State private var showingProfessionalColorPicker = false
+    @State private var showingDeleteAllAlert = false
     
 
 
@@ -388,6 +393,8 @@ struct SettingsView: View {
 
                 }
                 
+                // Components Visibility section removed: Logs and Journal are always visible
+                
                 Section("Debug & Auth Issues") {
                     HStack {
                         Image(systemName: "key.slash")
@@ -409,6 +416,26 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.bordered)
                         .foregroundColor(.red)
+                    }
+                }
+                
+                Section("Danger Zone") {
+                    Button(role: .destructive) {
+                        showingDeleteAllAlert = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                            Text("Delete All Data")
+                        }
+                    }
+                    .alert("Delete All Data?", isPresented: $showingDeleteAllAlert) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Delete", role: .destructive) {
+                            handleDeleteAllData()
+                        }
+                    } message: {
+                        Text("This action will unlink all your linked Google accounts but will not delete the events or tasks data from your Google accounts. \n\nLogs data, however, will be dteled from your iCloud and cannot be undone.")
                     }
                 }
                 
@@ -502,6 +529,25 @@ struct SettingsView: View {
                 } catch {
                 }
             }
+        }
+    }
+    
+    private func handleDeleteAllData() {
+        // Unlink all Google accounts
+        GoogleAuthManager.shared.clearAllAuthState()
+        
+        // Clear calendar caches
+        DataManager.shared.calendarViewModel.clearAllData()
+        
+        // Delete all Logs data (Core Data + CloudKit)
+        CoreDataManager.shared.deleteAllLogs()
+        LogsViewModel.shared.reloadData()
+        LogsViewModel.shared.loadLogsForCurrentDate()
+        
+        // If currently on Day view in Calendar, force UI refresh of Logs component by nudging NavigationManager's date
+        if NavigationManager.shared.currentInterval == .day {
+            let current = NavigationManager.shared.currentDate
+            NavigationManager.shared.updateInterval(.day, date: current)
         }
     }
     

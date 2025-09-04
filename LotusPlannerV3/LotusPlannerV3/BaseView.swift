@@ -124,13 +124,20 @@ struct BaseView: View {
                 Text(titleText)
                     .font(.title2)
                     .fontWeight(.semibold)
-                    .foregroundColor(.primary)
+                    .foregroundColor(isCurrentWeekTitle ? DateDisplayStyle.currentPeriodColor : .primary)
             }
             
             Button(action: { step(1) }) {
                 Image(systemName: "chevron.right")
             }
         }
+    }
+    
+    private var isCurrentWeekTitle: Bool {
+        let cal = Calendar.mondayFirst
+        guard let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start,
+              let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return false }
+        return selectedDate >= weekStart && selectedDate <= weekEnd
     }
     
     private var trailingToolbarButtons: some View {
@@ -151,7 +158,7 @@ struct BaseView: View {
                 navigationManager.switchToBaseViewV2()
                 navigationManager.updateInterval(.week, date: now)
             }) {
-                Image(systemName: "7.circle")
+                Image(systemName: "w.circle")
                     .font(.body)
                     .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
             }
@@ -173,6 +180,18 @@ struct BaseView: View {
                 }
             } label: {
                 Image(systemName: "plus.circle")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+
+            // Refresh button
+            Button(action: {
+                Task {
+                    await calendarViewModel.loadCalendarData(for: selectedDate)
+                    await tasksViewModel.loadTasks()
+                }
+            }) {
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                     .font(.body)
                     .foregroundColor(.secondary)
             }

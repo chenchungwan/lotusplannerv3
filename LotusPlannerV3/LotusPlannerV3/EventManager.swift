@@ -140,6 +140,20 @@ class EventManager: ObservableObject {
             eventCache.removeAll()
         }
     }
+
+    /// Clears in-memory events for one or both accounts and invalidates all caches
+    func clearEvents(for accountKind: GoogleAuthManager.AccountKind? = nil) {
+        switch accountKind {
+        case .some(.personal):
+            personalEvents = []
+        case .some(.professional):
+            professionalEvents = []
+        case .none:
+            personalEvents = []
+            professionalEvents = []
+        }
+        eventCache.removeAll()
+    }
     
     // MARK: - Private Methods
     

@@ -188,6 +188,25 @@ class CoreDataManager: ObservableObject {
         }
     }
     
+    // MARK: - Danger Zone: Delete All Logs
+    func deleteAllLogs() {
+        let deleteRequests: [NSFetchRequest<NSFetchRequestResult>] = [
+            WeightLog.fetchRequest(),
+            WorkoutLog.fetchRequest(),
+            FoodLog.fetchRequest()
+        ]
+        do {
+            for request in deleteRequests {
+                let batchDelete = NSBatchDeleteRequest(fetchRequest: request)
+                try context.execute(batchDelete)
+            }
+            save()
+            print("🧹 Deleted all log data from Core Data (CloudKit-backed – deletions will sync)")
+        } catch {
+            print("❌ Failed to delete all logs: \(error)")
+        }
+    }
+    
 
 }
 

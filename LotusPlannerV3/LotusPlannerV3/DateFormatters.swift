@@ -48,7 +48,7 @@ struct DateDisplayStyle {
     
     static let primaryColor: Color = .primary
     static let secondaryColor: Color = .secondary
-    static let currentPeriodColor: Color = Color(red: 0.306, green: 0.647, blue: 0.0) // Green #4EA500 for current period
+    static let currentPeriodColor: Color = Color(red: 0.176, green: 0.647, blue: 0.031) // Hex #2DA508 for current period
     static let todayColor: Color = .white // White text on blue background for today
     
     static func dateColor(isToday: Bool, isCurrentPeriod: Bool) -> Color {
