@@ -782,6 +782,13 @@ struct CalendarView: View {
     @State private var currentDate = Date()
     @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
     @State private var rightSectionTopHeight: CGFloat = UIScreen.main.bounds.height * 0.6
+    // Vertical layout row height
+    @State private var verticalTopRowHeight: CGFloat = UIScreen.main.bounds.height * 0.55
+    // Vertical layout column widths and drag states
+    @State private var verticalTopLeftWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var isVerticalTopDividerDragging: Bool = false
+    @State private var verticalBottomLeftWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var isVerticalBottomDividerDragging: Bool = false
     @State private var isDragging = false
     @State private var isRightDividerDragging = false
     @State private var pencilKitCanvasView = PKCanvasView()
@@ -1114,6 +1121,19 @@ struct CalendarView: View {
                         .foregroundColor(.secondary)
                 }
                 
+                // Refresh button
+                Button(action: {
+                    Task {
+                        await calendarViewModel.loadCalendarData(for: currentDate)
+                        await tasksViewModel.loadTasks()
+                        await MainActor.run { updateCachedTasks() }
+                    }
+                }) {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+
                 // Add menu (Event or Task) for Day view
                 Menu {
                     Button("Event") { 
@@ -1124,19 +1144,6 @@ struct CalendarView: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-
-                // Refresh button
-                Button(action: {
-                    Task {
-                        await calendarViewModel.loadCalendarData(for: currentDate)
-                        await tasksViewModel.loadTasks()
-                        await MainActor.run { updateCachedTasks() }
-                    }
-                }) {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                         .font(.body)
                         .foregroundColor(.secondary)
                 }
@@ -1796,6 +1803,8 @@ struct CalendarView: View {
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         if appPrefs.dayViewLayout == .expanded {
             dayViewContentExpanded(geometry: geometry)
+        } else if appPrefs.dayViewLayout == .vertical {
+            dayViewContentVertical(geometry: geometry)
         } else {
             dayViewContentCompact(geometry: geometry)
         }
@@ -1819,9 +1828,10 @@ struct CalendarView: View {
     private func dayViewContentExpanded(geometry: GeometryProxy) -> some View {
         let deviceWidth = UIScreen.main.bounds.width
         let dividerWidth: CGFloat = 8
-        let column1Width = deviceWidth * 0.25  // Timeline: 25% of device width
-        let column2Width = deviceWidth * 0.75  // Tasks + Logs: 75% of device width
-        let column3Width = deviceWidth         // Journal: 100% of device width
+        // Make column widths responsive to the draggable divider state
+        let column1Width = dayLeftSectionWidth
+        let column2Width = max(200, deviceWidth - column1Width - dividerWidth)
+        let column3Width = deviceWidth         // Journal: fixed to device width
 
         return HStack(alignment: .top, spacing: 0) {
             // Column 1 – timeline (25% device width)
@@ -1830,13 +1840,7 @@ struct CalendarView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 8)
                 .padding(.trailing, 8)
-                .padding(.leading, 8 + geometry.safeAreaInsets.leading)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(.systemGray4), lineWidth: 1)
-            )
+                .padding(.leading, 16 + geometry.safeAreaInsets.leading)
 
             dayVerticalDivider
 
@@ -1873,6 +1877,133 @@ struct CalendarView: View {
             .frame(width: column3Width)
             .padding(.all, 8)
         }
+    }
+
+    // MARK: - Vertical Layout
+    private func dayViewContentVertical(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            // Top row: HStack of Tasks (left) and Logs (right) with vertical divider
+            HStack(spacing: 0) {
+                // Tasks content (reuse topLeftDaySection)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Tasks")
+                            .font(.headline)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    topLeftDaySection
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .frame(width: verticalTopLeftWidth, alignment: .topLeading)
+                .padding(.all, 8)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+
+                // Vertical divider between Tasks and Logs
+                Rectangle()
+                    .fill(isVerticalTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                    .frame(width: 8)
+                    .overlay(
+                        Image(systemName: "line.3.vertical")
+                            .font(.caption)
+                            .foregroundColor(isVerticalTopDividerDragging ? .white : .gray)
+                    )
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isVerticalTopDividerDragging = true
+                                let minWidth: CGFloat = 200
+                                let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
+                                let newWidth = verticalTopLeftWidth + value.translation.width
+                                verticalTopLeftWidth = max(minWidth, min(maxWidth, newWidth))
+                            }
+                            .onEnded { _ in
+                                isVerticalTopDividerDragging = false
+                            }
+                    )
+
+                // Logs on the right with weight, workout, food in a column
+                LogsComponent(currentDate: currentDate, horizontal: false)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(height: verticalTopRowHeight, alignment: .top)
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+
+            // Draggable divider between top and bottom rows
+            Rectangle()
+                .fill(isWeekDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                .frame(height: 8)
+                .overlay(
+                    Image(systemName: "line.3.horizontal")
+                        .font(.caption)
+                        .foregroundColor(isWeekDividerDragging ? .white : .gray)
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            isWeekDividerDragging = true
+                            let newHeight = verticalTopRowHeight + value.translation.height
+                            let minHeight: CGFloat = 200
+                            let maxHeight: CGFloat = max(250, geometry.size.height - 250)
+                            verticalTopRowHeight = max(minHeight, min(maxHeight, newHeight))
+                        }
+                        .onEnded { _ in
+                            isWeekDividerDragging = false
+                        }
+                )
+
+            // Bottom row: HStack of Events (left) and Notes (right) with vertical divider
+            HStack(alignment: .top, spacing: 0) {
+                // Timeline on the left
+                eventsTimelineCard()
+                    .frame(width: verticalBottomLeftWidth, alignment: .topLeading)
+                    .frame(maxHeight: .infinity, alignment: .top)
+
+                // Vertical divider between Events and Notes
+                Rectangle()
+                    .fill(isVerticalBottomDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                    .frame(width: 8)
+                    .overlay(
+                        Image(systemName: "line.3.vertical")
+                            .font(.caption)
+                            .foregroundColor(isVerticalBottomDividerDragging ? .white : .gray)
+                    )
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isVerticalBottomDividerDragging = true
+                                let minWidth: CGFloat = 200
+                                let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
+                                let newWidth = verticalBottomLeftWidth + value.translation.width
+                                verticalBottomLeftWidth = max(minWidth, min(maxWidth, newWidth))
+                            }
+                            .onEnded { _ in
+                                isVerticalBottomDividerDragging = false
+                            }
+                    )
+
+                // Notes (Journal) on the right
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Notes")
+                            .font(.headline)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                        .id(currentDate)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.all, 8)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .background(Color(.systemBackground))
     }
     
     // vertical layout removed
@@ -1923,20 +2054,11 @@ struct CalendarView: View {
     
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Timeline section
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Events")
-                    .font(.headline)
-                    .padding(.leading, 12)
-                    .padding(.trailing, 8)
-                leftTimelineSection
-            }
-            .frame(height: leftTimelineHeight, alignment: .top)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
-            .padding(.trailing, 8)
-            .padding(.leading, 8 + geometry.safeAreaInsets.leading)
-            
+            // Timeline section – reuse the same card as expanded
+            eventsTimelineCard(height: leftTimelineHeight)
+                .padding(.leading, 16 + geometry.safeAreaInsets.leading)
+                .padding(.trailing, 8)
+
             // Draggable divider between timeline and logs
             leftTimelineDivider
             
@@ -1948,26 +2070,12 @@ struct CalendarView: View {
         .frame(height: geometry.size.height)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .padding(.trailing, 8)
-        .padding(.leading, 16 + geometry.safeAreaInsets.leading)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(.systemGray4), lineWidth: 1)
-        )
     }
     
     private var leftTimelineSection: some View {
         Group {
             if appPrefs.showEventsAsListInDay {
                 dayEventsList
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.6), lineWidth: 1)
-                    )
             } else {
                 TimelineComponent(
                     date: currentDate,
@@ -1980,12 +2088,6 @@ struct CalendarView: View {
                         selectedCalendarEvent = ev
                         showingEventDetails = true
                     }
-                )
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.blue.opacity(0.6), lineWidth: 1)
                 )
             }
         }
@@ -2003,13 +2105,8 @@ struct CalendarView: View {
         .frame(height: height, alignment: .topLeading)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .padding(.horizontal, 8)
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(.systemGray4), lineWidth: 1)
-        )
+        .padding(.leading, 8)
+        // remove background and border for a flat look
     }
     
     private var dayEventsList: some View {

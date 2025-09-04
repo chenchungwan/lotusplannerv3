@@ -15,6 +15,10 @@ struct TimelineComponent: View {
     private let hourHeight: CGFloat = 100
     private let startHour = 0
     private let endHour = 24
+    private let timeColumnWidth: CGFloat = 24
+    
+    // Debug borders toggle (disabled)
+    private let debugBorders: Bool = false
     
     // Separate all-day events from timed events
     private var allDayEvents: [GoogleCalendarEvent] {
@@ -56,11 +60,11 @@ struct TimelineComponent: View {
                             
                             // Final 12a line at the end of the day
                             HStack(spacing: 0) {
-                                // Time label
+                                // Time label (left-aligned to match "Events" header)
                                 Text(formatHour(endHour))
                                     .font(.body)
                                     .foregroundColor(.secondary)
-                                    .frame(width: 50, alignment: .trailing)
+                                    .frame(width: timeColumnWidth, alignment: .leading)
                                 
                                 // Hour line
                                 Rectangle()
@@ -80,9 +84,10 @@ struct TimelineComponent: View {
                         currentTimeLine
                     }
                 }
+                // debug border removed
             }
         }
-        .padding(.horizontal, 12) // symmetric inset to match card
+        // Removed extra left padding to minimize gap next to time column
         .onAppear {
             startCurrentTimeTimer()
         }
@@ -99,7 +104,7 @@ struct TimelineComponent: View {
                 // Time column spacer to align with hour grid
                 Rectangle()
                     .fill(Color.clear)
-                    .frame(width: 60)
+                    .frame(width: timeColumnWidth + 1)
                 
                 // Events column
                 VStack(spacing: 4) {
@@ -111,12 +116,13 @@ struct TimelineComponent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, 8)
-            .background(Color(.systemGray6).opacity(0.1))
+            // remove section background
             
             // Divider to separate from timed events
             Divider()
                 .background(Color(.systemGray4))
         }
+        // debug border removed
     }
     
     // Individual all-day event block
@@ -149,18 +155,18 @@ struct TimelineComponent: View {
     
     private func timeSlot(hour: Int) -> some View {
         HStack(spacing: 0) {
-            // Time label
+            // Time label (left-aligned to match "Events" header)
             VStack {
                 Text(formatHour(hour))
                     .font(.body)
                     .foregroundColor(.secondary)
-                    .frame(width: 50, alignment: .trailing)
+                    .frame(width: timeColumnWidth, alignment: .leading)
                 Spacer()
             }
             
             // Hour line and background
             Rectangle()
-                .fill(Color(.systemGray6).opacity(0.3))
+                .fill(Color.clear)
                 .frame(height: hourHeight - 1)
                 .overlay(
                     // Half-hour line
@@ -178,6 +184,7 @@ struct TimelineComponent: View {
                     alignment: .top
                 )
         }
+        // debug border removed
     }
     
     private func formatHour(_ hour: Int) -> String {
@@ -233,7 +240,8 @@ struct TimelineComponent: View {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(backgroundColor)
                 )
-                    .offset(x: 60, y: topOffset)
+                // removed debug overlay border on events
+                    .offset(x: timeColumnWidth + 1, y: topOffset)
                     .padding(.trailing, 8)
                     .onTapGesture { onEventTap?(event) }
                     .onLongPressGesture { onEventTap?(event) }
@@ -253,12 +261,12 @@ struct TimelineComponent: View {
             Circle()
                 .fill(Color.red)
                 .frame(width: 8, height: 8)
-                .offset(x: 46)
+                .offset(x: timeColumnWidth - 4)
             
             Rectangle()
                 .fill(Color.red)
                 .frame(height: 2)
-                .offset(x: 50)
+                .offset(x: timeColumnWidth + 1)
         }
         .offset(y: yOffset)
         .opacity(hour >= startHour && hour <= endHour ? 1 : 0)
@@ -276,6 +284,17 @@ struct TimelineComponent: View {
     }
 }
 
+// MARK: - Debug Border Helper
+private extension View {
+    @ViewBuilder
+    func debugBorder(_ color: Color = .red, width: CGFloat = 1, enabled: Bool = true) -> some View {
+        if enabled {
+            overlay(Rectangle().stroke(color, lineWidth: width))
+        } else {
+            self
+        }
+    }
+}
 // MARK: - Preview
 struct TimelineComponent_Previews: PreviewProvider {
     static var previews: some View {

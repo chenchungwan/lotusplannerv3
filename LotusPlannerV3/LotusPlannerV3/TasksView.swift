@@ -1069,6 +1069,68 @@ struct TasksView: View {
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+                if appPrefs.tasksLayoutTwoRows {
+                    // Two rows layout: Personal then Professional (each row horizontally scrolls lists)
+                    VStack(spacing: 8) {
+                        if authManager.isLinked(kind: .personal) {
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    TasksComponent(
+                                        taskLists: viewModel.personalTaskLists,
+                                        tasksDict: filteredTasks(viewModel.personalTasks),
+                                        accentColor: appPrefs.personalColor,
+                                        accountType: .personal,
+                                        onTaskToggle: { task, listId in
+                                            Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .personal) }
+                                        },
+                                        onTaskDetails: { task, listId in
+                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                        },
+                                        onListRename: { listId, newName in
+                                            Task { await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                                        },
+                                        onOrderChanged: { newOrder in
+                                            Task { await viewModel.updateTaskListOrder(newOrder, for: .personal) }
+                                        }
+                                    )
+                                    .frame(width: max(geometry.size.width - 32, 600), alignment: .top)
+                                }
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .padding(.horizontal, 8)
+                            }
+                        }
+
+                        if authManager.isLinked(kind: .professional) {
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    TasksComponent(
+                                        taskLists: viewModel.professionalTaskLists,
+                                        tasksDict: filteredTasks(viewModel.professionalTasks),
+                                        accentColor: appPrefs.professionalColor,
+                                        accountType: .professional,
+                                        onTaskToggle: { task, listId in
+                                            Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .professional) }
+                                        },
+                                        onTaskDetails: { task, listId in
+                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                        },
+                                        onListRename: { listId, newName in
+                                            Task { await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                                        },
+                                        onOrderChanged: { newOrder in
+                                            Task { await viewModel.updateTaskListOrder(newOrder, for: .professional) }
+                                        }
+                                    )
+                                    .frame(width: max(geometry.size.width - 32, 600), alignment: .top)
+                                }
+                                .frame(maxHeight: .infinity, alignment: .top)
+                                .padding(.horizontal, 8)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 0)
+                    .padding(.vertical, 16)
+                } else {
                 HStack(spacing: 0) {
                     // Personal Tasks Column
                     if authManager.isLinked(kind: .personal) {
@@ -1136,6 +1198,7 @@ struct TasksView: View {
                 }
                 .padding(.horizontal, 0)
                 .padding(.vertical, 16)
+                }
                 
                 // Debug overlay - only show when no tasks are visible
                 if shouldShowDebugInfo {
@@ -1392,6 +1455,17 @@ struct TasksView: View {
                             .foregroundColor(.secondary)
                     }
 
+                    // Refresh button
+                    Button(action: {
+                        Task {
+                            await viewModel.loadTasks()
+                        }
+                    }) {
+                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+
                     // Add menu: Event or Task
                     Menu {
                         Button("Event") {
@@ -1406,17 +1480,6 @@ struct TasksView: View {
                             .foregroundColor(.secondary)
                     }
                     .disabled(!authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional))
-
-                    // Refresh button
-                    Button(action: {
-                        Task {
-                            await viewModel.loadTasks()
-                        }
-                    }) {
-                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                    }
                 }
             }
         }

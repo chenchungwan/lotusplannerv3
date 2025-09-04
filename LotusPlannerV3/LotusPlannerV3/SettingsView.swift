@@ -4,12 +4,14 @@ import SwiftUI
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
     case expanded = 1
+    case vertical = 2
 
     var id: Int { rawValue }
     var displayName: String {
         switch self {
         case .compact: "Compact"
         case .expanded: "Expanded"
+        case .vertical: "Vertical"
         }
     }
     
@@ -17,6 +19,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         switch self {
         case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
         case .expanded: "Three columns: timeline, tasks & logs, and dedicated journal space"
+        case .vertical: "Two rows: Tasks+Logs on top, Notes+Timeline on bottom with slider"
         }
     }
 }
@@ -215,6 +218,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Tasks view layout: false => two columns; true => two rows
+    @Published var tasksLayoutTwoRows: Bool {
+        didSet {
+            UserDefaults.standard.set(tasksLayoutTwoRows, forKey: "tasksLayoutTwoRows")
+        }
+    }
+    
     // Visibility toggles removed: Logs and Journal always shown
     
 
@@ -237,6 +247,9 @@ class AppPreferences: ObservableObject {
         
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
+
+        // Load tasks layout preference (default false = two columns)
+        self.tasksLayoutTwoRows = UserDefaults.standard.bool(forKey: "tasksLayoutTwoRows")
 
 
         
@@ -362,6 +375,19 @@ struct SettingsView: View {
                             Text("Show Events as List in Day View")
                                 .font(.body)
                             Text("Replaces timeline with a simple chronological list")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.tasksLayoutTwoRows },
+                        set: { appPrefs.tasksLayoutTwoRows = $0 }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Tasks Layout: Two Rows")
+                                .font(.body)
+                            Text("Personal and Professional stacked vertically; lists scroll horizontally")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

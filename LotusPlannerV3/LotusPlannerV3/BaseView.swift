@@ -170,6 +170,18 @@ struct BaseView: View {
                     .foregroundColor(.secondary)
             }
 
+            // Refresh button
+            Button(action: {
+                Task {
+                    await calendarViewModel.loadCalendarData(for: selectedDate)
+                    await tasksViewModel.loadTasks()
+                }
+            }) {
+                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+
             // Add menu (Event or Task)
             Menu {
                 Button("Event") { 
@@ -180,18 +192,6 @@ struct BaseView: View {
                 }
             } label: {
                 Image(systemName: "plus.circle")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-
-            // Refresh button
-            Button(action: {
-                Task {
-                    await calendarViewModel.loadCalendarData(for: selectedDate)
-                    await tasksViewModel.loadTasks()
-                }
-            }) {
-                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
                     .font(.body)
                     .foregroundColor(.secondary)
             }

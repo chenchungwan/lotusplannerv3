@@ -58,12 +58,12 @@ struct AboutView: View {
                 
                 // Additional Info
                 VStack(spacing: 12) {
-                    Text("A beautiful and intuitive planner app")
+                    Text("A customizable planner for your unique needs.")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                     
-                    Text("© 2024 Lotus Planner")
+                    Text("© 2025 Lotus Planner")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

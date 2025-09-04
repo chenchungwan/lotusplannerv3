@@ -144,6 +144,7 @@ struct ScrapbookComponent: View {
     @State private var photos: [ScrapbookPhoto] = []
     @State private var selectedPhotoId: UUID?
     @State private var isShowingPhotoPicker = false
+    @State private var isUsingEraser = false
     @State private var containerSize: CGSize = .zero
     
     init(canvasView: Binding<PKCanvasView>, title: String = "Journal", currentDate: Date = Date(), accountKind: GoogleAuthManager.AccountKind = .personal) {
@@ -293,7 +294,7 @@ struct ScrapbookComponent: View {
             
             // Main Scrapbook Area
             GeometryReader { geometry in
-                ZStack {
+                ZStack(alignment: .topTrailing) {
                     // PencilKit Canvas (background layer)
                     ScrapbookPencilKitView(canvasView: $canvasView)
                         .background(Color(.systemBackground))
@@ -314,6 +315,41 @@ struct ScrapbookComponent: View {
                         )
                     }
                     
+                    // Top-right inline controls (row)
+                    HStack(spacing: 8) {
+                        // Toggle Pen tool
+                        Button(action: {
+                            isUsingEraser = false
+                            canvasView.tool = PKInkingTool(.pen, color: .black, width: 2)
+                        }) {
+                            Image(systemName: "pencil")
+                                .padding(10)
+                                .background(Color(.systemBackground).opacity(0.8))
+                                .clipShape(Circle())
+                        }
+
+                        // Toggle Eraser tool
+                        Button(action: {
+                            isUsingEraser = true
+                            canvasView.tool = PKEraserTool(.vector)
+                        }) {
+                            Image(systemName: "eraser")
+                                .padding(10)
+                                .background(Color(.systemBackground).opacity(0.8))
+                                .clipShape(Circle())
+                        }
+
+                        // Add Photo
+                        Button(action: { isShowingPhotoPicker = true }) {
+                            Image(systemName: "photo.on.rectangle")
+                                .padding(10)
+                                .background(Color(.systemBackground).opacity(0.8))
+                                .clipShape(Circle())
+                        }
+                    }
+                    .padding(.top, 8)
+                    .padding(.trailing, 8)
+
                     // Loading overlay
                     if isSaving {
                         Color.black.opacity(0.3)
