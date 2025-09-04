@@ -15,7 +15,7 @@ struct TimelineComponent: View {
     private let hourHeight: CGFloat = 100
     private let startHour = 0
     private let endHour = 24
-    private let timeColumnWidth: CGFloat = 24
+    private let timeColumnWidth: CGFloat = 28
     
     // Debug borders toggle (disabled)
     private let debugBorders: Bool = false
@@ -62,7 +62,7 @@ struct TimelineComponent: View {
                             HStack(spacing: 0) {
                                 // Time label (left-aligned to match "Events" header)
                                 Text(formatHour(endHour))
-                                    .font(.body)
+                                    .font(.caption2)
                                     .foregroundColor(.secondary)
                                     .frame(width: timeColumnWidth, alignment: .leading)
                                 
@@ -158,7 +158,7 @@ struct TimelineComponent: View {
             // Time label (left-aligned to match "Events" header)
             VStack {
                 Text(formatHour(hour))
-                    .font(.body)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
                     .frame(width: timeColumnWidth, alignment: .leading)
                 Spacer()
@@ -194,7 +194,7 @@ struct TimelineComponent: View {
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
         let timeString = formatter.string(from: date).lowercased()
-        return timeString.replacingOccurrences(of: "m", with: "")
+        return timeString
     }
     
     @ViewBuilder
