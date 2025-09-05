@@ -12,15 +12,20 @@ final class GoogleAuthManager: ObservableObject {
 
     static let shared = GoogleAuthManager()
     private init() {
+        // Migrate from UserDefaults to Keychain on first launch
+        migrateToKeychainIfNeeded()
         updateStates()
     }
 
-    // Persist refresh tokens securely. In production use Keychain.
+    // Persist refresh tokens securely using Keychain
     private let tokenKeyPrefix = "google_token_"
     private let accessTokenKeyPrefix = "google_access_token_"
     private let tokenExpiryKeyPrefix = "google_token_expiry_"
     private let emailKeyPrefix = "google_email_"
     private let customNameKeyPrefix = "google_custom_name_"
+    
+    // Keychain manager for secure token storage
+    private let keychainManager = KeychainManager.shared
 
     // Published map to drive UI updates
     @Published private(set) var linkedStates: [AccountKind: Bool] = [:]
@@ -47,6 +52,60 @@ final class GoogleAuthManager: ObservableObject {
         updateStates()
     }
     
+    // MARK: - Secure Token Storage
+    private func saveTokenSecurely(_ token: String, for key: String) {
+        do {
+            try keychainManager.saveString(token, for: key)
+        } catch {
+            print("❌ Failed to save token to keychain: \(error)")
+            // Fallback to UserDefaults for development (should be removed in production)
+            #if DEBUG
+            UserDefaults.standard.set(token, forKey: key)
+            print("⚠️ Falling back to UserDefaults for token storage (DEBUG only)")
+            #endif
+        }
+    }
+    
+    private func loadTokenSecurely(for key: String) -> String? {
+        do {
+            return try keychainManager.loadString(for: key)
+        } catch KeychainManager.KeychainError.itemNotFound {
+            // Check UserDefaults for migration
+            if let userDefaultsValue = UserDefaults.standard.string(forKey: key) {
+                print("🔄 Found token in UserDefaults, migrating to keychain...")
+                saveTokenSecurely(userDefaultsValue, for: key)
+                UserDefaults.standard.removeObject(forKey: key)
+                return userDefaultsValue
+            }
+            return nil
+        } catch {
+            print("❌ Failed to load token from keychain: \(error)")
+            return nil
+        }
+    }
+    
+    private func deleteTokenSecurely(for key: String) {
+        do {
+            try keychainManager.delete(for: key)
+        } catch {
+            print("❌ Failed to delete token from keychain: \(error)")
+        }
+        // Also remove from UserDefaults as cleanup
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+    
+    private func migrateToKeychainIfNeeded() {
+        let migrationKey = "keychain_migration_completed"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else {
+            return // Migration already completed
+        }
+        
+        print("🔄 Starting migration from UserDefaults to Keychain...")
+        keychainManager.migrateFromUserDefaults()
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        print("✅ Migration to Keychain completed")
+    }
+
     private func defaultName(for kind: AccountKind) -> String {
         switch kind {
         case .personal: return "Personal"
@@ -95,15 +154,15 @@ final class GoogleAuthManager: ObservableObject {
             )
             print("✅ Google sign-in completed successfully")
             
-            // Store refresh token
+            // Store refresh token securely
             let refreshToken = result.user.refreshToken.tokenString
             print("🔑 Storing refresh token for \(kind): \(refreshToken.prefix(20))...")
-            UserDefaults.standard.set(refreshToken, forKey: tokenKeyPrefix + kind.rawValue)
+            saveTokenSecurely(refreshToken, for: tokenKeyPrefix + kind.rawValue)
             
-            // Store access token and expiry
+            // Store access token and expiry securely
             let accessToken = result.user.accessToken.tokenString
             let expirationDate = result.user.accessToken.expirationDate
-            UserDefaults.standard.set(accessToken, forKey: accessTokenKeyPrefix + kind.rawValue)
+            saveTokenSecurely(accessToken, for: accessTokenKeyPrefix + kind.rawValue)
             UserDefaults.standard.set(expirationDate, forKey: tokenExpiryKeyPrefix + kind.rawValue)
             print("🔑 Stored access token for \(kind), expires: \(String(describing: expirationDate))")
             
@@ -128,7 +187,7 @@ final class GoogleAuthManager: ObservableObject {
         #else
         print("⚠️ GoogleSignIn framework NOT available - using stub")
         // Stub – simulate success
-        UserDefaults.standard.set(UUID().uuidString, forKey: tokenKeyPrefix + kind.rawValue)
+        saveTokenSecurely(UUID().uuidString, for: tokenKeyPrefix + kind.rawValue)
         updateStates()
         #endif
         print("🏁 Link process completed for \(kind)")
@@ -143,8 +202,8 @@ final class GoogleAuthManager: ObservableObject {
         // Clear any Google Sign-In keychain items that might be causing conflicts
         clearGoogleKeychainItems()
         #endif
-        UserDefaults.standard.removeObject(forKey: tokenKeyPrefix + kind.rawValue)
-        UserDefaults.standard.removeObject(forKey: accessTokenKeyPrefix + kind.rawValue)
+        deleteTokenSecurely(for: tokenKeyPrefix + kind.rawValue)
+        deleteTokenSecurely(for: accessTokenKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: tokenExpiryKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: emailKeyPrefix + kind.rawValue)
         UserDefaults.standard.removeObject(forKey: customNameKeyPrefix + kind.rawValue)
@@ -165,6 +224,9 @@ final class GoogleAuthManager: ObservableObject {
         #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
         #endif
+        // Clear keychain items
+        keychainManager.clearAllItems()
+        // Also clear UserDefaults as backup
         unlink(kind: .personal)
         unlink(kind: .professional)
     }
@@ -180,7 +242,7 @@ final class GoogleAuthManager: ObservableObject {
         let refreshTokenKey = tokenKeyPrefix + kind.rawValue
         
         // Check if we have a valid access token
-        if let accessToken = UserDefaults.standard.string(forKey: accessTokenKey),
+        if let accessToken = loadTokenSecurely(for: accessTokenKey),
            let expiryDate = UserDefaults.standard.object(forKey: expiryKey) as? Date,
            expiryDate > Date().addingTimeInterval(60) { // 1 minute buffer
             print("✅ Using cached access token for \(kind), expires: \(expiryDate)")
@@ -190,7 +252,7 @@ final class GoogleAuthManager: ObservableObject {
         print("🔄 Need to refresh access token for \(kind)...")
         
         // Check if we have a refresh token
-        guard let refreshToken = UserDefaults.standard.string(forKey: refreshTokenKey) else {
+        guard let refreshToken = loadTokenSecurely(for: refreshTokenKey) else {
             print("❌ No refresh token found for \(kind)")
             print("  🔍 Available UserDefaults keys: \(UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.contains("google") })")
             throw AuthError.noRefreshToken
@@ -258,7 +320,7 @@ final class GoogleAuthManager: ObservableObject {
             
             // Store the new access token and expiry
             let expiryDate = Date().addingTimeInterval(TimeInterval(tokenResponse.expires_in))
-            UserDefaults.standard.set(tokenResponse.access_token, forKey: accessTokenKeyPrefix + kind.rawValue)
+            saveTokenSecurely(tokenResponse.access_token, for: accessTokenKeyPrefix + kind.rawValue)
             UserDefaults.standard.set(expiryDate, forKey: tokenExpiryKeyPrefix + kind.rawValue)
             
             print("✅ Successfully refreshed access token for \(kind), expires: \(expiryDate)")
@@ -283,8 +345,8 @@ final class GoogleAuthManager: ObservableObject {
     // MARK: - Helpers
     private func updateStates() {
         linkedStates = [
-            .personal: UserDefaults.standard.string(forKey: tokenKeyPrefix + AccountKind.personal.rawValue) != nil,
-            .professional: UserDefaults.standard.string(forKey: tokenKeyPrefix + AccountKind.professional.rawValue) != nil
+            .personal: loadTokenSecurely(for: tokenKeyPrefix + AccountKind.personal.rawValue) != nil,
+            .professional: loadTokenSecurely(for: tokenKeyPrefix + AccountKind.professional.rawValue) != nil
         ]
         
         accountEmails = [

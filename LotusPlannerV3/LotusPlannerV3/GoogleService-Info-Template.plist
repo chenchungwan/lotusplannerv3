@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>195338740627-4v7ahq2vml1mcqas7h09n4k037kknmqj.apps.googleusercontent.com</string>
+	<string>YOUR_CLIENT_ID_HERE</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.195338740627-4v7ahq2vml1mcqas7h09n4k037kknmqj</string>
+	<string>YOUR_REVERSED_CLIENT_ID_HERE</string>
 	<key>API_KEY</key>
-	<string>AIzaSyD8JfDf4XPJkqiRjvLCVHQ60LfH8x8-WcI</string>
+	<string>YOUR_API_KEY_HERE</string>
 	<key>GCM_SENDER_ID</key>
-	<string>195338740627</string>
+	<string>YOUR_GCM_SENDER_ID_HERE</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.chenchungwan.LotusPlannerV3</string>
 	<key>PROJECT_ID</key>
-	<string>lotusplanner-18648</string>
+	<string>YOUR_PROJECT_ID_HERE</string>
 	<key>STORAGE_BUCKET</key>
-	<string>lotusplanner-18648.firebasestorage.app</string>
+	<string>YOUR_STORAGE_BUCKET_HERE</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -29,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:195338740627:ios:0766eb7814f3bd01c57e66</string>
+	<string>YOUR_GOOGLE_APP_ID_HERE</string>
 </dict>
 </plist>

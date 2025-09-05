@@ -12,6 +12,16 @@ struct LotusPlannerV3App: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var appPrefs = AppPreferences.shared
 
+    init() {
+        // Validate configuration on app launch
+        let configManager = ConfigurationManager.shared
+        configManager.printConfigurationInfo()
+        
+        if !configManager.validateConfiguration() {
+            print("⚠️ Configuration validation failed - some features may not work properly")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
