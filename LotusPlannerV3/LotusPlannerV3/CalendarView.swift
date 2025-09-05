@@ -1050,18 +1050,18 @@ struct CalendarView: View {
             }) {
                 Image(systemName: "d.circle")
                     .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .weeklyView ? .accentColor : .secondary)
             }
             
-            // BaseViewV2 button
+            // WeeklyView button
             Button(action: {
                 let now = Date()
-                navigationManager.switchToBaseViewV2()
+                navigationManager.switchToWeeklyView()
                 navigationManager.updateInterval(.week, date: now)
             }) {
                 Image(systemName: "w.circle")
                     .font(.body)
-                    .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
+                    .foregroundColor(navigationManager.currentView == .weeklyView ? .accentColor : .secondary)
             }
             
             // Show eye and plus only in Day view

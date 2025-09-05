@@ -24,20 +24,17 @@ This guide explains how to securely configure the LotusPlannerV3 app for product
 2. Replace all placeholder values with your actual Google project credentials:
    ```
    YOUR_CLIENT_ID_HERE → Your actual Google Client ID
-   YOUR_API_KEY_HERE → Your actual Google API Key
-   YOUR_PROJECT_ID_HERE → Your actual Firebase Project ID
-   etc.
+   YOUR_REVERSED_CLIENT_ID_HERE → Your actual reversed client ID
+   # Note: API_KEY, PROJECT_ID, STORAGE_BUCKET removed (Firestore not used)
    ```
 
 ### Step 2: Environment Variables (Recommended for CI/CD)
 Set these environment variables for maximum security:
 ```bash
 export GOOGLE_CLIENT_ID="your-client-id"
-export GOOGLE_API_KEY="your-api-key"
-export GOOGLE_PROJECT_ID="your-project-id"
-export GOOGLE_APP_ID="your-app-id"
-export GCM_SENDER_ID="your-sender-id"
-export GOOGLE_STORAGE_BUCKET="your-storage-bucket"
+export GOOGLE_REVERSED_CLIENT_ID="your-reversed-client-id"
+# Note: Only these 2 needed for Google Sign-In + Calendar/Tasks API
+# Firestore credentials removed (not used)
 ```
 
 ### Step 3: Verify Security Configuration

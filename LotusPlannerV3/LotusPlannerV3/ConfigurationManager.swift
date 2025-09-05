@@ -1,5 +1,12 @@
 import Foundation
 
+// MARK: - Debug Helper
+private func debugPrint(_ message: String) {
+    #if DEBUG
+    debugPrint(message)
+    #endif
+}
+
 /// Manages secure configuration and API keys for the app
 /// This replaces hardcoded values in plist files with environment-based configuration
 class ConfigurationManager {
@@ -7,15 +14,11 @@ class ConfigurationManager {
     
     private init() {}
     
-    // MARK: - Configuration Keys
+    // MARK: - Configuration Keys (Only what's actually used)
     private enum ConfigKey: String {
         case googleClientId = "GOOGLE_CLIENT_ID"
         case googleReversedClientId = "GOOGLE_REVERSED_CLIENT_ID"
-        case googleApiKey = "GOOGLE_API_KEY"
-        case googleProjectId = "GOOGLE_PROJECT_ID"
-        case googleAppId = "GOOGLE_APP_ID"
-        case gcmSenderId = "GCM_SENDER_ID"
-        case storageUrl = "GOOGLE_STORAGE_BUCKET"
+        // Note: API_KEY, PROJECT_ID, STORAGE_BUCKET, etc. removed - not used for Calendar/Tasks API
     }
     
     // MARK: - Public Configuration Properties
@@ -27,25 +30,12 @@ class ConfigurationManager {
         return getConfigValue(for: .googleReversedClientId) ?? ""
     }
     
-    var googleApiKey: String {
-        return getConfigValue(for: .googleApiKey) ?? ""
-    }
-    
-    var googleProjectId: String {
-        return getConfigValue(for: .googleProjectId) ?? ""
-    }
-    
-    var googleAppId: String {
-        return getConfigValue(for: .googleAppId) ?? ""
-    }
-    
-    var gcmSenderId: String {
-        return getConfigValue(for: .gcmSenderId) ?? ""
-    }
-    
-    var storageUrl: String {
-        return getConfigValue(for: .storageUrl) ?? ""
-    }
+    // Removed unused Firestore/Firebase properties:
+    // - googleApiKey (not used for Calendar/Tasks API)
+    // - googleProjectId (not used)
+    // - googleAppId (not used) 
+    // - gcmSenderId (not used)
+    // - storageUrl (not used)
     
     // MARK: - Environment Detection
     var isProduction: Bool {
@@ -77,21 +67,17 @@ class ConfigurationManager {
         return nil
     }
     
+    // GoogleService-Info.plist no longer needed - using Info.plist environment variables
     private func getValueFromConfigFile(key: String) -> String? {
-        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let plist = NSDictionary(contentsOfFile: path) else {
-            return nil
-        }
-        
-        return plist[key] as? String
+        return nil // Simplified: Only use environment variables or Info.plist
     }
     
     // MARK: - Validation
     func validateConfiguration() -> Bool {
         let requiredConfigs = [
-            ("Google Client ID", googleClientId),
-            ("Google API Key", googleApiKey),
-            ("Google Project ID", googleProjectId)
+            ("Google Client ID", googleClientId)
+            // Note: Only Client ID is required for Google Sign-In + Calendar/Tasks API
+            // API Key, Project ID, etc. are Firestore leftovers and not needed
         ]
         
         var isValid = true
@@ -110,6 +96,6 @@ class ConfigurationManager {
     }
     
     // MARK: - Debug Information
-    func printConfigurationInfo() {
+    func debugPrintConfigurationInfo() {
     }
 }

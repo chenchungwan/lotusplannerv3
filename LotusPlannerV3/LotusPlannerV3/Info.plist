@@ -11,7 +11,7 @@
 			<string>google</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c</string>
+				<string>$(GOOGLE_REVERSED_CLIENT_ID)</string>
 			</array>
 		</dict>
 		<dict>
@@ -20,8 +20,8 @@
 		</dict>
 	</array>
 	<key>GIDClientID</key>
-	<string>1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com</string>
+	<string>$(GOOGLE_CLIENT_ID)</string>
 	<key>GOOGLE_CLIENT_ID</key>
-	<string>1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com</string>
+	<string>$(GOOGLE_CLIENT_ID)</string>
 </dict>
 </plist>

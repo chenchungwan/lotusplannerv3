@@ -7,6 +7,13 @@
 
 import SwiftUI
 
+// MARK: - Debug Helper
+private func debugPrint(_ message: String) {
+    #if DEBUG
+    print(message)
+    #endif
+}
+
 @main
 struct LotusPlannerV3App: App {
     let persistenceController = PersistenceController.shared
@@ -15,10 +22,14 @@ struct LotusPlannerV3App: App {
     init() {
         // Validate configuration on app launch
         let configManager = ConfigurationManager.shared
-        configManager.printConfigurationInfo()
+        configManager.debugPrintConfigurationInfo()
         
         if !configManager.validateConfiguration() {
+            #if DEBUG
+            debugPrint("⚠️ Configuration validation failed")
+            #endif
         }
+        
     }
 
     var body: some Scene {

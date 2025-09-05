@@ -30,9 +30,9 @@ struct ContentView: View {
             if navigationManager.showTasksView {
                 TasksView()
             } else {
-                // Always use BaseView for weekly calendar
+                // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
-                    BaseView()
+                    WeeklyView()
                 } else {
                     CalendarView()
                 }
@@ -42,9 +42,9 @@ struct ContentView: View {
             if navigationManager.showTasksView {
                 TasksView()
             } else {
-                // Always use BaseView for weekly calendar
+                // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
-                    BaseView()
+                    WeeklyView()
                 } else {
                     CalendarView()
                 }
@@ -52,8 +52,8 @@ struct ContentView: View {
 
         case .journal:
             JournalView(currentDate: Date())
-        case .baseViewV2:
-            BaseViewV2()
+        case .weeklyView:
+            WeeklyView()
         }
     }
 }

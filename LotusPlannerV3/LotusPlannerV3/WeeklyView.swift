@@ -1,10 +1,10 @@
 import SwiftUI
 
-enum ViewModeV2: String, CaseIterable, Hashable {
+enum WeeklyViewMode: String, CaseIterable, Hashable {
     case week
 }
 
-struct BaseViewV2: View {
+struct WeeklyView: View {
     @EnvironmentObject var appPrefs: AppPreferences
     @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
@@ -12,19 +12,19 @@ struct BaseViewV2: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     
     @State private var selectedDate = Date()
-    @State private var viewMode: ViewModeV2 = .week
+    @State private var viewMode: WeeklyViewMode = .week
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var showingEventDetails = false
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
-    struct BaseV2TaskSelection: Identifiable {
+    struct WeeklyTaskSelection: Identifiable {
         let id = UUID()
         let task: GoogleTask
         let listId: String
         let accountKind: GoogleAuthManager.AccountKind
     }
-    @State private var taskSheetSelection: BaseV2TaskSelection?
+    @State private var taskSheetSelection: WeeklyTaskSelection?
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
     @State private var showingDatePicker = false
@@ -174,7 +174,7 @@ struct BaseViewV2: View {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
                             selectedDate = selectedDateForPicker
-                            navigationManager.switchToBaseViewV2()
+                            navigationManager.switchToWeeklyView()
                             navigationManager.updateInterval(.week, date: selectedDateForPicker)
                             showingDatePicker = false
                         }
@@ -201,20 +201,20 @@ struct BaseViewV2: View {
             }) {
                 Image(systemName: "d.circle")
                     .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .baseViewV2 ? .accentColor : .secondary)
+                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .weeklyView ? .accentColor : .secondary)
             }
             
-            // BaseViewV2 button
+            // WeeklyView button
             Button(action: {
                 let now = Date()
                 selectedDate = now
-                navigationManager.switchToBaseViewV2()
+                navigationManager.switchToWeeklyView()
                 navigationManager.updateInterval(.week, date: now)
                 Task { await tasksViewModel.loadTasks() }
             }) {
                 Image(systemName: "w.circle")
                     .font(.body)
-                    .foregroundColor(navigationManager.currentView == .baseViewV2 ? .accentColor : .secondary)
+                    .foregroundColor(navigationManager.currentView == .weeklyView ? .accentColor : .secondary)
             }
             
             // Hide Completed toggle
@@ -295,7 +295,7 @@ struct BaseViewV2: View {
 
 // MARK: - Helpers
 
-extension BaseViewV2 {
+extension WeeklyView {
     // MARK: - Task Views
 
     
@@ -512,7 +512,7 @@ extension BaseViewV2 {
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = BaseV2TaskSelection(task: task, listId: listId, accountKind: .personal)
+                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
                     },
                     onListRename: { listId, newName in
                         Task {
@@ -551,7 +551,7 @@ extension BaseViewV2 {
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = BaseV2TaskSelection(task: task, listId: listId, accountKind: .professional)
+                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
                     },
                     onListRename: { listId, newName in
                         Task {
@@ -618,7 +618,7 @@ extension BaseViewV2 {
 
 
 
-extension ViewModeV2 {
+extension WeeklyViewMode {
     var displayName: String {
         switch self {
         case .week: return "Week"
