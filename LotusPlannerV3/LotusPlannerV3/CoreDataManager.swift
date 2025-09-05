@@ -14,6 +14,8 @@ class CoreDataManager: ObservableObject {
     private init() {
         // Migrate any existing categories to have display order
         migrateExistingCategories()
+        // One-time migration from legacy UserDefaults / iCloud KVS to Core Data
+        migrateLegacyStorageIfNeeded()
     }
     
     private func migrateExistingCategories() {
@@ -197,7 +199,44 @@ class CoreDataManager: ObservableObject {
         }
     }
     
-
+    // MARK: - Legacy Migration (UserDefaults / iCloud KVS -> Core Data)
+    private let legacyMigrationFlagKey = "coreDataLegacyMigrationDone"
+    private func migrateLegacyStorageIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: legacyMigrationFlagKey) == false else { return }
+        
+        // Attempt to load legacy arrays from UserDefaults first
+        let decoder = JSONDecoder()
+        if let weightData = defaults.data(forKey: "weightEntries"),
+           let legacyWeights = try? decoder.decode([WeightLogEntry].self, from: weightData) {
+            for entry in legacyWeights { saveWeightEntry(entry) }
+        }
+        if let workoutData = defaults.data(forKey: "workoutEntries"),
+           let legacyWorkouts = try? decoder.decode([WorkoutLogEntry].self, from: workoutData) {
+            for entry in legacyWorkouts { saveWorkoutEntry(entry) }
+        }
+        if let foodData = defaults.data(forKey: "foodEntries"),
+           let legacyFoods = try? decoder.decode([FoodLogEntry].self, from: foodData) {
+            for entry in legacyFoods { saveFoodEntry(entry) }
+        }
+        
+        // Also try iCloud KVS if present
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let weightData = kvs.data(forKey: "weightEntries"),
+           let legacyWeights = try? decoder.decode([WeightLogEntry].self, from: weightData) {
+            for entry in legacyWeights { saveWeightEntry(entry) }
+        }
+        if let workoutData = kvs.data(forKey: "workoutEntries"),
+           let legacyWorkouts = try? decoder.decode([WorkoutLogEntry].self, from: workoutData) {
+            for entry in legacyWorkouts { saveWorkoutEntry(entry) }
+        }
+        if let foodData = kvs.data(forKey: "foodEntries"),
+           let legacyFoods = try? decoder.decode([FoodLogEntry].self, from: foodData) {
+            for entry in legacyFoods { saveFoodEntry(entry) }
+        }
+        
+        defaults.set(true, forKey: legacyMigrationFlagKey)
+    }
 }
 
 // MARK: - Extensions for WeightLogEntry

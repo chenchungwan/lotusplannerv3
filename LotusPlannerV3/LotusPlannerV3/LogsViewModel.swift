@@ -6,7 +6,6 @@ class LogsViewModel: ObservableObject {
     static let shared = LogsViewModel()
     
     private init() {
-        setupiCloudSync()
         loadLocalData()
     }
     
@@ -74,10 +73,7 @@ class LogsViewModel: ObservableObject {
         
     }
     
-    private func setupiCloudSync() {
-        // Core Data with CloudKit handles sync automatically
-        // No manual sync setup needed
-    }
+    private func setupiCloudSync() {}
     
     func loadLogsForCurrentDate() {
         // Data is already loaded locally, just filter for current date
