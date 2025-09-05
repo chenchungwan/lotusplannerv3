@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Debug Helper
 private func debugPrint(_ message: String) {
     #if DEBUG
-    debugPrint(message)
+    print(message)
     #endif
 }
 
@@ -57,19 +57,39 @@ class ConfigurationManager {
             return envValue
         }
         
-        // Then try to get from a secure config file (if it exists)
-        if let configValue = getValueFromConfigFile(key: key.rawValue) {
-            return configValue
-        }
-        
-        // For development, we'll use the existing values as fallback
-        // In production, these should be replaced with secure environment variables
-        return nil
+        // Fallback to reading directly from Info.plist
+        return getValueFromInfoPlist(key: key.rawValue)
     }
     
-    // GoogleService-Info.plist no longer needed - using Info.plist environment variables
-    private func getValueFromConfigFile(key: String) -> String? {
-        return nil // Simplified: Only use environment variables or Info.plist
+    private func getValueFromInfoPlist(key: String) -> String? {
+        // Map our config keys to actual Info.plist keys
+        let infoPlistKey: String
+        switch key {
+        case "GOOGLE_CLIENT_ID":
+            infoPlistKey = "GIDClientID"
+        case "GOOGLE_REVERSED_CLIENT_ID":
+            infoPlistKey = "CFBundleURLSchemes" // We'll extract from URL schemes
+        default:
+            infoPlistKey = key
+        }
+        
+        if infoPlistKey == "CFBundleURLSchemes" {
+            // Extract reversed client ID from URL schemes array
+            if let urlTypes = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] {
+                for urlType in urlTypes {
+                    if let schemes = urlType["CFBundleURLSchemes"] as? [String] {
+                        for scheme in schemes {
+                            if scheme.contains("googleusercontent.apps") {
+                                return scheme
+                            }
+                        }
+                    }
+                }
+            }
+            return nil
+        } else {
+            return Bundle.main.object(forInfoDictionaryKey: infoPlistKey) as? String
+        }
     }
     
     // MARK: - Validation
@@ -97,5 +117,12 @@ class ConfigurationManager {
     
     // MARK: - Debug Information
     func debugPrintConfigurationInfo() {
+        #if DEBUG
+        debugPrint("🔧 Configuration Manager Status:")
+        debugPrint("Environment: \(environment)")
+        debugPrint("Google Client ID configured: \(!googleClientId.isEmpty)")
+        debugPrint("Google Reversed Client ID configured: \(!googleReversedClientId.isEmpty)")
+        debugPrint("Validation passes: \(validateConfiguration())")
+        #endif
     }
 }

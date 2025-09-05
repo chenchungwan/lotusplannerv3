@@ -10,7 +10,7 @@ struct RootView: View {
     // Horizontal offset for the cover image while dragging
     @State private var coverOffset: CGFloat = 0
     // Whether the cover has fully opened and should be dismissed
-    @State private var isCoverOpened = false
+    @State private var isCoverOpened = false // Restore normal cover behavior
     // Auto-dismiss timer
     @State private var autoSkipTimer: Timer?
 
@@ -24,6 +24,23 @@ struct RootView: View {
             // Cover image overlay
             if !isCoverOpened {
                 ZStack {
+                    // Fallback background in case image doesn't load
+                    Rectangle()
+                        .fill(Color.blue.gradient)
+                        .ignoresSafeArea()
+                        .overlay(
+                            VStack {
+                                Text("Lotus Planner")
+                                    .font(.largeTitle)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                Text("Swipe left to continue")
+                                    .font(.body)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                        )
+                    
+                    // Try to load cover image, but don't break if it fails
                     Image("CoverImage")
                         .resizable()
                         .scaledToFill()

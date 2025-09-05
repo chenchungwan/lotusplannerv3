@@ -11,7 +11,7 @@ import CloudKit
 // MARK: - Debug Helper
 private func debugPrint(_ message: String) {
     #if DEBUG
-    debugPrint(message)
+    print(message)
     #endif
 }
 

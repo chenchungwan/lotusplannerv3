@@ -29,7 +29,6 @@ struct LotusPlannerV3App: App {
             debugPrint("⚠️ Configuration validation failed")
             #endif
         }
-        
     }
 
     var body: some Scene {

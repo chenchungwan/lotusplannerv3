@@ -6,7 +6,7 @@ import CoreData
 // MARK: - Debug Helper
 private func debugPrint(_ message: String) {
     #if DEBUG
-    debugPrint(message)
+    print(message)
     #endif
 }
 
@@ -42,11 +42,7 @@ final class iCloudManager: ObservableObject {
     
     private init() {
         #if DEBUG
-        #if DEBUG
-        #if DEBUG
         debugPrint("🔄 Initializing iCloudManager...")
-        #endif
-        #endif
         #endif
         checkiCloudAvailability()
         setupNotifications()
