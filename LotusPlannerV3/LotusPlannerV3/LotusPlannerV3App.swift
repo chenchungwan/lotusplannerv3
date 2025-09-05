@@ -18,7 +18,6 @@ struct LotusPlannerV3App: App {
         configManager.printConfigurationInfo()
         
         if !configManager.validateConfiguration() {
-            print("⚠️ Configuration validation failed - some features may not work properly")
         }
     }
 

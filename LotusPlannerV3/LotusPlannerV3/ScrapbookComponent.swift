@@ -132,9 +132,6 @@ struct DraggablePhotoView: View {
 struct ScrapbookComponent: View {
     @Binding var canvasView: PKCanvasView
     // @StateObject private var firestoreManager = FirestoreManager.shared // Removed - using local storage only
-    @State private var showingSaveAlert = false
-    @State private var scrapbookTitle = ""
-    @State private var isSaving = false
     @State private var errorMessage: String?
     
     let title: String
@@ -146,6 +143,7 @@ struct ScrapbookComponent: View {
     @State private var isShowingPhotoPicker = false
     @State private var isUsingEraser = false
     @State private var containerSize: CGSize = .zero
+    
     
     init(canvasView: Binding<PKCanvasView>, title: String = "Journal", currentDate: Date = Date(), accountKind: GoogleAuthManager.AccountKind = .personal) {
         self._canvasView = canvasView
@@ -180,51 +178,7 @@ struct ScrapbookComponent: View {
     }
     
     // MARK: - Firestore Integration Methods
-    private func scrapbookEntryCard(_ entry: ScrapbookEntry) -> some View {
-        VStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(.systemGray4))
-                .frame(width: 50, height: 40)
-                .overlay(
-                    Image(systemName: "doc.richtext")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                )
-            
-            Text(entry.title ?? "Untitled")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-                .frame(width: 50)
-        }
-        .onTapGesture {
-            // TODO: Open PDF viewer to display the saved scrapbook entry
-            print("Tapped scrapbook entry: \(entry.title ?? "Untitled")")
-        }
-        .contextMenu {
-            Button("Delete", role: .destructive) {
-                deleteScrapbookEntry(entry)
-            }
-        }
-    }
     
-    private func saveScrapbook() {
-        // TEMPORARILY DISABLED - Scrapbook saving is suspended
-        print("📖 Scrapbook saving temporarily disabled")
-        errorMessage = "Scrapbook saving is temporarily disabled"
-        scrapbookTitle = ""
-    }
-    
-    private func loadScrapbookEntries() {
-        // TEMPORARILY DISABLED - Scrapbook loading is suspended
-        print("📖 Scrapbook loading temporarily disabled")
-    }
-    
-    private func deleteScrapbookEntry(_ entry: ScrapbookEntry) {
-        // TEMPORARILY DISABLED - Scrapbook deletion is suspended
-        print("📖 Scrapbook deletion temporarily disabled")
-        errorMessage = "Scrapbook deletion is temporarily disabled"
-    }
     
     var body: some View {
         VStack(spacing: 12) {
@@ -237,15 +191,7 @@ struct ScrapbookComponent: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
-                    // Save to Firestore button
-                    Button(action: {
-                        showingSaveAlert = true
-                    }) {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                    }
-                    .disabled(canvasView.drawing.strokes.isEmpty && photos.isEmpty)
+                    // Save button removed
                     
                     // Add Photo Button
                     Button(action: {
@@ -276,21 +222,7 @@ struct ScrapbookComponent: View {
             .padding(.horizontal)
             .padding(.top)
             
-            // Saved scrapbook entries for today - TEMPORARILY DISABLED
-            // TODO: Implement local scrapbook entry storage
-            /*
-            if !scrapbookEntries.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(scrapbookEntries) { entry in
-                            scrapbookEntryCard(entry)
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                }
-                .frame(height: 60)
-            }
-            */
+            // Scrapbook entries section removed
             
             // Main Scrapbook Area
             GeometryReader { geometry in
@@ -350,23 +282,7 @@ struct ScrapbookComponent: View {
                     .padding(.top, 8)
                     .padding(.trailing, 8)
 
-                    // Loading overlay
-                    if isSaving {
-                        Color.black.opacity(0.3)
-                            .overlay(
-                                VStack {
-                                    ProgressView()
-                                        .scaleEffect(1.2)
-                                    Text("Saving to Firestore...")
-                                        .font(.caption)
-                                        .foregroundColor(.white)
-                                        .padding(.top, 8)
-                                }
-                                .padding()
-                                .background(Color(.systemBackground).opacity(0.9))
-                                .cornerRadius(12)
-                            )
-                    }
+                    // Loading overlay removed
                 }
                 .onAppear {
                     containerSize = geometry.size
@@ -385,17 +301,7 @@ struct ScrapbookComponent: View {
                 addPhoto(imageData: imageData)
             }
         }
-        .alert("Save Scrapbook", isPresented: $showingSaveAlert) {
-            TextField("Title (optional)", text: $scrapbookTitle)
-            Button("Save") {
-                saveScrapbook()
-            }
-            Button("Cancel", role: .cancel) {
-                scrapbookTitle = ""
-            }
-        } message: {
-            Text("Save your current drawing and photos as a PDF to your scrapbook?")
-        }
+        // Save alert removed
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") {
                 errorMessage = nil
@@ -405,12 +311,7 @@ struct ScrapbookComponent: View {
                 Text(errorMessage)
             }
         }
-        .onAppear {
-            loadScrapbookEntries()
-        }
-        .onChange(of: currentDate) { oldValue, newValue in
-            loadScrapbookEntries()
-        }
+        
     }
 }
 // MARK: - Photo Picker

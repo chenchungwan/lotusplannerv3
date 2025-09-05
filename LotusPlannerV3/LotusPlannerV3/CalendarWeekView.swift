@@ -5,15 +5,11 @@ struct CalendarWeekView: View {
     let currentDate: Date
     let onDateSelected: (Date) -> Void
     
-    @ObservedObject private var eventManager = EventManager.shared
+    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
     
-    @State private var selectedEvent: GoogleCalendarEvent?
-    @State private var weekEvents: [Date: [GoogleCalendarEvent]] = [:]
-    @State private var personalEvents: [GoogleCalendarEvent] = []
-    @State private var professionalEvents: [GoogleCalendarEvent] = []
-    @State private var isLoadingEvents = false // PERFORMANCE ENHANCEMENT: Loading state
+    @State private var selectedEvent: GoogleCalendarEvent? // PERFORMANCE ENHANCEMENT: Loading state
     
     private let calendar = Calendar.mondayFirst
     
@@ -33,53 +29,15 @@ struct CalendarWeekView: View {
         }
         .padding(.leading, 2) // Add 2px left padding
         .task {
-            // PERFORMANCE ENHANCEMENT: Progressive loading with loading state
-            isLoadingEvents = true
+            // Load calendar data for the week
+            await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
             
-            let options = EventFilterOptions()
-            
-            // FUNCTIONALITY PRESERVED: Same loading logic with loading state
-            weekEvents = await eventManager.getEvents(for: .week(currentDate), options: options)
-            personalEvents = await eventManager.getPersonalEvents(for: .week(currentDate), options: options)
-            professionalEvents = await eventManager.getProfessionalEvents(for: .week(currentDate), options: options)
-            
-            // DEBUG: Print loaded events to verify fix
-            print("📅 CalendarWeekView: Loaded events for week:")
-            print("  Total weekEvents dictionary has \(weekEvents.count) date entries")
-            for (date, events) in weekEvents.sorted(by: { $0.key < $1.key }) {
-                print("  \(DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .none)): \(events.count) events")
-                for event in events.prefix(2) {
-                    print("    - \(event.summary)")
-                }
-            }
-            
-            // DEBUG: Also check what dates we're expecting for the week
-            print("📅 Week days we're displaying:")
-            for day in weekDays {
-                let startOfDay = calendar.startOfDay(for: day)
-                let eventsForDay = weekEvents[startOfDay]?.count ?? 0
-                print("  \(DateFormatter.localizedString(from: day, dateStyle: .short, timeStyle: .none)) (startOfDay key: \(DateFormatter.localizedString(from: startOfDay, dateStyle: .short, timeStyle: .none))): \(eventsForDay) events")
-            }
-            
-            isLoadingEvents = false
-            
-            // Load tasks (only if not already loading) - FUNCTIONALITY PRESERVED
+            // Load tasks
             if !tasksViewModel.isLoading {
                 await tasksViewModel.loadTasks()
             }
         }
-        .sheet(item: $selectedEvent) { event in
-            CalendarEventDetailsView(event: event) {
-                // Handle event deletion if needed
-                if let selectedEvent = selectedEvent {
-                    weekEvents.forEach { (date, events) in
-                        if let index = events.firstIndex(where: { $0.id == selectedEvent.id }) {
-                            weekEvents[date]?.remove(at: index)
-                        }
-                    }
-                }
-            }
-        }
+        // Event details sheet removed
     }
     
     private var weekHeader: some View {
@@ -125,58 +83,32 @@ struct CalendarWeekView: View {
     }
     
     private func dayRow(_ date: Date) -> some View {
-        let startOfDay = calendar.startOfDay(for: date)
-        let events = weekEvents[startOfDay] ?? []
-        
-        // DEBUG: Print what we're looking for vs what we have
-        if weekEvents.count > 0 {
-            print("🔍 dayRow for \(DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .none)):")
-            print("  Looking for key: \(DateFormatter.localizedString(from: startOfDay, dateStyle: .short, timeStyle: .none)) \(startOfDay)")
-            print("  Found \(events.count) events")
-            print("  Available keys in weekEvents:")
-            for key in weekEvents.keys.sorted() {
-                print("    - \(DateFormatter.localizedString(from: key, dateStyle: .short, timeStyle: .none)) \(key): \(weekEvents[key]?.count ?? 0) events")
-            }
+        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        let dayEvents = allEvents.filter { event in
+            guard let startTime = event.startTime else { return false }
+            return calendar.isDate(startTime, inSameDayAs: date)
         }
         
         return HStack(spacing: 0) {
-            // FUNCTIONALITY PRESERVED: Same TimelineBaseView with optional loading overlay
-            ZStack {
-                TimelineBaseView(
-                    date: date,
-                    events: events,
-                    personalEvents: personalEvents,
-                    professionalEvents: professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    config: TimelineConfig(
-                        startHour: 0,
-                        endHour: 24,
-                        hourHeight: 80,
-                        timeColumnWidth: 50,
-                        showCurrentTime: true,
-                        showAllDayEvents: true
-                    ),
-                    onEventTap: { event in
-                        selectedEvent = event
-                    }
-                )
-                
-                // PERFORMANCE ENHANCEMENT: Subtle loading indicator (non-intrusive)
-                if isLoadingEvents && events.isEmpty {
-                    VStack {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .opacity(0.6)
-                        Text("Loading events...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .opacity(0.6)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground).opacity(0.8))
+            TimelineBaseView(
+                date: date,
+                events: dayEvents,
+                personalEvents: calendarViewModel.personalEvents,
+                professionalEvents: calendarViewModel.professionalEvents,
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor,
+                config: TimelineConfig(
+                    startHour: 0,
+                    endHour: 24,
+                    hourHeight: 80,
+                    timeColumnWidth: 50,
+                    showCurrentTime: true,
+                    showAllDayEvents: true
+                ),
+                onEventTap: { event in
+                    selectedEvent = event
                 }
-            }
+            )
         }
     }
     

@@ -50,14 +50,7 @@ struct BaseViewV2: View {
                     trailingToolbarButtons
                 }
             }
-        .sheet(item: Binding<GoogleCalendarEvent?>(
-            get: { selectedCalendarEvent },
-            set: { selectedCalendarEvent = $0 }
-        )) { event in
-            CalendarEventDetailsView(event: event) {
-                // Handle event deletion if needed
-            }
-        }
+        // Event details sheet removed
         .sheet(isPresented: $showingAddEvent) {
             AddItemView(
                 currentDate: selectedDate,

@@ -46,12 +46,11 @@ class KeychainManager {
         
         switch status {
         case errSecSuccess:
-            print("✅ Successfully saved to keychain for account: \(account)")
+            break
         case errSecDuplicateItem:
             // Item already exists, try to update it
             try update(data, for: account)
         default:
-            print("❌ Failed to save to keychain: \(status)")
             throw KeychainError.unhandledError(status: status)
         }
     }
@@ -74,12 +73,10 @@ class KeychainManager {
             guard let data = result as? Data else {
                 throw KeychainError.unexpectedPasswordData
             }
-            print("✅ Successfully loaded from keychain for account: \(account)")
             return data
         case errSecItemNotFound:
             throw KeychainError.itemNotFound
         default:
-            print("❌ Failed to load from keychain: \(status)")
             throw KeychainError.unhandledError(status: status)
         }
     }
@@ -100,9 +97,8 @@ class KeychainManager {
         
         switch status {
         case errSecSuccess:
-            print("✅ Successfully updated keychain for account: \(account)")
+            break
         default:
-            print("❌ Failed to update keychain: \(status)")
             throw KeychainError.unhandledError(status: status)
         }
     }
@@ -119,9 +115,8 @@ class KeychainManager {
         
         switch status {
         case errSecSuccess, errSecItemNotFound:
-            print("✅ Successfully deleted from keychain for account: \(account)")
+            break
         default:
-            print("❌ Failed to delete from keychain: \(status)")
             throw KeychainError.unhandledError(status: status)
         }
     }
@@ -153,15 +148,14 @@ class KeychainManager {
         
         switch status {
         case errSecSuccess, errSecItemNotFound:
-            print("✅ Successfully cleared all keychain items")
+            break
         default:
-            print("❌ Failed to clear keychain items: \(status)")
+            break
         }
     }
     
     // MARK: - Migration from UserDefaults
     func migrateFromUserDefaults() {
-        print("🔄 Starting migration from UserDefaults to Keychain...")
         
         let keysToMigrate = [
             "google_token_personal",
@@ -175,13 +169,10 @@ class KeychainManager {
                 do {
                     try saveString(value, for: key)
                     UserDefaults.standard.removeObject(forKey: key)
-                    print("✅ Migrated \(key) to keychain")
                 } catch {
-                    print("❌ Failed to migrate \(key): \(error)")
                 }
             }
         }
         
-        print("✅ Migration from UserDefaults completed")
     }
 }

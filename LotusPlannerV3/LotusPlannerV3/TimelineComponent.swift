@@ -17,8 +17,7 @@ struct TimelineComponent: View {
     private let endHour = 24
     private let timeColumnWidth: CGFloat = 28
     
-    // Debug borders toggle (disabled)
-    private let debugBorders: Bool = false
+    
     
     // Separate all-day events from timed events
     private var allDayEvents: [GoogleCalendarEvent] {
@@ -297,17 +296,7 @@ struct TimelineComponent: View {
     }
 }
 
-// MARK: - Debug Border Helper
-private extension View {
-    @ViewBuilder
-    func debugBorder(_ color: Color = .red, width: CGFloat = 1, enabled: Bool = true) -> some View {
-        if enabled {
-            overlay(Rectangle().stroke(color, lineWidth: width))
-        } else {
-            self
-        }
-    }
-}
+ 
 // MARK: - Preview
 struct TimelineComponent_Previews: PreviewProvider {
     static var previews: some View {

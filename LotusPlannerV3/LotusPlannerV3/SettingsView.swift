@@ -426,6 +426,25 @@ struct SettingsView: View {
                 
                 
                 
+                Section("Troubleshooting") {
+                    Button {
+                        GoogleAuthManager.shared.clearAllAuthState()
+                    } label: {
+                        HStack {
+                            Image(systemName: "key.slash")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Clear Auth State")
+                                    .font(.body)
+                                Text("Fix authentication issues by clearing all Google auth data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Section("Danger Zone") {
                     Button(role: .destructive) {
                         showingDeleteAllAlert = true

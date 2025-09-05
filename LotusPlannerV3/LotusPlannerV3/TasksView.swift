@@ -220,15 +220,12 @@ class TasksViewModel: ObservableObject {
         
         // Log raw JSON response for visibility
         if let jsonString = String(data: data, encoding: .utf8) {
-            print("[Tasks] Lists API response for \(kind): \n\(jsonString)")
         }
         
         // Log parsed summary (count, titles, ids)
         if let items = taskListsResponse.items {
             let summaries = items.map { "\($0.title) (\($0.id))" }
-            print("[Tasks] Parsed lists for \(kind): count=\(items.count) -> \(summaries)")
         } else {
-            print("[Tasks] Parsed lists for \(kind): count=0")
         }
         
         return taskListsResponse.items ?? []

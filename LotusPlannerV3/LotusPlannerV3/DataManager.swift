@@ -55,9 +55,7 @@ class DataManager: ObservableObject {
         
         // Load tasks data only if accounts are linked
         if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-            print("📋 DataManager: Loading tasks during initialization...")
             await tasksViewModel.loadTasks()
-            print("📋 DataManager: Tasks loading complete")
         }
         
         isInitializing = false
@@ -73,11 +71,9 @@ class DataManager: ObservableObject {
         
         // FUNCTIONALITY PRESERVED: Only refresh if accounts are actually linked
         guard authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) else {
-            print("📱 DataManager: No accounts linked, skipping background refresh")
             return
         }
         
-        print("📱 DataManager: Starting background calendar refresh...")
         
         // Refresh current month data in background (non-blocking)
         Task.detached(priority: .background) {
@@ -93,7 +89,6 @@ class DataManager: ObservableObject {
             }
             
             await MainActor.run {
-                print("✅ DataManager: Background calendar refresh completed")
             }
         }
     }

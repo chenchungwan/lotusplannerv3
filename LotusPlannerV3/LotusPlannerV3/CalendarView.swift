@@ -240,7 +240,6 @@ class CalendarViewModel: ObservableObject {
             UserDefaults.standard.set(data, forKey: diskCacheKeyPrefix + key)
             UserDefaults.standard.set(Date(), forKey: diskCacheTimestampPrefix + key)
         } catch {
-            print("⚠️ Failed to save events to disk cache: \(error)")
         }
     }
     
@@ -253,7 +252,6 @@ class CalendarViewModel: ObservableObject {
             let events = try JSONDecoder().decode([GoogleCalendarEvent].self, from: data)
             return events
         } catch {
-            print("⚠️ Failed to load events from disk cache: \(error)")
             // Clean up corrupted cache
             clearDiskCache(for: key)
             return nil
@@ -293,7 +291,6 @@ class CalendarViewModel: ObservableObject {
             }
         }
         
-        print("✅ Preloaded adjacent months (cache-only) around \(date)")
     }
 
     // Preload a month's calendars/events into cache without updating published state
@@ -312,7 +309,6 @@ class CalendarViewModel: ObservableObject {
         let needsProfessionalPreload = authManager.isLinked(kind: .professional) && !isCacheValid(for: professionalKey)
         
         guard needsPersonalPreload || needsProfessionalPreload else {
-            print("💾 All month data already cached for \(date)")
             return
         }
         
@@ -329,10 +325,8 @@ class CalendarViewModel: ObservableObject {
                         await MainActor.run {
                             self.cacheCalendars(fetchedCalendars, for: personalKey)
                             self.cacheEvents(fetchedEvents, for: personalKey)
-                            print("💾 Cached personal month preload: \(fetchedEvents.count) events")
                         }
                     } catch {
-                        print("❌ Failed to preload personal month into cache: \(error)")
                     }
                 }
             }
@@ -348,10 +342,8 @@ class CalendarViewModel: ObservableObject {
                         await MainActor.run {
                             self.cacheCalendars(fetchedCalendars, for: professionalKey)
                             self.cacheEvents(fetchedEvents, for: professionalKey)
-                            print("💾 Cached professional month preload: \(fetchedEvents.count) events")
                         }
                     } catch {
-                        print("❌ Failed to preload professional month into cache: \(error)")
                     }
                 }
             }
@@ -415,9 +407,6 @@ class CalendarViewModel: ObservableObject {
             return
         }
         
-        print("🔄 Loading month calendar data...")
-        print("  Personal account linked: \(authManager.isLinked(kind: .personal))")
-        print("  Professional account linked: \(authManager.isLinked(kind: .professional))")
         
         // removed hasValidCache unused flag
         
@@ -428,7 +417,6 @@ class CalendarViewModel: ObservableObject {
                let cachedCalendars = getCachedCalendars(for: personalKey) {
                 personalEvents = cachedEvents
                 personalCalendars = cachedCalendars
-                print("💾 Using cached personal data (\(cachedEvents.count) events)")
             }
         }
         
@@ -438,7 +426,6 @@ class CalendarViewModel: ObservableObject {
                let cachedCalendars = getCachedCalendars(for: professionalKey) {
                 professionalEvents = cachedEvents
                 professionalCalendars = cachedCalendars
-                print("💾 Using cached professional data (\(cachedEvents.count) events)")
             }
         }
         
@@ -447,7 +434,6 @@ class CalendarViewModel: ObservableObject {
         let needsProfessionalRefresh = authManager.isLinked(kind: .professional) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .professional)) == nil
         
         if !needsPersonalRefresh && !needsProfessionalRefresh {
-            print("✅ All data loaded from cache")
             return
         }
         
@@ -469,9 +455,6 @@ class CalendarViewModel: ObservableObject {
                             self.personalCalendars = calendars
                         }
                     } catch {
-                        print("❌ Calendar loading error for personal account: \(error)")
-                        print("   Error type: \(type(of: error))")
-                        print("   Localized description: \(error.localizedDescription)")
                         personalError = error
                     }
                 }
@@ -486,9 +469,6 @@ class CalendarViewModel: ObservableObject {
                             self.professionalCalendars = calendars
                         }
                     } catch {
-                        print("❌ Calendar loading error for professional account: \(error)")
-                        print("   Error type: \(type(of: error))")
-                        print("   Localized description: \(error.localizedDescription)")
                         professionalError = error
                     }
                 }
@@ -514,9 +494,6 @@ class CalendarViewModel: ObservableObject {
             }
         }
         
-        print("✅ Finished loading month calendar data")
-        print("  Final personal events: \(personalEvents.count)")
-        print("  Final professional events: \(professionalEvents.count)")
         
         isLoading = false
     }
@@ -537,8 +514,6 @@ class CalendarViewModel: ObservableObject {
                 }
             }
         } catch {
-            print("❌ Failed to load \(kind.rawValue) calendar data: \(error)")
-            print("   Error type: \(type(of: error))")
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) calendar data: \(error.localizedDescription)"
             }
@@ -546,27 +521,19 @@ class CalendarViewModel: ObservableObject {
     }
     
     private func fetchCalendars(for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleCalendar] {
-        print("📅 Fetching calendars for \(kind) account...")
-        print("  🔍 Account linked status: \(authManager.isLinked(kind: kind))")
-        print("  📧 Account email: \(authManager.getEmail(for: kind))")
         
         do {
             let accessToken = try await authManager.getAccessToken(for: kind)
-            print("🔑 Got access token for \(kind): \(accessToken.prefix(20))...")
             
             let url = URL(string: "https://www.googleapis.com/calendar/v3/users/me/calendarList")!
             var request = URLRequest(url: url)
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             
-            print("🌐 Making calendar API request for \(kind)...")
             let (data, httpResponse) = try await URLSession.shared.data(for: request)
             
             if let response = httpResponse as? HTTPURLResponse {
-                print("📊 Calendar API response status for \(kind): \(response.statusCode)")
                 if response.statusCode != 200 {
-                    print("❌ Calendar API error for \(kind) - Status: \(response.statusCode)")
                     if let responseString = String(data: data, encoding: .utf8) {
-                        print("📄 Response body: \(responseString)")
                     }
                     
                     // Handle HTTP errors
@@ -578,22 +545,16 @@ class CalendarViewModel: ObservableObject {
             
             let response = try JSONDecoder().decode(GoogleCalendarListResponse.self, from: data)
             let calendars = response.items ?? []
-            print("✅ Successfully fetched \(calendars.count) calendars for \(kind)")
             
             // Debug: Print calendar details
             for calendar in calendars {
-                print("  📅 Calendar: \(calendar.summary) (ID: \(calendar.id))")
             }
             
             return calendars
         } catch {
-            print("❌ Error fetching calendars for \(kind): \(error)")
-            print("  🔍 Error details: \(error.localizedDescription)")
             
             // Add more specific error information
             if let urlError = error as? URLError {
-                print("  🌐 Network error: \(urlError.localizedDescription)")
-                print("  📡 Network code: \(urlError.code.rawValue)")
             }
             
             throw error
@@ -645,7 +606,6 @@ class CalendarViewModel: ObservableObject {
                     allEvents.append(contentsOf: eventsWithCalendarId)
                 }
             } catch {
-                print("Failed to fetch events for calendar \(calendarItem.summary): \(error)")
             }
         }
         
@@ -681,33 +641,26 @@ class CalendarViewModel: ObservableObject {
     
     private func loadCalendarDataForMonthRange(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async {
         do {
-            print("📅 Loading \(kind.rawValue) calendar data for month range...")
             let calendars = try await fetchCalendars(for: kind)
-            print("  Found \(calendars.count) \(kind.rawValue) calendars")
             
             let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
-            print("  Found \(events.count) \(kind.rawValue) events")
             
             // Cache the fresh data
             let cacheKey = self.cacheKey(for: kind, startDate: startDate, endDate: endDate)
             cacheEvents(events, for: cacheKey)
             cacheCalendars(calendars, for: cacheKey)
-            print("  💾 Cached \(events.count) events for key: \(cacheKey)")
             
             await MainActor.run {
                 switch kind {
                 case .personal:
                     self.personalCalendars = calendars
                     self.personalEvents = events
-                    print("  ✅ Set \(events.count) personal events")
                 case .professional:
                     self.professionalCalendars = calendars
                     self.professionalEvents = events
-                    print("  ✅ Set \(events.count) professional events")
                 }
             }
         } catch {
-            print("  ❌ Error loading \(kind.rawValue) calendar data: \(error)")
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) calendar data for month: \(error.localizedDescription)"
             }
@@ -755,7 +708,6 @@ class CalendarViewModel: ObservableObject {
                     allEvents.append(contentsOf: eventsWithCalendarId)
                 }
             } catch {
-                print("Failed to fetch events for calendar \(calendarItem.summary): \(error)")
             }
         }
         
@@ -1503,7 +1455,6 @@ struct CalendarView: View {
         let endString = DateFormatter.standardDate.string(from: weekEnd)
         let result = "\(startString) - \(endString)"
         
-        print("📅 CalendarView weekTitle: \(result)")
         return result
     }
     
@@ -1616,17 +1567,12 @@ struct CalendarView: View {
     private var dayView: some View {
         dayViewBase
             .task {
-                print("📅 Day view .task block starting...")
-                print("📅 DataManager isInitializing: \(dataManager.isInitializing)")
                 
                 await calendarViewModel.loadCalendarData(for: currentDate)
-                print("📅 Calendar data loaded, now loading tasks...")
                 await tasksViewModel.loadTasks()
-                print("📅 Tasks loaded, now updating cached tasks...")
                 await MainActor.run {
                     updateCachedTasks()
                 }
-                print("📅 Day view initialization complete")
             }
             .onChange(of: currentDate) { oldValue, newValue in
                 Task {
@@ -1637,16 +1583,13 @@ struct CalendarView: View {
                 }
             }
             .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
-                print("📋 Personal tasks changed, updating cache...")
                 updateCachedTasks()
             }
             .onChange(of: tasksViewModel.professionalTasks) { oldValue, newValue in
-                print("📋 Professional tasks changed, updating cache...")
                 updateCachedTasks()
             }
             .onChange(of: dataManager.isInitializing) { oldValue, newValue in
                 if !newValue {
-                    print("📋 DataManager finished initializing, updating cached tasks...")
                     updateCachedTasks()
                 }
             }
@@ -2532,8 +2475,6 @@ struct CalendarView: View {
                 .offset(x: 8, y: -8)
             }
             .position(photo.position)
-                            // Temporarily removed drag gesture due to compilation issues
-                // TODO: Implement moveable photos later
             .animation(.easeOut(duration: 0.2), value: isDragging)
         }
     }
@@ -2933,21 +2874,14 @@ struct CalendarView: View {
         }
         
         // Debug: Print event counts to help diagnose the issue
-        print("🗓️ Month Events Debug:")
-        print("  Personal events count: \(calendarViewModel.personalEvents.count)")
-        print("  Professional events count: \(calendarViewModel.professionalEvents.count)")
-        print("  Total combined events: \(allEvents.count)")
         
         // Filter out recurring events if the setting is enabled
         if appPrefs.hideRecurringEventsInMonth {
             let allEventsForRecurringDetection = allEvents
             let recurringEvents = allEvents.filter { $0.isLikelyRecurring(among: allEventsForRecurringDetection) }
-            print("  Found \(recurringEvents.count) recurring events:")
             for event in recurringEvents {
-                print("    - '\(event.summary)' (recurringEventId: \(event.recurringEventId ?? "nil"), recurrence: \(event.recurrence?.isEmpty == false ? "has rules" : "nil"))")
             }
             allEvents = allEvents.filter { !$0.isLikelyRecurring(among: allEventsForRecurringDetection) }
-            print("  After recurring filter: \(allEvents.count)")
         }
         
         for date in monthDates {
@@ -3665,7 +3599,6 @@ struct CalendarView: View {
                 await MainActor.run {
                     // Add the image to our array of selected images
                     selectedImages.append(uiImage)
-                    print("📸 Photo selected and loaded successfully")
                     
                     // Reset the selection for next time
                     selectedPhoto = nil
@@ -3678,21 +3611,14 @@ struct CalendarView: View {
     
     // MARK: - Helper Methods for Real Tasks
     private func updateCachedTasks() {
-        print("🔄 Updating cached tasks for date: \(currentDate)")
-        print("   Personal task lists: \(tasksViewModel.personalTasks.keys.count)")
-        print("   Professional task lists: \(tasksViewModel.professionalTasks.keys.count)")
         
         cachedPersonalTasks = authManager.isLinked(kind: .personal) ? filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate) : [:]
         cachedProfessionalTasks = authManager.isLinked(kind: .professional) ? filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate) : [:]
         
-        print("   Cached personal tasks: \(cachedPersonalTasks.values.flatMap { $0 }.count)")
-        print("   Cached professional tasks: \(cachedProfessionalTasks.values.flatMap { $0 }.count)")
         
         // Debug: Print first few task titles to verify content
         let personalTaskTitles = cachedPersonalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
         let professionalTaskTitles = cachedProfessionalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
-        print("   Sample personal task titles: \(personalTaskTitles)")
-        print("   Sample professional task titles: \(professionalTaskTitles)")
         
         // Force UI update
         DispatchQueue.main.async {
@@ -3732,9 +3658,6 @@ struct CalendarView: View {
                         let formatter = DateFormatter()
                         formatter.dateStyle = .short
                         formatter.timeStyle = .short
-                        print("🐛 Task '\(task.title)' completed at \(formatter.string(from: completionDate)) not showing on \(formatter.string(from: date))")
-                        print("   Completion date timezone: \(completionDate)")
-                        print("   Display date timezone: \(date)")
                     }
                     
                     return isOnSameDay ? task : nil
@@ -3753,9 +3676,7 @@ struct CalendarView: View {
                     let include = isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday)
 
                     if include {
-                        print("✅ Task '\(task.title)' showing: isDueOnViewedDate=\(isDueOnViewedDate), isOverdueRelativeToToday=\(isOverdueRelativeToToday), isViewingToday=\(isViewingToday)")
                     } else {
-                        print("❌ Task '\(task.title)' hidden: due=\(startOfDueDate), viewed=\(startOfViewedDate), today=\(startOfToday)")
                     }
 
                     return include ? task : nil
@@ -4548,12 +4469,6 @@ struct AddItemView: View {
                     dismiss()
                 }
             } catch {
-                print("❌ Failed to create task: \(error)")
-                print("   Error type: \(type(of: error))")
-                print("   Account: \(accountKind)")
-                print("   Title: '\(itemTitle)'")
-                print("   List ID: '\(selectedTaskListId)'")
-                print("   Creating new list: \(isCreatingNewList)")
                 await MainActor.run {
                     isCreating = false
                     // Handle error (could show alert)
@@ -4564,13 +4479,11 @@ struct AddItemView: View {
     
     private func createEvent() {
         guard let accountKind = selectedAccountKind else { return }
-        print("🔄 Creating calendar event: '\(itemTitle)' for \(accountKind)")
         isCreating = true
 
         Task {
             do {
                 let accessToken = try await authManager.getAccessToken(for: accountKind)
-                print("🔑 Got access token for \(accountKind)")
                 
                 let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
                 var request = URLRequest(url: url)
@@ -4605,27 +4518,21 @@ struct AddItemView: View {
                 ]
                 if !itemNotes.isEmpty { body["description"] = itemNotes }
 
-                print("📤 Event request body: \(body)")
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                 let (data, response) = try await URLSession.shared.data(for: request)
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ Invalid response type")
                     throw PlannerCalendarError.invalidResponse
                 }
                 
-                print("📥 Event response status: \(httpResponse.statusCode)")
                 
                 guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-                    print("❌ Event API error - Status: \(httpResponse.statusCode)")
                     if let responseString = String(data: data, encoding: .utf8) {
-                        print("   Response body: \(responseString)")
                     }
                     throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
                 }
 
-                print("✅ Event created successfully, refreshing calendar data...")
                 // Refresh events in background for better UX
                 Task {
                     await calendarViewModel.loadCalendarData(for: eventStart)
@@ -4633,13 +4540,6 @@ struct AddItemView: View {
 
                 await MainActor.run { dismiss() }
             } catch {
-                print("❌ Failed to create calendar event: \(error)")
-                print("   Error type: \(type(of: error))")
-                print("   Account: \(accountKind)")
-                print("   Title: '\(itemTitle)'")
-                print("   Start: \(eventStart)")
-                print("   End: \(eventEnd)")
-                print("   All day: \(isAllDay)")
                 await MainActor.run { isCreating = false }
             }
         }
@@ -4651,9 +4551,6 @@ struct AddItemView: View {
         guard let originalAccountKind = existingEventAccountKind,
               let targetAccountKind = selectedAccountKind else { return }
         
-        print("🔄 Updating event: '\(itemTitle)'")
-        print("   Original account: \(originalAccountKind)")
-        print("   Target account: \(targetAccountKind)")
         
         isCreating = true
 
@@ -4661,7 +4558,6 @@ struct AddItemView: View {
             do {
                 // Check if we're moving between accounts
                 if originalAccountKind != targetAccountKind {
-                    print("🔄 Cross-account move detected, creating new event and deleting old one")
                     
                     // First create the event in the new account
                     try await createEventInAccount(targetAccountKind)
@@ -4669,9 +4565,7 @@ struct AddItemView: View {
                     // Then delete the event from the original account
                     try await deleteEventFromAccount(ev, from: originalAccountKind)
                     
-                    print("✅ Cross-account event move completed")
                 } else {
-                    print("🔄 Same account update")
                     // Same account - just update the existing event
                     try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
@@ -4683,15 +4577,12 @@ struct AddItemView: View {
                 
                 await MainActor.run { dismiss() }
             } catch {
-                print("❌ Failed to update event: \(error)")
-                print("   Error type: \(type(of: error))")
                 await MainActor.run { isCreating = false }
             }
         }
     }
     
     private func createEventInAccount(_ accountKind: GoogleAuthManager.AccountKind) async throws {
-        print("🌐 Creating event in \(accountKind) account")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
@@ -4726,7 +4617,6 @@ struct AddItemView: View {
         ]
         if !itemNotes.isEmpty { body["description"] = itemNotes }
 
-        print("📤 Create event request body: \(body)")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -4734,20 +4624,16 @@ struct AddItemView: View {
             throw PlannerCalendarError.invalidResponse
         }
         
-        print("📥 Create event response status: \(httpResponse.statusCode)")
         
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   Response body: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
         
-        print("✅ Event created successfully in \(accountKind) account")
     }
     
     private func deleteEventFromAccount(_ event: GoogleCalendarEvent, from accountKind: GoogleAuthManager.AccountKind) async throws {
-        print("🗑️ Deleting event from \(accountKind) account")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
@@ -4761,20 +4647,16 @@ struct AddItemView: View {
             throw PlannerCalendarError.invalidResponse
         }
         
-        print("📥 Delete event response status: \(httpResponse.statusCode)")
         
         guard httpResponse.statusCode == 204 || httpResponse.statusCode == 200 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   Response body: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
         
-        print("✅ Event deleted successfully from \(accountKind) account")
     }
     
     private func updateEventInSameAccount(_ event: GoogleCalendarEvent, accountKind: GoogleAuthManager.AccountKind) async throws {
-        print("🔄 Updating event in same account: \(accountKind)")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
@@ -4810,7 +4692,6 @@ struct AddItemView: View {
         ]
         if !itemNotes.isEmpty { body["description"] = itemNotes }
 
-        print("📤 Update event request body: \(body)")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -4818,16 +4699,13 @@ struct AddItemView: View {
             throw PlannerCalendarError.invalidResponse
         }
         
-        print("📥 Update event response status: \(httpResponse.statusCode)")
         
         guard httpResponse.statusCode == 200 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   Response body: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
         
-        print("✅ Event updated successfully in \(accountKind) account")
     }
     
     // MARK: - Delete Event
@@ -4850,7 +4728,6 @@ struct AddItemView: View {
                 await calendarViewModel.loadCalendarData(for: currentDate)
                 await MainActor.run { dismiss() }
             } catch {
-                print("Failed to delete event: \(error)")
                 await MainActor.run { isCreating = false }
             }
         }

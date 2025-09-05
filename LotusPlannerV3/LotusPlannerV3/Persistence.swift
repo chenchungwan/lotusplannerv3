@@ -90,10 +90,8 @@ struct PersistenceController {
                  * The store could not be migrated to the current model version.
                  Check the error message to determine what the actual problem was.
                  */
-                print("❌ Core Data error: \(error), \(error.userInfo)")
                 fatalError("Unresolved error \(error), \(error.userInfo)")
             } else {
-                print("✅ Core Data loaded successfully")
             }
         })
         

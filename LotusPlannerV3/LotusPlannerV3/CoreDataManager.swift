@@ -25,9 +25,7 @@ class CoreDataManager: ObservableObject {
         if context.hasChanges {
             do {
                 try context.save()
-                print("✅ Core Data saved successfully")
             } catch {
-                print("❌ Core Data save failed: \(error)")
             }
         }
     }
@@ -66,7 +64,6 @@ class CoreDataManager: ObservableObject {
                 )
             }
         } catch {
-            print("❌ Failed to load weight entries: \(error)")
             return []
         }
     }
@@ -80,7 +77,6 @@ class CoreDataManager: ObservableObject {
             logs.forEach(context.delete)
             save()
         } catch {
-            print("❌ Failed to delete weight entry: \(error)")
         }
     }
     
@@ -118,7 +114,6 @@ class CoreDataManager: ObservableObject {
                 )
             }
         } catch {
-            print("❌ Failed to load workout entries: \(error)")
             return []
         }
     }
@@ -132,7 +127,6 @@ class CoreDataManager: ObservableObject {
             logs.forEach(context.delete)
             save()
         } catch {
-            print("❌ Failed to delete workout entry: \(error)")
         }
     }
     
@@ -170,7 +164,6 @@ class CoreDataManager: ObservableObject {
                 )
             }
         } catch {
-            print("❌ Failed to load food entries: \(error)")
             return []
         }
     }
@@ -184,7 +177,6 @@ class CoreDataManager: ObservableObject {
             logs.forEach(context.delete)
             save()
         } catch {
-            print("❌ Failed to delete food entry: \(error)")
         }
     }
     
@@ -201,9 +193,7 @@ class CoreDataManager: ObservableObject {
                 try context.execute(batchDelete)
             }
             save()
-            print("🧹 Deleted all log data from Core Data (CloudKit-backed – deletions will sync)")
         } catch {
-            print("❌ Failed to delete all logs: \(error)")
         }
     }
     

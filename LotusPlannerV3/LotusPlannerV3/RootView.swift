@@ -85,7 +85,6 @@ struct RootView: View {
     private func startAutoSkipTimer() {
         // Auto-skip after 5 seconds
         autoSkipTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
-            print("🕐 Auto-skipping cover after 5 seconds")
             dismissCover()
         }
     }

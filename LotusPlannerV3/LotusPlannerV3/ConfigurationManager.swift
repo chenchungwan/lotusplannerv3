@@ -80,7 +80,6 @@ class ConfigurationManager {
     private func getValueFromConfigFile(key: String) -> String? {
         guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
               let plist = NSDictionary(contentsOfFile: path) else {
-            print("⚠️ GoogleService-Info.plist not found - using fallback values")
             return nil
         }
         
@@ -99,15 +98,12 @@ class ConfigurationManager {
         
         for (name, value) in requiredConfigs {
             if value.isEmpty || value.contains("YOUR_") || value.contains("_HERE") {
-                print("❌ Invalid configuration for \(name): \(value)")
                 isValid = false
             }
         }
         
         if isValid {
-            print("✅ Configuration validation passed")
         } else {
-            print("❌ Configuration validation failed - check your environment variables or config files")
         }
         
         return isValid
@@ -115,10 +111,5 @@ class ConfigurationManager {
     
     // MARK: - Debug Information
     func printConfigurationInfo() {
-        print("📱 App Configuration:")
-        print("   Environment: \(environment)")
-        print("   Bundle ID: \(Bundle.main.bundleIdentifier ?? "Unknown")")
-        print("   Google Project: \(googleProjectId)")
-        print("   Config Valid: \(validateConfiguration())")
     }
 }
