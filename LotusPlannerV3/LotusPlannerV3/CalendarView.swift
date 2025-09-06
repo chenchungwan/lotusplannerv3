@@ -4398,17 +4398,18 @@ struct AddItemView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(selectedTab == 0 ? (isEditingEvent ? "Save" : "Create Task") : (isEditingEvent ? "Save" : "Create Event")) {
-                        if selectedTab == 0 {
-                            createTask()
+                        if isEditingEvent {
+                            // Always update the existing event when in edit mode, regardless of tab
+                            updateEvent()
                         } else {
-                            if isEditingEvent {
-                                updateEvent()
+                            if selectedTab == 0 {
+                                createTask()
                             } else {
                                 createEvent()
                             }
                         }
                     }
-                    .disabled(selectedTab == 0 ? !canCreateTask : !canCreateEvent)
+                    .disabled(isEditingEvent ? !canCreateEvent : (selectedTab == 0 ? !canCreateTask : !canCreateEvent))
                     .foregroundColor(accentColor)
                 }
                 
@@ -4533,9 +4534,12 @@ struct AddItemView: View {
                     throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
                 }
 
-                // Refresh events in background for better UX
+                // Refresh both original and new dates so UI reflects time/day changes
+                let originalEventDate = currentDate
+                let newEventDate = eventStart
                 Task {
-                    await calendarViewModel.loadCalendarData(for: eventStart)
+                    await calendarViewModel.loadCalendarData(for: originalEventDate)
+                    await calendarViewModel.loadCalendarData(for: newEventDate)
                 }
 
                 await MainActor.run { dismiss() }
@@ -4548,8 +4552,8 @@ struct AddItemView: View {
     // MARK: - Update existing event
     private func updateEvent() {
         guard let ev = existingEvent else { return }
-        guard let originalAccountKind = existingEventAccountKind,
-              let targetAccountKind = selectedAccountKind else { return }
+        guard let originalAccountKind = existingEventAccountKind else { return }
+        let targetAccountKind = selectedAccountKind ?? originalAccountKind
         
         
         isCreating = true
@@ -4570,9 +4574,9 @@ struct AddItemView: View {
                     try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
 
-                // Refresh events in background (optimized - non-blocking)
+                // Refresh events for the currently visible date so UI reflects change immediately
                 Task {
-                    await calendarViewModel.loadCalendarData(for: eventStart)
+                    await calendarViewModel.loadCalendarData(for: currentDate)
                 }
                 
                 await MainActor.run { dismiss() }
@@ -4637,10 +4641,13 @@ struct AddItemView: View {
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
-        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(event.id)")!
+        let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
+        let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
+        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("*", forHTTPHeaderField: "If-Match")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -4660,13 +4667,17 @@ struct AddItemView: View {
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
-        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(event.id)")!
+        let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
+        let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
+        let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("*", forHTTPHeaderField: "If-Match")
 
         let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime]
         isoFormatter.timeZone = TimeZone.current
 
         var startDict: [String: String] = [:]
@@ -4688,9 +4699,10 @@ struct AddItemView: View {
         var body: [String: Any] = [
             "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             "start": startDict,
-            "end": endDict
+            "end": endDict,
+            // Always include description so clearing notes works
+            "description": itemNotes
         ]
-        if !itemNotes.isEmpty { body["description"] = itemNotes }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -4716,10 +4728,13 @@ struct AddItemView: View {
             do {
                 let accessToken = try await authManager.getAccessToken(for: accountKind)
                 let calId = ev.calendarId ?? "primary"
-                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(calId)/events/\(ev.id)")!
+                let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
+                let encodedEventId = ev.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ev.id
+                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
                 var request = URLRequest(url: url)
                 request.httpMethod = "DELETE"
                 request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("*", forHTTPHeaderField: "If-Match")
 
                 let (_, response) = try await URLSession.shared.data(for: request)
                 guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 204 else {

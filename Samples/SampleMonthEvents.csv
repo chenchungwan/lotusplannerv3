@@ -1,0 +1,153 @@
+Subject,Start Date,Start Time,End Date,End Time,All Day Event,Description,Location,Private
+Daily Standup,09/08/2025,9:00 AM,09/08/2025,9:15 AM,False,Daily team standup,Office,False
+Weekly Planning,09/08/2025,8:30 AM,09/08/2025,9:00 AM,False,Plan the week's priorities,Office,False
+Deep Work,09/08/2025,9:30 AM,09/08/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/08/2025,12:30 PM,09/08/2025,1:30 PM,False,Lunch break,Cafe,False
+Team Sync,09/08/2025,2:00 PM,09/08/2025,3:00 PM,False,Weekly team sync,Office,False
+Project Work,09/08/2025,3:15 PM,09/08/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/08/2025,5:10 PM,09/08/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/09/2025,9:00 AM,09/09/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/09/2025,9:30 AM,09/09/2025,11:30 AM,False,Focused development time,Office,False
+1:1 with Manager,09/09/2025,11:00 AM,09/09/2025,11:30 AM,False,Weekly 1:1,Office,False
+Lunch,09/09/2025,12:30 PM,09/09/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/09/2025,2:00 PM,09/09/2025,4:30 PM,False,Feature development,Office,False
+Gym,09/09/2025,6:00 PM,09/09/2025,7:00 PM,False,Yoga class,Gym,False
+End of Day Planning,09/09/2025,5:10 PM,09/09/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/10/2025,9:00 AM,09/10/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/10/2025,9:30 AM,09/10/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/10/2025,12:30 PM,09/10/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/10/2025,2:00 PM,09/10/2025,4:30 PM,False,Feature development,Office,False
+Gym,09/10/2025,6:30 PM,09/10/2025,7:30 PM,False,Strength training,Gym,False
+End of Day Planning,09/10/2025,5:10 PM,09/10/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/11/2025,9:00 AM,09/11/2025,9:15 AM,False,Daily team standup,Office,False
+Dentist Appointment,09/11/2025,8:00 AM,09/11/2025,9:00 AM,False,Regular checkup,Dentist,True
+Deep Work,09/11/2025,9:30 AM,09/11/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/11/2025,12:30 PM,09/11/2025,1:30 PM,False,Lunch break,Cafe,False
+Design Review,09/11/2025,2:00 PM,09/11/2025,3:00 PM,False,UX and flows review,Office,False
+Project Work,09/11/2025,3:15 PM,09/11/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/11/2025,5:10 PM,09/11/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/12/2025,9:00 AM,09/12/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/12/2025,9:30 AM,09/12/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/12/2025,12:30 PM,09/12/2025,1:30 PM,False,Lunch break,Cafe,False
+Sprint Review,09/12/2025,2:00 PM,09/12/2025,3:00 PM,False,Sprint review with stakeholders,Office,False
+Demo,09/12/2025,3:15 PM,09/12/2025,4:00 PM,False,Feature demo,Office,False
+End of Day Planning,09/12/2025,4:10 PM,09/12/2025,4:30 PM,False,Plan next week,Office,False
+Gym,09/12/2025,6:30 PM,09/12/2025,7:30 PM,False,Strength training,Gym,False
+Brunch with Friends,09/13/2025,11:30 AM,09/13/2025,1:00 PM,False,Weekend brunch,Cafe,False
+Date Night,09/13/2025,7:00 PM,09/13/2025,9:30 PM,False,Dinner reservation,Restaurant,True
+Grocery Run,09/14/2025,11:00 AM,09/14/2025,12:00 PM,False,Weekly groceries,Market,False
+Family Call,09/14/2025,5:00 PM,09/14/2025,5:45 PM,False,Weekly catch-up,Home,True
+Daily Standup,09/15/2025,9:00 AM,09/15/2025,9:15 AM,False,Daily team standup,Office,False
+Weekly Planning,09/15/2025,8:30 AM,09/15/2025,9:00 AM,False,Plan the week's priorities,Office,False
+Deep Work,09/15/2025,9:30 AM,09/15/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/15/2025,12:30 PM,09/15/2025,1:30 PM,False,Lunch break,Cafe,False
+Team Sync,09/15/2025,2:00 PM,09/15/2025,3:00 PM,False,Weekly team sync,Office,False
+Project Work,09/15/2025,3:15 PM,09/15/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/15/2025,5:10 PM,09/15/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/16/2025,9:00 AM,09/16/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/16/2025,9:30 AM,09/16/2025,11:30 AM,False,Focused development time,Office,False
+1:1 with Manager,09/16/2025,11:00 AM,09/16/2025,11:30 AM,False,Weekly 1:1,Office,False
+Lunch,09/16/2025,12:30 PM,09/16/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/16/2025,2:00 PM,09/16/2025,4:30 PM,False,Feature development,Office,False
+Yoga,09/16/2025,6:00 PM,09/16/2025,7:00 PM,False,Evening yoga class,Studio,False
+End of Day Planning,09/16/2025,5:10 PM,09/16/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/17/2025,9:00 AM,09/17/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/17/2025,9:30 AM,09/17/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/17/2025,12:30 PM,09/17/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/17/2025,2:00 PM,09/17/2025,4:30 PM,False,Feature development,Office,False
+Gym,09/17/2025,6:30 PM,09/17/2025,7:30 PM,False,Strength training,Gym,False
+End of Day Planning,09/17/2025,5:10 PM,09/17/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/18/2025,9:00 AM,09/18/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/18/2025,9:30 AM,09/18/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/18/2025,12:30 PM,09/18/2025,1:30 PM,False,Lunch break,Cafe,False
+Design Review,09/18/2025,2:00 PM,09/18/2025,3:00 PM,False,UX and flows review,Office,False
+Project Work,09/18/2025,3:15 PM,09/18/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/18/2025,5:10 PM,09/18/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Personal Day (OOO),09/19/2025,,09/19/2025,,True,Out of office,Home,True
+Daily Standup,09/19/2025,9:00 AM,09/19/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/19/2025,9:30 AM,09/19/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/19/2025,12:30 PM,09/19/2025,1:30 PM,False,Lunch break,Cafe,False
+Sprint Review,09/19/2025,2:00 PM,09/19/2025,3:00 PM,False,Sprint review with stakeholders,Office,False
+Demo,09/19/2025,3:15 PM,09/19/2025,4:00 PM,False,Feature demo,Office,False
+End of Day Planning,09/19/2025,4:10 PM,09/19/2025,4:30 PM,False,Plan next week,Office,False
+Gym,09/19/2025,6:30 PM,09/19/2025,7:30 PM,False,Strength training,Gym,False
+Brunch with Friends,09/20/2025,11:30 AM,09/20/2025,1:00 PM,False,Weekend brunch,Cafe,False
+Date Night,09/20/2025,7:00 PM,09/20/2025,9:30 PM,False,Dinner reservation,Restaurant,True
+Grocery Run,09/21/2025,11:00 AM,09/21/2025,12:00 PM,False,Weekly groceries,Market,False
+Family Call,09/21/2025,5:00 PM,09/21/2025,5:45 PM,False,Weekly catch-up,Home,True
+Daily Standup,09/22/2025,9:00 AM,09/22/2025,9:15 AM,False,Daily team standup,Office,False
+Weekly Planning,09/22/2025,8:30 AM,09/22/2025,9:00 AM,False,Plan the week's priorities,Office,False
+Deep Work,09/22/2025,9:30 AM,09/22/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/22/2025,12:30 PM,09/22/2025,1:30 PM,False,Lunch break,Cafe,False
+Team Sync,09/22/2025,2:00 PM,09/22/2025,3:00 PM,False,Weekly team sync,Office,False
+Project Work,09/22/2025,3:15 PM,09/22/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/22/2025,5:10 PM,09/22/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/23/2025,9:00 AM,09/23/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/23/2025,9:30 AM,09/23/2025,11:30 AM,False,Focused development time,Office,False
+1:1 with Manager,09/23/2025,11:00 AM,09/23/2025,11:30 AM,False,Weekly 1:1,Office,False
+Lunch,09/23/2025,12:30 PM,09/23/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/23/2025,2:00 PM,09/23/2025,4:30 PM,False,Feature development,Office,False
+Yoga,09/23/2025,6:00 PM,09/23/2025,7:00 PM,False,Evening yoga class,Studio,False
+End of Day Planning,09/23/2025,5:10 PM,09/23/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Focus Day (No Meetings),09/24/2025,,09/24/2025,,True,Heads-down work day,Office,False
+Daily Standup,09/24/2025,9:00 AM,09/24/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/24/2025,9:30 AM,09/24/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/24/2025,12:30 PM,09/24/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/24/2025,2:00 PM,09/24/2025,4:30 PM,False,Feature development,Office,False
+Gym,09/24/2025,6:30 PM,09/24/2025,7:30 PM,False,Strength training,Gym,False
+End of Day Planning,09/24/2025,5:10 PM,09/24/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/25/2025,9:00 AM,09/25/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/25/2025,9:30 AM,09/25/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/25/2025,12:30 PM,09/25/2025,1:30 PM,False,Lunch break,Cafe,False
+Design Review,09/25/2025,2:00 PM,09/25/2025,3:00 PM,False,UX and flows review,Office,False
+Project Work,09/25/2025,3:15 PM,09/25/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/25/2025,5:10 PM,09/25/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/26/2025,9:00 AM,09/26/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/26/2025,9:30 AM,09/26/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/26/2025,12:30 PM,09/26/2025,1:30 PM,False,Lunch break,Cafe,False
+Sprint Review,09/26/2025,2:00 PM,09/26/2025,3:00 PM,False,Sprint review with stakeholders,Office,False
+Demo,09/26/2025,3:15 PM,09/26/2025,4:00 PM,False,Feature demo,Office,False
+End of Day Planning,09/26/2025,4:10 PM,09/26/2025,4:30 PM,False,Plan next week,Office,False
+Gym,09/26/2025,6:30 PM,09/26/2025,7:30 PM,False,Strength training,Gym,False
+Brunch with Friends,09/27/2025,11:30 AM,09/27/2025,1:00 PM,False,Weekend brunch,Cafe,False
+Date Night,09/27/2025,7:00 PM,09/27/2025,9:30 PM,False,Dinner reservation,Restaurant,True
+Grocery Run,09/28/2025,11:00 AM,09/28/2025,12:00 PM,False,Weekly groceries,Market,False
+Family Call,09/28/2025,5:00 PM,09/28/2025,5:45 PM,False,Weekly catch-up,Home,True
+Daily Standup,09/29/2025,9:00 AM,09/29/2025,9:15 AM,False,Daily team standup,Office,False
+Weekly Planning,09/29/2025,8:30 AM,09/29/2025,9:00 AM,False,Plan the week's priorities,Office,False
+Deep Work,09/29/2025,9:30 AM,09/29/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,09/29/2025,12:30 PM,09/29/2025,1:30 PM,False,Lunch break,Cafe,False
+Team Sync,09/29/2025,2:00 PM,09/29/2025,3:00 PM,False,Weekly team sync,Office,False
+Project Work,09/29/2025,3:15 PM,09/29/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,09/29/2025,5:10 PM,09/29/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,09/30/2025,9:00 AM,09/30/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,09/30/2025,9:30 AM,09/30/2025,11:30 AM,False,Focused development time,Office,False
+1:1 with Manager,09/30/2025,11:00 AM,09/30/2025,11:30 AM,False,Weekly 1:1,Office,False
+Lunch,09/30/2025,12:30 PM,09/30/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,09/30/2025,2:00 PM,09/30/2025,4:30 PM,False,Feature development,Office,False
+Yoga,09/30/2025,6:00 PM,09/30/2025,7:00 PM,False,Evening yoga class,Studio,False
+End of Day Planning,09/30/2025,5:10 PM,09/30/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,10/01/2025,9:00 AM,10/01/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,10/01/2025,9:30 AM,10/01/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,10/01/2025,12:30 PM,10/01/2025,1:30 PM,False,Lunch break,Cafe,False
+Project Work,10/01/2025,2:00 PM,10/01/2025,4:30 PM,False,Feature development,Office,False
+Gym,10/01/2025,6:30 PM,10/01/2025,7:30 PM,False,Strength training,Gym,False
+End of Day Planning,10/01/2025,5:10 PM,10/01/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,10/02/2025,9:00 AM,10/02/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,10/02/2025,9:30 AM,10/02/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,10/02/2025,12:30 PM,10/02/2025,1:30 PM,False,Lunch break,Cafe,False
+Design Review,10/02/2025,2:00 PM,10/02/2025,3:00 PM,False,UX and flows review,Office,False
+Project Work,10/02/2025,3:15 PM,10/02/2025,5:00 PM,False,Feature development,Office,False
+End of Day Planning,10/02/2025,5:10 PM,10/02/2025,5:30 PM,False,Plan tomorrow's tasks,Office,False
+Daily Standup,10/03/2025,9:00 AM,10/03/2025,9:15 AM,False,Daily team standup,Office,False
+Deep Work,10/03/2025,9:30 AM,10/03/2025,11:30 AM,False,Focused development time,Office,False
+Lunch,10/03/2025,12:30 PM,10/03/2025,1:30 PM,False,Lunch break,Cafe,False
+Sprint Review,10/03/2025,2:00 PM,10/03/2025,3:00 PM,False,Sprint review with stakeholders,Office,False
+Demo,10/03/2025,3:15 PM,10/03/2025,4:00 PM,False,Feature demo,Office,False
+End of Day Planning,10/03/2025,4:10 PM,10/03/2025,4:30 PM,False,Plan next week,Office,False
+Gym,10/03/2025,6:30 PM,10/03/2025,7:30 PM,False,Strength training,Gym,False
+Brunch with Friends,10/04/2025,11:30 AM,10/04/2025,1:00 PM,False,Weekend brunch,Cafe,False
+Date Night,10/04/2025,7:00 PM,10/04/2025,9:30 PM,False,Dinner reservation,Restaurant,True
+Grocery Run,10/05/2025,11:00 AM,10/05/2025,12:00 PM,False,Weekly groceries,Market,False
+Family Call,10/05/2025,5:00 PM,10/05/2025,5:45 PM,False,Weekly catch-up,Home,True
+

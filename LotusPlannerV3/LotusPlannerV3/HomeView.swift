@@ -16,7 +16,9 @@ struct ContentView: View {
         NavigationStack {
             currentView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
         }
+        .background(Color(.systemBackground))
         .sheet(isPresented: $navigationManager.showingSettings) {
             SettingsView()
         }

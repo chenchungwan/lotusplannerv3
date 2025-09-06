@@ -24,18 +24,6 @@ struct PersistenceController {
         let viewContext = result.container.viewContext
         
         // Create some sample data for previews
-        let sampleCategory = GoalCategoryEntity(context: viewContext)
-        sampleCategory.id = UUID().uuidString
-        sampleCategory.name = "Health & Fitness"
-        
-        let sampleGoal = GoalEntity(context: viewContext)
-        sampleGoal.id = UUID().uuidString
-        sampleGoal.desc = "Exercise 3 times per week"
-        sampleGoal.isCompleted = false
-        sampleGoal.userId = "preview_user"
-        sampleGoal.createdAt = Date()
-        sampleGoal.categoryId = sampleCategory.id
-        
         let sampleWeight = WeightLog(context: viewContext)
         sampleWeight.id = UUID().uuidString
         sampleWeight.timestamp = Date()

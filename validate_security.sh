@@ -44,14 +44,16 @@ else
     ISSUES_FOUND=$((ISSUES_FOUND + 1))
 fi
 
-# Check 4: Ensure production environment
+# Check 4: Ensure production environment (Release build without DEBUG flag)
 echo -n "Checking for production environment settings... "
-if grep -q "production" LotusPlannerV3/LotusPlannerV3/LotusPlannerV3.entitlements; then
-    echo -e "${GREEN}✅ PASS${NC}"
-else
+BUILD_SETTINGS=$(xcodebuild -project LotusPlannerV3/LotusPlannerV3/LotusPlannerV3.xcodeproj -scheme LotusPlannerV3 -configuration Release -showBuildSettings 2>/dev/null)
+SWIFT_FLAGS=$(echo "$BUILD_SETTINGS" | grep -E "SWIFT_ACTIVE_COMPILATION_CONDITIONS" | awk -F"= " '{print $2}')
+if echo "$SWIFT_FLAGS" | grep -q "DEBUG"; then
     echo -e "${RED}❌ FAIL${NC}"
-    echo "  Environment should be set to production"
+    echo "  Release build contains DEBUG compilation condition"
     ISSUES_FOUND=$((ISSUES_FOUND + 1))
+else
+    echo -e "${GREEN}✅ PASS${NC}"
 fi
 
 # Check 5: Ensure UserDefaults token storage is removed
