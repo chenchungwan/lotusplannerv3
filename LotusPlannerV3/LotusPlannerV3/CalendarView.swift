@@ -1758,6 +1758,8 @@ struct CalendarView: View {
             dayViewContentMobile(geometry: geometry)
         } else if appPrefs.dayViewLayout == .long {
             dayViewContentLong(geometry: geometry)
+        } else if appPrefs.dayViewLayout == .long2 {
+            dayViewContentLong2(geometry: geometry)
         } else {
             dayViewContentCompact(geometry: geometry)
         }
@@ -2125,6 +2127,51 @@ struct CalendarView: View {
                 .padding(.bottom, 16)
             }
             .padding(.top, 8)
+        }
+        .background(Color(.systemBackground))
+    }
+
+    // MARK: - Long Layout 2
+    // Four rows: 1) Events, 2) Tasks, 3) Logs, 4) Notes full screen below
+    private func dayViewContentLong2(geometry: GeometryProxy) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 12) {
+                // Row 1: Events (full width)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Events")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    dayEventsList
+                }
+                .padding(.horizontal, 8)
+
+                // Row 2: Tasks (Personal + Professional stacked vertically)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tasks")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    topLeftDaySection
+                }
+                .padding(.horizontal, 8)
+
+                // Row 3: Logs (full width)
+                VStack(alignment: .leading, spacing: 6) {
+                    LogsComponent(currentDate: currentDate, horizontal: false)
+                }
+                .padding(.horizontal, 8)
+
+                // Row 4: Notes full-screen below
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Notes")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                        .frame(maxWidth: .infinity, minHeight: 600)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 12)
+            }
+            .padding(.vertical, 8)
         }
         .background(Color(.systemBackground))
     }

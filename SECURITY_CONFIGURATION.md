@@ -17,8 +17,8 @@ Your app now uses a **much simpler** credential setup since you're only using Go
 For development and production, just set these 2 environment variables:
 
 ```bash
-export GOOGLE_CLIENT_ID="195338740627-3fs5ahnl0sr1j6k0ivtlpedrjfnl5mgp.apps.googleusercontent.com"
-export GOOGLE_REVERSED_CLIENT_ID="com.googleusercontent.apps.195338740627-3fs5ahnl0sr1j6k0ivtlpedrjfnl5mgp"
+export GOOGLE_CLIENT_ID="1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com"
+export GOOGLE_REVERSED_CLIENT_ID="com.googleusercontent.apps.1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c"
 ```
 
 **That's all you need!** No complex plist files, no Firestore setup, no API keys.

@@ -19,8 +19,8 @@ Click the "+" button and add these **2 environment variables**:
 
 | Name | Value |
 |------|-------|
-| `GOOGLE_CLIENT_ID` | `195338740627-3fs5ahnl0sr1j6k0ivtlpedrjfnl5mgp.apps.googleusercontent.com` |
-| `GOOGLE_REVERSED_CLIENT_ID` | `com.googleusercontent.apps.195338740627-3fs5ahnl0sr1j6k0ivtlpedrjfnl5mgp` |
+| `GOOGLE_CLIENT_ID` | `1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com` |
+| `GOOGLE_REVERSED_CLIENT_ID` | `com.googleusercontent.apps.1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c` |
 
 ### 3. Save and Run
 ```

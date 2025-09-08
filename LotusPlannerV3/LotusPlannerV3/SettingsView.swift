@@ -7,6 +7,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case vertical = 2
     case mobile = 3
     case long = 4
+    case long2 = 5
 
     var id: Int { rawValue }
     var displayName: String {
@@ -16,6 +17,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .vertical: "Vertical"
         case .mobile: "Mobile"
         case .long: "Long"
+        case .long2: "Long View 2"
         }
     }
     
@@ -26,6 +28,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .vertical: "Two rows: Tasks+Logs on top, Notes+Timeline on bottom with slider"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .long: "Three rows: Tasks; Events+Logs; full-screen Notes below"
+        case .long2: "Three rows: Events+Logs; Tasks; full-screen Notes below"
         }
     }
 }
