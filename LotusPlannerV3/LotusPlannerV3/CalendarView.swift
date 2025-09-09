@@ -798,6 +798,12 @@ struct CalendarView: View {
     @State private var weekTasksPersonalWidth: CGFloat = UIScreen.main.bounds.width * 0.3
     @State private var isWeekTasksDividerDragging = false
     
+    // Long layout adjustable sizes and drag states
+    @State private var longTopRowHeight: CGFloat = UIScreen.main.bounds.height * 0.35
+    @State private var isLongHorizontalDividerDragging: Bool = false
+    @State private var longEventsLeftWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var isLongVerticalDividerDragging: Bool = false
+    
     // Date picker state
     @State private var showingDatePicker = false
     @State private var selectedDateForPicker = Date()
@@ -1748,6 +1754,12 @@ struct CalendarView: View {
             dayViewContentExpanded(geometry: geometry)
         } else if appPrefs.dayViewLayout == .vertical {
             dayViewContentVertical(geometry: geometry)
+        } else if appPrefs.dayViewLayout == .mobile {
+            dayViewContentMobile(geometry: geometry)
+        } else if appPrefs.dayViewLayout == .long {
+            dayViewContentLong(geometry: geometry)
+        } else if appPrefs.dayViewLayout == .long2 {
+            dayViewContentLong2(geometry: geometry)
         } else {
             dayViewContentCompact(geometry: geometry)
         }
@@ -1789,12 +1801,6 @@ struct CalendarView: View {
 
             // Column 2 – Tasks + Logs (75% device width)
             VStack(spacing: 0) {
-                HStack {
-                    Text("Tasks")
-                        .font(.headline)
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
                 topLeftDaySection
                     .frame(height: rightSectionTopHeight)
                     .padding(.all, 8)
@@ -1950,6 +1956,225 @@ struct CalendarView: View {
     }
     
     // vertical layout removed
+    
+    // MARK: - Mobile Layout (single column: Events, Personal Tasks, Professional Tasks, Logs)
+    private func dayViewContentMobile(geometry: GeometryProxy) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Events list (always list in Mobile layout)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Events")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    dayEventsList
+                }
+                .padding(.vertical, 8)
+
+                // Personal tasks
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Personal Tasks")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    TasksComponent(
+                        taskLists: tasksViewModel.personalTaskLists,
+                        tasksDict: filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate),
+                        accentColor: appPrefs.personalColor,
+                        accountType: .personal,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                updateCachedTasks()
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        },
+                        onListRename: { listId, newName in
+                            Task {
+                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            }
+                        },
+                        onOrderChanged: { newOrder in
+                            Task {
+                                await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                            }
+                        },
+                        hideDueDateTag: false,
+                        showEmptyState: true,
+                        horizontalCards: false
+                    )
+                }
+
+                // Professional tasks
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Professional Tasks")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    TasksComponent(
+                        taskLists: tasksViewModel.professionalTaskLists,
+                        tasksDict: filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate),
+                        accentColor: appPrefs.professionalColor,
+                        accountType: .professional,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                updateCachedTasks()
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedAccountKind = .professional
+                            DispatchQueue.main.async { showingTaskDetails = true }
+                        },
+                        onListRename: { listId, newName in
+                            Task {
+                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            }
+                        },
+                        onOrderChanged: { newOrder in
+                            Task {
+                                await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                            }
+                        },
+                        hideDueDateTag: false,
+                        showEmptyState: true,
+                        horizontalCards: false
+                    )
+                }
+
+                // Logs (no label in Mobile layout)
+                VStack(alignment: .leading, spacing: 6) {
+                    LogsComponent(currentDate: currentDate, horizontal: false)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+        }
+        .background(Color(.systemBackground))
+    }
+
+    // MARK: - Long Layout
+    // Three rows: 1) Tasks, 2) HStack(Events list, Logs side-by-side), 3) Notes full screen below accessible via swipe
+    private func dayViewContentLong(geometry: GeometryProxy) -> some View {
+        // Use a vertical ScrollView so users can swipe up to reach the full-screen Notes area
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 12) {
+                // Row 1: Tasks (Personal + Professional stacked vertically)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tasks")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    // Reuse existing day tasks section which renders personal and professional
+                    topLeftDaySection
+                }
+                .padding(.horizontal, 8)
+
+                // Row 2: Events list and Logs side-by-side, top aligned
+                HStack(alignment: .top, spacing: 0) {
+                    // Events as list
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Events")
+                            .font(.headline)
+                            .padding(.horizontal, 12)
+                        dayEventsList
+                    }
+                    .frame(width: longEventsLeftWidth, alignment: .topLeading)
+
+                    // Vertical draggable divider between Events and Logs
+                    Rectangle()
+                        .fill(isLongVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(width: 8)
+                        .overlay(
+                            Image(systemName: "line.3.vertical")
+                                .font(.caption)
+                                .foregroundColor(isLongVerticalDividerDragging ? .white : .gray)
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    isLongVerticalDividerDragging = true
+                                    let minWidth: CGFloat = 180
+                                    let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
+                                    let newWidth = longEventsLeftWidth + value.translation.width
+                                    longEventsLeftWidth = max(minWidth, min(maxWidth, newWidth))
+                                }
+                                .onEnded { _ in
+                                    isLongVerticalDividerDragging = false
+                                }
+                        )
+
+                    // Logs with weight, workout, and food laid out side-by-side
+                    VStack(alignment: .leading, spacing: 6) {
+                        // No label per latest style
+                        // Reuse LogsComponent in horizontal mode to display categories side-by-side
+                        LogsComponent(currentDate: currentDate, horizontal: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .padding(.horizontal, 8)
+
+                // Row 3: Notes full-screen width and height; make it tall so it occupies screen when reached
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Notes")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                        .id(currentDate)
+                        .frame(minHeight: UIScreen.main.bounds.height * 0.9)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 16)
+            }
+            .padding(.top, 8)
+        }
+        .background(Color(.systemBackground))
+    }
+
+    // MARK: - Long Layout 2
+    // Four rows: 1) Events, 2) Tasks, 3) Logs, 4) Notes full screen below
+    private func dayViewContentLong2(geometry: GeometryProxy) -> some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 12) {
+                // Row 1: Events (full width)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Events")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    dayEventsList
+                }
+                .padding(.horizontal, 8)
+
+                // Row 2: Tasks (Personal + Professional stacked vertically)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tasks")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    topLeftDaySection
+                }
+                .padding(.horizontal, 8)
+
+                // Row 3: Logs (full width)
+                VStack(alignment: .leading, spacing: 6) {
+                    LogsComponent(currentDate: currentDate, horizontal: false)
+                }
+                .padding(.horizontal, 8)
+
+                // Row 4: Notes full-screen below
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Notes")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                        .frame(maxWidth: .infinity, minHeight: 600)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 12)
+            }
+            .padding(.vertical, 8)
+        }
+        .background(Color(.systemBackground))
+    }
     
     private func rightDaySection(geometry: GeometryProxy) -> some View {
         // The total content width is 100% of device width
