@@ -92,6 +92,7 @@ class NavigationManager: ObservableObject {
         case tasks
         case journal
         case weeklyView
+        case gWeekView
     }
     
     @Published var currentView: CurrentView = .calendar

@@ -1070,6 +1070,16 @@ struct CalendarView: View {
                     .foregroundColor(navigationManager.currentView == .weeklyView ? .accentColor : .secondary)
             }
             
+            // Requested: add g.circle icon to the right of w.circle
+            Button(action: {
+                navigationManager.currentView = .gWeekView
+                navigationManager.updateInterval(.week, date: currentDate)
+            }) {
+                Image(systemName: "g.circle")
+                    .font(.body)
+                    .foregroundColor(navigationManager.currentView == .gWeekView ? .accentColor : .secondary)
+            }
+            
             // Show eye and plus only in Day view
             if navigationManager.currentInterval == .day {
                 // Hide Completed toggle

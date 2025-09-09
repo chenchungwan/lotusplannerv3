@@ -13,6 +13,8 @@ struct WeekTimelineComponent: View {
     let professionalTaskLists: [GoogleTaskList]
     let professionalTasks: [String: [GoogleTask]]
     let hideCompletedTasks: Bool
+    let fixedStartHour: Int?
+    let showTasksSection: Bool
 
     
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
@@ -36,7 +38,7 @@ struct WeekTimelineComponent: View {
     private let minTimelineHeight: CGFloat = 100 // Minimum height for timeline section
     
     // MARK: - Initializer
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil, showTasksSection: Bool = true, fixedStartHour: Int? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
@@ -51,6 +53,8 @@ struct WeekTimelineComponent: View {
 
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
+        self.showTasksSection = showTasksSection
+        self.fixedStartHour = fixedStartHour
     }
     
     // MARK: - Data Models
@@ -85,12 +89,15 @@ struct WeekTimelineComponent: View {
                 // Fixed header with day labels
                 headerSection(dayColumnWidth: dayColumnWidth)
                 
-                // Fixed daily tasks section at top (conditionally shown)
-                dailyTasksSection(dayColumnWidth: dayColumnWidth)
-                    .padding(.top, 2) // Small gap between header and tasks to prevent overlap
-                
-                // Slider between tasks and events
-                sliderSection(maxHeight: maxTasksRowHeight)
+                // Optional top tasks section with slider
+                if showTasksSection {
+                    // Fixed daily tasks section at top (conditionally shown)
+                    dailyTasksSection(dayColumnWidth: dayColumnWidth)
+                        .padding(.top, 2) // Small gap between header and tasks to prevent overlap
+                    
+                    // Slider between tasks and events
+                    sliderSection(maxHeight: maxTasksRowHeight)
+                }
                 
                 // Scrollable content (all-day events and timeline)
                 ScrollView(.vertical, showsIndicators: true) {
@@ -156,7 +163,15 @@ struct WeekTimelineComponent: View {
             }
         }
         
-        // Ensure we have at least the default range and cap at 24-hour bounds
+        // If a fixed start hour is provided, honor it (bounded to 0...24)
+        if let fixedStartHour = fixedStartHour {
+            let boundedStart = min(24, max(0, fixedStartHour))
+            return (
+                start: boundedStart,
+                end: min(24, max(latestHour, defaultEndHour))
+            )
+        }
+        // Ensure we have at least the default range and cap at 24-hour bounds (retain existing behavior)
         return (
             start: max(0, min(earliestHour, defaultStartHour)),
             end: min(24, max(latestHour, defaultEndHour))
