@@ -275,7 +275,7 @@ private struct TaskComponentListCard: View {
         .background(Color(.systemBackground))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isTopPriority ? .red : Color(.systemGray4), lineWidth: isTopPriority ? 2 : 1)
+                .stroke(isTopPriority ? accentColor : Color(.systemGray4), lineWidth: isTopPriority ? 2 : 1)
         )
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)

@@ -10,7 +10,17 @@ struct GWeekView: View {
     @State private var currentDate: Date = Date()
     @State private var showingDatePicker = false
     @State private var selectedDateForPicker = Date()
-    
+
+    struct GWeekTaskSelection: Identifiable {
+        let id = UUID()
+        let task: GoogleTask
+        let listId: String
+        let accountKind: GoogleAuthManager.AccountKind
+    }
+    @State private var taskSheetSelection: GWeekTaskSelection?
+
+    @State private var selectedEvent: GoogleCalendarEvent?
+
     private let calendar = Calendar.mondayFirst
     
     var body: some View {
@@ -35,6 +45,38 @@ struct GWeekView: View {
             currentDate = newValue
             Task { await calendarViewModel.loadCalendarDataForWeek(containing: newValue) }
         }
+        .sheet(item: $taskSheetSelection) { sel in
+            TaskDetailsView(
+                task: sel.task,
+                taskListId: sel.listId,
+                accountKind: sel.accountKind,
+                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { updatedTask in
+                    Task {
+                        await tasksViewModel.updateTask(updatedTask, in: sel.listId, for: sel.accountKind)
+                    }
+                },
+                onDelete: {
+                    Task {
+                        await tasksViewModel.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
+                    }
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await tasksViewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                    Task {
+                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
+                    }
+                }
+            )
+        }
     }
     
     private var mainContent: some View {
@@ -47,11 +89,30 @@ struct GWeekView: View {
                 professionalEvents: calendarViewModel.professionalEvents,
                 personalColor: appPrefs.personalColor,
                 professionalColor: appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                personalTasks: weekPersonalTasks,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                professionalTasks: weekProfessionalTasks,
                 hideCompletedTasks: appPrefs.hideCompletedTasks,
-                onEventTap: { _ in },
+                onEventTap: { event in
+                    // Navigate to day view with the event's date
+                    let eventDate = Calendar.current.startOfDay(for: event.startTime ?? Date())
+                    navigationManager.switchToCalendar()
+                    navigationManager.updateInterval(.day, date: eventDate)
+                },
                 onDayTap: { date in
                     navigationManager.switchToCalendar()
                     navigationManager.updateInterval(.day, date: date)
+                },
+                onTaskTap: { task, listId in
+                    // Determine account kind based on task list
+                    let accountKind: GoogleAuthManager.AccountKind
+                    if tasksViewModel.personalTaskLists.contains(where: { $0.id == listId }) {
+                        accountKind = .personal
+                    } else {
+                        accountKind = .professional
+                    }
+                    taskSheetSelection = GWeekTaskSelection(task: task, listId: listId, accountKind: accountKind)
                 },
                 showTasksSection: false,
                 fixedStartHour: 8
@@ -77,7 +138,9 @@ struct GWeekView: View {
                                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: GoogleAuthManager.AccountKind.personal)
                                     }
                                 },
-                                onTaskDetails: { _, _ in },
+                                onTaskDetails: { task, listId in
+                                    taskSheetSelection = GWeekTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                },
                                 onListRename: { listId, newName in
                                     Task { await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: GoogleAuthManager.AccountKind.personal) }
                                 },
@@ -107,7 +170,9 @@ struct GWeekView: View {
                                         await tasksViewModel.toggleTaskCompletion(task, in: listId, for: GoogleAuthManager.AccountKind.professional)
                                     }
                                 },
-                                onTaskDetails: { _, _ in },
+                                onTaskDetails: { task, listId in
+                                    taskSheetSelection = GWeekTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                },
                                 onListRename: { listId, newName in
                                     Task { await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: GoogleAuthManager.AccountKind.professional) }
                                 },

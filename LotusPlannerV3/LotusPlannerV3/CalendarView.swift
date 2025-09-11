@@ -810,7 +810,7 @@ struct CalendarView: View {
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
     
-    var body: some View {
+    private var baseContent: some View {
         GeometryReader { geometry in
             splitScreenContent(geometry: geometry)
         }
@@ -828,6 +828,10 @@ struct CalendarView: View {
                 trailingToolbarButtons
             }
         }
+    }
+
+    private var toolbarAndSheetsContent: some View {
+        baseContent
         .sheet(item: Binding<GoogleCalendarEvent?>(
             get: { selectedCalendarEvent },
             set: { selectedCalendarEvent = $0 }
@@ -978,10 +982,153 @@ struct CalendarView: View {
             }
             .presentationDetents([.large])
         }
-
-
     }
-    
+
+    private var finalContent: some View {
+        toolbarAndSheetsContent
+        .onChange(of: authManager.linkedStates) { oldValue, newValue in
+            // When an account is unlinked, clear associated tasks and refresh caches
+            if !(newValue[.personal] ?? false) {
+                tasksViewModel.clearTasks(for: .personal)
+            }
+            if !(newValue[.professional] ?? false) {
+                tasksViewModel.clearTasks(for: .professional)
+            }
+            // When an account becomes linked, load tasks immediately
+            let personalJustLinked = (newValue[.personal] ?? false) && !(oldValue[.personal] ?? false)
+            let professionalJustLinked = (newValue[.professional] ?? false) && !(oldValue[.professional] ?? false)
+            if personalJustLinked || professionalJustLinked {
+                Task {
+                    await tasksViewModel.loadTasks()
+                    await MainActor.run {
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
+                    }
+                }
+            } else {
+                updateCachedTasks()
+                updateMonthCachedTasks()
+            }
+        }
+        .sheet(isPresented: $showingAddItem) {
+            AddItemView(
+                currentDate: currentDate,
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                showEventOnly: true
+            )
+        }
+        .sheet(isPresented: $showingAddEvent) {
+            AddItemView(
+                currentDate: currentDate,
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                showEventOnly: true
+            )
+        }
+        .sheet(isPresented: $showingNewTask) {
+            // Create-task UI matching TasksView create flow
+            let personalLinked = authManager.isLinked(kind: GoogleAuthManager.AccountKind.personal)
+            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? GoogleAuthManager.AccountKind.personal : GoogleAuthManager.AccountKind.professional
+            let defaultLists = defaultAccount == GoogleAuthManager.AccountKind.personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let defaultListId = defaultLists.first?.id ?? ""
+            let newTask = GoogleTask(
+                id: UUID().uuidString,
+                title: "",
+                notes: nil,
+                status: "needsAction",
+                due: nil,
+                completed: nil,
+                updated: nil
+            )
+            TaskDetailsView(
+                task: newTask,
+                taskListId: defaultListId,
+                accountKind: defaultAccount,
+                accentColor: defaultAccount == GoogleAuthManager.AccountKind.personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksViewModel,
+                onSave: { _ in },
+                onDelete: {},
+                onMove: { _, _ in },
+                onCrossAccountMove: { _, _, _ in },
+                isNew: true
+            )
+        }
+        .sheet(isPresented: $showingTaskDetails) {
+            if let task = selectedTask, let taskListId = selectedTaskListId, let accountKind = selectedAccountKind {
+                TaskDetailsView(
+                    task: task,
+                    taskListId: taskListId,
+                    accountKind: accountKind,
+                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    personalTaskLists: tasksViewModel.personalTaskLists,
+                    professionalTaskLists: tasksViewModel.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: tasksViewModel,
+                    onSave: { updatedTask in
+                        Task {
+                            await tasksViewModel.updateTask(updatedTask, in: taskListId, for: accountKind)
+                            updateCachedTasks()
+                        }
+                    },
+                    onDelete: {
+                        Task {
+                            await tasksViewModel.deleteTask(task, from: taskListId, for: accountKind)
+                            updateCachedTasks()
+                        }
+                    },
+                    onMove: { updatedTask, targetListId in
+                        Task {
+                            await tasksViewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: accountKind)
+                            updateCachedTasks()
+                        }
+                    },
+                    onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                        Task {
+                            await tasksViewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (targetAccountKind, targetListId))
+                            updateCachedTasks()
+                        }
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                DatePicker(
+                    "Select Date",
+                    selection: $selectedDateForPicker,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .navigationTitle("Select Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") {
+                            showingDatePicker = false
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            navigateToDate(selectedDateForPicker)
+                            showingDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.large])
+        }
+    }
+
+    var body: some View {
+        finalContent
+    }
+
     private func splitScreenContent(geometry: GeometryProxy) -> some View {
         // Just show the main content without any overlay panels
         mainContentView

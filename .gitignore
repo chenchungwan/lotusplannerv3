@@ -89,7 +89,8 @@ fastlane/test_output
 
 iOSInjectionProject/
 
-# SECURITY: Sensitive configuration files (simplified - no longer using GoogleService-Info.plist)
+# SECURITY: Sensitive configuration files
+GoogleService-Info.plist
 Config.plist
 Secrets.plist
 *.p12

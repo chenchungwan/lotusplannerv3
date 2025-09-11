@@ -120,7 +120,16 @@ final class GoogleAuthManager: ObservableObject {
         guard let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String else {
             throw AuthError.missingClientID
         }
-        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+        // Use GoogleService-Info.plist for full configuration if available
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let plistData = NSDictionary(contentsOfFile: path) {
+            // Full configuration from GoogleService-Info.plist
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        } else {
+            // Fallback to basic configuration
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        }
 
         // Request access to Google Calendar and Tasks
         let scopes = [
@@ -237,9 +246,14 @@ final class GoogleAuthManager: ObservableObject {
     
     #if canImport(GoogleSignIn)
     private func refreshAccessToken(refreshToken: String, for kind: AccountKind) async throws -> String {
-        
+
         guard let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String else {
             throw AuthError.missingClientID
+        }
+
+        // Ensure configuration is set for token refresh
+        if GIDSignIn.sharedInstance.configuration == nil {
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         }
         
         

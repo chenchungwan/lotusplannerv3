@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
     <key>CLIENT_ID</key>
-    <string>YOUR_CLIENT_ID_HERE.apps.googleusercontent.com</string>
+    <string>1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com</string>
     <key>REVERSED_CLIENT_ID</key>
-    <string>com.googleusercontent.apps.YOUR_CLIENT_ID_HERE</string>
+    <string>com.googleusercontent.apps.1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c</string>
     <key>GCM_SENDER_ID</key>
-    <string></string>
+    <string>1079954098512</string>
     <key>API_KEY</key>
     <string></string>
     <key>PROJECT_ID</key>
-    <string></string>
+    <string>lotusplanner-v3</string>
     <key>STORAGE_BUCKET</key>
     <string></string>
 </dict>
