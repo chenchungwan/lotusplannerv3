@@ -4,16 +4,18 @@ import SwiftUI
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case defaultNew = 0
     case compact = 1
-    case expanded = 2
-    case mobile = 3
+    case compactTwo = 2
+    case expanded = 3
+    case mobile = 4
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.defaultNew, .compact, .expanded, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.defaultNew, .compact, .compactTwo, .expanded, .mobile] }
 
     var displayName: String {
         switch self {
         case .defaultNew: "Default"
         case .compact: "Compact"
+        case .compactTwo: "Compact Two"
         case .expanded: "Expanded"
         case .mobile: "Mobile"
         
@@ -24,6 +26,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         switch self {
         case .defaultNew: "Timeline & Tasks side-by-side, Logs row, then Journal"
         case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
+        case .compactTwo: "Tasks first, then Timeline + Logs column next to Journal"
         case .expanded: "Three columns: timeline, tasks & logs, and dedicated journal space"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         

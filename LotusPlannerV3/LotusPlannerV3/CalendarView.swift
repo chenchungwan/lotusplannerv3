@@ -1915,6 +1915,11 @@ struct CalendarView: View {
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
+        case .compactTwo:
+            DayViewAlt(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         case .mobile:
             dayViewContentMobile(geometry: geometry)
         default:
