@@ -225,8 +225,9 @@ struct DayViewDefault: View {
                 .id(navigationManager.currentDate)
                 .frame(height: journalHeight, alignment: .top)
                 }
-                .padding(12)
             }
+            .ignoresSafeArea(edges: .top)
+            .padding(12)
         }
         // Task details sheet
         .sheet(isPresented: $showingTaskDetails) {

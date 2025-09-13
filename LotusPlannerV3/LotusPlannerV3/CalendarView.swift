@@ -2213,6 +2213,9 @@ struct CalendarView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
         }
+        .ignoresSafeArea(edges: .top)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .background(Color(.systemBackground))
     }
 

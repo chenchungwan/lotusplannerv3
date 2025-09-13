@@ -211,6 +211,7 @@ struct DayViewAlt: View {
                 }
                 .frame(height: bottomH)
             }
+            .ignoresSafeArea(edges: .top)
             .padding(12)
         }
     }
