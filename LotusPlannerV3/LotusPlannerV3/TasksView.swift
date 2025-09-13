@@ -1066,74 +1066,153 @@ struct TasksView: View {
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-                if true {
-                HStack(spacing: 0) {
-                    // Personal Tasks Column
-                    if authManager.isLinked(kind: .personal) {
-                        TasksComponent(
-                            taskLists: viewModel.personalTaskLists,
-                            tasksDict: filteredTasks(viewModel.personalTasks),
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
-                            onTaskToggle: { task, listId in
-                                Task {
-                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                }
-                            },
-                            onTaskDetails: { task, listId in
-                                // Set selection first, present sheet after state updates
-                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
-                            },
-                            onListRename: { listId, newName in
-                                Task {
-                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                                }
-                            },
-                            onOrderChanged: { newOrder in
-                                Task {
-                                    await viewModel.updateTaskListOrder(newOrder, for: .personal)
-                                }
-                            }
-                        )
-                        .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
-                    }
-                    
-                    // Vertical divider (only show if both accounts are linked)
-                    if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
-                        tasksViewDivider
-                    }
-                    
-                    // Professional Tasks Column
-                    if authManager.isLinked(kind: .professional) {
-                        TasksComponent(
-                            taskLists: viewModel.professionalTaskLists,
-                            tasksDict: filteredTasks(viewModel.professionalTasks),
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
-                            onTaskToggle: { task, listId in
-                                Task {
-                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                }
-                            },
-                            onTaskDetails: { task, listId in
-                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
-                            },
-                            onListRename: { listId, newName in
-                                Task {
-                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                                }
-                            },
-                            onOrderChanged: { newOrder in
-                                Task {
-                                    await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                Group {
+                    if appPrefs.tasksLayoutHorizontal {
+                        // Vertical stack when horizontal cards
+                        VStack(spacing: 16) {
+                            // Personal Tasks
+                            if authManager.isLinked(kind: .personal) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Personal")
+                                        .font(.headline)
+                                        .foregroundColor(appPrefs.personalColor)
+                                        .padding(.horizontal, 12)
+                                    TasksComponent(
+                                        taskLists: viewModel.personalTaskLists,
+                                        tasksDict: filteredTasks(viewModel.personalTasks),
+                                        accentColor: appPrefs.personalColor,
+                                        accountType: .personal,
+                                        onTaskToggle: { task, listId in
+                                            Task {
+                                                await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                            }
+                                        },
+                                        onTaskDetails: { task, listId in
+                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                        },
+                                        onListRename: { listId, newName in
+                                            Task {
+                                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                            }
+                                        },
+                                        onOrderChanged: { newOrder in
+                                            Task {
+                                                await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                                            }
+                                        },
+                                        horizontalCards: true
+                                    )
                                 }
                             }
-                        )
-                        .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
+                            
+                            // Professional Tasks
+                            if authManager.isLinked(kind: .professional) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Professional")
+                                        .font(.headline)
+                                        .foregroundColor(appPrefs.professionalColor)
+                                        .padding(.horizontal, 12)
+                                    TasksComponent(
+                                        taskLists: viewModel.professionalTaskLists,
+                                        tasksDict: filteredTasks(viewModel.professionalTasks),
+                                        accentColor: appPrefs.professionalColor,
+                                        accountType: .professional,
+                                        onTaskToggle: { task, listId in
+                                            Task {
+                                                await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                            }
+                                        },
+                                        onTaskDetails: { task, listId in
+                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                        },
+                                        onListRename: { listId, newName in
+                                            Task {
+                                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                            }
+                                        },
+                                        onOrderChanged: { newOrder in
+                                            Task {
+                                                await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                                            }
+                                        },
+                                        horizontalCards: true
+                                    )
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 0)
+                        .padding(.vertical, 16)
+                    } else {
+                        // Side by side when vertical cards
+                        HStack(spacing: 0) {
+                            // Personal Tasks Column
+                            if authManager.isLinked(kind: .personal) {
+                                TasksComponent(
+                                    taskLists: viewModel.personalTaskLists,
+                                    tasksDict: filteredTasks(viewModel.personalTasks),
+                                    accentColor: appPrefs.personalColor,
+                                    accountType: .personal,
+                                    onTaskToggle: { task, listId in
+                                        Task {
+                                            await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                        }
+                                    },
+                                    onTaskDetails: { task, listId in
+                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                    },
+                                    onListRename: { listId, newName in
+                                        Task {
+                                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                        }
+                                    },
+                                    onOrderChanged: { newOrder in
+                                        Task {
+                                            await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                                        }
+                                    },
+                                    horizontalCards: false
+                                )
+                                .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
+                            }
+                            
+                            // Vertical divider (only show if both accounts are linked)
+                            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+                                tasksViewDivider
+                            }
+                            
+                            // Professional Tasks Column
+                            if authManager.isLinked(kind: .professional) {
+                                TasksComponent(
+                                    taskLists: viewModel.professionalTaskLists,
+                                    tasksDict: filteredTasks(viewModel.professionalTasks),
+                                    accentColor: appPrefs.professionalColor,
+                                    accountType: .professional,
+                                    onTaskToggle: { task, listId in
+                                        Task {
+                                            await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                        }
+                                    },
+                                    onTaskDetails: { task, listId in
+                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                    },
+                                    onListRename: { listId, newName in
+                                        Task {
+                                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                        }
+                                    },
+                                    onOrderChanged: { newOrder in
+                                        Task {
+                                            await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                                        }
+                                    },
+                                    horizontalCards: false
+                                )
+                                .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
+                            }
+                        }
+                        .padding(.horizontal, 0)
+                        .padding(.vertical, 16)
                     }
-                }
-                .padding(.horizontal, 0)
-                .padding(.vertical, 16)
                 }
                 
                 // Debug overlay - only show when no tasks are visible

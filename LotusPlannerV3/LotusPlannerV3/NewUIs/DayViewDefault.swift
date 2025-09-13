@@ -101,57 +101,77 @@ struct DayViewDefault: View {
 
                     // Tasks (two side-by-side columns)
                     HStack(alignment: .top, spacing: 12) {
-                        TasksComponent(
-                            taskLists: tasksVM.personalTaskLists,
-                            tasksDict: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
-                            onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedTaskAccount = .personal
-                                showingTaskDetails = true
-                            },
-                            onListRename: { listId, newName in
-                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
-                            },
-                            onOrderChanged: { newOrder in
-                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
-                            },
-                            hideDueDateTag: false,
-                            showEmptyState: true,
-                            horizontalCards: false
-                        )
-                        .frame(maxWidth: .infinity, alignment: .top)
+                        let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
+                        let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
+                        let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
+                        let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
+                        
+                        if hasPersonalTasks {
+                            TasksComponent(
+                                taskLists: tasksVM.personalTaskLists,
+                                tasksDict: personalTasks,
+                                accentColor: appPrefs.personalColor,
+                                accountType: .personal,
+                                onTaskToggle: { task, listId in
+                                    let viewModel = tasksVM // Capture the view model
+                                    Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .personal) }
+                                },
+                                onTaskDetails: { task, listId in
+                                    selectedTask = task
+                                    selectedTaskListId = listId
+                                    selectedTaskAccount = .personal
+                                    showingTaskDetails = true
+                                },
+                                onListRename: { listId, newName in
+                                    Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                                },
+                                onOrderChanged: { newOrder in
+                                    Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
+                                },
+                                hideDueDateTag: false,
+                                showEmptyState: true,
+                                horizontalCards: false
+                            )
+                            .frame(maxWidth: hasProfessionalTasks ? nil : .infinity, alignment: .top)
+                        }
 
-                        TasksComponent(
-                            taskLists: tasksVM.professionalTaskLists,
-                            tasksDict: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
-                            onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedTaskAccount = .professional
-                                showingTaskDetails = true
-                            },
-                            onListRename: { listId, newName in
-                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
-                            },
-                            onOrderChanged: { newOrder in
-                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
-                            },
-                            hideDueDateTag: false,
-                            showEmptyState: true,
-                            horizontalCards: false
-                        )
-                        .frame(maxWidth: .infinity, alignment: .top)
+                        if hasProfessionalTasks {
+                            TasksComponent(
+                                taskLists: tasksVM.professionalTaskLists,
+                                tasksDict: professionalTasks,
+                                accentColor: appPrefs.professionalColor,
+                                accountType: .professional,
+                                onTaskToggle: { task, listId in
+                                    let viewModel = tasksVM // Capture the view model
+                                    Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .professional) }
+                                },
+                                onTaskDetails: { task, listId in
+                                    selectedTask = task
+                                    selectedTaskListId = listId
+                                    selectedTaskAccount = .professional
+                                    showingTaskDetails = true
+                                },
+                                onListRename: { listId, newName in
+                                    Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                                },
+                                onOrderChanged: { newOrder in
+                                    Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
+                                },
+                                hideDueDateTag: false,
+                                showEmptyState: true,
+                                horizontalCards: false
+                            )
+                            .frame(maxWidth: hasPersonalTasks ? nil : .infinity, alignment: .top)
+                        }
+                        
+                        if !hasPersonalTasks && !hasProfessionalTasks {
+                            Text("No tasks for today")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        }
                     }
                     .frame(
                         maxWidth: .infinity,
@@ -241,10 +261,34 @@ struct DayViewDefault: View {
                     professionalTaskLists: tasksVM.professionalTaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
-                    onSave: { _ in },
-                    onDelete: {},
-                    onMove: { _, _ in },
-                    onCrossAccountMove: { _, _, _ in },
+                    onSave: { updatedTask in
+                        let viewModel = tasksVM // Capture the view model
+                        Task {
+                            await viewModel.updateTask(updatedTask, in: listId, for: account)
+                        }
+                        showingTaskDetails = false
+                    },
+                    onDelete: {
+                        let viewModel = tasksVM // Capture the view model
+                        Task {
+                            await viewModel.deleteTask(t, from: listId, for: account)
+                        }
+                        showingTaskDetails = false
+                    },
+                    onMove: { updatedTask, targetListId in
+                        let viewModel = tasksVM // Capture the view model
+                        Task {
+                            await viewModel.moveTask(updatedTask, from: listId, to: targetListId, for: account)
+                        }
+                        showingTaskDetails = false
+                    },
+                    onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                        let viewModel = tasksVM // Capture the view model
+                        Task {
+                            await viewModel.crossAccountMoveTask(updatedTask, from: (account, listId), to: (targetAccount, targetListId))
+                        }
+                        showingTaskDetails = false
+                    },
                     isNew: false
                 )
             }

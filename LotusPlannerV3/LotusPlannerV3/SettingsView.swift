@@ -231,7 +231,12 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Tasks view layout toggle removed; always two columns
+    // Tasks view layout preference
+    @Published var tasksLayoutHorizontal: Bool {
+        didSet {
+            UserDefaults.standard.set(tasksLayoutHorizontal, forKey: "tasksLayoutHorizontal")
+        }
+    }
     
     // Visibility toggles removed: Logs and Journal always shown
     
@@ -258,7 +263,8 @@ class AppPreferences: ObservableObject {
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
 
-        // tasksLayoutTwoRows removed
+        // Load tasks layout preference (default false - vertical layout)
+        self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
 
 
         
@@ -296,6 +302,10 @@ class AppPreferences: ObservableObject {
     
     func updateShowEventsAsListInDay(_ value: Bool) {
         showEventsAsListInDay = value
+    }
+    
+    func updateTasksLayoutHorizontal(_ value: Bool) {
+        tasksLayoutHorizontal = value
     }
 
     // removed updateUseDayViewDefault
@@ -393,7 +403,21 @@ struct SettingsView: View {
                     }
                 }
 
-                // Tasks View Preference section removed: layout is fixed
+                // Tasks View Preference
+                Section("Tasks View Preference") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.tasksLayoutHorizontal },
+                        set: { appPrefs.updateTasksLayoutHorizontal($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Horizontal Task Lists")
+                                .font(.body)
+                            Text("Display task lists side by side in a scrollable row")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
                 
                 Section("App Preferences") {
                     HStack {
