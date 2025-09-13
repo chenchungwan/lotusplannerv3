@@ -2,33 +2,31 @@ import SwiftUI
 
 // MARK: - Day View Layout Option Enum
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
-    case compact = 0
-    case expanded = 1
-    case vertical = 2
+    case defaultNew = 0
+    case compact = 1
+    case expanded = 2
     case mobile = 3
-    case long = 4
-    case long2 = 5
 
     var id: Int { rawValue }
+    static var allCases: [DayViewLayoutOption] { [.defaultNew, .compact, .expanded, .mobile] }
+
     var displayName: String {
         switch self {
+        case .defaultNew: "Default"
         case .compact: "Compact"
         case .expanded: "Expanded"
-        case .vertical: "Vertical"
         case .mobile: "Mobile"
-        case .long: "Long"
-        case .long2: "Long View 2"
+        
         }
     }
     
     var description: String {
         switch self {
+        case .defaultNew: "Timeline & Tasks side-by-side, Logs row, then Journal"
         case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
         case .expanded: "Three columns: timeline, tasks & logs, and dedicated journal space"
-        case .vertical: "Two rows: Tasks+Logs on top, Notes+Timeline on bottom with slider"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
-        case .long: "Three rows: Tasks; Events+Logs; full-screen Notes below"
-        case .long2: "Three rows: Events+Logs; Tasks; full-screen Notes below"
+        
         }
     }
 }
@@ -213,6 +211,8 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // useDayViewDefault removed; handled by dayViewLayout radio
+
     
     // Day view layout preference
     @Published var dayViewLayout: DayViewLayoutOption {
@@ -228,12 +228,7 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Tasks view layout: false => two columns; true => two rows
-    @Published var tasksLayoutTwoRows: Bool {
-        didSet {
-            UserDefaults.standard.set(tasksLayoutTwoRows, forKey: "tasksLayoutTwoRows")
-        }
-    }
+    // Tasks view layout toggle removed; always two columns
     
     // Visibility toggles removed: Logs and Journal always shown
     
@@ -250,16 +245,17 @@ class AppPreferences: ObservableObject {
         self.hideCompletedTasks = UserDefaults.standard.bool(forKey: "hideCompletedTasks")
         self.hideRecurringEventsInMonth = UserDefaults.standard.bool(forKey: "hideRecurringEventsInMonth")
 
+        // useDayViewDefault removed
+
         
-        // Load day view layout preference
+        // Load day view layout preference (default to Default layout if unset)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-        self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
+        self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .defaultNew
         
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
 
-        // Load tasks layout preference (default false = two columns)
-        self.tasksLayoutTwoRows = UserDefaults.standard.bool(forKey: "tasksLayoutTwoRows")
+        // tasksLayoutTwoRows removed
 
 
         
@@ -298,6 +294,8 @@ class AppPreferences: ObservableObject {
     func updateShowEventsAsListInDay(_ value: Bool) {
         showEventsAsListInDay = value
     }
+
+    // removed updateUseDayViewDefault
     
     // Removed visibility update methods
     
@@ -392,20 +390,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Tasks View Preference") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.tasksLayoutTwoRows },
-                        set: { appPrefs.tasksLayoutTwoRows = $0 }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Tasks Layout: Two Rows")
-                                .font(.body)
-                            Text("Personal and Professional stacked vertically; lists scroll horizontally")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
+                // Tasks View Preference section removed: layout is fixed
                 
                 Section("App Preferences") {
                     HStack {

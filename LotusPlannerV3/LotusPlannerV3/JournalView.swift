@@ -63,7 +63,10 @@ struct JournalView: View {
     var body: some View {
         Group {
             if embedded {
-                canvasContent
+                VStack(spacing: 8) {
+                    topToolbar
+                    canvasContent
+                }
                     .onAppear {
                         loadDrawing()
                         loadPhotos()
@@ -83,7 +86,10 @@ struct JournalView: View {
                     }
             } else {
                 NavigationStack {
-                    canvasContent
+                    VStack(spacing: 8) {
+                        topToolbar
+                        canvasContent
+                    }
                         .navigationTitle("")
                         .toolbarTitleDisplayMode(.inline)
                         .onAppear { loadDrawing(); loadPhotos() }
@@ -133,6 +139,69 @@ struct JournalView: View {
         }
     }
 
+    // MARK: - Top toolbar inline (left: export; right: text, pencil, photo, trash)
+    private var topToolbar: some View {
+        GeometryReader { geo in
+            HStack(alignment: .top) {
+                // Left export/share
+                Button(action: { exportJournal() }) {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                Spacer()
+                // Right-side actions, wrap to second line on narrow widths
+                if geo.size.width < 380 {
+                    VStack(alignment: .trailing, spacing: 8) {
+                        HStack(spacing: 16) {
+                            Button(action: { /* text tool placeholder */ }) {
+                                Image(systemName: "character.cursor.ibeam")
+                            }
+                            Button(action: { showToolPicker.toggle() }) {
+                                Image(systemName: "applepencil.and.scribble")
+                            }
+                        }
+                        HStack(spacing: 16) {
+                            if #available(iOS 17, *) {
+                                PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                                    Image(systemName: "photo.badge.plus.fill")
+                                }
+                            } else {
+                                PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                                    Image(systemName: "photo.badge.plus.fill")
+                                }
+                            }
+                            Button(action: { showingEraseConfirmation = true }) {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
+                } else {
+                    HStack(spacing: 16) {
+                        Button(action: { /* text tool placeholder */ }) {
+                            Image(systemName: "character.cursor.ibeam")
+                        }
+                        Button(action: { showToolPicker.toggle() }) {
+                            Image(systemName: "applepencil.and.scribble")
+                        }
+                        if #available(iOS 17, *) {
+                            PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                                Image(systemName: "photo.badge.plus.fill")
+                            }
+                        } else {
+                            PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                                Image(systemName: "photo.badge.plus.fill")
+                            }
+                        }
+                        Button(action: { showingEraseConfirmation = true }) {
+                            Image(systemName: "trash")
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+        }
+        .frame(height: 60)
+    }
+
     private var canvasContent: some View {
         ZStack {
             // Observe photo picker selection
@@ -155,63 +224,26 @@ struct JournalView: View {
                     photos.remove(at: idx)
                 }
             }
-            // Floating controls (top-right)
-            HStack {
-                Spacer()
-                controlButtons
-            }
-            .padding(.top, 8)
+            // (Floating controls removed; replaced by topToolbar)
         }
         .onChange(of: pickerItems) { _ in
             loadSelectedPhotos()
         }
     }
     
-    // MARK: - Control Buttons
-    private var controlButtons: some View {
-        VStack {
-            // Toggle tool picker
-            Button(action: { showToolPicker.toggle() }) {
-                Image(systemName: showToolPicker ? "pencil.slash" : "pencil")
-                    .padding(10)
-                    .background(Color(.systemBackground).opacity(0.8))
-                    .clipShape(Circle())
-            }
-            // Eraser button – shows confirmation before clearing
-            Button(action: { showingEraseConfirmation = true }) {
-                Image(systemName: "trash")
-                    .padding(10)
-                    .background(Color(.systemBackground).opacity(0.8))
-                    .clipShape(Circle())
-            }
-            // Photos picker button with crop on iOS 17+
-            if #available(iOS 17, *) {
-                PhotosPicker(selection: $pickerItems,
-                             matching: .images,
-                             photoLibrary: .shared()) {
-                    Image(systemName: "photo.on.rectangle")
-                        .padding(10)
-                        .background(Color(.systemBackground).opacity(0.8))
-                        .clipShape(Circle())
-                }
-            } else {
-                PhotosPicker(selection: $pickerItems,
-                             matching: .images,
-                             photoLibrary: .shared()) {
-                    Image(systemName: "photo.on.rectangle")
-                        .padding(10)
-                        .background(Color(.systemBackground).opacity(0.8))
-                        .clipShape(Circle())
-                }
-            }
-        }
-        .padding(12)
-    }
+    // (Old floating controlButtons removed)
     
     // MARK: - Clear Journal
     private func clearJournal() {
         canvasView.drawing = PKDrawing()
         photos.removeAll()
+    }
+
+    private func exportJournal() {
+        // Save current drawing/photos first
+        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+        savePhotos()
+        // Stub: actual export (PDF/image) can be implemented as needed
     }
     
     // MARK: - Photo Data Persistence

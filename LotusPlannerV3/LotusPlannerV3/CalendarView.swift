@@ -1907,17 +1907,17 @@ struct CalendarView: View {
     
     @ViewBuilder
     private func dayViewContent(geometry: GeometryProxy) -> some View {
-        if appPrefs.dayViewLayout == .expanded {
+        switch appPrefs.dayViewLayout {
+        case .expanded:
             dayViewContentExpanded(geometry: geometry)
-        } else if appPrefs.dayViewLayout == .vertical {
-            dayViewContentVertical(geometry: geometry)
-        } else if appPrefs.dayViewLayout == .mobile {
+        case .defaultNew:
+            DayViewDefault(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
+        case .mobile:
             dayViewContentMobile(geometry: geometry)
-        } else if appPrefs.dayViewLayout == .long {
-            dayViewContentLong(geometry: geometry)
-        } else if appPrefs.dayViewLayout == .long2 {
-            dayViewContentLong2(geometry: geometry)
-        } else {
+        default:
             dayViewContentCompact(geometry: geometry)
         }
     }

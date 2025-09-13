@@ -1,0 +1,304 @@
+import SwiftUI
+
+struct DayViewDefault: View {
+    @ObservedObject private var navigationManager: NavigationManager
+    @ObservedObject private var appPrefs: AppPreferences
+    private let calendarVM: CalendarViewModel
+    @ObservedObject private var tasksVM: TasksViewModel
+    @ObservedObject private var auth: GoogleAuthManager
+    private let onEventTap: ((GoogleCalendarEvent) -> Void)?
+
+    // Divider state between top row and logs
+    @State private var topRowHeight: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var isTopDividerDragging: Bool = false
+
+    // Divider state between timeline (left) and tasks (right)
+    @State private var leftTimelineWidth: CGFloat = UIScreen.main.bounds.width * 0.25
+    @State private var isLeftDividerDragging: Bool = false
+
+    // Divider state between logs and notes
+    @State private var logsHeight: CGFloat = UIScreen.main.bounds.height * 0.25
+    @State private var journalHeight: CGFloat = UIScreen.main.bounds.height * 0.6
+    @State private var isBottomDividerDragging: Bool = false
+
+    // MARK: - Selection State
+    @State private var selectedEvent: GoogleCalendarEvent?
+    @State private var showingEventDetails: Bool = false
+    @State private var selectedTask: GoogleTask?
+    @State private var selectedTaskListId: String?
+    @State private var selectedTaskAccount: GoogleAuthManager.AccountKind?
+    @State private var showingTaskDetails: Bool = false
+
+    init(onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+        self._navigationManager = ObservedObject(wrappedValue: NavigationManager.shared)
+        self._appPrefs = ObservedObject(wrappedValue: AppPreferences.shared)
+        self.calendarVM = DataManager.shared.calendarViewModel
+        self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
+        self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
+        self.onEventTap = onEventTap
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: true) {
+                // Main content
+                VStack(spacing: 12) {
+                // 1) Timeline + Tasks side-by-side
+                HStack(alignment: .top, spacing: 12) {
+                    // Timeline or Events List (based on preference)
+                    Group {
+                        if appPrefs.showEventsAsListInDay {
+                            EventsListComponent(
+                                events: filteredEventsForDay(navigationManager.currentDate),
+                                personalEvents: calendarVM.personalEvents,
+                                professionalEvents: calendarVM.professionalEvents,
+                                personalColor: appPrefs.personalColor,
+                                professionalColor: appPrefs.professionalColor,
+                                onEventTap: { ev in onEventTap?(ev) }
+                            )
+                        } else {
+                            TimelineComponent(
+                                date: navigationManager.currentDate,
+                                events: filteredEventsForDay(navigationManager.currentDate),
+                                personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                                professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                                personalColor: appPrefs.personalColor,
+                                professionalColor: appPrefs.professionalColor,
+                                onEventTap: { event in
+                                    onEventTap?(event)
+                                }
+                            )
+                        }
+                    }
+                    .frame(
+                        width: leftTimelineWidth,
+                        height: topRowHeight,
+                        alignment: .topLeading
+                    )
+
+                    // Vertical draggable divider between timeline and tasks
+                    Rectangle()
+                        .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(width: 8, height: topRowHeight)
+                        .overlay(
+                            Image(systemName: "line.3.vertical")
+                                .font(.caption)
+                                .foregroundColor(isLeftDividerDragging ? .white : .gray)
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    isLeftDividerDragging = true
+                                    let newWidth = leftTimelineWidth + value.translation.width
+                                    let minWidth: CGFloat = 150
+                                    let maxWidth: CGFloat = max(200, UIScreen.main.bounds.width - 300)
+                                    leftTimelineWidth = max(minWidth, min(maxWidth, newWidth))
+                                }
+                                .onEnded { _ in
+                                    isLeftDividerDragging = false
+                                }
+                        )
+
+                    // Tasks (two side-by-side columns)
+                    HStack(alignment: .top, spacing: 12) {
+                        TasksComponent(
+                            taskLists: tasksVM.personalTaskLists,
+                            tasksDict: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
+                            accentColor: appPrefs.personalColor,
+                            accountType: .personal,
+                            onTaskToggle: { task, listId in
+                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
+                            },
+                            onTaskDetails: { task, listId in
+                                selectedTask = task
+                                selectedTaskListId = listId
+                                selectedTaskAccount = .personal
+                                showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
+                            },
+                            hideDueDateTag: false,
+                            showEmptyState: true,
+                            horizontalCards: false
+                        )
+                        .frame(maxWidth: .infinity, alignment: .top)
+
+                        TasksComponent(
+                            taskLists: tasksVM.professionalTaskLists,
+                            tasksDict: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
+                            accentColor: appPrefs.professionalColor,
+                            accountType: .professional,
+                            onTaskToggle: { task, listId in
+                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
+                            },
+                            onTaskDetails: { task, listId in
+                                selectedTask = task
+                                selectedTaskListId = listId
+                                selectedTaskAccount = .professional
+                                showingTaskDetails = true
+                            },
+                            onListRename: { listId, newName in
+                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
+                            },
+                            hideDueDateTag: false,
+                            showEmptyState: true,
+                            horizontalCards: false
+                        )
+                        .frame(maxWidth: .infinity, alignment: .top)
+                    }
+                    .frame(
+                        maxWidth: .infinity,
+                        maxHeight: topRowHeight,
+                        alignment: .top
+                    )
+                }
+
+                // Draggable divider between top row and logs
+                Rectangle()
+                    .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                    .frame(height: 8)
+                    .overlay(
+                        Image(systemName: "line.3.horizontal")
+                            .font(.caption)
+                            .foregroundColor(isTopDividerDragging ? .white : .gray)
+                    )
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isTopDividerDragging = true
+                                let newHeight = topRowHeight + value.translation.height
+                                let minHeight: CGFloat = 200
+                                let maxHeight: CGFloat = max(200, UIScreen.main.bounds.height - 300)
+                                topRowHeight = max(minHeight, min(maxHeight, newHeight))
+                            }
+                            .onEnded { _ in
+                                isTopDividerDragging = false
+                            }
+                    )
+
+                // 2) Logs laid out side-by-side (weight, workout, food)
+                LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
+                    .frame(height: logsHeight)
+
+                // Draggable divider between logs and journal
+                Rectangle()
+                    .fill(isBottomDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                    .frame(height: 8)
+                    .overlay(
+                        Image(systemName: "line.3.horizontal")
+                            .font(.caption)
+                            .foregroundColor(isBottomDividerDragging ? .white : .gray)
+                    )
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isBottomDividerDragging = true
+                                let delta = value.translation.height
+                                let minLogs: CGFloat = 120
+                                let minJournal: CGFloat = 200
+                                let newLogs = logsHeight + delta
+                                let newJournal = journalHeight - delta
+                                if newLogs >= minLogs && newJournal >= minJournal {
+                                    logsHeight = newLogs
+                                    journalHeight = newJournal
+                                }
+                            }
+                            .onEnded { _ in
+                                isBottomDividerDragging = false
+                            }
+                    )
+
+                // 3) Journal component
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Notes")
+                        .font(.headline)
+                        .padding(.horizontal, 8)
+                    JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                }
+                .id(navigationManager.currentDate)
+                .frame(height: journalHeight, alignment: .top)
+                }
+                .padding(12)
+            }
+        }
+        // Task details sheet
+        .sheet(isPresented: $showingTaskDetails) {
+            if let t = selectedTask, let listId = selectedTaskListId, let account = selectedTaskAccount {
+                TaskDetailsView(
+                    task: t,
+                    taskListId: listId,
+                    accountKind: account,
+                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    personalTaskLists: tasksVM.personalTaskLists,
+                    professionalTaskLists: tasksVM.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: tasksVM,
+                    onSave: { _ in },
+                    onDelete: {},
+                    onMove: { _, _ in },
+                    onCrossAccountMove: { _, _, _ in },
+                    isNew: false
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Day Filters
+extension DayViewDefault {
+    private func isSameDay(_ lhs: Date, _ rhs: Date) -> Bool {
+        Calendar.mondayFirst.isDate(lhs, inSameDayAs: rhs)
+    }
+
+    private func filteredEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
+        let all = calendarVM.personalEvents + calendarVM.professionalEvents
+        return all.filter { ev in
+            if let start = ev.startTime { return isSameDay(start, date) }
+            return ev.isAllDay // keep all-day events if date unknown
+        }
+    }
+
+    private func filteredPersonalEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
+        calendarVM.personalEvents.filter { ev in
+            if let start = ev.startTime { return isSameDay(start, date) }
+            return ev.isAllDay
+        }
+    }
+
+    private func filteredProfessionalEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
+        calendarVM.professionalEvents.filter { ev in
+            if let start = ev.startTime { return isSameDay(start, date) }
+            return ev.isAllDay
+        }
+    }
+
+    private func filteredTasksDictForDay(_ dict: [String: [GoogleTask]], on date: Date) -> [String: [GoogleTask]] {
+        var result: [String: [GoogleTask]] = [:]
+        for (listId, tasks) in dict {
+            let filtered = tasks.filter { task in
+                if task.isCompleted, let comp = task.completionDate {
+                    return isSameDay(comp, date)
+                }
+                if let due = task.dueDate { return isSameDay(due, date) }
+                return false
+            }
+            if !filtered.isEmpty { result[listId] = filtered }
+        }
+        return result
+    }
+
+    // Removed custom events list; using EventsListComponent instead
+}
+
+#Preview {
+    DayViewDefault()
+}
+
+
