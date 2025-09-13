@@ -57,7 +57,7 @@ struct ContentView: View {
         case .weeklyView:
             WeeklyView()
         case .gWeekView:
-            GWeekView()
+            CalendarView()
         }
     }
 }

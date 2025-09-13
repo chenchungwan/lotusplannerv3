@@ -217,15 +217,7 @@ struct WeeklyView: View {
                     .foregroundColor(navigationManager.currentView == .weeklyView ? .accentColor : .secondary)
             }
 
-            // GWeekView button
-            Button(action: {
-                navigationManager.currentView = .gWeekView
-                navigationManager.updateInterval(.week, date: selectedDate)
-            }) {
-                Image(systemName: "g.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentView == .gWeekView ? .accentColor : .secondary)
-            }
+            // g.circle removed
             
             // Hide Completed toggle
             Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {

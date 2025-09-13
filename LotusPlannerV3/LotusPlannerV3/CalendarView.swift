@@ -1217,15 +1217,7 @@ struct CalendarView: View {
                     .foregroundColor(navigationManager.currentView == .weeklyView ? .accentColor : .secondary)
             }
             
-            // Requested: add g.circle icon to the right of w.circle
-            Button(action: {
-                navigationManager.currentView = .gWeekView
-                navigationManager.updateInterval(.week, date: currentDate)
-            }) {
-                Image(systemName: "g.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentView == .gWeekView ? .accentColor : .secondary)
-            }
+            // g.circle removed
             
             // Show eye and plus only in Day view
             if navigationManager.currentInterval == .day {
@@ -2449,55 +2441,17 @@ struct CalendarView: View {
                 let bDate = b.startTime ?? Date.distantPast
                 return aDate < bDate
             }
-        return VStack(alignment: .leading, spacing: 8) {
-            if events.isEmpty {
-                Text("No events today")
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
-            } else {
-                ForEach(events, id: \.id) { ev in
-                    Button(action: {
-                        selectedCalendarEvent = ev
-                        showingEventDetails = true
-                    }) {
-                        HStack(alignment: .top, spacing: 10) {
-                            Text(formatEventTime(ev))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(width: 52, alignment: .trailing)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(ev.summary)
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                    .lineLimit(2)
-                                if let location = ev.location, !location.isEmpty {
-                                    Text(location)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            let isPersonal = calendarViewModel.personalEvents.contains { $0.id == ev.id }
-                            Circle()
-                                .fill(isPersonal ? appPrefs.personalColor : appPrefs.professionalColor)
-                                .frame(width: 8, height: 8)
-                        }
-                        .padding(10)
-                        .background(
-                            (
-                                calendarViewModel.personalEvents.contains { $0.id == ev.id }
-                                ? appPrefs.personalColor.opacity(0.12)
-                                : appPrefs.professionalColor.opacity(0.12)
-                            )
-                        )
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
+        return EventsListComponent(
+            events: events,
+            personalEvents: calendarViewModel.personalEvents,
+            professionalEvents: calendarViewModel.professionalEvents,
+            personalColor: appPrefs.personalColor,
+            professionalColor: appPrefs.professionalColor,
+            onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
             }
-        }
+        )
     }
     
     private var rightSectionDivider: some View {

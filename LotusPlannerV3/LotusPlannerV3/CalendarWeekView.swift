@@ -90,24 +90,14 @@ struct CalendarWeekView: View {
         }
         
         return HStack(spacing: 0) {
-            TimelineBaseView(
+            TimelineComponent(
                 date: date,
                 events: dayEvents,
                 personalEvents: calendarViewModel.personalEvents,
                 professionalEvents: calendarViewModel.professionalEvents,
                 personalColor: appPrefs.personalColor,
                 professionalColor: appPrefs.professionalColor,
-                config: TimelineConfig(
-                    startHour: 0,
-                    endHour: 24,
-                    hourHeight: 80,
-                    timeColumnWidth: 50,
-                    showCurrentTime: true,
-                    showAllDayEvents: true
-                ),
-                onEventTap: { event in
-                    selectedEvent = event
-                }
+                onEventTap: { event in selectedEvent = event }
             )
         }
     }
