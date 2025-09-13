@@ -32,6 +32,34 @@ extension DateFormatter {
         return formatter
     }()
     
+    /// Full month name: January
+    static let standardMonth: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        return formatter
+    }()
+    
+    /// Short month name: Jan
+    static let standardShortMonth: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        return formatter
+    }()
+    
+    /// Day of month without leading zero: 1, 2, ... 31
+    static let standardDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter
+    }()
+    
+    /// Month and day: January 5
+    static let standardMonthDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM d"
+        return formatter
+    }()
+    
     /// Full date format for headers: Monday, December 25, 2024
     static let standardFullDate: DateFormatter = {
         let formatter = DateFormatter()

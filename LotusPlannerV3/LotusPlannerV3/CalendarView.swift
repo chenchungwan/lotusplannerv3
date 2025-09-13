@@ -817,16 +817,9 @@ struct CalendarView: View {
         .sidebarToggleHidden()
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarLeading) {
-                principalToolbarContent
-            }
-
-            ToolbarItemGroup(placement: .principal) { EmptyView() }
-
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                trailingToolbarButtons
-            }
+        .safeAreaInset(edge: .top) {
+            GlobalNavBar()
+                .background(.ultraThinMaterial)
         }
     }
 
@@ -1913,7 +1906,10 @@ struct CalendarView: View {
                 showingEventDetails = true
             })
         case .mobile:
-            dayViewContentMobile(geometry: geometry)
+            DayViewMobile(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         default:
             dayViewContentCompact(geometry: geometry)
         }
@@ -2111,105 +2107,7 @@ struct CalendarView: View {
     
     // vertical layout removed
     
-    // MARK: - Mobile Layout (single column: Events, Personal Tasks, Professional Tasks, Logs)
-    private func dayViewContentMobile(geometry: GeometryProxy) -> some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Events list (always list in Mobile layout)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Events")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
-                    dayEventsList
-                }
-                .padding(.vertical, 8)
-
-                // Personal tasks
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Personal Tasks")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
-                    TasksComponent(
-                        taskLists: tasksViewModel.personalTaskLists,
-                        tasksDict: filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate),
-                        accentColor: appPrefs.personalColor,
-                        accountType: .personal,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                updateCachedTasks()
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
-                        },
-                        onListRename: { listId, newName in
-                            Task {
-                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                            }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task {
-                                await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
-                            }
-                        },
-                        hideDueDateTag: false,
-                        showEmptyState: true,
-                        horizontalCards: false
-                    )
-                }
-
-                // Professional tasks
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Professional Tasks")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
-                    TasksComponent(
-                        taskLists: tasksViewModel.professionalTaskLists,
-                        tasksDict: filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate),
-                        accentColor: appPrefs.professionalColor,
-                        accountType: .professional,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                updateCachedTasks()
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedAccountKind = .professional
-                            DispatchQueue.main.async { showingTaskDetails = true }
-                        },
-                        onListRename: { listId, newName in
-                            Task {
-                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                            }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task {
-                                await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
-                            }
-                        },
-                        hideDueDateTag: false,
-                        showEmptyState: true,
-                        horizontalCards: false
-                    )
-                }
-
-                // Logs (no label in Mobile layout)
-                VStack(alignment: .leading, spacing: 6) {
-                    LogsComponent(currentDate: currentDate, horizontal: false)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-        }
-        .ignoresSafeArea(edges: .top)
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .background(Color(.systemBackground))
-    }
+    // Mobile layout moved to DayViewMobile.swift
 
     // MARK: - Long Layout
     // Three rows: 1) Tasks, 2) HStack(Events list, Logs side-by-side), 3) Notes full screen below accessible via swipe
