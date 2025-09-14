@@ -128,11 +128,28 @@ struct JournalView: View {
                                     }
                                 }
                             }
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                Button("Done") {
-                                    JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
-                        savePhotos()
-                                    dismiss()
+                            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                                HStack(spacing: 16) {
+                                    Button(action: { showToolPicker.toggle() }) {
+                                        Image(systemName: "applepencil.and.scribble")
+                                    }
+                                    if #available(iOS 17, *) {
+                                        PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                                            Image(systemName: "photo.badge.plus.fill")
+                                        }
+                                    } else {
+                                        PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                                            Image(systemName: "photo.badge.plus.fill")
+                                        }
+                                    }
+                                    Button(action: { showingEraseConfirmation = true }) {
+                                        Image(systemName: "trash")
+                                    }
+                                    Button("Done") {
+                                        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+                                        savePhotos()
+                                        dismiss()
+                                    }
                                 }
                             }
                         }
@@ -149,61 +166,30 @@ struct JournalView: View {
         }
     }
 
-    // MARK: - Top toolbar inline (left: export; right: text, pencil, photo, trash)
+    // MARK: - Top toolbar inline (all icons on same line as title)
     private var topToolbar: some View {
-        GeometryReader { geo in
-            HStack(alignment: .top) {
-                // Left export/share
-                Button(action: { exportJournal() }) {
-                    Image(systemName: "square.and.arrow.down")
+        HStack {
+            Spacer()
+            HStack(spacing: 16) {
+                Button(action: { showToolPicker.toggle() }) {
+                    Image(systemName: "applepencil.and.scribble")
                 }
-                Spacer()
-                // Right-side actions, wrap to second line on narrow widths
-                if geo.size.width < 380 {
-                    VStack(alignment: .trailing, spacing: 8) {
-                        HStack(spacing: 16) {
-                            Button(action: { showToolPicker.toggle() }) {
-                                Image(systemName: "applepencil.and.scribble")
-                            }
-                        }
-                        HStack(spacing: 16) {
-                            if #available(iOS 17, *) {
-                                PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
-                                    Image(systemName: "photo.badge.plus.fill")
-                                }
-                            } else {
-                                PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
-                                    Image(systemName: "photo.badge.plus.fill")
-                                }
-                            }
-                            Button(action: { showingEraseConfirmation = true }) {
-                                Image(systemName: "trash")
-                            }
-                        }
+                if #available(iOS 17, *) {
+                    PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                        Image(systemName: "photo.badge.plus.fill")
                     }
                 } else {
-                    HStack(spacing: 16) {
-                        Button(action: { showToolPicker.toggle() }) {
-                            Image(systemName: "applepencil.and.scribble")
-                        }
-                        if #available(iOS 17, *) {
-                            PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
-                                Image(systemName: "photo.badge.plus.fill")
-                            }
-                        } else {
-                            PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
-                                Image(systemName: "photo.badge.plus.fill")
-                            }
-                        }
-                        Button(action: { showingEraseConfirmation = true }) {
-                            Image(systemName: "trash")
-                        }
+                    PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
+                        Image(systemName: "photo.badge.plus.fill")
                     }
                 }
+                Button(action: { showingEraseConfirmation = true }) {
+                    Image(systemName: "trash")
+                }
             }
-            .padding(.horizontal, 12)
         }
-        .frame(height: 60)
+        .padding(.horizontal, 12)
+        .frame(height: 44)
     }
 
     private var canvasContent: some View {
