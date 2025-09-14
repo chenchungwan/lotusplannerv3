@@ -2093,6 +2093,9 @@ struct TaskDetailsView: View {
     @State private var isSaving = false
     @State private var tempDueDate: Date = Date()
     
+    // Track original due date to detect changes properly
+    private let originalDueDate: Date?
+    
     private let dueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -2113,6 +2116,9 @@ struct TaskDetailsView: View {
         self.onMove = onMove
         self.onCrossAccountMove = onCrossAccountMove
         self.isNew = isNew
+        
+        // Store original due date to detect changes properly
+        self.originalDueDate = task.dueDate
         
         _editedTitle = State(initialValue: task.title)
         _editedNotes = State(initialValue: task.notes ?? "")
@@ -2137,7 +2143,7 @@ struct TaskDetailsView: View {
     var hasChanges: Bool {
         editedTitle != task.title ||
         editedNotes != (task.notes ?? "") ||
-        editedDueDate != task.dueDate ||
+        editedDueDate != originalDueDate ||
         selectedAccountKind != accountKind ||
         selectedListId != taskListId ||
         isCreatingNewList
