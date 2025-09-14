@@ -99,7 +99,7 @@ struct GlobalNavBar: View {
     }
     
     var body: some View {
-        VStack() {
+        VStack(spacing: 0) {
             GeometryReader { geo in
                 let isNarrow = geo.size.width < 450
                 VStack(alignment: .leading) {
@@ -236,7 +236,7 @@ struct GlobalNavBar: View {
                             Button {
                                 appPrefs.hideCompletedTasks.toggle()
                             } label: {
-                                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                     .font(.title2)
                             }
                             Button {
@@ -256,7 +256,7 @@ struct GlobalNavBar: View {
                                     showingAddTask = true
                                 }
                             } label: {
-                                Image(systemName: "plus.circle")
+                                Image(systemName: "plus")
                                     .font(.title2)
                             }
                         }
@@ -347,7 +347,7 @@ struct GlobalNavBar: View {
                             Button {
                                 appPrefs.hideCompletedTasks.toggle()
                             } label: {
-                                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                     .font(.title2)
                             }
                             Button {
@@ -367,7 +367,7 @@ struct GlobalNavBar: View {
                                     showingAddTask = true
                                 }
                             } label: {
-                                Image(systemName: "plus.circle")
+                                Image(systemName: "plus")
                                     .font(.title2)
                             }
                         }
@@ -375,9 +375,8 @@ struct GlobalNavBar: View {
                     
                 }.padding()
             }
-            .frame(height: 50)
-         
         }
+        .frame(height: UIScreen.main.bounds.width < 450 ? 100 : 50)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
