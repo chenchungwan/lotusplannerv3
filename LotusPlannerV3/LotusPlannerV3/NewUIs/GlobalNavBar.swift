@@ -193,6 +193,7 @@ struct GlobalNavBar: View {
                                     .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .year ? .accentColor : .secondary))
                             }
                             
+                            
                             // Hide a.circle and ellipsis.circle in calendar view
                             if navigationManager.currentView != .calendar {
                                 Button {
@@ -303,6 +304,7 @@ struct GlobalNavBar: View {
                                     .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .year ? .accentColor : .secondary))
                             }
                             
+                            
                             // Hide a.circle and ellipsis.circle in calendar view
                             if navigationManager.currentView != .calendar {
                                 Button {
@@ -374,7 +376,7 @@ struct GlobalNavBar: View {
                 }.padding()
             }
             .frame(height: 50)
-            
+         
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -398,7 +400,8 @@ struct GlobalNavBar: View {
                 .navigationBarItems(
                     leading: Button("Cancel") { showingDatePicker = false },
                     trailing: Button("Done") {
-                        navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
+                        // Always navigate to day view of the selected date
+                        navigationManager.updateInterval(.day, date: selectedDateForPicker)
                         showingDatePicker = false
                     }
                 )

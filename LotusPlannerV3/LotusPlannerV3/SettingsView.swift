@@ -128,6 +128,7 @@ class NavigationManager: ObservableObject {
         currentInterval = .week // WeeklyView is always week view
     }
     
+    
     func showSettings() {
         showingSettings = true
     }

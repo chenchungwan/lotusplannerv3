@@ -77,7 +77,8 @@ struct DayViewAlt: View {
                             },
                             hideDueDateTag: false,
                             showEmptyState: true,
-                            horizontalCards: false
+                            horizontalCards: false,
+                            isSingleDayView: true
                         )
                         .frame(maxWidth: hasProfessionalTasks ? nil : .infinity, alignment: .top)
                     }
@@ -106,7 +107,8 @@ struct DayViewAlt: View {
                             },
                             hideDueDateTag: false,
                             showEmptyState: true,
-                            horizontalCards: false
+                            horizontalCards: false,
+                            isSingleDayView: true
                         )
                         .frame(maxWidth: hasPersonalTasks ? nil : .infinity, alignment: .top)
                     }

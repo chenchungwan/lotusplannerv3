@@ -93,7 +93,7 @@ struct RootView: View {
         }
 
         // Remove the cover after the slide-out animation finishes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             withAnimation(.easeIn(duration: 0.01)) {
                 self.isCoverOpened = true
             }

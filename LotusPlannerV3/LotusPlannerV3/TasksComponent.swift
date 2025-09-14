@@ -12,12 +12,13 @@ struct TasksComponent: View {
     let hideDueDateTag: Bool
     let showEmptyState: Bool
     let horizontalCards: Bool
+    let isSingleDayView: Bool
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
     
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -29,6 +30,7 @@ struct TasksComponent: View {
         self.hideDueDateTag = hideDueDateTag
         self.showEmptyState = showEmptyState
         self.horizontalCards = horizontalCards
+        self.isSingleDayView = isSingleDayView
         self._localTaskLists = State(initialValue: taskLists)
     }
     
@@ -91,7 +93,8 @@ extension TasksComponent {
                 onListRename: { newName in onListRename?(taskList.id, newName) },
                 hideDueDateTag: hideDueDateTag,
                 enableScroll: enableScroll,
-                maxTasksAreaHeight: maxHeight
+                maxTasksAreaHeight: maxHeight,
+                isSingleDayView: isSingleDayView
             )
         }
     }
@@ -151,6 +154,7 @@ private struct TaskComponentListCard: View {
     let hideDueDateTag: Bool
     let enableScroll: Bool
     let maxTasksAreaHeight: CGFloat?
+    let isSingleDayView: Bool
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -181,7 +185,8 @@ private struct TaskComponentListCard: View {
         onListRename: @escaping (String) -> Void,
         hideDueDateTag: Bool,
         enableScroll: Bool = false,
-        maxTasksAreaHeight: CGFloat? = nil
+        maxTasksAreaHeight: CGFloat? = nil,
+        isSingleDayView: Bool = false
     ) {
         self.taskList = taskList
         self.tasks = tasks
@@ -192,6 +197,7 @@ private struct TaskComponentListCard: View {
         self.hideDueDateTag = hideDueDateTag
         self.enableScroll = enableScroll
         self.maxTasksAreaHeight = maxTasksAreaHeight
+        self.isSingleDayView = isSingleDayView
     }
     
     var body: some View {
@@ -248,7 +254,8 @@ private struct TaskComponentListCard: View {
                                     task: task,
                                     accentColor: accentColor,
                                     onToggle: { onTaskToggle(task) },
-                                    onDetails: { onTaskDetails(task) }
+                                    onDetails: { onTaskDetails(task) },
+                                    isSingleDayView: isSingleDayView
                                 )
                                 .environment(\.hideDueDate, hideDueDateTag)
                             }
@@ -263,7 +270,8 @@ private struct TaskComponentListCard: View {
                                 task: task,
                                 accentColor: accentColor,
                                 onToggle: { onTaskToggle(task) },
-                                onDetails: { onTaskDetails(task) }
+                                onDetails: { onTaskDetails(task) },
+                                isSingleDayView: isSingleDayView
                             )
                             .environment(\.hideDueDate, hideDueDateTag)
                         }
@@ -308,6 +316,7 @@ private struct TaskComponentRow: View {
     let accentColor: Color
     let onToggle: () -> Void
     let onDetails: () -> Void
+    let isSingleDayView: Bool
     @Environment(\.hideDueDate) private var hideDueDate: Bool
     
     var body: some View {
@@ -365,18 +374,29 @@ private struct TaskComponentRow: View {
             guard let dueDate = task.dueDate else { return nil }
             let dueDay = calendar.startOfDay(for: dueDate)
             
-            if calendar.isDate(dueDay, inSameDayAs: today) {
-                return ("Today", .white, accentColor)
-            } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
-                      calendar.isDate(dueDay, inSameDayAs: tomorrow) {
-                return ("Tomorrow", .white, .orange)
-            } else if dueDay < today {
-                return ("Overdue", .white, .red)
+            if isSingleDayView {
+                // In single day view, only show overdue tasks
+                if dueDay < today {
+                    return ("Overdue", .white, .red)
+                } else {
+                    // Don't show future due dates or today's due dates in single day view
+                    return nil
+                }
             } else {
-                // Future date
-                let formatter = DateFormatter()
-                formatter.dateFormat = "M/d/yy"
-                return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
+                // In other views (week, month, year, all), show all due dates
+                if calendar.isDate(dueDay, inSameDayAs: today) {
+                    return ("Today", .white, accentColor)
+                } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+                          calendar.isDate(dueDay, inSameDayAs: tomorrow) {
+                    return ("Tomorrow", .white, .orange)
+                } else if dueDay < today {
+                    return ("Overdue", .white, .red)
+                } else {
+                    // Future date
+                    let formatter = DateFormatter()
+                    formatter.dateFormat = "M/d/yy"
+                    return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
+                }
             }
         }
     }

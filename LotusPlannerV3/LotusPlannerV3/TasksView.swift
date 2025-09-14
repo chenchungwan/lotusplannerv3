@@ -1100,7 +1100,8 @@ struct TasksView: View {
                                                 await viewModel.updateTaskListOrder(newOrder, for: .personal)
                                             }
                                         },
-                                        horizontalCards: true
+                                        horizontalCards: true,
+                                        isSingleDayView: selectedFilter == .day
                                     )
                                 }
                             }
@@ -1135,7 +1136,8 @@ struct TasksView: View {
                                                 await viewModel.updateTaskListOrder(newOrder, for: .professional)
                                             }
                                         },
-                                        horizontalCards: true
+                                        horizontalCards: true,
+                                        isSingleDayView: selectedFilter == .day
                                     )
                                 }
                             }
@@ -1170,7 +1172,8 @@ struct TasksView: View {
                                             await viewModel.updateTaskListOrder(newOrder, for: .personal)
                                         }
                                     },
-                                    horizontalCards: false
+                                    horizontalCards: false,
+                                    isSingleDayView: selectedFilter == .day
                                 )
                                 .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
                             }
@@ -1205,7 +1208,8 @@ struct TasksView: View {
                                             await viewModel.updateTaskListOrder(newOrder, for: .professional)
                                         }
                                     },
-                                    horizontalCards: false
+                                    horizontalCards: false,
+                                    isSingleDayView: selectedFilter == .day
                                 )
                                 .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
                             }
@@ -1666,40 +1670,9 @@ struct TasksView: View {
     }
     
     private func navigateToDate(_ selectedDate: Date) {
-        switch selectedFilter {
-        case .day:
-            // For day view, navigate directly to the selected date
-            referenceDate = selectedDate
-        case .week:
-            // For week view, navigate to the week containing the selected date
-            let calendar = Calendar.mondayFirst
-            if let weekStart = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start {
-                referenceDate = weekStart
-            } else {
-                referenceDate = selectedDate
-            }
-        case .month:
-            // For month view, navigate to the month containing the selected date
-            let calendar = Calendar.current
-            let components = calendar.dateComponents([.year, .month], from: selectedDate)
-            if let firstOfMonth = calendar.date(from: components) {
-                referenceDate = firstOfMonth
-            } else {
-                referenceDate = selectedDate
-            }
-        case .year:
-            // For year view, navigate to the year containing the selected date
-            let calendar = Calendar.current
-            let year = calendar.component(.year, from: selectedDate)
-            if let firstOfYear = calendar.date(from: DateComponents(year: year, month: 1, day: 1)) {
-                referenceDate = firstOfYear
-            } else {
-                referenceDate = selectedDate
-            }
-        case .all:
-            // For "all" view, don't change the reference date as it shows all tasks
-            break
-        }
+        // Always navigate to day view of the selected date
+        selectedFilter = .day
+        referenceDate = selectedDate
     }
     
     // MARK: - Step helper
@@ -2143,7 +2116,8 @@ struct TaskDetailsView: View {
         
         _editedTitle = State(initialValue: task.title)
         _editedNotes = State(initialValue: task.notes ?? "")
-        _editedDueDate = State(initialValue: task.dueDate)
+        // For new tasks, default due date to current day; for existing tasks, use the task's due date
+        _editedDueDate = State(initialValue: isNew ? Calendar.current.startOfDay(for: Date()) : task.dueDate)
         _selectedAccountKind = State(initialValue: accountKind)
         _selectedListId = State(initialValue: taskListId)
     }

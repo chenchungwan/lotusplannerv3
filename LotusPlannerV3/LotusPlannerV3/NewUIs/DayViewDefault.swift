@@ -130,7 +130,8 @@ struct DayViewExpandedTwo: View {
                                             },
                                             hideDueDateTag: false,
                                             showEmptyState: true,
-                                            horizontalCards: false
+                                            horizontalCards: false,
+                                            isSingleDayView: true
                                         )
                                         .frame(maxWidth: hasProfessionalTasks ? nil : .infinity, alignment: .top)
                                     }
@@ -159,7 +160,8 @@ struct DayViewExpandedTwo: View {
                                             },
                                             hideDueDateTag: false,
                                             showEmptyState: true,
-                                            horizontalCards: false
+                                            horizontalCards: false,
+                                            isSingleDayView: true
                                         )
                                         .frame(maxWidth: hasPersonalTasks ? nil : .infinity, alignment: .top)
                                     }
@@ -228,7 +230,10 @@ struct DayViewExpandedTwo: View {
             }
         }
         // Task details sheet
-        .sheet(isPresented: $showingTaskDetails) {
+        .sheet(isPresented: Binding(
+            get: { showingTaskDetails && selectedTask != nil && selectedTaskListId != nil && selectedTaskAccount != nil },
+            set: { showingTaskDetails = $0 }
+        )) {
             if let t = selectedTask, let listId = selectedTaskListId, let account = selectedTaskAccount {
                 TaskDetailsView(
                     task: t,

@@ -52,12 +52,12 @@ struct ContentView: View {
                 }
             }
 
-        case .journal:
-            JournalView(currentDate: Date())
-        case .weeklyView:
-            WeeklyView()
-        case .gWeekView:
-            CalendarView()
+            case .journal:
+                JournalView(currentDate: Date())
+            case .weeklyView:
+                WeeklyView()
+            case .gWeekView:
+                CalendarView()
         }
     }
 }

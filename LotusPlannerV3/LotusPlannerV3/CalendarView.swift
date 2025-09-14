@@ -965,7 +965,9 @@ struct CalendarView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
-                            navigateToDate(selectedDateForPicker)
+                            // Always navigate to day view of the selected date
+                            currentDate = selectedDateForPicker
+                            navigationManager.updateInterval(.day, date: selectedDateForPicker)
                             showingDatePicker = false
                         }
                     }
@@ -1106,7 +1108,9 @@ struct CalendarView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
-                            navigateToDate(selectedDateForPicker)
+                            // Always navigate to day view of the selected date
+                            currentDate = selectedDateForPicker
+                            navigationManager.updateInterval(.day, date: selectedDateForPicker)
                             showingDatePicker = false
                         }
                     }
@@ -1368,7 +1372,8 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                     }
-                }
+                },
+                isSingleDayView: true
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.all, 8)
@@ -1397,7 +1402,8 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
-                }
+                },
+                isSingleDayView: true
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             
@@ -1477,7 +1483,8 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                     }
-                }
+                },
+                isSingleDayView: true
             )
             .frame(width: weekTasksPersonalWidth, alignment: .topLeading)
             
@@ -1508,7 +1515,8 @@ struct CalendarView: View {
                     Task {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
-                }
+                },
+                isSingleDayView: true
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
@@ -3535,7 +3543,8 @@ struct CalendarView: View {
                         Task {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                         }
-                    }
+                    },
+                    isSingleDayView: true
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
@@ -3585,7 +3594,8 @@ struct CalendarView: View {
                         Task {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                         }
-                    }
+                    },
+                    isSingleDayView: true
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
@@ -3714,7 +3724,8 @@ struct CalendarView: View {
                 Task {
                     await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                 }
-            }
+            },
+            isSingleDayView: true
         )
         .frame(maxHeight: .infinity, alignment: .top)
     }

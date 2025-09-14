@@ -25,7 +25,7 @@ struct DayViewMobile: View {
     
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading) {
                 // Events list (always list in Mobile layout)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Events")
@@ -68,7 +68,8 @@ struct DayViewMobile: View {
                         },
                         hideDueDateTag: false,
                         showEmptyState: true,
-                        horizontalCards: false
+                        horizontalCards: false,
+                        isSingleDayView: true
                     )
                 }
                 
@@ -99,7 +100,8 @@ struct DayViewMobile: View {
                         },
                         hideDueDateTag: false,
                         showEmptyState: true,
-                        horizontalCards: false
+                        horizontalCards: false,
+                        isSingleDayView: true
                     )
                 }
                 
@@ -108,11 +110,9 @@ struct DayViewMobile: View {
                     LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+         
+        
         }
-        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
         // Task details sheet
         .sheet(isPresented: $showingTaskDetails) {
             if let t = selectedTask, let listId = selectedTaskListId, let account = selectedTaskAccount {

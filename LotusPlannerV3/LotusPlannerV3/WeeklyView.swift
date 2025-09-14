@@ -27,8 +27,21 @@ struct WeeklyView: View {
     @State private var taskSheetSelection: WeeklyTaskSelection?
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
-    @State private var v2TopTasksHeight: CGFloat = 300
+    @State private var v2TopTasksHeight: CGFloat = 0 // Will be calculated dynamically
     @State private var isV2DividerDragging: Bool = false
+    @State private var scrollToCurrentDayTrigger = false
+    
+    // Calculate available height for equal row distribution
+    private var availableHeight: CGFloat {
+        // Get the screen height minus navigation and padding
+        let screenHeight = UIScreen.main.bounds.height
+        let navigationHeight: CGFloat = 100 // Approximate navigation bar height
+        let padding: CGFloat = 16 // 8pt padding on each side
+        let headerHeight: CGFloat = 60 // Date header height
+        let dividerHeight: CGFloat = 8 // Divider height
+        
+        return screenHeight - navigationHeight - padding - headerHeight - dividerHeight
+    }
     
     // No section width management needed since we removed the events section
     
@@ -118,10 +131,14 @@ struct WeeklyView: View {
         .task {
             // Initialize selectedDate from navigation manager if available
             selectedDate = navigationManager.currentDate
+            // Initialize divider to equal height (half of available height)
+            v2TopTasksHeight = availableHeight / 2
             await tasksViewModel.loadTasks()
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
             selectedDate = newValue
+            // Scroll to current day when date changes
+            scrollToCurrentDayTrigger.toggle()
         }
     }
     
@@ -131,37 +148,45 @@ struct WeeklyView: View {
         // Main content area with only tasks section (no events section)
         VStack(spacing: 0) {
             // Tasks section - Full width
-            ScrollView(.horizontal, showsIndicators: true) {
-                VStack(spacing: 0) {
-                    // Week view - 7-column tasks layout
-                    weekTasksView
-                    
-                    // If neither account is linked, show placeholder
-                    if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
-                        Button(action: { NavigationManager.shared.showSettings() }) {
-                            VStack(spacing: 8) {
-                                Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.secondary)
-                                Text("No Task Accounts Linked")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
-                                Text("Link your Google accounts in Settings to view tasks")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        // Week view - 7-column tasks layout
+                        weekTasksView
+                        
+                        // If neither account is linked, show placeholder
+                        if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+                            Button(action: { NavigationManager.shared.showSettings() }) {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "person.badge.plus")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(.secondary)
+                                    Text("No Task Accounts Linked")
+                                        .font(.headline)
+                                        .foregroundColor(.secondary)
+                                    Text("Link your Google accounts in Settings to view tasks")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.center)
+                                }
                             }
+                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.all, 8)
                         }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.all, 8)
                     }
+                    .frame(maxHeight: .infinity)
                 }
-                .frame(maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
+                .padding(.all, 8)
+                .onAppear {
+                    scrollToCurrentDayWithProxy(proxy)
+                }
+                .onChange(of: scrollToCurrentDayTrigger) { _ in
+                    scrollToCurrentDayWithProxy(proxy)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemBackground))
-            .padding(.all, 8)
         }
         .frame(minHeight: 0, maxHeight: .infinity)
     }
@@ -206,7 +231,7 @@ extension WeeklyView {
                     // Fixed-width 7-day task columns
                     HStack(spacing: 0) {
                         // 7-day task columns with fixed width
-                        ForEach(weekDates, id: \.self) { date in
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                             weekTaskColumnPersonal(date: date)
                                 .frame(width: dayColumnWidth) // Fixed width matching timeline
                                 .background(Color(.systemBackground))
@@ -216,6 +241,7 @@ extension WeeklyView {
                                         .frame(width: 0.5),
                                     alignment: .trailing
                                 )
+                                .id("day_\(index)")
                         }
                     }
                     .frame(width: fixedWidth) // Total fixed width
@@ -258,7 +284,7 @@ extension WeeklyView {
                     // Fixed-width 7-day task columns
                     HStack(spacing: 0) {
                         // 7-day task columns with fixed width
-                        ForEach(weekDates, id: \.self) { date in
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                             weekTaskColumnProfessional(date: date)
                                 .frame(width: dayColumnWidth) // Fixed width matching timeline
                                 .background(Color(.systemBackground))
@@ -268,13 +294,15 @@ extension WeeklyView {
                                         .frame(width: 0.5),
                                     alignment: .trailing
                                 )
+                                .id("day_\(index)")
                         }
                     }
                     .frame(width: fixedWidth) // Total fixed width
                 }
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
-                .frame(maxHeight: .infinity, alignment: .top)
+                .frame(height: (authManager.isLinked(kind: .personal) && personalHasAny) ? (availableHeight - v2TopTasksHeight) : nil, alignment: .top)
+                .clipped()
             }
         }
     }
@@ -318,7 +346,7 @@ extension WeeklyView {
     private func weekTasksDateHeader(dayColumnWidth: CGFloat, timeColumnWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             // Day headers
-            ForEach(weekDates, id: \.self) { date in
+            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                 weekTaskDateHeaderView(date: date)
                     .frame(width: dayColumnWidth, height: 60)
                     .background(Color(.systemGray6))
@@ -328,6 +356,7 @@ extension WeeklyView {
                             .frame(width: 0.5),
                         alignment: .trailing
                     )
+                    .id("day_\(index)")
             }
         }
         .background(Color(.systemBackground))
@@ -386,8 +415,9 @@ extension WeeklyView {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                         }
                     },
-                    hideDueDateTag: true,
-                    showEmptyState: false
+                    hideDueDateTag: false,
+                    showEmptyState: false,
+                    isSingleDayView: true
                 )
             } else {
                 EmptyView()
@@ -425,8 +455,9 @@ extension WeeklyView {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                         }
                     },
-                    hideDueDateTag: true,
-                    showEmptyState: false
+                    hideDueDateTag: false,
+                    showEmptyState: false,
+                    isSingleDayView: true
                 )
             } else {
                 EmptyView()
@@ -475,6 +506,37 @@ extension WeeklyView {
     // Calendar header functions removed since we only show tasks now
     
     // All calendar-related timeline functions removed since we only show tasks now
+    
+    // MARK: - Scrolling Functions
+    private func scrollToCurrentDay() {
+        // Find the current day in the week using the same calendar as weekDates
+        let today = Date()
+        let calendar = Calendar.mondayFirst
+        
+        // Find which day of the week today is (0 = Monday, 6 = Sunday)
+        let todayWeekday = calendar.component(.weekday, from: today)
+        let mondayWeekday = 2 // Monday is weekday 2 in Calendar.current
+        let dayIndex = (todayWeekday - mondayWeekday + 7) % 7
+        
+        // Trigger scroll by toggling the state
+        scrollToCurrentDayTrigger.toggle()
+    }
+    
+    private func scrollToCurrentDayWithProxy(_ proxy: ScrollViewProxy) {
+        // Find the current day in the week using the same calendar as weekDates
+        let today = Date()
+        let calendar = Calendar.mondayFirst
+        
+        // Find which day of the week today is (0 = Monday, 6 = Sunday)
+        let todayWeekday = calendar.component(.weekday, from: today)
+        let mondayWeekday = 2 // Monday is weekday 2 in Calendar.current
+        let dayIndex = (todayWeekday - mondayWeekday + 7) % 7
+        
+        // Scroll to the current day column
+        withAnimation(.easeInOut(duration: 0.5)) {
+            proxy.scrollTo("day_\(dayIndex)", anchor: .center)
+        }
+    }
 
 }
 
