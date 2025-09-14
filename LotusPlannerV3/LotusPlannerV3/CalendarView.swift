@@ -4319,7 +4319,7 @@ struct PencilKitView: UIViewRepresentable {
     
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
-        canvasView.drawingPolicy = .anyInput
+        canvasView.drawingPolicy = .pencilOnly
         canvasView.backgroundColor = .clear
 
         // Present (or hide) the system tool picker (colour, stroke, eraser …)
