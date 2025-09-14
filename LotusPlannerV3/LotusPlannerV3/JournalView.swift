@@ -126,10 +126,7 @@ struct JournalView: View {
                                     Button(action: { step(1) }) {
                                         Image(systemName: "chevron.right")
                                     }
-                                }
-                            }
-                            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                                HStack(spacing: 16) {
+                                    Spacer()
                                     Button(action: { showToolPicker.toggle() }) {
                                         Image(systemName: "applepencil.and.scribble")
                                     }
@@ -145,11 +142,13 @@ struct JournalView: View {
                                     Button(action: { showingEraseConfirmation = true }) {
                                         Image(systemName: "trash")
                                     }
-                                    Button("Done") {
-                                        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
-                                        savePhotos()
-                                        dismiss()
-                                    }
+                                }
+                            }
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("Done") {
+                                    JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+                                    savePhotos()
+                                    dismiss()
                                 }
                             }
                         }
@@ -196,14 +195,9 @@ struct JournalView: View {
         ZStack {
             // Observe photo picker selection
         
-            // PDF background (fallback to blank when file missing)
-            if let url = JournalManager.shared.backgroundPDFURL(for: layoutType),
-               let doc = PDFDocument(url: url) {
-                PDFKitView(document: doc)
-                    .ignoresSafeArea()
-            } else {
-                Color.clear
-            }
+            // Clean white background
+            Color.white
+                .ignoresSafeArea()
 
             // PencilKit canvas overlay
             PencilKitView(canvasView: $canvasView, showsToolPicker: showToolPicker)
@@ -408,19 +402,6 @@ struct JournalView: View {
     
 }
 
-// PDFKit SwiftUI wrapper
-struct PDFKitView: UIViewRepresentable {
-    let document: PDFDocument
-    func makeUIView(context: Context) -> PDFView {
-        let pdfView = PDFView()
-        pdfView.document = document
-        pdfView.autoScales = true
-        pdfView.backgroundColor = UIColor.clear
-        pdfView.isUserInteractionEnabled = false // static background
-        return pdfView
-    }
-    func updateUIView(_ uiView: PDFView, context: Context) {}
-}
 
 
 #Preview {
