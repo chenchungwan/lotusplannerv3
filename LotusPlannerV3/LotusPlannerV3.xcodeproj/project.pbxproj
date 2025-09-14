@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		458BB21B2E761D68007B61CA /* DateFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 458BB1DB2E761D68007B61CA /* DateFormatters.swift */; };
 		45D43E722E148D1000B834CC /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 45D43E712E148D1000B834CC /* GoogleSignIn */; };
 		45D43E742E148D1000B834CC /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 45D43E732E148D1000B834CC /* GoogleSignInSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		458BB1DB2E761D68007B61CA /* DateFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateFormatters.swift; sourceTree = "<group>"; };
 		45D43E312E147A4B00B834CC /* LotusPlannerV3.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LotusPlannerV3.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -52,6 +54,7 @@
 		45D43E282E147A4B00B834CC = {
 			isa = PBXGroup;
 			children = (
+				458BB1DB2E761D68007B61CA /* DateFormatters.swift */,
 				45D43E332E147A4B00B834CC /* LotusPlannerV3 */,
 				45D43E322E147A4B00B834CC /* Products */,
 			);
@@ -144,6 +147,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				458BB21B2E761D68007B61CA /* DateFormatters.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

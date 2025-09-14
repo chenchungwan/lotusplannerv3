@@ -21,9 +21,11 @@ struct GlobalNavBar: View {
     private var dateLabel: String {
         switch navigationManager.currentInterval {
         case .year:
-            return String(Calendar.current.component(.year, from: navigationManager.currentDate))
+            let year = Calendar.current.component(.year, from: navigationManager.currentDate)
+            return "\(year)"
         case .month:
-            let formatter = DateFormatter.standardMonthYear
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM yyyy"
             return formatter.string(from: navigationManager.currentDate)
         case .week:
             let cal = Calendar.mondayFirst
@@ -33,20 +35,53 @@ struct GlobalNavBar: View {
             let start = weekInterval.start
             let end = cal.date(byAdding: .day, value: 6, to: start) ?? start
             
-            let monthFormatter = DateFormatter.standardMonth
-            let dayFormatter = DateFormatter.standardDay
+            // Get week number
+            let weekNumber = cal.component(.weekOfYear, from: start)
             
-            if cal.isDate(start, equalTo: end, toGranularity: .month) {
-                // Same month: "September 11-17"
-                return "\(monthFormatter.string(from: start)) \(dayFormatter.string(from: start))-\(dayFormatter.string(from: end))"
-            } else {
-                // Different months: "Sep 30-Oct 6"
-                let shortMonthFormatter = DateFormatter.standardShortMonth
-                return "\(shortMonthFormatter.string(from: start)) \(dayFormatter.string(from: start))-\(shortMonthFormatter.string(from: end)) \(dayFormatter.string(from: end))"
-            }
+            // Format dates as M/d/yy
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "M/d/yy"
+            let startString = dateFormatter.string(from: start)
+            let endString = dateFormatter.string(from: end)
+            
+            return "Week\(weekNumber): \(startString) - \(endString)"
         case .day:
-            let formatter = DateFormatter.standardMonthDay
-            return formatter.string(from: navigationManager.currentDate)
+            let cal = Calendar.current
+            let date = navigationManager.currentDate
+            
+            // Get day of week abbreviation
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "EEE"
+            let dayOfWeek = dayFormatter.string(from: date).uppercased()
+            
+            // Format as M/d/yy
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "M/d/yy"
+            let dateString = dateFormatter.string(from: date)
+            
+            return "\(dayOfWeek) \(dateString)"
+        }
+    }
+    
+    private var isCurrentPeriod: Bool {
+        let cal = Calendar.current
+        let now = Date()
+        let currentDate = navigationManager.currentDate
+        
+        switch navigationManager.currentInterval {
+        case .year:
+            return cal.isDate(currentDate, equalTo: now, toGranularity: .year)
+        case .month:
+            return cal.isDate(currentDate, equalTo: now, toGranularity: .month)
+        case .week:
+            let mondayFirst = Calendar.mondayFirst
+            guard let weekInterval = mondayFirst.dateInterval(of: .weekOfYear, for: currentDate),
+                  let nowWeekInterval = mondayFirst.dateInterval(of: .weekOfYear, for: now) else {
+                return false
+            }
+            return weekInterval.start == nowWeekInterval.start
+        case .day:
+            return cal.isDate(currentDate, inSameDayAs: now)
         }
     }
     
@@ -55,6 +90,11 @@ struct GlobalNavBar: View {
         let component = navigationManager.currentInterval.calendarComponent
         if let newDate = cal.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
             navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
+            
+            // Refresh data for the new date/period
+            Task {
+                await reloadAllDataForDate(newDate)
+            }
         }
     }
     
@@ -76,112 +116,136 @@ struct GlobalNavBar: View {
                             }
                         } label: {
                             Image(systemName: "line.3.horizontal")
-                                .font(.body)
-                                .frame(width: 20, height: 20)
+                                .font(.title2)
+                                .frame(width: 25, height: 25)
                                 .foregroundColor(.secondary)
                         }
-                        // Quick nav to Tasks view
+                        // Toggle between Tasks and Calendar views
                         Button {
-                            navigationManager.switchToTasks()
-                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                            if navigationManager.showTasksView {
+                                navigationManager.switchToCalendar()
+                            } else {
+                                navigationManager.switchToTasks()
+                                NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                            }
                         } label: {
-                            Image(systemName: "checklist")
-                        }
-                        // Quick nav to Calendar Day view
-                        Button {
-                            navigationManager.switchToCalendar()
-                            navigationManager.updateInterval(.day, date: Date())
-                        } label: {
-                            Image(systemName: "calendar")
+                            Image(systemName: navigationManager.showTasksView ? "calendar" : "checklist")
+                                .font(.title2)
+                                .foregroundColor(navigationManager.showTasksView ? .secondary : .accentColor)
                         }
                         
                         
                         Button { step(-1) } label: {
                             Image(systemName: "chevron.left")
+                                .font(.title2)
                         }
                         Button {
                             selectedDateForPicker = navigationManager.currentDate
                             showingDatePicker = true
                         } label: {
                             Text(dateLabel)
-                                .font(.headline)
+                                .font(.title)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
+                                .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary)
                         }
                         Button { step(1) } label: {
                             Image(systemName: "chevron.right")
+                                .font(.title2)
                         }
                         
                         if !isNarrow {
-                            Spacer()
+                        Spacer()
                             Button {
-                                navigationManager.updateInterval(.day, date: navigationManager.currentDate)
+                                // Go to current day
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.day, date: Date())
                             } label: {
                                 Image(systemName: "d.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary))
                             }
                             Button {
-                                navigationManager.updateInterval(.week, date: navigationManager.currentDate)
+                                // Go to current week
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.week, date: Date())
                             } label: {
                                 Image(systemName: "w.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .week ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary))
                             }
                             Button {
-                                navigationManager.updateInterval(.month, date: navigationManager.currentDate)
+                                // Go to current month
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.month, date: Date())
                             } label: {
                                 Image(systemName: "m.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .month ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary))
                             }
                             Button {
-                                navigationManager.updateInterval(.year, date: navigationManager.currentDate)
+                                // Go to current year
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.year, date: Date())
                             } label: {
                                 Image(systemName: "y.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .year ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .year ? .accentColor : .secondary))
                             }
-                            Button {
-                                navigationManager.updateInterval(.year, date: navigationManager.currentDate)
-                            } label: {
-                                Image(systemName: "a.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .year ? .accentColor : .secondary)
-                            }
-                            Menu {
-                                Button("Has Due Date") {
-                                    //code
+                            
+                            // Hide a.circle and ellipsis.circle in calendar view
+                            if navigationManager.currentView != .calendar {
+                                Button {
+                                    // Switch to "All" tasks view
+                                    NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                } label: {
+                                    Image(systemName: "a.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                 }
-                                Button("No Due Date") {
-                                    //code
+                                Menu {
+                                    Button("Has Due Date") {
+                                        // Switch to All view with Has Due Date filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
+                                    }
+                                    Button("No Due Date") {
+                                        // Switch to All view with No Due Date filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
+                                    }
+                                    Button("Overdue") {
+                                        // Switch to All view with Past Due filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
+                                    }
+                                    Button("Complete") {
+                                        // Switch to All view with Complete filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.title2)
                                 }
-                                Button("Overd") {
-                                    //code
-                                }
-                                Button("Complete") {
-                                    //code
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
                             }
                             
                             Text("|")
+                                .font(.title2)
                             Button {
                                 appPrefs.hideCompletedTasks.toggle()
                             } label: {
                                 Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                                    .font(.title2)
                             }
                             Button {
-                                //code
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            Button {
-                                let calVM = calendarVM
-                                let tVM = tasksVM
-                                let date = navigationManager.currentDate
+                                // Comprehensive data reload
                                 Task {
-                                    await calVM.preloadMonthIntoCache(containing: date)
-                                    await tVM.loadTasks()
+                                    await reloadAllData()
                                 }
                             } label: {
-                                Image(systemName: "arrow.trianglepath")
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.title2)
                             }
                             Menu {
                                 Button("Event") {
@@ -192,6 +256,7 @@ struct GlobalNavBar: View {
                                 }
                             } label: {
                                 Image(systemName: "plus.circle")
+                                    .font(.title2)
                             }
                         }
                     }
@@ -202,73 +267,95 @@ struct GlobalNavBar: View {
                         HStack{
                             
                             Button {
-                                navigationManager.updateInterval(.day, date: navigationManager.currentDate)
+                                // Go to current day
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.day, date: Date())
                             } label: {
                                 Image(systemName: "d.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary))
                             }
                             Button {
-                                navigationManager.updateInterval(.week, date: navigationManager.currentDate)
+                                // Go to current week
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.week, date: Date())
                             } label: {
                                 Image(systemName: "w.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .week ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary))
                             }
                             Button {
-                                navigationManager.updateInterval(.month, date: navigationManager.currentDate)
+                                // Go to current month
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.month, date: Date())
                             } label: {
                                 Image(systemName: "m.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .month ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary))
                             }
                             Button {
-                                navigationManager.updateInterval(.year, date: navigationManager.currentDate)
+                                // Go to current year
+                                navigationManager.showingAllTasks = false
+                                navigationManager.updateInterval(.year, date: Date())
                             } label: {
                                 Image(systemName: "y.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .year ? .accentColor : .secondary)
+                                    .font(.title2)
+                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentInterval == .year ? .accentColor : .secondary))
                             }
-                            Button {
-                                navigationManager.updateInterval(.year, date: navigationManager.currentDate)
-                            } label: {
-                                Image(systemName: "a.circle")
-                                    .foregroundColor(navigationManager.currentInterval == .year ? .accentColor : .secondary)
-                            }
-                            Menu {
-                                Button("Has Due Date") {
-                                    //code
+                            
+                            // Hide a.circle and ellipsis.circle in calendar view
+                            if navigationManager.currentView != .calendar {
+                                Button {
+                                    // Switch to "All" tasks view
+                                    NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                } label: {
+                                    Image(systemName: "a.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                 }
-                                Button("No Due Date") {
-                                    //code
+                                Menu {
+                                    Button("Has Due Date") {
+                                        // Switch to All view with Has Due Date filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
+                                    }
+                                    Button("No Due Date") {
+                                        // Switch to All view with No Due Date filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
+                                    }
+                                    Button("Overdue") {
+                                        // Switch to All view with Past Due filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
+                                    }
+                                    Button("Complete") {
+                                        // Switch to All view with Complete filter
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.title2)
                                 }
-                                Button("Overd") {
-                                    //code
-                                }
-                                Button("Complete") {
-                                    //code
-                                }
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
                             }
                             
                             Text("|")
+                                .font(.title2)
                             Button {
                                 appPrefs.hideCompletedTasks.toggle()
                             } label: {
                                 Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
+                                    .font(.title2)
                             }
                             Button {
-                                //code
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            Button {
-                                let calVM = calendarVM
-                                let tVM = tasksVM
-                                let date = navigationManager.currentDate
+                                // Comprehensive data reload
                                 Task {
-                                    await calVM.preloadMonthIntoCache(containing: date)
-                                    await tVM.loadTasks()
+                                    await reloadAllData()
                                 }
                             } label: {
-                                Image(systemName: "arrow.trianglepath")
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.title2)
                             }
                             Menu {
                                 Button("Event") {
@@ -279,13 +366,14 @@ struct GlobalNavBar: View {
                                 }
                             } label: {
                                 Image(systemName: "plus.circle")
+                                    .font(.title2)
                             }
                         }
                     }
                     
                 }.padding()
             }
-            .frame(height: 84)
+            .frame(height: 50)
             
         }
         .sheet(isPresented: $showingSettings) {
@@ -362,6 +450,57 @@ struct GlobalNavBar: View {
                 )
             }
         }
+    }
+    
+    // MARK: - Data Reload Functions
+    private func reloadAllData() async {
+        let currentDate = navigationManager.currentDate
+        
+        // Reload calendar events based on current interval
+        switch navigationManager.currentInterval {
+        case .day:
+            await calendarVM.loadCalendarData(for: currentDate)
+        case .week:
+            await calendarVM.loadCalendarDataForWeek(containing: currentDate)
+        case .month:
+            await calendarVM.loadCalendarDataForMonth(containing: currentDate)
+        case .year:
+            // For year view, load month data for the specific month
+            await calendarVM.loadCalendarDataForMonth(containing: currentDate)
+        }
+        
+        // Reload tasks
+        await tasksVM.loadTasks()
+        
+        // Reload logs data
+        LogsViewModel.shared.reloadData()
+        
+        // Post notification to refresh journal content
+        NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+    }
+    
+    private func reloadAllDataForDate(_ date: Date) async {
+        // Reload calendar events based on current interval
+        switch navigationManager.currentInterval {
+        case .day:
+            await calendarVM.loadCalendarData(for: date)
+        case .week:
+            await calendarVM.loadCalendarDataForWeek(containing: date)
+        case .month:
+            await calendarVM.loadCalendarDataForMonth(containing: date)
+        case .year:
+            // For year view, load month data for the specific month
+            await calendarVM.loadCalendarDataForMonth(containing: date)
+        }
+        
+        // Reload tasks
+        await tasksVM.loadTasks()
+        
+        // Reload logs data
+        LogsViewModel.shared.reloadData()
+        
+        // Post notification to refresh journal content
+        NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
     }
     
 }

@@ -1393,9 +1393,23 @@ struct TasksView: View {
             )
         }
         .onAppear {
-            // Default to current day when entering Tasks view
-            selectedFilter = .day
-            referenceDate = Date()
+            // Sync with navigation manager state when view appears
+            if navigationManager.showingAllTasks {
+                selectedFilter = .all
+            } else {
+                switch navigationManager.currentInterval {
+                case .day:
+                    selectedFilter = .day
+                case .week:
+                    selectedFilter = .week
+                case .month:
+                    selectedFilter = .month
+                case .year:
+                    selectedFilter = .year
+                }
+            }
+            referenceDate = navigationManager.currentDate
+            
             // Listen for external requests to show Add Task so behavior matches Calendar
             NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
                 showingNewTask = true
@@ -1405,6 +1419,74 @@ struct TasksView: View {
                 selectedFilter = .all
                 allSubfilter = .all
                 referenceDate = Date()
+                navigationManager.showingAllTasks = true
+                // Clear the current interval since "All Tasks" doesn't correspond to a specific time interval
+                // This ensures other icons (D, W, M, Y) are properly unhighlighted
+                navigationManager.currentInterval = .day // Reset to a default interval
+                // Reload tasks for "All" view
+                Task {
+                    await viewModel.loadTasks()
+                }
+            }
+            // Listen for request to set specific subfilter
+            NotificationCenter.default.addObserver(forName: Notification.Name("SetAllTasksSubfilter"), object: nil, queue: .main) { notification in
+                if let subfilter = notification.object as? AllTaskSubfilter {
+                    allSubfilter = subfilter
+                    // Reload tasks with new subfilter
+                    Task {
+                        await viewModel.loadTasks()
+                    }
+                }
+            }
+        }
+        .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+            referenceDate = newValue
+        }
+        .onChange(of: navigationManager.currentInterval) { oldValue, newValue in
+            // Update selectedFilter to match navigation manager's interval
+            // Only update if we're not currently showing "All Tasks"
+            if !navigationManager.showingAllTasks {
+                switch newValue {
+                case .day:
+                    selectedFilter = .day
+                case .week:
+                    selectedFilter = .week
+                case .month:
+                    selectedFilter = .month
+                case .year:
+                    selectedFilter = .year
+                }
+            }
+        }
+        .onChange(of: referenceDate) { oldValue, newValue in
+            // Reload tasks when reference date changes
+            Task {
+                await viewModel.loadTasks()
+            }
+        }
+        .onChange(of: selectedFilter) { oldValue, newValue in
+            // Reload tasks when filter changes
+            Task {
+                await viewModel.loadTasks()
+            }
+        }
+        .onChange(of: navigationManager.showingAllTasks) { oldValue, newValue in
+            // Sync selectedFilter with showingAllTasks state
+            if newValue {
+                selectedFilter = .all
+            } else if selectedFilter == .all {
+                // If we're currently showing "All" but showingAllTasks is false,
+                // switch to the current interval
+                switch navigationManager.currentInterval {
+                case .day:
+                    selectedFilter = .day
+                case .week:
+                    selectedFilter = .week
+                case .month:
+                    selectedFilter = .month
+                case .year:
+                    selectedFilter = .year
+                }
             }
         }
     }
@@ -1556,7 +1638,11 @@ struct TasksView: View {
         let cal = Calendar.mondayFirst
         switch filter {
         case .all:
-            return ""
+            // Show subfilter name if not "All"
+            if allSubfilter != .all {
+                return "All Tasks - \(allSubfilter.rawValue)"
+            }
+            return "All Tasks"
         case .day:
             // Standardized format: MON 12/25/24
             let dayOfWeek = DateFormatter.standardDayOfWeek.string(from: referenceDate).uppercased()

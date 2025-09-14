@@ -2,18 +2,18 @@ import SwiftUI
 
 // MARK: - Day View Layout Option Enum
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
-    case defaultNew = 0
-    case compact = 1
-    case compactTwo = 2
-    case expanded = 3
+    case compact = 0
+    case compactTwo = 1
+    case expanded = 2
+    case defaultNew = 3
     case mobile = 4
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.defaultNew, .compact, .compactTwo, .expanded, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .expanded, .defaultNew, .mobile] }
 
     var displayName: String {
         switch self {
-        case .defaultNew: "Default"
+        case .defaultNew: "Expanded Two"
         case .compact: "Compact"
         case .compactTwo: "Compact Two"
         case .expanded: "Expanded"
@@ -101,6 +101,7 @@ class NavigationManager: ObservableObject {
     @Published var currentInterval: TimelineInterval = .day
     @Published var currentDate: Date = Date()
     @Published var showingSettings = false
+    @Published var showingAllTasks = false
     
     private init() {}
     
@@ -256,9 +257,9 @@ class AppPreferences: ObservableObject {
         // useDayViewDefault removed
 
         
-        // Load day view layout preference (default to Default layout if unset)
+        // Load day view layout preference (default to Compact layout if unset)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-        self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .defaultNew
+        self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
         
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")

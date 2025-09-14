@@ -407,9 +407,6 @@ class CalendarViewModel: ObservableObject {
             return
         }
         
-        
-        // removed hasValidCache unused flag
-        
         // Check cache first - if we have valid cached data, use it immediately
         if authManager.isLinked(kind: .personal) {
             let personalKey = monthCacheKey(for: date, accountKind: .personal)
@@ -437,7 +434,8 @@ class CalendarViewModel: ObservableObject {
             return
         }
         
-        // Load fresh data for accounts that need it
+        // Only set loading state if we actually need to load fresh data
+        // This prevents the UI from flickering when we have cached data
         isLoading = true
         errorMessage = nil
         
@@ -1706,8 +1704,18 @@ struct CalendarView: View {
             await calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
         }
         .onChange(of: currentDate) { oldValue, newValue in
-            Task {
-                await calendarViewModel.loadCalendarDataForMonth(containing: newValue)
+            // Only load data if the date actually changed to a different month
+            let calendar = Calendar.current
+            if !calendar.isDate(oldValue, equalTo: newValue, toGranularity: .month) {
+                Task {
+                    await calendarViewModel.loadCalendarDataForMonth(containing: newValue)
+                }
+            }
+        }
+        .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+            // Only update currentDate if it's actually different
+            if currentDate != newValue {
+                currentDate = newValue
             }
         }
     }
@@ -1729,6 +1737,9 @@ struct CalendarView: View {
                         updateCachedTasks()
                     }
                 }
+            }
+            .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+                currentDate = newValue
             }
             .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
                 updateCachedTasks()
@@ -1896,7 +1907,7 @@ struct CalendarView: View {
         case .expanded:
             dayViewContentExpanded(geometry: geometry)
         case .defaultNew:
-            DayViewDefault(onEventTap: { ev in
+            DayViewExpandedTwo(onEventTap: { ev in
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })

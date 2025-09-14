@@ -27,8 +27,6 @@ struct WeeklyView: View {
     @State private var taskSheetSelection: WeeklyTaskSelection?
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
-    @State private var showingDatePicker = false
-    @State private var selectedDateForPicker = Date()
     @State private var v2TopTasksHeight: CGFloat = 300
     @State private var isV2DividerDragging: Bool = false
     
@@ -39,16 +37,9 @@ struct WeeklyView: View {
             .sidebarToggleHidden()
             .navigationTitle("")
             .toolbarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
-                    principalToolbarContent
-                }
-
-                ToolbarItemGroup(placement: .principal) { EmptyView() }
-
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    trailingToolbarButtons
-                }
+            .safeAreaInset(edge: .top) {
+                GlobalNavBar()
+                    .background(.ultraThinMaterial)
             }
         // Event details sheet removed
         .sheet(isPresented: $showingAddEvent) {
@@ -134,124 +125,6 @@ struct WeeklyView: View {
         }
     }
     
-    // MARK: - Toolbar Content
-    private var principalToolbarContent: some View {
-        HStack(spacing: 8) {
-            SharedNavigationToolbar()
-            
-            Button(action: { step(-1) }) {
-                Image(systemName: "chevron.left")
-            }
-            
-            Button(action: {
-                selectedDateForPicker = selectedDate
-                showingDatePicker = true
-            }) {
-                Text(titleText)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(isCurrentWeekTitle ? DateDisplayStyle.currentPeriodColor : .primary)
-            }
-            
-            Button(action: { step(1) }) {
-                Image(systemName: "chevron.right")
-            }
-        }
-        .sheet(isPresented: $showingDatePicker) {
-            NavigationStack {
-                DatePicker(
-                    "Select Date",
-                    selection: $selectedDateForPicker,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.graphical)
-                .navigationTitle("Select Date")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Cancel") { showingDatePicker = false }
-                    }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Done") {
-                            selectedDate = selectedDateForPicker
-                            navigationManager.switchToWeeklyView()
-                            navigationManager.updateInterval(.week, date: selectedDateForPicker)
-                            showingDatePicker = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.large])
-        }
-    }
-    
-    private var isCurrentWeekTitle: Bool {
-        let cal = Calendar.mondayFirst
-        guard let weekStart = cal.dateInterval(of: .weekOfYear, for: Date())?.start,
-              let weekEnd = cal.date(byAdding: .day, value: 6, to: weekStart) else { return false }
-        return selectedDate >= weekStart && selectedDate <= weekEnd
-    }
-    
-    private var trailingToolbarButtons: some View {
-        HStack(spacing: 12) {
-            // Day button
-            Button(action: {
-                navigationManager.switchToCalendar()
-                navigationManager.updateInterval(.day, date: selectedDate)
-            }) {
-                Image(systemName: "d.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentInterval == .day && navigationManager.currentView != .weeklyView ? .accentColor : .secondary)
-            }
-            
-            // WeeklyView button
-            Button(action: {
-                let now = Date()
-                selectedDate = now
-                navigationManager.switchToWeeklyView()
-                navigationManager.updateInterval(.week, date: now)
-                Task { await tasksViewModel.loadTasks() }
-            }) {
-                Image(systemName: "w.circle")
-                    .font(.body)
-                    .foregroundColor(navigationManager.currentView == .weeklyView ? .accentColor : .secondary)
-            }
-
-            // g.circle removed
-            
-            // Hide Completed toggle
-            Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
-                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-
-            // Refresh button
-            Button(action: {
-                Task {
-                    await tasksViewModel.loadTasks()
-                }
-            }) {
-                Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-
-            // Add menu (Event or Task)
-            Menu {
-                Button("Event") { 
-                    showingAddEvent = true
-                }
-                Button("Task") {
-                    showingNewTask = true
-                }
-            } label: {
-                Image(systemName: "plus.circle")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
     
     // MARK: - Main Content
     private var mainContent: some View {
@@ -410,19 +283,6 @@ extension WeeklyView {
     
 
     
-    private var titleText: String {
-        let calendar = Calendar.mondayFirst
-        guard
-            let weekStart = calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start,
-            let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart)
-        else { return "Week" }
-        
-        // Standardized format: 12/25/24 - 12/31/24
-        let startString = DateFormatter.standardDate.string(from: weekStart)
-        let endString = DateFormatter.standardDate.string(from: weekEnd)
-        
-        return "\(startString) - \(endString)"
-    }
     
     private func step(_ offset: Int) {
         let calendar = Calendar.current

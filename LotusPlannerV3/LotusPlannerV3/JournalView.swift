@@ -70,6 +70,16 @@ struct JournalView: View {
                     .onAppear {
                         loadDrawing()
                         loadPhotos()
+                        
+                        // Listen for refresh notifications
+                        NotificationCenter.default.addObserver(
+                            forName: Notification.Name("RefreshJournalContent"),
+                            object: nil,
+                            queue: .main
+                        ) { _ in
+                            loadDrawing()
+                            loadPhotos()
+                        }
                     }
                     .onDisappear {
                         JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
