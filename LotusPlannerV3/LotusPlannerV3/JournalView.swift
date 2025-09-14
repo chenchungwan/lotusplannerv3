@@ -602,6 +602,7 @@ struct JournalView: View {
         
         @State private var inputText: String = ""
         @FocusState private var isTextFieldFocused: Bool
+        @State private var keyboardHeight: CGFloat = 0
         
         var body: some View {
             VStack {
@@ -628,11 +629,41 @@ struct JournalView: View {
                 .padding()
                 .background(Color.white.opacity(0.9))
                 .cornerRadius(10)
-                .padding()
+                .padding(.horizontal)
+                .padding(.bottom, max(keyboardHeight, 20)) // Ensure it's above keyboard
             }
             .onAppear {
                 isTextFieldFocused = true
+                setupKeyboardObservers()
             }
+            .onDisappear {
+                removeKeyboardObservers()
+            }
+        }
+        
+        private func setupKeyboardObservers() {
+            NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardWillShowNotification,
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                    keyboardHeight = keyboardFrame.height
+                }
+            }
+            
+            NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardWillHideNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                keyboardHeight = 0
+            }
+        }
+        
+        private func removeKeyboardObservers() {
+            NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+            NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
         }
     }
 }
