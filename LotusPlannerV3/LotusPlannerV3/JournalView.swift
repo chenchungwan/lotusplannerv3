@@ -587,7 +587,7 @@ struct JournalView: View {
         }
         
         private var dragGesture: some Gesture {
-            DragGesture()
+            DragGesture(minimumDistance: 10)
                 .onChanged { value in
                     dragOffset = value.translation
                 }
