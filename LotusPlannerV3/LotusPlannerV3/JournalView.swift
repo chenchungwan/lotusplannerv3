@@ -575,12 +575,14 @@ struct JournalView: View {
             .gesture(dragGesture)
             .onTapGesture {
                 if !isEditing {
-                    withAnimation { showDelete.toggle() }
+                    isEditing = true
+                    showDelete = false
                 }
             }
             .onLongPressGesture {
-                isEditing = true
-                showDelete = false
+                if !isEditing {
+                    withAnimation { showDelete.toggle() }
+                }
             }
         }
         
