@@ -76,86 +76,32 @@ class TasksViewModel: ObservableObject {
     
     private let authManager = GoogleAuthManager.shared
     
+    // MARK: - Task Caching
+    private var cachedTasks: [String: [GoogleTask]] = [:]
+    private var cacheTimestamps: [String: Date] = [:]
+    private let cacheTimeout: TimeInterval = 1800 // 30 minutes
+    
     func loadTasks() async {
         isLoading = true
         errorMessage = ""
         
-        // Load tasks and recurring tasks for both account types
+        // Load tasks for both account types in parallel
         await withTaskGroup(of: Void.self) { group in
             if authManager.isLinked(kind: .personal) {
                 group.addTask {
-                    do {
-                        let taskLists = try await self.fetchTaskLists(for: .personal)
-                        
-                        await MainActor.run {
-                            // Use the order returned by Google API
-                            self.personalTaskLists = taskLists
-                        }
-                        
-                        // Load tasks for each task list
-                        for taskList in taskLists {
-                            let tasks = try await self.fetchTasks(for: .personal, taskListId: taskList.id)
-                            
-                            await MainActor.run {
-                                self.personalTasks[taskList.id] = tasks
-                            }
-                        }
-                        
-                    } catch {
-                        await MainActor.run {
-                            self.errorMessage = "Failed to load personal tasks: \(error.localizedDescription)"
-                        }
-                    }
+                    await self.loadTasksForAccount(.personal)
                 }
             }
             
             if authManager.isLinked(kind: .professional) {
                 group.addTask {
-                    do {
-                        let taskLists = try await self.fetchTaskLists(for: .professional)
-                        
-                        await MainActor.run {
-                            // Use the order returned by Google API
-                            self.professionalTaskLists = taskLists
-                        }
-                        
-                        // Load tasks for each task list
-                        for taskList in taskLists {
-                            let tasks = try await self.fetchTasks(for: .professional, taskListId: taskList.id)
-                            
-                            await MainActor.run {
-                                self.professionalTasks[taskList.id] = tasks
-                            }
-                        }
-                        
-                    } catch {
-                        await MainActor.run {
-                            self.errorMessage = "Failed to load professional tasks: \(error.localizedDescription)"
-                        }
-                    }
+                    await self.loadTasksForAccount(.professional)
                 }
             }
         }
         
         await MainActor.run {
             self.isLoading = false
-        }
-    }
-
-    /// Clears tasks and lists for the specified account kind (or all if nil)
-    func clearTasks(for kind: GoogleAuthManager.AccountKind? = nil) {
-        switch kind {
-        case .some(.personal):
-            personalTaskLists = []
-            personalTasks = [:]
-        case .some(.professional):
-            professionalTaskLists = []
-            professionalTasks = [:]
-        case .none:
-            personalTaskLists = []
-            professionalTaskLists = []
-            personalTasks = [:]
-            professionalTasks = [:]
         }
     }
     
@@ -165,32 +111,87 @@ class TasksViewModel: ObservableObject {
             
             await MainActor.run {
                 switch kind {
-                case .personal:
-                    self.personalTaskLists = taskLists
-                case .professional:
-                    self.professionalTaskLists = taskLists
+                case .personal: self.personalTaskLists = taskLists
+                case .professional: self.professionalTaskLists = taskLists
                 }
             }
             
-            // Fetch tasks for each task list
-            for taskList in taskLists {
-                let tasks = try await fetchTasks(for: kind, taskListId: taskList.id)
-                
-                await MainActor.run {
-                    switch kind {
-                    case .personal:
-                        self.personalTasks[taskList.id] = tasks
-                    case .professional:
-                        self.professionalTasks[taskList.id] = tasks
+            // PARALLEL task loading for all lists
+            await withTaskGroup(of: Void.self) { group in
+                for taskList in taskLists {
+                    group.addTask {
+                        do {
+                            let tasks = try await self.fetchTasks(for: kind, taskListId: taskList.id)
+                            await MainActor.run {
+                                switch kind {
+                                case .personal: self.personalTasks[taskList.id] = tasks
+                                case .professional: self.professionalTasks[taskList.id] = tasks
+                                }
+                            }
+                        } catch {
+                            await MainActor.run {
+                                self.errorMessage = "Failed to load tasks for \(taskList.title): \(error.localizedDescription)"
+                            }
+                        }
                     }
                 }
             }
+            
         } catch {
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) tasks: \(error.localizedDescription)"
             }
         }
     }
+
+    /// Clears tasks and lists for the specified account kind (or all if nil)
+    func clearTasks(for kind: GoogleAuthManager.AccountKind? = nil) {
+        switch kind {
+        case .some(.personal):
+            personalTaskLists = []
+            personalTasks = [:]
+            clearCacheForAccount(.personal)
+        case .some(.professional):
+            professionalTaskLists = []
+            professionalTasks = [:]
+            clearCacheForAccount(.professional)
+        case .none:
+            personalTaskLists = []
+            professionalTaskLists = []
+            personalTasks = [:]
+            professionalTasks = [:]
+            cachedTasks.removeAll()
+            cacheTimestamps.removeAll()
+        }
+    }
+    
+    // MARK: - Cache Helper Methods
+    private func taskCacheKey(for kind: GoogleAuthManager.AccountKind, listId: String) -> String {
+        return "\(kind.rawValue)_\(listId)"
+    }
+    
+    private func getCachedTasks(for key: String) -> [GoogleTask]? {
+        guard let timestamp = cacheTimestamps[key],
+              Date().timeIntervalSince(timestamp) < cacheTimeout else {
+            cachedTasks.removeValue(forKey: key)
+            return nil
+        }
+        return cachedTasks[key]
+    }
+    
+    private func cacheTasks(_ tasks: [GoogleTask], for key: String) {
+        cachedTasks[key] = tasks
+        cacheTimestamps[key] = Date()
+    }
+    
+    private func clearCacheForAccount(_ kind: GoogleAuthManager.AccountKind) {
+        let keysToRemove = cachedTasks.keys.filter { $0.hasPrefix(kind.rawValue) }
+        for key in keysToRemove {
+            cachedTasks.removeValue(forKey: key)
+            cacheTimestamps.removeValue(forKey: key)
+        }
+    }
+    
     
     private func fetchTaskLists(for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleTaskList] {
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
@@ -232,6 +233,14 @@ class TasksViewModel: ObservableObject {
     }
     
     private func fetchTasks(for kind: GoogleAuthManager.AccountKind, taskListId: String) async throws -> [GoogleTask] {
+        let cacheKey = taskCacheKey(for: kind, listId: taskListId)
+        
+        // Check cache first
+        if let cachedTasks = getCachedTasks(for: cacheKey) {
+            return cachedTasks
+        }
+        
+        // Fetch from API if not cached
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
             throw TasksError.notAuthenticated
         }
@@ -257,6 +266,9 @@ class TasksViewModel: ObservableObject {
         
         let tasksResponse = try decoder.decode(GoogleTasksResponse.self, from: data)
         let tasks = tasksResponse.items ?? []
+        
+        // Cache the results
+        cacheTasks(tasks, for: cacheKey)
         
         return tasks
     }
@@ -1063,6 +1075,125 @@ struct TasksView: View {
         }
     }
     
+    // MARK: - Local Filtering (No API calls)
+    private var filteredPersonalTasks: [String: [GoogleTask]] {
+        return filterTasks(viewModel.personalTasks)
+    }
+    
+    private var filteredProfessionalTasks: [String: [GoogleTask]] {
+        return filterTasks(viewModel.professionalTasks)
+    }
+    
+    private func filterTasks(_ tasksDict: [String: [GoogleTask]]) -> [String: [GoogleTask]] {
+        return tasksDict.mapValues { tasks in
+            filterTasksList(tasks)
+        }
+    }
+    
+    private func filterTasksList(_ tasks: [GoogleTask]) -> [GoogleTask] {
+        let calendar = Calendar.mondayFirst
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        
+        var filteredTasks = tasks
+        
+        // Apply subfilter when in "All"
+        if selectedFilter == .all {
+            filteredTasks = applyAllSubfilter(filteredTasks, calendar: calendar, startOfToday: startOfToday)
+        } else {
+            // For time-based filters, apply hide completed tasks setting
+            if appPrefs.hideCompletedTasks {
+                filteredTasks = filteredTasks.filter { !$0.isCompleted }
+            }
+            // Then apply time-based filter
+            filteredTasks = applyTimeBasedFilter(filteredTasks, calendar: calendar, now: now, startOfToday: startOfToday)
+        }
+        
+        return filteredTasks
+    }
+    
+    private func applyAllSubfilter(_ tasks: [GoogleTask], calendar: Calendar, startOfToday: Date) -> [GoogleTask] {
+        var filteredTasks = tasks
+        
+        switch allSubfilter {
+        case .all:
+            break
+        case .hasDueDate:
+            filteredTasks = filteredTasks.filter { $0.dueDate != nil }
+        case .noDueDate:
+            filteredTasks = filteredTasks.filter { $0.dueDate == nil }
+        case .pastDue:
+            filteredTasks = filteredTasks.filter { task in
+                if let due = task.dueDate {
+                    return calendar.startOfDay(for: due) < startOfToday && !task.isCompleted
+                }
+                return false
+            }
+        case .completed:
+            // When filtering for completed tasks, automatically turn off hide completed tasks
+            if appPrefs.hideCompletedTasks {
+                appPrefs.hideCompletedTasks = false
+            }
+            filteredTasks = filteredTasks.filter { $0.isCompleted }
+        }
+        
+        // Apply hide completed tasks setting for non-completed filters
+        if allSubfilter != .completed && appPrefs.hideCompletedTasks {
+            filteredTasks = filteredTasks.filter { !$0.isCompleted }
+        }
+        
+        return filteredTasks
+    }
+    
+    private func applyTimeBasedFilter(_ tasks: [GoogleTask], calendar: Calendar, now: Date, startOfToday: Date) -> [GoogleTask] {
+        return tasks.filter { task in
+            if task.isCompleted {
+                return matchesCompletionDate(task, calendar: calendar)
+            } else {
+                return matchesDueDate(task, calendar: calendar, now: now, startOfToday: startOfToday)
+            }
+        }
+    }
+    
+    private func matchesCompletionDate(_ task: GoogleTask, calendar: Calendar) -> Bool {
+        guard let completionDate = task.completionDate else { return false }
+        
+        switch selectedFilter {
+        case .day:
+            return calendar.isDate(completionDate, inSameDayAs: referenceDate)
+        case .week:
+            return calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .weekOfYear)
+        case .month:
+            return calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .month)
+        case .year:
+            return calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .year)
+        case .all:
+            return true
+        }
+    }
+    
+    private func matchesDueDate(_ task: GoogleTask, calendar: Calendar, now: Date, startOfToday: Date) -> Bool {
+        guard let dueDate = task.dueDate else { return false }
+        
+        switch selectedFilter {
+        case .day:
+            // Show task on due date OR, if viewing today, show overdue (relative to today)
+            let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: referenceDate)
+            let isViewingToday = calendar.isDate(referenceDate, inSameDayAs: now)
+            let startOfDueDate = calendar.startOfDay(for: dueDate)
+            let isOverdueRelativeToToday = startOfDueDate < startOfToday
+            return isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday)
+        case .week:
+            return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
+        case .month:
+            return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .month)
+        case .year:
+            return calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .year)
+        case .all:
+            return true
+        }
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
@@ -1079,7 +1210,7 @@ struct TasksView: View {
                                         .padding(.horizontal, 12)
                                     TasksComponent(
                                         taskLists: viewModel.personalTaskLists,
-                                        tasksDict: filteredTasks(viewModel.personalTasks),
+                                        tasksDict: filteredPersonalTasks,
                                         accentColor: appPrefs.personalColor,
                                         accountType: .personal,
                                         onTaskToggle: { task, listId in
@@ -1115,7 +1246,7 @@ struct TasksView: View {
                                         .padding(.horizontal, 12)
                                     TasksComponent(
                                         taskLists: viewModel.professionalTaskLists,
-                                        tasksDict: filteredTasks(viewModel.professionalTasks),
+                                        tasksDict: filteredProfessionalTasks,
                                         accentColor: appPrefs.professionalColor,
                                         accountType: .professional,
                                         onTaskToggle: { task, listId in
@@ -1151,7 +1282,7 @@ struct TasksView: View {
                             if authManager.isLinked(kind: .personal) {
                                 TasksComponent(
                                     taskLists: viewModel.personalTaskLists,
-                                    tasksDict: filteredTasks(viewModel.personalTasks),
+                                    tasksDict: filteredPersonalTasks,
                                     accentColor: appPrefs.personalColor,
                                     accountType: .personal,
                                     onTaskToggle: { task, listId in
@@ -1187,7 +1318,7 @@ struct TasksView: View {
                             if authManager.isLinked(kind: .professional) {
                                 TasksComponent(
                                     taskLists: viewModel.professionalTaskLists,
-                                    tasksDict: filteredTasks(viewModel.professionalTasks),
+                                    tasksDict: filteredProfessionalTasks,
                                     accentColor: appPrefs.professionalColor,
                                     accountType: .professional,
                                     onTaskToggle: { task, listId in
@@ -1436,10 +1567,7 @@ struct TasksView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("SetAllTasksSubfilter"), object: nil, queue: .main) { notification in
                 if let subfilter = notification.object as? AllTaskSubfilter {
                     allSubfilter = subfilter
-                    // Reload tasks with new subfilter
-                    Task {
-                        await viewModel.loadTasks()
-                    }
+                    // Note: No API reload needed - local filtering handles this instantly
                 }
             }
         }
@@ -1462,18 +1590,7 @@ struct TasksView: View {
                 }
             }
         }
-        .onChange(of: referenceDate) { oldValue, newValue in
-            // Reload tasks when reference date changes
-            Task {
-                await viewModel.loadTasks()
-            }
-        }
-        .onChange(of: selectedFilter) { oldValue, newValue in
-            // Reload tasks when filter changes
-            Task {
-                await viewModel.loadTasks()
-            }
-        }
+        // Note: Removed reactive API calls - now using local filtering for instant response
         .onChange(of: navigationManager.showingAllTasks) { oldValue, newValue in
             // Sync selectedFilter with showingAllTasks state
             if newValue {
@@ -1532,112 +1649,6 @@ struct TasksView: View {
     }
     
     // MARK: - Helper Methods
-    private func filteredTasks(_ tasksDict: [String: [GoogleTask]]) -> [String: [GoogleTask]] {
-        let calendar = Calendar.mondayFirst // Use consistent calendar
-        let now = Date()
-        let startOfToday = calendar.startOfDay(for: now)
-        
-        return tasksDict.mapValues { tasks in
-            var filteredTasks = tasks
-            
-            // Apply subfilter when in "All"
-            if selectedFilter == .all {
-                switch allSubfilter {
-                case .all:
-                    break
-                case .hasDueDate:
-                    filteredTasks = filteredTasks.filter { $0.dueDate != nil }
-                case .noDueDate:
-                    filteredTasks = filteredTasks.filter { $0.dueDate == nil }
-                case .pastDue:
-                    let cal = Calendar.mondayFirst
-                    let startOfToday = cal.startOfDay(for: Date())
-                    filteredTasks = filteredTasks.filter { task in
-                        if let due = task.dueDate {
-                            return cal.startOfDay(for: due) < startOfToday && !task.isCompleted
-                        }
-                        return false
-                    }
-                case .completed:
-                    // When filtering for completed tasks, automatically turn off hide completed tasks
-                    if appPrefs.hideCompletedTasks {
-                        appPrefs.hideCompletedTasks = false
-                    }
-                    filteredTasks = filteredTasks.filter { $0.isCompleted }
-                }
-                
-                // Apply hide completed tasks setting for non-completed filters
-                if allSubfilter != .completed && appPrefs.hideCompletedTasks {
-                    filteredTasks = filteredTasks.filter { !$0.isCompleted }
-                }
-            } else {
-                // For time-based filters, apply hide completed tasks setting
-                if appPrefs.hideCompletedTasks {
-                    filteredTasks = filteredTasks.filter { !$0.isCompleted }
-                }
-                // Then apply time-based filter if not "all"
-                filteredTasks = filteredTasks.filter { task in
-                    // For completed tasks, check completion date
-                    if task.isCompleted {
-                        guard let completionDate = task.completionDate else { 
-                            return false 
-                        }
-                        let isMatch: Bool
-                        switch selectedFilter {
-                        case .day:
-                            isMatch = calendar.isDate(completionDate, inSameDayAs: referenceDate)
-                        case .week:
-                            isMatch = calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .weekOfYear)
-                        case .month:
-                            isMatch = calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .month)
-                        case .year:
-                            isMatch = calendar.isDate(completionDate, equalTo: referenceDate, toGranularity: .year)
-                        case .all:
-                            isMatch = true
-                        }
-                        
-                        if selectedFilter == .day && !isMatch {
-                        }
-                        
-                        return isMatch
-                    } else {
-                        // For incomplete tasks, check due date
-                        guard let dueDate = task.dueDate else { 
-                            return false 
-                        }
-                        let isMatch: Bool
-                        switch selectedFilter {
-                        case .day:
-                            // Show task on due date OR, if viewing today, show overdue (relative to today)
-                            let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: referenceDate)
-                            let isViewingToday = calendar.isDate(referenceDate, inSameDayAs: now)
-                            let startOfDueDate = calendar.startOfDay(for: dueDate)
-                            let isOverdueRelativeToToday = startOfDueDate < startOfToday
-                            isMatch = isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday)
-                        case .week:
-                            isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .weekOfYear)
-                        case .month:
-                            isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .month)
-                        case .year:
-                            isMatch = calendar.isDate(dueDate, equalTo: referenceDate, toGranularity: .year)
-                        case .all:
-                            isMatch = true
-                        }
-                        
-                        if selectedFilter == .day && !isMatch {
-                        }
-                        
-                        if isMatch {
-                        }
-                        
-                        return isMatch
-                    }
-                }
-            }
-            
-            return filteredTasks
-        }
-    }
     
     private func isDueDateOverdue(dueDate: Date) -> Bool {
         let calendar = Calendar.mondayFirst
@@ -1780,88 +1791,131 @@ struct TasksSectionView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section Header
-            HStack {
-                Image(systemName: icon)
-                    .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor)
-                    .font(.title2)
-                Text(title)
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor)
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill((isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor).opacity(0.1))
-            )
-            
-            // Content Area
-            if isLinked {
-                if taskLists.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "checklist")
-                            .font(.system(size: 40))
-                            .foregroundColor(.secondary)
-                        Text("Loading tasks...")
-                            .foregroundColor(.secondary)
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.top, 40)
-                } else {
-                    let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
-                    ScrollView {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-                            ForEach(taskLists) { taskList in
-                                let filteredTasks = tasksDict[taskList.id] ?? []
-                                if !filteredTasks.isEmpty || filter == .all {
-                                    TaskListCard(
-                                        taskList: taskList,
-                                        tasks: filteredTasks,
-                                        accountKind: accountKind,
-                                        accentColor: accentColor,
-                                        filter: filter,
-                                        onTaskToggle: { task in
-                                            onTaskToggle(task, taskList.id)
-                                        },
-                                        onTaskDetails: { task in
-                                            onTaskDetails(task, taskList.id)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                    }
-                }
-            } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "\(icon.replacingOccurrences(of: ".circle.fill", with: ".badge.plus"))")
-                        .font(.system(size: 50))
-                        .foregroundColor(accentColor.opacity(0.6))
-                    Text("Link \(title) Account")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(accentColor)
-                    Text("Connect your \(title.lowercased()) Google account to view and manage your tasks")
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .font(.body)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 40)
-            }
+            sectionHeader
+            contentArea
         }
         .frame(width: width)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: accentColor.opacity(0.2), radius: 12, x: 0, y: 6)
-        )
+        .background(backgroundView)
+    }
+    
+    private var sectionHeader: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(headerColor)
+                .font(.title2)
+            Text(title)
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(headerColor)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(headerBackground)
+    }
+    
+    private var headerColor: Color {
+        isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : accentColor
+    }
+    
+    private var headerBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(headerColor.opacity(0.1))
+    }
+    
+    private var contentArea: some View {
+        Group {
+            if isLinked {
+                linkedContent
+            } else {
+                unlinkedContent
+            }
+        }
+    }
+    
+    private var linkedContent: some View {
+        Group {
+            if taskLists.isEmpty {
+                loadingView
+            } else {
+                taskListsGrid
+            }
+        }
+    }
+    
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checklist")
+                .font(.system(size: 40))
+                .foregroundColor(.secondary)
+            Text("Loading tasks...")
+                .foregroundColor(.secondary)
+                .font(.headline)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 40)
+    }
+    
+    private var taskListsGrid: some View {
+        let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
+        return ScrollView {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                ForEach(taskLists) { taskList in
+                    taskListCard(for: taskList)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+        }
+    }
+    
+    private func taskListCard(for taskList: GoogleTaskList) -> some View {
+        let filteredTasks = tasksDict[taskList.id] ?? []
+        return Group {
+            if !filteredTasks.isEmpty || filter == .all {
+                TaskListCard(
+                    taskList: taskList,
+                    tasks: filteredTasks,
+                    accountKind: accountKind,
+                    accentColor: accentColor,
+                    filter: filter,
+                    onTaskToggle: { task in
+                        onTaskToggle(task, taskList.id)
+                    },
+                    onTaskDetails: { task, listId in
+                        onTaskDetails(task, listId)
+                    }
+                )
+            }
+        }
+    }
+    
+    private var unlinkedContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: unlinkedIcon)
+                .font(.system(size: 50))
+                .foregroundColor(accentColor.opacity(0.6))
+            Text("Link \(title) Account")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(accentColor)
+            Text("Connect your \(title.lowercased()) Google account to view and manage your tasks")
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .font(.body)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 40)
+    }
+    
+    private var unlinkedIcon: String {
+        icon.replacingOccurrences(of: ".circle.fill", with: ".badge.plus")
+    }
+    
+    private var backgroundView: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(.systemBackground))
+            .shadow(color: accentColor.opacity(0.2), radius: 12, x: 0, y: 6)
     }
 }
 
@@ -1873,7 +1927,7 @@ struct TaskListCard: View {
     let accentColor: Color
     let filter: TaskFilter
     let onTaskToggle: (GoogleTask) -> Void
-    let onTaskDetails: (GoogleTask) -> Void
+    let onTaskDetails: (GoogleTask, String) -> Void
     
     @State private var isExpanded = false
     
@@ -1954,7 +2008,7 @@ struct TaskListCard: View {
                                     onTaskToggle(task)
                                 },
                                 onLongPress: {
-                                    onTaskDetails(task)
+                                    onTaskDetails(task, taskList.id)
                                 }
                             )
                             
