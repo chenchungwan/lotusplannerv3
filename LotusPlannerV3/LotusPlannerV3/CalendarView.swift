@@ -3973,11 +3973,14 @@ struct CalendarView: View {
                     guard let completionDate = task.completionDate else { return nil }
                     return completionDate >= weekStart && completionDate < weekEnd ? task : nil
                 } else {
-                    // For incomplete tasks, only show them if their due date is within the week
+                    // For incomplete tasks, show them if their due date is within the week OR if they're overdue
                     guard let dueDate = task.dueDate else { return nil }
                     
-                    // Only include tasks with due dates within the week (no overdue tasks from previous weeks)
-                    return dueDate >= weekStart && dueDate < weekEnd ? task : nil
+                    let isWithinWeek = dueDate >= weekStart && dueDate < weekEnd
+                    let isOverdue = dueDate < calendar.startOfDay(for: Date())
+                    
+                    // Include tasks within the week OR overdue tasks (they'll appear on today's column)
+                    return isWithinWeek || isOverdue ? task : nil
                 }
             }
             
@@ -4181,6 +4184,10 @@ struct MonthCardView: View {
         Calendar.mondayFirst.component(.day, from: currentDate)
     }
     
+    private var todayDay: Int {
+        Calendar.mondayFirst.component(.day, from: Date())
+    }
+    
     private var monthData: (daysInMonth: Int, offsetDays: Int) {
         let calendar = Calendar.mondayFirst
         let monthDate = calendar.date(from: DateComponents(year: year, month: month))!
@@ -4259,7 +4266,7 @@ struct MonthCardView: View {
     private func dayCell(week: Int, dayOfWeek: Int) -> some View {
         let dayNumber = week * 7 + dayOfWeek - monthData.offsetDays + 1
         let isValidDay = dayNumber > 0 && dayNumber <= monthData.daysInMonth
-        let isToday = isCurrentMonth && dayNumber == currentDay
+        let isToday = isCurrentMonth && dayNumber == todayDay
         
         return Group {
             if isValidDay {

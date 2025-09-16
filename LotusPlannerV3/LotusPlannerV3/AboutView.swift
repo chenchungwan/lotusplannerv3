@@ -45,6 +45,16 @@ struct AboutView: View {
                 
                 // Version Information
                 VStack(spacing: 8) {
+                    Text("A customizable digital planner and bullet journal for your unique needs.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                Spacer()
+                
+                // Additional Info
+                VStack(spacing: 12) {
                     Text("Version \(appVersion)")
                         .font(.title2)
                         .foregroundColor(.secondary)
@@ -52,16 +62,6 @@ struct AboutView: View {
                     Text("Build \(buildNumber)")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                // Additional Info
-                VStack(spacing: 12) {
-                    Text("A customizable planner for your unique needs.")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
                     
                     Text("© 2025 Lotus Planner")
                         .font(.caption)

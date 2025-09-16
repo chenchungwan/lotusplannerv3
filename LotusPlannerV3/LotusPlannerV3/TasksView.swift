@@ -1540,11 +1540,6 @@ struct TasksView: View {
         return tasksDict.mapValues { tasks in
             var filteredTasks = tasks
             
-            // Hide completed tasks if preference is on
-            if appPrefs.hideCompletedTasks {
-                filteredTasks = filteredTasks.filter { !$0.isCompleted }
-            }
-            
             // Apply subfilter when in "All"
             if selectedFilter == .all {
                 switch allSubfilter {
@@ -1564,9 +1559,22 @@ struct TasksView: View {
                         return false
                     }
                 case .completed:
+                    // When filtering for completed tasks, automatically turn off hide completed tasks
+                    if appPrefs.hideCompletedTasks {
+                        appPrefs.hideCompletedTasks = false
+                    }
                     filteredTasks = filteredTasks.filter { $0.isCompleted }
                 }
+                
+                // Apply hide completed tasks setting for non-completed filters
+                if allSubfilter != .completed && appPrefs.hideCompletedTasks {
+                    filteredTasks = filteredTasks.filter { !$0.isCompleted }
+                }
             } else {
+                // For time-based filters, apply hide completed tasks setting
+                if appPrefs.hideCompletedTasks {
+                    filteredTasks = filteredTasks.filter { !$0.isCompleted }
+                }
                 // Then apply time-based filter if not "all"
                 filteredTasks = filteredTasks.filter { task in
                     // For completed tasks, check completion date

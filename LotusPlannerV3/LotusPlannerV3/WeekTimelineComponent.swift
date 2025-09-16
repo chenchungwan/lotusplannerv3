@@ -946,11 +946,17 @@ struct WeekTimelineComponent: View {
                 guard let completionDate = task.completionDate else { return nil }
                 return calendar.isDate(completionDate, inSameDayAs: date) ? task : nil
             } else {
-                // For incomplete tasks, show them on due date OR if overdue
+                // For incomplete tasks, show them on due date OR if overdue (only on today)
                 guard let dueDate = task.dueDate else { return nil }
                 
-                // Show tasks on their due date OR if they're overdue (due date <= current date)
-                return (calendar.isDate(dueDate, inSameDayAs: date) || dueDate <= date) ? task : nil
+                let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: date)
+                let isViewingToday = calendar.isDate(date, inSameDayAs: Date())
+                let startOfDueDate = calendar.startOfDay(for: dueDate)
+                let startOfToday = calendar.startOfDay(for: Date())
+                let isOverdueRelativeToToday = startOfDueDate < startOfToday
+                
+                // Show tasks on their due date OR if we're viewing today and the task is overdue
+                return isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday) ? task : nil
             }
         }
         

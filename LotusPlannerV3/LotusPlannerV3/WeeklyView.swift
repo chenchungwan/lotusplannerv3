@@ -215,14 +215,12 @@ extension WeeklyView {
         }
 
         return VStack(spacing: 0) {
-            if personalHasAny || professionalHasAny {
-                // Shared Date Header Row (only when there is at least one row to show)
-                weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: timeColumnWidth)
-                // Divider below date header
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(height: 1)
-            }
+            // Always show the date header row
+            weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: timeColumnWidth)
+            // Divider below date header
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 1)
 
             // Personal Tasks Row (top 50%)
             if authManager.isLinked(kind: .personal) && personalHasAny {
@@ -303,6 +301,26 @@ extension WeeklyView {
                 .background(Color(.systemGray6).opacity(0.3))
                 .frame(height: (authManager.isLinked(kind: .personal) && personalHasAny) ? (availableHeight - v2TopTasksHeight) : nil, alignment: .top)
                 .clipped()
+            }
+            
+            // Empty state message when no tasks are present
+            if !personalHasAny && !professionalHasAny {
+                VStack(spacing: 16) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    
+                    Text("No tasks this week")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Add tasks or check other weeks")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 60)
             }
         }
     }
