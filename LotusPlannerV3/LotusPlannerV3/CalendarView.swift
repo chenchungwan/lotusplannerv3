@@ -4328,21 +4328,26 @@ struct PencilKitView: UIViewRepresentable {
     /// keep existing behaviour for call-sites that don't specify the argument.
     var showsToolPicker: Bool = true
     
+    class Coordinator {
+        var toolPicker: PKToolPicker?
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
         canvasView.drawingPolicy = .pencilOnly
         canvasView.backgroundColor = .clear
 
-        // Present (or hide) the system tool picker (colour, stroke, eraser …)
-        if UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap({ $0.windows })
-                .first != nil {
-            let toolPicker = PKToolPicker()
-            toolPicker.setVisible(showsToolPicker, forFirstResponder: canvasView)
-            toolPicker.addObserver(canvasView)
-            if showsToolPicker {
-                DispatchQueue.main.async { // ensure first responder after view attached
+        // Attach the scene-shared PKToolPicker once the view is in a window
+        DispatchQueue.main.async {
+            if let window = canvasView.window, let picker = PKToolPicker.shared(for: window) {
+                context.coordinator.toolPicker = picker
+                picker.addObserver(canvasView)
+                picker.setVisible(showsToolPicker, forFirstResponder: canvasView)
+                if showsToolPicker {
                     canvasView.becomeFirstResponder()
                 }
             }
@@ -4353,23 +4358,30 @@ struct PencilKitView: UIViewRepresentable {
     
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
         // Update tool-picker visibility when state changes
-        guard UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap({ $0.windows })
-                .first != nil else { return }
-        let toolPicker = PKToolPicker()
-        toolPicker.setVisible(showsToolPicker, forFirstResponder: uiView)
-        if showsToolPicker {
-            // Become first-responder so the picker can attach
-            if !uiView.isFirstResponder {
-                DispatchQueue.main.async {
-                    uiView.becomeFirstResponder()
+        if let picker = context.coordinator.toolPicker {
+            picker.setVisible(showsToolPicker, forFirstResponder: uiView)
+            if showsToolPicker {
+                if !uiView.isFirstResponder {
+                    DispatchQueue.main.async {
+                        uiView.becomeFirstResponder()
+                    }
+                }
+            } else {
+                if uiView.isFirstResponder {
+                    uiView.resignFirstResponder()
                 }
             }
         } else {
-            // Hide keyboard / resign when picker hidden
-            if uiView.isFirstResponder {
-                uiView.resignFirstResponder()
+            // If the picker hasn't been set yet, attempt to attach it now
+            DispatchQueue.main.async {
+                if let window = uiView.window, let picker = PKToolPicker.shared(for: window) {
+                    context.coordinator.toolPicker = picker
+                    picker.addObserver(uiView)
+                    picker.setVisible(showsToolPicker, forFirstResponder: uiView)
+                    if showsToolPicker {
+                        uiView.becomeFirstResponder()
+                    }
+                }
             }
         }
     }
