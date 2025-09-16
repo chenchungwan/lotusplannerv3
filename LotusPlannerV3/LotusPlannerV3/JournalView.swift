@@ -121,6 +121,7 @@ struct JournalView: View {
                         .onChange(of: currentDate) { oldValue, newValue in
                             JournalManager.shared.saveDrawing(for: oldValue, drawing: canvasView.drawing)
                             savePhotos(for: oldValue)
+                            // Load new date
                             loadDrawing()
                             loadPhotos()
                         }
@@ -301,7 +302,8 @@ struct JournalView: View {
     private func metadataURL(for date: Date) -> URL {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
+        // Use UTC so filenames are consistent across devices/timezones
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         let name = formatter.string(from: date) + "_photos.json"
         return photosDirectory().appendingPathComponent(name)
@@ -351,7 +353,8 @@ struct JournalView: View {
             )
         }
         if let jsonData = try? JSONEncoder().encode(metas) {
-            try? jsonData.write(to: metadataURL(for: targetDate), options: .atomic)
+            let url = metadataURL(for: targetDate)
+            JournalManager.shared.writeData(jsonData, to: url)
         }
         // Ensure iCloud migration picks up newly saved photos/metadata
         JournalManager.shared.migrateLocalToICloudIfNeeded()

@@ -2,6 +2,7 @@ import Foundation
 import UniformTypeIdentifiers
 import PencilKit
 import UIKit
+// import CloudKit (removed for iCloud Drive-only sync)
 
 /// Layout type for journal views
 enum JournalLayoutType {
@@ -35,6 +36,24 @@ struct JournalManager {
 
     /// Expose the current storage root for other components (e.g. photos)
     func storageRootURL() -> URL { docsURL }
+
+    // MARK: - Journal Photos paths (shared)
+    private var photosDirectoryURL: URL {
+        let dir = docsURL.appendingPathComponent("journal_photos", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    func metadataURL(for date: Date) -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        let name = formatter.string(from: date) + "_photos.json"
+        return photosDirectoryURL.appendingPathComponent(name)
+    }
 
     /// Attempt to migrate any local-only content into iCloud when it becomes
     /// available so drawings/photos sync across devices. Safe to call repeatedly.
@@ -155,7 +174,8 @@ struct JournalManager {
     private func drawingURL(for date: Date) -> URL {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
+        // Use UTC so filenames are consistent across devices/timezones
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         let name = formatter.string(from: date) + ".drawing"
         return drawingsDirectory.appendingPathComponent(name)
@@ -164,7 +184,7 @@ struct JournalManager {
     func saveDrawing(for date: Date, drawing: PKDrawing) {
         let data = drawing.dataRepresentation()
         let url = drawingURL(for: date)
-        try? data.write(to: url, options: .atomic)
+        writeData(data, to: url)
         // If iCloud becomes available later, move local files automatically
         migrateLocalToICloudIfNeeded()
     }
@@ -211,6 +231,7 @@ struct JournalManager {
         query.start()
     }
 
+
     func stopICloudMonitoring() {
         guard let query = JournalManager.metadataQuery else { return }
         query.stop()
@@ -240,9 +261,33 @@ struct JournalManager {
         try? fm.startDownloadingUbiquitousItem(at: drawURL)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         let metadata = storageRootURL().appendingPathComponent("journal_photos").appendingPathComponent(formatter.string(from: date) + "_photos.json")
         try? fm.startDownloadingUbiquitousItem(at: metadata)
+    }
+
+    // MARK: - Coordinated writes for iCloud reliability
+    /// Write data to URL using NSFileCoordinator when iCloud is available to ensure sync picks up changes.
+    func writeData(_ data: Data, to url: URL) {
+        if ubiquityDocsURL != nil {
+            let coordinator = NSFileCoordinator(filePresenter: nil)
+            var coordError: NSError?
+            coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordError) { targetURL in
+                try? data.write(to: targetURL, options: .atomic)
+            }
+            if coordError != nil {
+                try? data.write(to: url, options: .atomic)
+            }
+        } else {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    // MARK: - Types
+    /// Minimal info needed from photo metadata for CloudKit attachment mapping
+    struct LitePhotoMeta: Codable {
+        let id: String
+        let fileName: String
     }
 } 
