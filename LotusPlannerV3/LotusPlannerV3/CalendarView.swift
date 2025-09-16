@@ -531,7 +531,8 @@ class CalendarViewModel: ObservableObject {
             
             if let response = httpResponse as? HTTPURLResponse {
                 if response.statusCode != 200 {
-                    if let responseString = String(data: data, encoding: .utf8) {
+                    if String(data: data, encoding: .utf8) != nil {
+                        // Response string available for debugging if needed
                     }
                     
                     // Handle HTTP errors
@@ -552,7 +553,8 @@ class CalendarViewModel: ObservableObject {
         } catch {
             
             // Add more specific error information
-            if let urlError = error as? URLError {
+            if error is URLError {
+                // URL error detected for debugging if needed
             }
             
             throw error
@@ -1770,7 +1772,9 @@ struct CalendarView: View {
                 updateCachedTasks()
                 // Listen for external add requests
                 NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
-                    navigationManager.switchToTasks()
+                    Task { @MainActor in
+                        navigationManager.switchToTasks()
+                    }
                 }
                 NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddEvent"), object: nil, queue: .main) { _ in
                     showingAddItem = true
@@ -2253,7 +2257,7 @@ struct CalendarView: View {
     private func rightDaySection(geometry: GeometryProxy) -> some View {
         // The total content width is 100% of device width
         let totalWidth = geometry.size.width
-        let rightSectionWidth: CGFloat = totalWidth - dayLeftSectionWidth - 8 // divider width
+        let _ = totalWidth - dayLeftSectionWidth - 8 // divider width (unused but kept for clarity)
         
         return VStack(spacing: 0) {
             // Top section - Tasks
@@ -3140,7 +3144,7 @@ struct CalendarView: View {
         if appPrefs.hideRecurringEventsInMonth {
             let allEventsForRecurringDetection = allEvents
             let recurringEvents = allEvents.filter { $0.isLikelyRecurring(among: allEventsForRecurringDetection) }
-            for event in recurringEvents {
+            for _ in recurringEvents {
             }
             allEvents = allEvents.filter { !$0.isLikelyRecurring(among: allEventsForRecurringDetection) }
         }
@@ -3881,8 +3885,8 @@ struct CalendarView: View {
         
         
         // Debug: Print first few task titles to verify content
-        let personalTaskTitles = cachedPersonalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
-        let professionalTaskTitles = cachedProfessionalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
+        let _ = cachedPersonalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
+        let _ = cachedProfessionalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
         
         // Force UI update
         DispatchQueue.main.async {
@@ -3929,7 +3933,7 @@ struct CalendarView: View {
                     // For incomplete tasks, show them on due date OR, if viewing today, show overdue
                     guard let dueDate = task.dueDate else { return nil }
 
-                    let startOfViewedDate = calendar.startOfDay(for: date)
+                    let _ = calendar.startOfDay(for: date)
                     let startOfDueDate = calendar.startOfDay(for: dueDate)
                     let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: date)
                     let isViewingToday = calendar.isDate(date, inSameDayAs: Date())
@@ -4330,11 +4334,11 @@ struct PencilKitView: UIViewRepresentable {
         canvasView.backgroundColor = .clear
 
         // Present (or hide) the system tool picker (colour, stroke, eraser …)
-        if let window = UIApplication.shared.connectedScenes
+        if UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .flatMap({ $0.windows })
-                .first,
-           let toolPicker = PKToolPicker.shared(for: window) {
+                .first != nil {
+            let toolPicker = PKToolPicker()
             toolPicker.setVisible(showsToolPicker, forFirstResponder: canvasView)
             toolPicker.addObserver(canvasView)
             if showsToolPicker {
@@ -4349,11 +4353,11 @@ struct PencilKitView: UIViewRepresentable {
     
     func updateUIView(_ uiView: PKCanvasView, context: Context) {
         // Update tool-picker visibility when state changes
-        guard let window = UIApplication.shared.connectedScenes
+        guard UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .flatMap({ $0.windows })
-                .first,
-              let toolPicker = PKToolPicker.shared(for: window) else { return }
+                .first != nil else { return }
+        let toolPicker = PKToolPicker()
         toolPicker.setVisible(showsToolPicker, forFirstResponder: uiView)
         if showsToolPicker {
             // Become first-responder so the picker can attach

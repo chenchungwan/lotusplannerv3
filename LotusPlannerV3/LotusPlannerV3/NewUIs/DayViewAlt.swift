@@ -240,7 +240,10 @@ struct DayViewAlt: View {
             .padding(12)
         }
         // Task details sheet
-        .sheet(isPresented: $showingTaskDetails) {
+        .sheet(isPresented: Binding(
+            get: { showingTaskDetails && selectedTask != nil && selectedTaskListId != nil && selectedTaskAccount != nil },
+            set: { showingTaskDetails = $0 }
+        )) {
             if let t = selectedTask, let listId = selectedTaskListId, let account = selectedTaskAccount {
                 TaskDetailsView(
                     task: t,

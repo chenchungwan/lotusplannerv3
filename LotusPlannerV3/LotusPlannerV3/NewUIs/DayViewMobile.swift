@@ -55,10 +55,12 @@ struct DayViewMobile: View {
                             Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
                         },
                         onTaskDetails: { task, listId in
+                            print("DEBUG: Setting task details state - task: \(task.title)")
                             selectedTask = task
                             selectedTaskListId = listId
                             selectedTaskAccount = .personal
                             showingTaskDetails = true
+                            print("DEBUG: Task details state set - task: \(selectedTask?.title ?? "nil"), listId: \(selectedTaskListId ?? "nil"), account: \(selectedTaskAccount?.rawValue ?? "nil"), showing: \(showingTaskDetails)")
                         },
                         onListRename: { listId, newName in
                             Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
@@ -87,10 +89,12 @@ struct DayViewMobile: View {
                             Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
                         },
                         onTaskDetails: { task, listId in
+                            print("DEBUG: Setting task details state - task: \(task.title)")
                             selectedTask = task
                             selectedTaskListId = listId
                             selectedTaskAccount = .professional
                             showingTaskDetails = true
+                            print("DEBUG: Task details state set - task: \(selectedTask?.title ?? "nil"), listId: \(selectedTaskListId ?? "nil"), account: \(selectedTaskAccount?.rawValue ?? "nil"), showing: \(showingTaskDetails)")
                         },
                         onListRename: { listId, newName in
                             Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
@@ -114,7 +118,10 @@ struct DayViewMobile: View {
         
         }
         // Task details sheet
-        .sheet(isPresented: $showingTaskDetails) {
+        .sheet(isPresented: Binding(
+            get: { showingTaskDetails && selectedTask != nil && selectedTaskListId != nil && selectedTaskAccount != nil },
+            set: { showingTaskDetails = $0 }
+        )) {
             if let t = selectedTask, let listId = selectedTaskListId, let account = selectedTaskAccount {
                 TaskDetailsView(
                     task: t,

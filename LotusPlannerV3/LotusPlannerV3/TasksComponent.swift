@@ -24,7 +24,10 @@ struct TasksComponent: View {
         self.accentColor = accentColor
         self.accountType = accountType
         self.onTaskToggle = onTaskToggle
-        self.onTaskDetails = onTaskDetails
+        self.onTaskDetails = { task, listId in
+            print("DEBUG: TasksComponent onTaskDetails called with task: \(task.title), listId: \(listId)")
+            onTaskDetails(task, listId)
+        }
         self.onListRename = onListRename
         self.onOrderChanged = onOrderChanged
         self.hideDueDateTag = hideDueDateTag
@@ -89,7 +92,12 @@ extension TasksComponent {
                 tasks: filtered,
                 accentColor: accentColor,
                 onTaskToggle: { task in onTaskToggle(task, taskList.id) },
-                onTaskDetails: { task in onTaskDetails(task, taskList.id) },
+                onTaskDetails: { task, listId in 
+                    print("DEBUG: TaskComponentListCard callback triggered - \(task.title)")
+                    print("DEBUG: About to call onTaskDetails with task: \(task.title), listId: \(listId)")
+                    onTaskDetails(task, listId) 
+                    print("DEBUG: onTaskDetails call completed")
+                },
                 onListRename: { newName in onListRename?(taskList.id, newName) },
                 hideDueDateTag: hideDueDateTag,
                 enableScroll: enableScroll,
@@ -149,7 +157,7 @@ private struct TaskComponentListCard: View {
     let tasks: [GoogleTask]
     let accentColor: Color
     let onTaskToggle: (GoogleTask) -> Void
-    let onTaskDetails: (GoogleTask) -> Void
+    let onTaskDetails: (GoogleTask, String) -> Void
     let onListRename: (String) -> Void
     let hideDueDateTag: Bool
     let enableScroll: Bool
@@ -181,7 +189,7 @@ private struct TaskComponentListCard: View {
         tasks: [GoogleTask],
         accentColor: Color,
         onTaskToggle: @escaping (GoogleTask) -> Void,
-        onTaskDetails: @escaping (GoogleTask) -> Void,
+        onTaskDetails: @escaping (GoogleTask, String) -> Void,
         onListRename: @escaping (String) -> Void,
         hideDueDateTag: Bool,
         enableScroll: Bool = false,
@@ -202,94 +210,135 @@ private struct TaskComponentListCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Task list header
-            HStack {
-                if isEditingTitle {
-                    TextField("List name", text: $editedTitle)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(accentColor)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .onSubmit {
-                            saveTitle()
-                        }
-                        .onAppear {
-                            editedTitle = taskList.title
-                        }
-                } else {
-                    Text(taskList.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(accentColor)
-                        .onTapGesture {
-                            startEditing()
-                        }
-                }
-                
-                Spacer()
-                
-                if isEditingTitle {
-                    Button("Cancel") {
-                        cancelEditing()
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    
-                    Button("Save") {
-                        saveTitle()
-                    }
-                    .font(.caption)
-                    .foregroundColor(accentColor)
-                    .disabled(editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            
-            // Tasks for this list
-            Group {
-                if enableScroll {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        VStack(spacing: 4) {
-                            ForEach(tasks, id: \.id) { task in
-                                TaskComponentRow(
-                                    task: task,
-                                    accentColor: accentColor,
-                                    onToggle: { onTaskToggle(task) },
-                                    onDetails: { onTaskDetails(task) },
-                                    isSingleDayView: isSingleDayView
-                                )
-                                .environment(\.hideDueDate, hideDueDateTag)
-                            }
-                        }
-                    }
-                    .frame(height: (maxTasksAreaHeight ?? 260))
-                    .clipped()
-                } else {
-                    VStack(spacing: 4) {
-                        ForEach(tasks, id: \.id) { task in
-                            TaskComponentRow(
-                                task: task,
-                                accentColor: accentColor,
-                                onToggle: { onTaskToggle(task) },
-                                onDetails: { onTaskDetails(task) },
-                                isSingleDayView: isSingleDayView
-                            )
-                            .environment(\.hideDueDate, hideDueDateTag)
-                        }
-                    }
-                }
-            }
+            headerView
+            tasksView
         }
         .padding(12)
         .background(Color(.systemBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isTopPriority ? accentColor : Color(.systemGray4), lineWidth: isTopPriority ? 2 : 1)
-        )
+        .overlay(overlayView)
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         .onDrag {
             NSItemProvider(object: taskList.id as NSString)
         }
+    }
+    
+    @ViewBuilder
+    private var headerView: some View {
+        HStack {
+            if isEditingTitle {
+                editingTitleView
+            } else {
+                titleView
+            }
+            
+            Spacer()
+            
+            if isEditingTitle {
+                editingButtonsView
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var editingTitleView: some View {
+        TextField("List name", text: $editedTitle)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(accentColor)
+            .textFieldStyle(RoundedBorderTextFieldStyle())
+            .onSubmit {
+                saveTitle()
+            }
+            .onAppear {
+                editedTitle = taskList.title
+            }
+    }
+    
+    @ViewBuilder
+    private var titleView: some View {
+        Text(taskList.title)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(accentColor)
+            .onTapGesture {
+                startEditing()
+            }
+    }
+    
+    @ViewBuilder
+    private var editingButtonsView: some View {
+        Button("Cancel") {
+            cancelEditing()
+        }
+        .font(.caption)
+        .foregroundColor(.secondary)
+        
+        Button("Save") {
+            saveTitle()
+        }
+        .font(.caption)
+        .foregroundColor(accentColor)
+        .disabled(editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+    
+    @ViewBuilder
+    private var tasksView: some View {
+        if enableScroll {
+            scrollableTasksView
+        } else {
+            staticTasksView
+        }
+    }
+    
+    @ViewBuilder
+    private var scrollableTasksView: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 4) {
+                ForEach(tasks, id: \.id) { task in
+                    TaskComponentRow(
+                        task: task,
+                        listId: taskList.id,
+                        accentColor: accentColor,
+                        onToggle: { onTaskToggle(task) },
+                        onDetails: { task, listId in
+                            print("DEBUG: TaskComponentRow onDetails callback triggered for task: \(task.title)")
+                            onTaskDetails(task, listId) 
+                        },
+                        isSingleDayView: isSingleDayView
+                    )
+                    .environment(\.hideDueDate, hideDueDateTag)
+                }
+            }
+        }
+        .frame(height: (maxTasksAreaHeight ?? 260))
+        .clipped()
+    }
+    
+    @ViewBuilder
+    private var staticTasksView: some View {
+        VStack(spacing: 4) {
+            ForEach(tasks, id: \.id) { task in
+                TaskComponentRow(
+                    task: task,
+                    listId: taskList.id,
+                    accentColor: accentColor,
+                    onToggle: { onTaskToggle(task) },
+                    onDetails: { task, listId in
+                        print("DEBUG: TaskComponentRow onDetails callback triggered for task: \(task.title)")
+                        onTaskDetails(task, listId) 
+                    },
+                    isSingleDayView: isSingleDayView
+                )
+                .environment(\.hideDueDate, hideDueDateTag)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var overlayView: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(isTopPriority ? accentColor : Color(.systemGray4), lineWidth: isTopPriority ? 2 : 1)
     }
     
     private func startEditing() {
@@ -313,9 +362,10 @@ private struct TaskComponentListCard: View {
 
 private struct TaskComponentRow: View {
     let task: GoogleTask
+    let listId: String
     let accentColor: Color
     let onToggle: () -> Void
-    let onDetails: () -> Void
+    let onDetails: (GoogleTask, String) -> Void
     let isSingleDayView: Bool
     @Environment(\.hideDueDate) private var hideDueDate: Bool
     
@@ -355,7 +405,10 @@ private struct TaskComponentRow: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { onDetails() }
+            .onTapGesture { 
+                print("DEBUG: TaskComponentRow tap gesture triggered")
+                onDetails(task, listId) 
+            }
         }
     }
     

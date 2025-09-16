@@ -28,15 +28,14 @@ struct GlobalNavBar: View {
             formatter.dateFormat = "MMMM yyyy"
             return formatter.string(from: navigationManager.currentDate)
         case .week:
-            let cal = Calendar.mondayFirst
-            guard let weekInterval = cal.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
+            guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
                 return ""
             }
             let start = weekInterval.start
-            let end = cal.date(byAdding: .day, value: 6, to: start) ?? start
+            let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
             
             // Get week number
-            let weekNumber = cal.component(.weekOfYear, from: start)
+            let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
             
             // Format dates as M/d/yy
             let dateFormatter = DateFormatter()
@@ -46,7 +45,6 @@ struct GlobalNavBar: View {
             
             return "Week\(weekNumber): \(startString) - \(endString)"
         case .day:
-            let cal = Calendar.current
             let date = navigationManager.currentDate
             
             // Get day of week abbreviation
@@ -64,15 +62,14 @@ struct GlobalNavBar: View {
     }
     
     private var isCurrentPeriod: Bool {
-        let cal = Calendar.current
         let now = Date()
         let currentDate = navigationManager.currentDate
         
         switch navigationManager.currentInterval {
         case .year:
-            return cal.isDate(currentDate, equalTo: now, toGranularity: .year)
+            return Calendar.current.isDate(currentDate, equalTo: now, toGranularity: .year)
         case .month:
-            return cal.isDate(currentDate, equalTo: now, toGranularity: .month)
+            return Calendar.current.isDate(currentDate, equalTo: now, toGranularity: .month)
         case .week:
             let mondayFirst = Calendar.mondayFirst
             guard let weekInterval = mondayFirst.dateInterval(of: .weekOfYear, for: currentDate),
@@ -81,14 +78,13 @@ struct GlobalNavBar: View {
             }
             return weekInterval.start == nowWeekInterval.start
         case .day:
-            return cal.isDate(currentDate, inSameDayAs: now)
+            return Calendar.current.isDate(currentDate, inSameDayAs: now)
         }
     }
     
     private func step(_ direction: Int) {
-        let cal = Calendar.mondayFirst
         let component = navigationManager.currentInterval.calendarComponent
-        if let newDate = cal.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
+        if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
             navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
             
             // Refresh data for the new date/period

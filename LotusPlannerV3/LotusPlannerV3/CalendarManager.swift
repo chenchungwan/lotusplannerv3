@@ -105,7 +105,7 @@ class CalendarManager {
         let allEvents = try await withThrowingTaskGroup(of: [GoogleCalendarEvent].self) { group in
             // Add a task for each calendar
             for cal in calendars {
-                group.addTask { [weak self] in
+                group.addTask {
                     let urlString = "https://www.googleapis.com/calendar/v3/calendars/\(cal.id)/events?timeMin=\(timeMin)&timeMax=\(timeMax)&singleEvents=true&orderBy=startTime&maxResults=2500"
                     guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else { 
                         return []

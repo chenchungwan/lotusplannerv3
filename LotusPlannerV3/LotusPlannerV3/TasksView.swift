@@ -285,15 +285,17 @@ class TasksViewModel: ObservableObject {
     func toggleTaskCompletion(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
         let newStatus = task.isCompleted ? "needsAction" : "completed"
         
+        // Google Tasks API expects RFC 3339 format in UTC
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        let now = Date()
+        let updatedTimestamp = formatter.string(from: now)
+        
         // Set completion timestamp when marking as completed, clear when marking incomplete
         let completedTimestamp: String?
         if newStatus == "completed" {
-            // Google Tasks API expects RFC 3339 format in UTC
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-            formatter.timeZone = TimeZone(identifier: "UTC")
-            let now = Date()
-            completedTimestamp = formatter.string(from: now)
+            completedTimestamp = updatedTimestamp
         } else {
             completedTimestamp = nil
         }
@@ -305,7 +307,7 @@ class TasksViewModel: ObservableObject {
             status: newStatus,
             due: task.due,
             completed: completedTimestamp,
-            updated: task.updated
+            updated: updatedTimestamp
         )
         
         // Update the task first
@@ -352,8 +354,17 @@ class TasksViewModel: ObservableObject {
                 
                 var requestBody: [String: Any] = [
                     "title": task.title,
-                    "status": task.status
+                    "status": task.status,
+                    "updated": task.updated as Any
                 ]
+                
+                // Include completed timestamp if task is completed
+                if let completed = task.completed {
+                    requestBody["completed"] = completed
+                } else {
+                    // Explicitly clear completed timestamp on the server
+                    requestBody["completed"] = NSNull()
+                }
                 
                 if let notes = task.notes {
                     requestBody["notes"] = notes
@@ -382,6 +393,9 @@ class TasksViewModel: ObservableObject {
                 if httpResponse.statusCode != 200 {
                     throw TasksError.apiError(httpResponse.statusCode)
                 }
+                
+                // Clear cache for this account to ensure fresh data on next load
+                clearCacheForAccount(kind)
                 
             } catch {
                 // REVERT OPTIMISTIC UPDATE on error
@@ -1219,7 +1233,11 @@ struct TasksView: View {
                                             }
                                         },
                                         onTaskDetails: { task, listId in
+                                            print("DEBUG: TasksView personal callback triggered - \(task.title)")
+                                            print("DEBUG: Personal task tapped - \(task.title)")
+                                            print("DEBUG: Setting taskSheetSelection for personal task")
                                             taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                            print("DEBUG: taskSheetSelection set: \(taskSheetSelection != nil)")
                                         },
                                         onListRename: { listId, newName in
                                             Task {
@@ -1255,7 +1273,11 @@ struct TasksView: View {
                                             }
                                         },
                                         onTaskDetails: { task, listId in
+                                            print("DEBUG: TasksView professional callback triggered - \(task.title)")
+                                            print("DEBUG: Professional task tapped - \(task.title)")
+                                            print("DEBUG: Setting taskSheetSelection for professional task")
                                             taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                            print("DEBUG: taskSheetSelection set: \(taskSheetSelection != nil)")
                                         },
                                         onListRename: { listId, newName in
                                             Task {
@@ -1291,6 +1313,7 @@ struct TasksView: View {
                                         }
                                     },
                                     onTaskDetails: { task, listId in
+                                        print("DEBUG: Personal task tapped (mobile) - \(task.title)")
                                         taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
                                     },
                                     onListRename: { listId, newName in
@@ -1327,6 +1350,7 @@ struct TasksView: View {
                                         }
                                     },
                                     onTaskDetails: { task, listId in
+                                        print("DEBUG: Professional task tapped (mobile) - \(task.title)")
                                         taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
                                     },
                                     onListRename: { listId, newName in
@@ -1420,37 +1444,38 @@ struct TasksView: View {
             }
         }
         .sheet(item: $taskSheetSelection) { sel in
-            TaskDetailsView(
-                task: sel.task,
-                taskListId: sel.listId,
-                accountKind: sel.accountKind,
-                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: viewModel.personalTaskLists,
-                professionalTaskLists: viewModel.professionalTaskLists,
-                appPrefs: appPrefs,
-                viewModel: viewModel,
-                onSave: { updatedTask in
-                    Task {
-                        await viewModel.updateTask(updatedTask, in: sel.listId, for: sel.accountKind)
+            NavigationView {
+                VStack(spacing: 20) {
+                    Text("Task Details")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Text("Task: \(sel.task.title)")
+                        .font(.title2)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("List ID: \(sel.listId)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Text("Account: \(sel.accountKind == .personal ? "Personal" : "Professional")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Button("Close") {
+                        taskSheetSelection = nil
                     }
-                },
-                onDelete: {
-                    Task {
-                        await viewModel.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
-                    }
-                },
-                onMove: { updatedTask, targetListId in
-                    Task {
-                        await viewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
-                    }
-                },
-                onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
-                    Task {
-                        await viewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
-                    }
-                },
-                isNew: false
-            )
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+                .navigationTitle("Task Details")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .onAppear {
+                print("DEBUG: Sheet content appeared for task: \(sel.task.title)")
+            }
         }
         .sheet(isPresented: $showingNewTask) {
             // Use the same UI as Task Details for creating a task
@@ -1494,18 +1519,23 @@ struct TasksView: View {
                 .datePickerStyle(.graphical)
                 .navigationTitle("Select Date")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
+                .navigationBarBackButtonHidden(true)
+                .overlay(alignment: .topTrailing) {
+                    HStack {
                         Button("Cancel") {
                             showingNavigationDatePicker = false
                         }
-                    }
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                        .padding(.leading)
+                        
+                        Spacer()
+                        
                         Button("Done") {
                             navigateToDate(selectedDateForNavigation)
                             showingNavigationDatePicker = false
                         }
+                        .padding(.trailing)
                     }
+                    .padding(.top, 8)
                 }
             }
             .presentationDetents([.large])
@@ -1883,6 +1913,7 @@ struct TasksSectionView: View {
                         onTaskToggle(task, taskList.id)
                     },
                     onTaskDetails: { task, listId in
+                        print("DEBUG: TaskListCard callback triggered - \(task.title)")
                         onTaskDetails(task, listId)
                     }
                 )
@@ -2114,6 +2145,9 @@ struct TaskRow: View {
             }
         }
         .contentShape(Rectangle())
+        .onTapGesture {
+            onLongPress() // Use the same callback for both tap and long press
+        }
         .onLongPressGesture {
             onLongPress()
         }
