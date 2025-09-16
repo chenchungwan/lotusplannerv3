@@ -222,9 +222,16 @@ struct JournalView: View {
                 .ignoresSafeArea()
             // Movable photos overlay
             ForEach(photos.indices, id: \.self) { idx in
-                DraggablePhotoView(photo: $photos[idx]) {
-                    photos.remove(at: idx)
-                }
+                DraggablePhotoView(
+                    photo: $photos[idx],
+                    onDelete: {
+                        photos.remove(at: idx)
+                    },
+                    onChanged: {
+                        // Persist edits so divider/layout changes don't undo user changes
+                        savePhotos()
+                    }
+                )
             }
             
             // (Floating controls removed; replaced by topToolbar)
@@ -370,11 +377,13 @@ struct JournalView: View {
             let posY: CGFloat
             let sizeW: CGFloat
             let sizeH: CGFloat
-            if let nx = meta.nx, let ny = meta.ny, let nw = meta.nw, let nh = meta.nh {
+            if let nx = meta.nx, let ny = meta.ny, let _ = meta.nw, let _ = meta.nh {
+                // Keep photo size constant across divider/canvas size changes.
+                // Reflow position using normalized coordinates only.
                 posX = CGFloat(nx) * width
                 posY = CGFloat(ny) * height
-                sizeW = CGFloat(nw) * width
-                sizeH = CGFloat(nh) * height
+                sizeW = CGFloat(meta.width)
+                sizeH = CGFloat(meta.height)
             } else {
                 posX = CGFloat(meta.x)
                 posY = CGFloat(meta.y)
@@ -416,6 +425,7 @@ struct JournalView: View {
     struct DraggablePhotoView: View {
         @Binding var photo: JournalPhoto
         var onDelete: () -> Void
+        var onChanged: () -> Void = {}
 
         @State private var dragOffset: CGSize = .zero
         @State private var scale: CGFloat = 1.0
@@ -462,6 +472,7 @@ struct JournalView: View {
                     photo.position.x += value.translation.width
                     photo.position.y += value.translation.height
                     dragOffset = .zero
+                    onChanged()
                 }
         }
         // Resize
@@ -474,6 +485,7 @@ struct JournalView: View {
                     photo.size.width *= scaleVal
                     photo.size.height *= scaleVal
                     scale = 1.0
+                    onChanged()
                 }
         }
         // Rotate
@@ -485,6 +497,7 @@ struct JournalView: View {
                 .onEnded { angle in
                     photo.rotation += angle
                     rotationAngle = .zero
+                    onChanged()
                 }
         }
     }
