@@ -1233,10 +1233,7 @@ struct TasksView: View {
                                             }
                                         },
                                         onTaskDetails: { task, listId in
-                                            selectedTask = task
-                                            selectedTaskListId = listId
-                                            selectedAccountKind = .personal
-                                            DispatchQueue.main.async { showingTaskDetails = true }
+                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
                                         },
                                         onListRename: { listId, newName in
                                             Task {
@@ -1272,10 +1269,7 @@ struct TasksView: View {
                                             }
                                         },
                                         onTaskDetails: { task, listId in
-                                            selectedTask = task
-                                            selectedTaskListId = listId
-                                            selectedAccountKind = .professional
-                                            DispatchQueue.main.async { showingTaskDetails = true }
+                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
                                         },
                                         onListRename: { listId, newName in
                                             Task {
@@ -1311,10 +1305,7 @@ struct TasksView: View {
                                         }
                                     },
                                     onTaskDetails: { task, listId in
-                                        selectedTask = task
-                                        selectedTaskListId = listId
-                                        selectedAccountKind = .personal
-                                        DispatchQueue.main.async { showingTaskDetails = true }
+                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
                                     },
                                     onListRename: { listId, newName in
                                         Task {
@@ -1350,10 +1341,7 @@ struct TasksView: View {
                                         }
                                     },
                                     onTaskDetails: { task, listId in
-                                        selectedTask = task
-                                        selectedTaskListId = listId
-                                        selectedAccountKind = .professional
-                                        DispatchQueue.main.async { showingTaskDetails = true }
+                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
                                     },
                                     onListRename: { listId, newName in
                                         Task {
@@ -1445,31 +1433,29 @@ struct TasksView: View {
                 await viewModel.loadTasks()
             }
         }
-        .sheet(isPresented: $showingTaskDetails) {
-            if let task = selectedTask, let taskListId = selectedTaskListId, let accountKind = selectedAccountKind {
-                TaskDetailsView(
-                    task: task,
-                    taskListId: taskListId,
-                    accountKind: accountKind,
-                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: viewModel.personalTaskLists,
-                    professionalTaskLists: viewModel.professionalTaskLists,
-                    appPrefs: appPrefs,
-                    viewModel: viewModel,
-                    onSave: { updatedTask in
-                        Task { await viewModel.updateTask(updatedTask, in: taskListId, for: accountKind) }
-                    },
-                    onDelete: {
-                        Task { await viewModel.deleteTask(task, from: taskListId, for: accountKind) }
-                    },
-                    onMove: { updatedTask, newListId in
-                        Task { await viewModel.moveTask(updatedTask, from: taskListId, to: newListId, for: accountKind) }
-                    },
-                    onCrossAccountMove: { updatedTask, targetAccount, targetListId in
-                        Task { await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (targetAccount, targetListId)) }
-                    }
-                )
-            }
+        .sheet(item: $taskSheetSelection) { selection in
+            TaskDetailsView(
+                task: selection.task,
+                taskListId: selection.listId,
+                accountKind: selection.accountKind,
+                accentColor: selection.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: viewModel.personalTaskLists,
+                professionalTaskLists: viewModel.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: viewModel,
+                onSave: { updatedTask in
+                    Task { await viewModel.updateTask(updatedTask, in: selection.listId, for: selection.accountKind) }
+                },
+                onDelete: {
+                    Task { await viewModel.deleteTask(selection.task, from: selection.listId, for: selection.accountKind) }
+                },
+                onMove: { updatedTask, newListId in
+                    Task { await viewModel.moveTask(updatedTask, from: selection.listId, to: newListId, for: selection.accountKind) }
+                },
+                onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                    Task { await viewModel.crossAccountMoveTask(updatedTask, from: (selection.accountKind, selection.listId), to: (targetAccount, targetListId)) }
+                }
+            )
         }
         .sheet(isPresented: $showingNewTask) {
             // Use the same UI as Task Details for creating a task
