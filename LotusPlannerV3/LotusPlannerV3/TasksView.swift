@@ -1233,11 +1233,10 @@ struct TasksView: View {
                                             }
                                         },
                                         onTaskDetails: { task, listId in
-                                            print("DEBUG: TasksView personal callback triggered - \(task.title)")
-                                            print("DEBUG: Personal task tapped - \(task.title)")
-                                            print("DEBUG: Setting taskSheetSelection for personal task")
-                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
-                                            print("DEBUG: taskSheetSelection set: \(taskSheetSelection != nil)")
+                                            selectedTask = task
+                                            selectedTaskListId = listId
+                                            selectedAccountKind = .personal
+                                            DispatchQueue.main.async { showingTaskDetails = true }
                                         },
                                         onListRename: { listId, newName in
                                             Task {
@@ -1273,11 +1272,10 @@ struct TasksView: View {
                                             }
                                         },
                                         onTaskDetails: { task, listId in
-                                            print("DEBUG: TasksView professional callback triggered - \(task.title)")
-                                            print("DEBUG: Professional task tapped - \(task.title)")
-                                            print("DEBUG: Setting taskSheetSelection for professional task")
-                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
-                                            print("DEBUG: taskSheetSelection set: \(taskSheetSelection != nil)")
+                                            selectedTask = task
+                                            selectedTaskListId = listId
+                                            selectedAccountKind = .professional
+                                            DispatchQueue.main.async { showingTaskDetails = true }
                                         },
                                         onListRename: { listId, newName in
                                             Task {
@@ -1313,8 +1311,10 @@ struct TasksView: View {
                                         }
                                     },
                                     onTaskDetails: { task, listId in
-                                        print("DEBUG: Personal task tapped (mobile) - \(task.title)")
-                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                        selectedTask = task
+                                        selectedTaskListId = listId
+                                        selectedAccountKind = .personal
+                                        DispatchQueue.main.async { showingTaskDetails = true }
                                     },
                                     onListRename: { listId, newName in
                                         Task {
@@ -1350,8 +1350,10 @@ struct TasksView: View {
                                         }
                                     },
                                     onTaskDetails: { task, listId in
-                                        print("DEBUG: Professional task tapped (mobile) - \(task.title)")
-                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                        selectedTask = task
+                                        selectedTaskListId = listId
+                                        selectedAccountKind = .professional
+                                        DispatchQueue.main.async { showingTaskDetails = true }
                                     },
                                     onListRename: { listId, newName in
                                         Task {
@@ -1443,38 +1445,30 @@ struct TasksView: View {
                 await viewModel.loadTasks()
             }
         }
-        .sheet(item: $taskSheetSelection) { sel in
-            NavigationView {
-                VStack(spacing: 20) {
-                    Text("Task Details")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text("Task: \(sel.task.title)")
-                        .font(.title2)
-                        .multilineTextAlignment(.center)
-                    
-                    Text("List ID: \(sel.listId)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Account: \(sel.accountKind == .personal ? "Personal" : "Professional")")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Button("Close") {
-                        taskSheetSelection = nil
+        .sheet(isPresented: $showingTaskDetails) {
+            if let task = selectedTask, let taskListId = selectedTaskListId, let accountKind = selectedAccountKind {
+                TaskDetailsView(
+                    task: task,
+                    taskListId: taskListId,
+                    accountKind: accountKind,
+                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    personalTaskLists: viewModel.personalTaskLists,
+                    professionalTaskLists: viewModel.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: viewModel,
+                    onSave: { updatedTask in
+                        Task { await viewModel.updateTask(updatedTask, in: taskListId, for: accountKind) }
+                    },
+                    onDelete: {
+                        Task { await viewModel.deleteTask(task, from: taskListId, for: accountKind) }
+                    },
+                    onMove: { updatedTask, newListId in
+                        Task { await viewModel.moveTask(updatedTask, from: taskListId, to: newListId, for: accountKind) }
+                    },
+                    onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                        Task { await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (targetAccount, targetListId)) }
                     }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding()
-                .navigationTitle("Task Details")
-                .navigationBarTitleDisplayMode(.inline)
-            }
-            .onAppear {
-                print("DEBUG: Sheet content appeared for task: \(sel.task.title)")
+                )
             }
         }
         .sheet(isPresented: $showingNewTask) {
