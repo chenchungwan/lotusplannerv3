@@ -129,12 +129,14 @@ struct GlobalNavBar: View {
                                 .font(.title2)
                                 .foregroundColor(navigationManager.showTasksView ? .secondary : .accentColor)
                         }
-                        
+                        .padding(.trailing, 20)
                         
                         Button { step(-1) } label: {
                             Image(systemName: "chevron.left")
                                 .font(.title2)
                         }
+                        .padding(.trailing, 15)
+                        
                         Button {
                             selectedDateForPicker = navigationManager.currentDate
                             showingDatePicker = true
@@ -145,6 +147,8 @@ struct GlobalNavBar: View {
                                 .minimumScaleFactor(0.7)
                                 .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary)
                         }
+                        .padding(.trailing, 15)
+                        
                         Button { step(1) } label: {
                             Image(systemName: "chevron.right")
                                 .font(.title2)
@@ -401,7 +405,7 @@ struct GlobalNavBar: View {
                     }
                 )
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.height(UIScreen.main.bounds.height * 0.5 + 30)])
         }
         .sheet(isPresented: $showingAddEvent) {
             NavigationStack {
@@ -467,8 +471,8 @@ struct GlobalNavBar: View {
             await calendarVM.loadCalendarDataForMonth(containing: currentDate)
         }
         
-        // Reload tasks
-        await tasksVM.loadTasks()
+        // Reload tasks with forced cache clear
+        await tasksVM.loadTasks(forceClear: true)
         
         // Reload logs data
         LogsViewModel.shared.reloadData()
@@ -491,8 +495,8 @@ struct GlobalNavBar: View {
             await calendarVM.loadCalendarDataForMonth(containing: date)
         }
         
-        // Reload tasks
-        await tasksVM.loadTasks()
+        // Reload tasks with forced cache clear
+        await tasksVM.loadTasks(forceClear: true)
         
         // Reload logs data
         LogsViewModel.shared.reloadData()

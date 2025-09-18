@@ -400,8 +400,11 @@ extension WeeklyView {
         .background(isToday ? Color.blue : Color.clear)
         .cornerRadius(8)
         .contentShape(Rectangle())
-        .onTapGesture { 
-            selectedDate = date 
+        .onTapGesture {
+            // Update the selected date
+            selectedDate = date
+            // Navigate to day view for the selected date
+            navigationManager.updateInterval(.day, date: date)
         }
     }
     

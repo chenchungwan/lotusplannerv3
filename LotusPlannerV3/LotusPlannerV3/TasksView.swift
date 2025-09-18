@@ -81,9 +81,15 @@ class TasksViewModel: ObservableObject {
     private var cacheTimestamps: [String: Date] = [:]
     private let cacheTimeout: TimeInterval = 1800 // 30 minutes
     
-    func loadTasks() async {
+    func loadTasks(forceClear: Bool = false) async {
         isLoading = true
         errorMessage = ""
+        
+        // Clear all caches if forced
+        if forceClear {
+            clearCacheForAccount(.personal)
+            clearCacheForAccount(.professional)
+        }
         
         // Load tasks for both account types in parallel
         await withTaskGroup(of: Void.self) { group in
@@ -396,6 +402,9 @@ class TasksViewModel: ObservableObject {
                 
                 // Clear cache for this account to ensure fresh data on next load
                 clearCacheForAccount(kind)
+                
+                // Reload tasks to get the latest state
+                await loadTasks()
                 
             } catch {
                 // REVERT OPTIMISTIC UPDATE on error

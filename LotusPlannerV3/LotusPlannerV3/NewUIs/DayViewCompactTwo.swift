@@ -80,7 +80,7 @@ struct DayViewAlt: View {
                             horizontalCards: false,
                             isSingleDayView: true
                         )
-                        .frame(maxWidth: hasProfessionalTasks ? nil : .infinity, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .top)
                     }
 
                     if hasProfessionalTasks {
@@ -110,7 +110,7 @@ struct DayViewAlt: View {
                             horizontalCards: false,
                             isSingleDayView: true
                         )
-                        .frame(maxWidth: hasPersonalTasks ? nil : .infinity, alignment: .top)
+                        .frame(maxWidth: .infinity, alignment: .top)
                     }
                     
                     if !hasPersonalTasks && !hasProfessionalTasks {
