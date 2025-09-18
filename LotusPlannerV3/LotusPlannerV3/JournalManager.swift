@@ -284,6 +284,45 @@ struct JournalManager {
         }
     }
 
+    // MARK: - Delete All Journal Data
+    /// Delete all journal data including drawings, photos, and background PDFs
+    func deleteAllJournalData() {
+        let fm = FileManager.default
+        
+        // Delete all drawings
+        let drawingsDir = drawingsDirectory
+        if fm.fileExists(atPath: drawingsDir.path) {
+            try? fm.removeItem(at: drawingsDir)
+        }
+        
+        // Delete all photos and metadata
+        let photosDir = photosDirectoryURL
+        if fm.fileExists(atPath: photosDir.path) {
+            try? fm.removeItem(at: photosDir)
+        }
+        
+        // Delete background PDFs
+        clearBackgroundPDF(layoutType: .compact)
+        clearBackgroundPDF(layoutType: .expanded)
+        
+        // Clear UserDefaults journal-related keys
+        let journalKeys = UserDefaults.standard.dictionaryRepresentation().keys.filter { 
+            $0.contains("journal") || $0.contains("Journal") 
+        }
+        for key in journalKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        
+        // Also clear from iCloud if available
+        if let iCloudRoot = ubiquityDocsURL {
+            let iCloudDrawingsDir = iCloudRoot.appendingPathComponent("journal_drawings")
+            try? fm.removeItem(at: iCloudDrawingsDir)
+            
+            let iCloudPhotosDir = iCloudRoot.appendingPathComponent("journal_photos")
+            try? fm.removeItem(at: iCloudPhotosDir)
+        }
+    }
+
     // MARK: - Types
     /// Minimal info needed from photo metadata for CloudKit attachment mapping
     struct LitePhotoMeta: Codable {

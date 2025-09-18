@@ -52,6 +52,7 @@ struct DayViewAlt: View {
                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
                     let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
                     let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
+                    let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
                     
                     if hasPersonalTasks {
                         TasksComponent(
@@ -114,12 +115,34 @@ struct DayViewAlt: View {
                     }
                     
                     if !hasPersonalTasks && !hasProfessionalTasks {
-                        Text("No tasks for today")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
+                        if !hasAnyLinkedAccount {
+                            // No accounts linked - show link account UI
+                            VStack(spacing: 16) {
+                                Image(systemName: "person.crop.circle.badge.plus")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Link Your Google Account")
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                
+                                Text("Connect your Google account to view and manage your calendar events and tasks")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
                             .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
+                            .padding(.vertical, 40)
+                            .padding(.horizontal, 20)
+                        } else {
+                            // Accounts linked but no tasks
+                            Text("No tasks for today")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        }
                     }
                 }
                 .frame(height: clampedTasks)

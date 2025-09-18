@@ -1426,14 +1426,14 @@ struct CalendarView: View {
                 // Centered empty state for weekly view
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 12) {
-                        Image(systemName: "person.badge.plus")
+                        Image(systemName: "person.crop.circle.badge.plus")
                             .font(.system(size: 48))
                             .foregroundColor(.secondary)
                         Text("Link Your Google Account")
                             .font(.title3)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
-                        Text("Connect your Google account to view weekly tasks")
+                        Text("Connect your Google account to view and manage your calendar events and tasks")
                             .multilineTextAlignment(.center)
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 40)
@@ -3555,13 +3555,13 @@ struct CalendarView: View {
                 // Empty state in Day view, placed in Tasks area
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 8) {
-                        Image(systemName: "person.badge.plus")
+                        Image(systemName: "person.crop.circle.badge.plus")
                             .font(.system(size: 32))
                             .foregroundColor(.secondary)
                         Text("Link Your Google Account")
                             .font(.headline)
                             .foregroundColor(.primary)
-                        Text("Connect your Google account to view and manage your tasks")
+                        Text("Connect your Google account to view and manage your calendar events and tasks")
                             .font(.caption)
                             .multilineTextAlignment(.center)
                             .foregroundColor(.secondary)

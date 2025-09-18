@@ -335,6 +335,7 @@ struct SettingsView: View {
     @State private var showingPersonalColorPicker = false
     @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
+    @State private var showingDeleteSuccessAlert = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     
 
@@ -487,6 +488,11 @@ struct SettingsView: View {
                     } message: {
                         Text("This action will unlink all your linked Google accounts but will not delete the events or tasks data from your Google accounts. \n\nLogs data, however, will be deleted from your iCloud and cannot be undone.")
                     }
+                    .alert("Data Deleted Successfully", isPresented: $showingDeleteSuccessAlert) {
+                        Button("OK") {}
+                    } message: {
+                        Text("All app data has been deleted successfully. The current view has been refreshed to reflect the changes.")
+                    }
                 }
                 
 
@@ -615,11 +621,50 @@ struct SettingsView: View {
         LogsViewModel.shared.reloadData()
         LogsViewModel.shared.loadLogsForCurrentDate()
         
-        // If currently on Day view in Calendar, force UI refresh of Logs component by nudging NavigationManager's date
-        if NavigationManager.shared.currentInterval == .day {
-            let current = NavigationManager.shared.currentDate
-            NavigationManager.shared.updateInterval(.day, date: current)
+        // Delete all journal data (drawings, photos, background PDFs)
+        JournalManager.shared.deleteAllJournalData()
+        
+        // Force comprehensive UI refresh
+        Task {
+            await refreshAllViewsAfterDelete()
+            
+            // Show success confirmation
+            DispatchQueue.main.async {
+                showingDeleteSuccessAlert = true
+            }
         }
+    }
+    
+    private func refreshAllViewsAfterDelete() async {
+        let currentDate = NavigationManager.shared.currentDate
+        
+        // Reload calendar events based on current interval
+        switch NavigationManager.shared.currentInterval {
+        case .day:
+            await DataManager.shared.calendarViewModel.loadCalendarData(for: currentDate)
+        case .week:
+            await DataManager.shared.calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
+        case .month:
+            await DataManager.shared.calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
+        case .year:
+            await DataManager.shared.calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
+        }
+        
+        // Reload tasks with forced cache clear
+        await DataManager.shared.tasksViewModel.loadTasks(forceClear: true)
+        
+        // Reload logs data
+        LogsViewModel.shared.reloadData()
+        LogsViewModel.shared.loadLogsForCurrentDate()
+        
+        // Post comprehensive refresh notifications
+        NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+        NotificationCenter.default.post(name: Notification.Name("RefreshAllData"), object: nil)
+        NotificationCenter.default.post(name: Notification.Name("iCloudDataChanged"), object: nil)
+        
+        // Force NavigationManager refresh to update all UI components
+        let current = NavigationManager.shared.currentDate
+        NavigationManager.shared.updateInterval(NavigationManager.shared.currentInterval, date: current)
     }
     
     private func testGoogleSignInConfig() {

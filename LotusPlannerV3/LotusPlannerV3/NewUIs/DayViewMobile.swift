@@ -46,33 +46,67 @@ struct DayViewMobile: View {
                     Text("Personal Tasks")
                         .font(.headline)
                         .padding(.horizontal, 12)
-                    TasksComponent(
-                        taskLists: tasksVM.personalTaskLists,
-                        tasksDict: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
-                        accentColor: appPrefs.personalColor,
-                        accountType: .personal,
-                        onTaskToggle: { task, listId in
-                            Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
-                        },
-                        onTaskDetails: { task, listId in
-                            print("DEBUG: Setting task details state - task: \(task.title)")
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedTaskAccount = .personal
-                            showingTaskDetails = true
-                            print("DEBUG: Task details state set - task: \(selectedTask?.title ?? "nil"), listId: \(selectedTaskListId ?? "nil"), account: \(selectedTaskAccount?.rawValue ?? "nil"), showing: \(showingTaskDetails)")
-                        },
-                        onListRename: { listId, newName in
-                            Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
-                        },
-                        hideDueDateTag: false,
-                        showEmptyState: true,
-                        horizontalCards: false,
-                        isSingleDayView: true
-                    )
+                    
+                    let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
+                    let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
+                    let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
+                    
+                    if hasPersonalTasks {
+                        TasksComponent(
+                            taskLists: tasksVM.personalTaskLists,
+                            tasksDict: personalTasks,
+                            accentColor: appPrefs.personalColor,
+                            accountType: .personal,
+                            onTaskToggle: { task, listId in
+                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
+                            },
+                            onTaskDetails: { task, listId in
+                                print("DEBUG: Setting task details state - task: \(task.title)")
+                                selectedTask = task
+                                selectedTaskListId = listId
+                                selectedTaskAccount = .personal
+                                showingTaskDetails = true
+                                print("DEBUG: Task details state set - task: \(selectedTask?.title ?? "nil"), listId: \(selectedTaskListId ?? "nil"), account: \(selectedTaskAccount?.rawValue ?? "nil"), showing: \(showingTaskDetails)")
+                            },
+                            onListRename: { listId, newName in
+                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
+                            },
+                            hideDueDateTag: false,
+                            showEmptyState: false, // We handle empty state ourselves
+                            horizontalCards: false,
+                            isSingleDayView: true
+                        )
+                    } else if !hasAnyLinkedAccount {
+                        // No accounts linked - show link account UI
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                                .font(.system(size: 48))
+                                .foregroundColor(.secondary)
+                            
+                            Text("Link Your Google Account")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                            
+                            Text("Connect your Google account to view and manage your calendar events and tasks")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 40)
+                        .padding(.horizontal, 20)
+                    } else {
+                        // Account linked but no tasks
+                        Text("No personal tasks for today")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 20)
+                    }
                 }
                 
                 // Professional tasks
@@ -80,33 +114,51 @@ struct DayViewMobile: View {
                     Text("Professional Tasks")
                         .font(.headline)
                         .padding(.horizontal, 12)
-                    TasksComponent(
-                        taskLists: tasksVM.professionalTaskLists,
-                        tasksDict: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
-                        accentColor: appPrefs.professionalColor,
-                        accountType: .professional,
-                        onTaskToggle: { task, listId in
-                            Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
-                        },
-                        onTaskDetails: { task, listId in
-                            print("DEBUG: Setting task details state - task: \(task.title)")
-                            selectedTask = task
-                            selectedTaskListId = listId
-                            selectedTaskAccount = .professional
-                            showingTaskDetails = true
-                            print("DEBUG: Task details state set - task: \(selectedTask?.title ?? "nil"), listId: \(selectedTaskListId ?? "nil"), account: \(selectedTaskAccount?.rawValue ?? "nil"), showing: \(showingTaskDetails)")
-                        },
-                        onListRename: { listId, newName in
-                            Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
-                        },
-                        hideDueDateTag: false,
-                        showEmptyState: true,
-                        horizontalCards: false,
-                        isSingleDayView: true
-                    )
+                    
+                    let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
+                    let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
+                    let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
+                    
+                    if hasProfessionalTasks {
+                        TasksComponent(
+                            taskLists: tasksVM.professionalTaskLists,
+                            tasksDict: professionalTasks,
+                            accentColor: appPrefs.professionalColor,
+                            accountType: .professional,
+                            onTaskToggle: { task, listId in
+                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
+                            },
+                            onTaskDetails: { task, listId in
+                                print("DEBUG: Setting task details state - task: \(task.title)")
+                                selectedTask = task
+                                selectedTaskListId = listId
+                                selectedTaskAccount = .professional
+                                showingTaskDetails = true
+                                print("DEBUG: Task details state set - task: \(selectedTask?.title ?? "nil"), listId: \(selectedTaskListId ?? "nil"), account: \(selectedTaskAccount?.rawValue ?? "nil"), showing: \(showingTaskDetails)")
+                            },
+                            onListRename: { listId, newName in
+                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
+                            },
+                            hideDueDateTag: false,
+                            showEmptyState: false, // We handle empty state ourselves
+                            horizontalCards: false,
+                            isSingleDayView: true
+                        )
+                    } else if !hasAnyLinkedAccount {
+                        // No accounts linked - show link account UI (only show once)
+                        EmptyView() // This will be handled by the personal tasks section
+                    } else {
+                        // Account linked but no tasks
+                        Text("No professional tasks for today")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 20)
+                    }
                 }
                 
                 // Logs (no label in Mobile layout)

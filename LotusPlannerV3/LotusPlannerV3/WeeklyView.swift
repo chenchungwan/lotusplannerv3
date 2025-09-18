@@ -158,7 +158,7 @@ struct WeeklyView: View {
                         if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
                             Button(action: { NavigationManager.shared.showSettings() }) {
                                 VStack(spacing: 8) {
-                                    Image(systemName: "person.badge.plus")
+                                    Image(systemName: "person.crop.circle.badge.plus")
                                         .font(.system(size: 40))
                                         .foregroundColor(.secondary)
                                     Text("No Task Accounts Linked")
@@ -306,18 +306,18 @@ extension WeeklyView {
             // Empty state message when no tasks are present
             if !personalHasAny && !professionalHasAny {
                 VStack(spacing: 16) {
-                    Image(systemName: "checkmark.circle")
+                    Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
                     
-                    Text("No tasks this week")
+                    Text("Link Your Google Account")
                         .font(.title2)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary)
+                        .fontWeight(.semibold)
                     
-                    Text("Add tasks or check other weeks")
+                    Text("Connect your Google account to view and manage your calendar events and tasks")
                         .font(.body)
                         .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.vertical, 60)

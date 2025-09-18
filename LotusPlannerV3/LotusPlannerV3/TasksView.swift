@@ -1410,14 +1410,14 @@ struct TasksView: View {
                 VStack(spacing: 16) {
                     Button(action: { NavigationManager.shared.showSettings() }) {
                         VStack(spacing: 12) {
-                            Image(systemName: "person.badge.plus")
+                            Image(systemName: "person.crop.circle.badge.plus")
                                 .font(.system(size: 60))
                                 .foregroundColor(.secondary)
                             Text("Link Your Google Account")
                                 .font(.title2)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.primary)
-                            Text("Connect your Google account to view and manage your tasks")
+                            Text("Connect your Google account to view and manage your calendar events and tasks")
                                 .multilineTextAlignment(.center)
                                 .foregroundColor(.secondary)
                                 .padding(.horizontal, 40)
@@ -1919,7 +1919,7 @@ struct TasksSectionView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
                 .foregroundColor(accentColor)
-            Text("Connect your \(title.lowercased()) Google account to view and manage your tasks")
+            Text("Connect your \(title.lowercased()) Google account to view and manage your calendar events and tasks")
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .font(.body)
