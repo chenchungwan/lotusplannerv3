@@ -81,23 +81,26 @@ struct DayViewMobile: View {
                         )
                     } else if !hasAnyLinkedAccount {
                         // No accounts linked - show link account UI
-                        VStack(spacing: 16) {
-                            Image(systemName: "person.crop.circle.badge.plus")
-                                .font(.system(size: 48))
-                                .foregroundColor(.secondary)
-                            
-                            Text("Link Your Google Account")
-                                .font(.title2)
-                                .fontWeight(.semibold)
-                            
-                            Text("Connect your Google account to view and manage your calendar events and tasks")
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
+                        Button(action: { NavigationManager.shared.showSettings() }) {
+                            VStack(spacing: 16) {
+                                Image(systemName: "person.crop.circle.badge.plus")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Link Your Google Account")
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                
+                                Text("Connect your Google account to view and manage your calendar events and tasks")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 40)
+                            .padding(.horizontal, 20)
                         }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 40)
-                        .padding(.horizontal, 20)
+                        .buttonStyle(.plain)
                     } else {
                         // Account linked but no tasks
                         Text("No personal tasks for today")

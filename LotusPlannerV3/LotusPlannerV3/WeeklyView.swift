@@ -154,26 +154,6 @@ struct WeeklyView: View {
                         // Week view - 7-column tasks layout
                         weekTasksView
                         
-                        // If neither account is linked, show placeholder
-                        if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
-                            Button(action: { NavigationManager.shared.showSettings() }) {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "person.crop.circle.badge.plus")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.secondary)
-                                    Text("No Task Accounts Linked")
-                                        .font(.headline)
-                                        .foregroundColor(.secondary)
-                                    Text("Link your Google accounts in Settings to view tasks")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .multilineTextAlignment(.center)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(.all, 8)
-                        }
                     }
                     .frame(maxHeight: .infinity)
                 }
@@ -305,22 +285,25 @@ extension WeeklyView {
             
             // Empty state message when no tasks are present
             if !personalHasAny && !professionalHasAny {
-                VStack(spacing: 16) {
-                    Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Link Your Google Account")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    Text("Connect your Google account to view and manage your calendar events and tasks")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+                Button(action: { NavigationManager.shared.showSettings() }) {
+                    VStack(spacing: 16) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        
+                        Text("Link Your Google Account")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        Text("Connect your Google account to view and manage your calendar events and tasks")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.vertical, 60)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 60)
+                .buttonStyle(.plain)
             }
         }
     }
