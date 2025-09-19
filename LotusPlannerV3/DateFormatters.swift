@@ -66,6 +66,20 @@ extension DateFormatter {
         formatter.dateFormat = "EEEE, MMMM d, yyyy"
         return formatter
     }()
+    
+    /// Short date format: M/d/yy (e.g., "12/25/24")
+    static let shortDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d/yy"
+        return formatter
+    }()
+    
+    /// Short time format: h:mm a (e.g., "2:30 PM")
+    static let shortTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
 }
 
 // MARK: - Standardized Date Display Styles

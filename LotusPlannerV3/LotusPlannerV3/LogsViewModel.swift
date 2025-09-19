@@ -20,10 +20,13 @@ class LogsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showingAddLogSheet = false
+    @Published var showingEditLogSheet = false
+    @Published var editingEntry: (type: LogType, id: String)? = nil
     
     // Weight entry form
     @Published var weightValue = ""
     @Published var selectedWeightUnit: WeightUnit = .pounds
+    @Published var weightDate = Date()
     
     // Workout entry form
     @Published var workoutName = ""
@@ -88,7 +91,13 @@ class LogsViewModel: ObservableObject {
         }
         
         let userId = getUserId()
-        let entry = WeightLogEntry(weight: weight, unit: selectedWeightUnit, userId: userId)
+        
+        // Extract date and time from the combined date picker
+        let calendar = Calendar.current
+        let date = calendar.startOfDay(for: weightDate)
+        let time = weightDate
+        
+        let entry = WeightLogEntry(weight: weight, unit: selectedWeightUnit, userId: userId, date: date, time: time)
         
         // Save to Core Data immediately
         coreDataManager.saveWeightEntry(entry)
@@ -98,6 +107,7 @@ class LogsViewModel: ObservableObject {
         
         // Clear form
         weightValue = ""
+        weightDate = Date()
         showingAddLogSheet = false
         
     }
@@ -234,9 +244,147 @@ class LogsViewModel: ObservableObject {
     
     func resetForms() {
         weightValue = ""
+        weightDate = currentDate
         workoutName = ""
         foodName = ""
         workoutDate = currentDate
         foodDate = currentDate
+    }
+    
+    // MARK: - Edit Entry Methods
+    func editWeightEntry(_ entry: WeightLogEntry) {
+        editingEntry = (.weight, entry.id)
+        selectedLogType = .weight
+        weightValue = String(entry.weight)
+        selectedWeightUnit = entry.unit
+        weightDate = entry.timestamp
+        showingEditLogSheet = true
+    }
+    
+    func editWorkoutEntry(_ entry: WorkoutLogEntry) {
+        editingEntry = (.workout, entry.id)
+        selectedLogType = .workout
+        workoutName = entry.name
+        workoutDate = entry.date
+        showingEditLogSheet = true
+    }
+    
+    func editFoodEntry(_ entry: FoodLogEntry) {
+        editingEntry = (.food, entry.id)
+        selectedLogType = .food
+        foodName = entry.name
+        foodDate = entry.date
+        showingEditLogSheet = true
+    }
+    
+    func updateCurrentLogEntry() {
+        guard let editingEntry = editingEntry else { return }
+        
+        switch editingEntry.type {
+        case .weight:
+            updateWeightEntry()
+        case .workout:
+            updateWorkoutEntry()
+        case .food:
+            updateFoodEntry()
+        }
+    }
+    
+    private func updateWeightEntry() {
+        guard let editingEntry = editingEntry,
+              let weight = Double(weightValue), !weightValue.isEmpty else {
+            errorMessage = "Please enter a valid weight"
+            return
+        }
+        
+        // Find and update the entry
+        if let index = weightEntries.firstIndex(where: { $0.id == editingEntry.id }) {
+            let calendar = Calendar.current
+            let date = calendar.startOfDay(for: weightDate)
+            let time = weightDate
+            
+            let updatedEntry = WeightLogEntry(
+                id: editingEntry.id,
+                date: date,
+                time: time,
+                weight: weight,
+                unit: selectedWeightUnit,
+                userId: weightEntries[index].userId
+            )
+            
+            // Update in Core Data
+            coreDataManager.deleteWeightEntry(weightEntries[index])
+            coreDataManager.saveWeightEntry(updatedEntry)
+            
+            // Update local array
+            weightEntries[index] = updatedEntry
+        }
+        
+        // Clear form and close sheet
+        resetForms()
+        showingEditLogSheet = false
+        self.editingEntry = nil
+    }
+    
+    private func updateWorkoutEntry() {
+        guard let editingEntry = editingEntry,
+              !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please enter a workout name"
+            return
+        }
+        
+        // Find and update the entry
+        if let index = workoutEntries.firstIndex(where: { $0.id == editingEntry.id }) {
+            let updatedEntry = WorkoutLogEntry(
+                id: editingEntry.id,
+                date: workoutDate,
+                name: workoutName,
+                userId: workoutEntries[index].userId,
+                createdAt: workoutEntries[index].createdAt
+            )
+            
+            // Update in Core Data
+            coreDataManager.deleteWorkoutEntry(workoutEntries[index])
+            coreDataManager.saveWorkoutEntry(updatedEntry)
+            
+            // Update local array
+            workoutEntries[index] = updatedEntry
+        }
+        
+        // Clear form and close sheet
+        resetForms()
+        showingEditLogSheet = false
+        self.editingEntry = nil
+    }
+    
+    private func updateFoodEntry() {
+        guard let editingEntry = editingEntry,
+              !foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please enter a food name"
+            return
+        }
+        
+        // Find and update the entry
+        if let index = foodEntries.firstIndex(where: { $0.id == editingEntry.id }) {
+            let updatedEntry = FoodLogEntry(
+                id: editingEntry.id,
+                date: foodDate,
+                name: foodName,
+                userId: foodEntries[index].userId,
+                createdAt: foodEntries[index].createdAt
+            )
+            
+            // Update in Core Data
+            coreDataManager.deleteFoodEntry(foodEntries[index])
+            coreDataManager.saveFoodEntry(updatedEntry)
+            
+            // Update local array
+            foodEntries[index] = updatedEntry
+        }
+        
+        // Clear form and close sheet
+        resetForms()
+        showingEditLogSheet = false
+        self.editingEntry = nil
     }
 } 

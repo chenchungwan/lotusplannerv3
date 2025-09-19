@@ -86,6 +86,9 @@ struct LogsComponent: View {
         .sheet(isPresented: $viewModel.showingAddLogSheet) {
             AddLogEntryView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showingEditLogSheet) {
+            EditLogEntryView(viewModel: viewModel)
+        }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") {
                 viewModel.errorMessage = nil
@@ -158,6 +161,9 @@ struct LogsComponent: View {
         .padding(.vertical, 4)
         .background(Color(.systemBackground))
         .cornerRadius(6)
+        .onTapGesture {
+            viewModel.editWeightEntry(entry)
+        }
     }
     
     // MARK: - Workout Section
@@ -210,6 +216,9 @@ struct LogsComponent: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .onTapGesture {
+            viewModel.editWorkoutEntry(entry)
+        }
         .background(Color(.systemBackground))
         .cornerRadius(6)
     }
@@ -264,6 +273,9 @@ struct LogsComponent: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .onTapGesture {
+            viewModel.editFoodEntry(entry)
+        }
         .background(Color(.systemBackground))
         .cornerRadius(6)
     }
@@ -344,6 +356,85 @@ struct AddLogEntryView: View {
                 }
                 .pickerStyle(MenuPickerStyle())
             }
+            
+            DatePicker("Date & Time", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+    
+    private var workoutForm: some View {
+        Section("Workout Details") {
+            TextField("Workout name", text: $viewModel.workoutName)
+            DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+    
+    private var foodForm: some View {
+        Section("Food Details") {
+            TextField("Food name", text: $viewModel.foodName)
+            DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+}
+
+// MARK: - Edit Log Entry View
+struct EditLogEntryView: View {
+    @ObservedObject var viewModel: LogsViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Log Type") {
+                    Text(viewModel.selectedLogType.displayName)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Form fields based on log type
+                switch viewModel.selectedLogType {
+                case .weight:
+                    weightForm
+                case .workout:
+                    workoutForm
+                case .food:
+                    foodForm
+                }
+            }
+            .navigationTitle("Edit \(viewModel.selectedLogType.displayName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Update") {
+                        viewModel.updateCurrentLogEntry()
+                        dismiss()
+                    }
+                    .disabled(!viewModel.canAddCurrentLogType)
+                    .foregroundColor(viewModel.accentColor)
+                }
+            }
+        }
+    }
+    
+    private var weightForm: some View {
+        Section("Weight Details") {
+            HStack {
+                TextField("Weight", text: $viewModel.weightValue)
+                    .keyboardType(.decimalPad)
+                
+                Picker("Unit", selection: $viewModel.selectedWeightUnit) {
+                    ForEach(WeightUnit.allCases, id: \.self) { unit in
+                        Text(unit.displayName).tag(unit)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+            }
+            
+            DatePicker("Date & Time", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
         }
     }
     

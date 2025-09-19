@@ -36,7 +36,9 @@ class CoreDataManager: ObservableObject {
     func saveWeightEntry(_ entry: WeightLogEntry) {
         let weightLog = WeightLog(context: context)
         weightLog.id = entry.id
-        weightLog.timestamp = entry.timestamp
+        weightLog.date = entry.date
+        weightLog.time = entry.time
+        weightLog.timestamp = entry.timestamp // Keep for backward compatibility
         weightLog.weight = entry.weight
         weightLog.unit = entry.unit.rawValue
         weightLog.userId = entry.userId
@@ -52,14 +54,18 @@ class CoreDataManager: ObservableObject {
             let logs = try context.fetch(request)
             return logs.compactMap { log in
                 guard let id = log.id,
-                      let timestamp = log.timestamp,
                       let unitString = log.unit,
                       let unit = WeightUnit(rawValue: unitString),
                       let userId = log.userId else { return nil }
                 
+                // Use new date/time fields if available, otherwise fall back to timestamp
+                let date = log.date ?? log.timestamp ?? Date()
+                let time = log.time ?? log.timestamp ?? Date()
+                
                 return WeightLogEntry(
                     id: id,
-                    timestamp: timestamp,
+                    date: date,
+                    time: time,
                     weight: log.weight,
                     unit: unit,
                     userId: userId
@@ -241,9 +247,10 @@ class CoreDataManager: ObservableObject {
 
 // MARK: - Extensions for WeightLogEntry
 extension WeightLogEntry {
-    init(id: String, timestamp: Date, weight: Double, unit: WeightUnit, userId: String) {
+    init(id: String, date: Date, time: Date, weight: Double, unit: WeightUnit, userId: String) {
         self.id = id
-        self.timestamp = timestamp
+        self.date = date
+        self.time = time
         self.weight = weight
         self.unit = unit
         self.userId = userId

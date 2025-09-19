@@ -26,20 +26,28 @@ enum LogType: String, CaseIterable, Codable {
 // MARK: - Weight Log Entry
 struct WeightLogEntry: Identifiable, Codable, Hashable {
     let id: String
-    let timestamp: Date
+    let date: Date
+    let time: Date
     let weight: Double
     let unit: WeightUnit
     let userId: String
     
-    init(weight: Double, unit: WeightUnit, userId: String) {
+    init(weight: Double, unit: WeightUnit, userId: String, date: Date = Date(), time: Date = Date()) {
         self.id = UUID().uuidString
-        self.timestamp = Date()
+        self.date = date
+        self.time = time
         self.weight = weight
         self.unit = unit
         self.userId = userId
     }
     
-
+    // Computed property for backward compatibility
+    var timestamp: Date {
+        Calendar.current.date(bySettingHour: Calendar.current.component(.hour, from: time),
+                            minute: Calendar.current.component(.minute, from: time),
+                            second: 0,
+                            of: date) ?? date
+    }
 }
 
 enum WeightUnit: String, CaseIterable, Codable {
@@ -117,7 +125,7 @@ protocol LogEntry {
 }
 
 extension WeightLogEntry: LogEntry {
-    var date: Date { timestamp }
+    // date property is already defined in the struct
 }
 
 extension WorkoutLogEntry: LogEntry {}
