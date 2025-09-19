@@ -449,12 +449,71 @@ final class iCloudManager: ObservableObject {
             forName: .NSPersistentStoreRemoteChange,
             object: nil,
             queue: .main
-        ) { _ in
-        #if DEBUG
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            
+            #if DEBUG
             debugPrint("📡 CloudKit remote changes received")
-        #endif
+            #endif
+            
+            // Update last sync date
             self.lastSyncDate = Date()
-            NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+            self.syncStatus = .syncing
+            
+            // Force refresh all Core Data objects
+            let context = self.persistenceController.container.viewContext
+            context.refreshAllObjects()
+            
+            // Create a background context for fetching fresh data
+            let backgroundContext = self.persistenceController.container.newBackgroundContext()
+            backgroundContext.automaticallyMergesChangesFromParent = true
+            backgroundContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+            
+            Task {
+                do {
+                    // Perform fetch in background
+                    try await backgroundContext.perform {
+                        // Fetch all log types to ensure they're up to date
+                        let weightRequest: NSFetchRequest<WeightLog> = WeightLog.fetchRequest()
+                        let workoutRequest: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
+                        let foodRequest: NSFetchRequest<FoodLog> = FoodLog.fetchRequest()
+                        
+                        let _ = try backgroundContext.fetch(weightRequest)
+                        let _ = try backgroundContext.fetch(workoutRequest)
+                        let _ = try backgroundContext.fetch(foodRequest)
+                        
+                        // Save background context to ensure changes are merged
+                        if backgroundContext.hasChanges {
+                            try backgroundContext.save()
+                        }
+                    }
+                    
+                    await MainActor.run {
+                        self.syncStatus = .available
+                        #if DEBUG
+                        debugPrint("✅ CloudKit changes merged successfully")
+                        #endif
+                        
+                        // Post notification for UI updates
+                        NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                        
+                        // Provide haptic feedback
+                        let feedback = UINotificationFeedbackGenerator()
+                        feedback.notificationOccurred(.success)
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.syncStatus = .error(error.localizedDescription)
+                        #if DEBUG
+                        debugPrint("❌ Failed to merge CloudKit changes: \(error)")
+                        #endif
+                        
+                        // Provide error feedback
+                        let feedback = UINotificationFeedbackGenerator()
+                        feedback.notificationOccurred(.error)
+                    }
+                }
+            }
         }
     }
 }
