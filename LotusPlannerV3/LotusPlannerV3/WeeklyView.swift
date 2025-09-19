@@ -133,12 +133,60 @@ struct WeeklyView: View {
             selectedDate = navigationManager.currentDate
             // Initialize divider to equal height (half of available height)
             v2TopTasksHeight = availableHeight / 2
-            await tasksViewModel.loadTasks()
+            
+            // Clear caches and load fresh data
+            calendarViewModel.clearAllData()
+            await tasksViewModel.loadTasks(forceClear: true)
+            await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
+            
+            await MainActor.run {
+                // Force view updates
+                calendarViewModel.objectWillChange.send()
+                tasksViewModel.objectWillChange.send()
+            }
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
             selectedDate = newValue
             // Scroll to current day when date changes
             scrollToCurrentDayTrigger.toggle()
+            
+            Task {
+                // Clear caches and load fresh data
+                calendarViewModel.clearAllData()
+                await tasksViewModel.loadTasks(forceClear: true)
+                await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
+                
+                await MainActor.run {
+                    // Force view updates
+                    calendarViewModel.objectWillChange.send()
+                    tasksViewModel.objectWillChange.send()
+                }
+            }
+        }
+        .onChange(of: navigationManager.currentInterval) { oldValue, newValue in
+            Task {
+                // Clear caches and load fresh data
+                calendarViewModel.clearAllData()
+                await tasksViewModel.loadTasks(forceClear: true)
+                
+                // Load data based on interval
+                switch newValue {
+                case .day:
+                    await calendarViewModel.loadCalendarData(for: selectedDate)
+                case .week:
+                    await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
+                case .month:
+                    await calendarViewModel.loadCalendarDataForMonth(containing: selectedDate)
+                case .year:
+                    await calendarViewModel.loadCalendarDataForMonth(containing: selectedDate)
+                }
+                
+                await MainActor.run {
+                    // Force view updates
+                    calendarViewModel.objectWillChange.send()
+                    tasksViewModel.objectWillChange.send()
+                }
+            }
         }
     }
     

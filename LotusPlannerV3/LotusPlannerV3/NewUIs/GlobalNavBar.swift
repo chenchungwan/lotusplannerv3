@@ -85,11 +85,40 @@ struct GlobalNavBar: View {
     private func step(_ direction: Int) {
         let component = navigationManager.currentInterval.calendarComponent
         if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
+            // First update the navigation
             navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
             
-            // Refresh data for the new date/period
+            // Then do a comprehensive data refresh
             Task {
-                await reloadAllDataForDate(newDate)
+                // Clear all caches first
+                calendarVM.clearAllData()
+                await tasksVM.loadTasks(forceClear: true)
+                
+                // Load fresh data based on interval
+                switch navigationManager.currentInterval {
+                case .day:
+                    await calendarVM.loadCalendarData(for: newDate)
+                case .week:
+                    await calendarVM.loadCalendarDataForWeek(containing: newDate)
+                case .month:
+                    await calendarVM.loadCalendarDataForMonth(containing: newDate)
+                case .year:
+                    await calendarVM.loadCalendarDataForMonth(containing: newDate)
+                }
+                
+                // Force UI refresh
+                await MainActor.run {
+                    // Reload logs data
+                    LogsViewModel.shared.reloadData()
+                    
+                    // Post notifications for UI updates
+                    NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                    NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+                    
+                    // Force calendar refresh
+                    calendarVM.objectWillChange.send()
+                    tasksVM.objectWillChange.send()
+                }
             }
         }
     }

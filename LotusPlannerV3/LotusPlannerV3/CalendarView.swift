@@ -1733,18 +1733,56 @@ struct CalendarView: View {
     private var dayView: some View {
         dayViewBase
             .task {
-                
+                // Clear caches and load fresh data
+                calendarViewModel.clearAllData()
+                await tasksViewModel.loadTasks(forceClear: true)
                 await calendarViewModel.loadCalendarData(for: currentDate)
-                await tasksViewModel.loadTasks()
+                
                 await MainActor.run {
                     updateCachedTasks()
+                    // Force view updates
+                    calendarViewModel.objectWillChange.send()
+                    tasksViewModel.objectWillChange.send()
                 }
             }
             .onChange(of: currentDate) { oldValue, newValue in
                 Task {
+                    // Clear caches and load fresh data
+                    calendarViewModel.clearAllData()
+                    await tasksViewModel.loadTasks(forceClear: true)
                     await calendarViewModel.loadCalendarData(for: newValue)
+                    
                     await MainActor.run {
                         updateCachedTasks()
+                        // Force view updates
+                        calendarViewModel.objectWillChange.send()
+                        tasksViewModel.objectWillChange.send()
+                    }
+                }
+            }
+            .onChange(of: navigationManager.currentInterval) { oldValue, newValue in
+                Task {
+                    // Clear caches and load fresh data
+                    calendarViewModel.clearAllData()
+                    await tasksViewModel.loadTasks(forceClear: true)
+                    
+                    // Load data based on interval
+                    switch newValue {
+                    case .day:
+                        await calendarViewModel.loadCalendarData(for: currentDate)
+                    case .week:
+                        await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
+                    case .month:
+                        await calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
+                    case .year:
+                        await calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
+                    }
+                    
+                    await MainActor.run {
+                        updateCachedTasks()
+                        // Force view updates
+                        calendarViewModel.objectWillChange.send()
+                        tasksViewModel.objectWillChange.send()
                     }
                 }
             }
@@ -1753,17 +1791,27 @@ struct CalendarView: View {
             }
             .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
                 updateCachedTasks()
+                // Force view update
+                tasksViewModel.objectWillChange.send()
             }
             .onChange(of: tasksViewModel.professionalTasks) { oldValue, newValue in
                 updateCachedTasks()
+                // Force view update
+                tasksViewModel.objectWillChange.send()
             }
             .onChange(of: dataManager.isInitializing) { oldValue, newValue in
                 if !newValue {
                     updateCachedTasks()
+                    // Force view updates
+                    calendarViewModel.objectWillChange.send()
+                    tasksViewModel.objectWillChange.send()
                 }
             }
             .onChange(of: appPrefs.hideCompletedTasks) { oldValue, newValue in
                 updateCachedTasks()
+                // Force view updates
+                calendarViewModel.objectWillChange.send()
+                tasksViewModel.objectWillChange.send()
             }
 
             .onAppear {
