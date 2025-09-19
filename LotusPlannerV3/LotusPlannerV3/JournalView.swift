@@ -257,8 +257,32 @@ struct JournalView: View {
     
     // MARK: - Clear Journal
     private func clearJournal() {
+        // Clear drawing
         canvasView.drawing = PKDrawing()
+        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+        
+        // Clear photos from memory
         photos.removeAll()
+        
+        // Delete photo files for current date
+        let metaURL = metadataURL(for: currentDate)
+        if let data = try? Data(contentsOf: metaURL),
+           let metas = try? JSONDecoder().decode([PhotoMeta].self, from: data) {
+            // Delete each photo file
+            for meta in metas {
+                let fileURL = photosDirectory().appendingPathComponent(meta.fileName)
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
+        
+        // Clear metadata file
+        let empty: [PhotoMeta] = []
+        if let jsonData = try? JSONEncoder().encode(empty) {
+            try? jsonData.write(to: metaURL, options: .atomic)
+        }
+        
+        // Ensure changes sync to iCloud
+        JournalManager.shared.migrateLocalToICloudIfNeeded()
     }
 
     private func exportJournal() {
