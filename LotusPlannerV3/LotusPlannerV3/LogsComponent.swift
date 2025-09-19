@@ -357,7 +357,7 @@ struct AddLogEntryView: View {
                 .pickerStyle(MenuPickerStyle())
             }
             
-            DatePicker("Date & Time", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
+            DatePicker("Date", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
         }
     }
     
@@ -434,7 +434,7 @@ struct EditLogEntryView: View {
                 .pickerStyle(MenuPickerStyle())
             }
             
-            DatePicker("Date & Time", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
+            DatePicker("Date", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
         }
     }
     
