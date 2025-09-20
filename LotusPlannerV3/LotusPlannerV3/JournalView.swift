@@ -6,6 +6,8 @@ import UIKit
 
 struct JournalView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var drawingManager = JournalDrawingManager.shared
     @State private var currentDate: Date
     @State private var canvasView = PKCanvasView()
     // Track previous date to save when date changes
@@ -40,12 +42,9 @@ struct JournalView: View {
     // Interval is always day for journal navigation (reuse same step logic)
     private func step(_ direction: Int) {
         guard let newDate = Calendar.current.date(byAdding: .day, value: direction, to: currentDate) else { return }
-        // Save drawing for current date before switching
-        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
-                        savePhotos()
+        // Let the date change handler handle saving
         previousDate = currentDate
         currentDate = newDate
-        loadDrawing()
     }
 
     private func loadDrawing() {
@@ -73,36 +72,45 @@ struct JournalView: View {
                     canvasContent
                 }
                     .onAppear {
-                        loadDrawing()
-                        loadPhotos()
-                        // Ensure local content is moved to iCloud when available (embedded path)
-                        JournalManager.shared.migrateLocalToICloudIfNeeded()
-                        JournalManager.shared.startICloudMonitoring()
-                        JournalManager.shared.ensureICloudReady(for: currentDate)
-                        
-                        // Listen for refresh notifications
-                        NotificationCenter.default.addObserver(
-                            forName: Notification.Name("RefreshJournalContent"),
-                            object: nil,
-                            queue: .main
-                        ) { _ in
+                        Task { @MainActor in
+                            // Ensure iCloud is ready
+                            JournalManager.shared.migrateLocalToICloudIfNeeded()
+                            JournalManager.shared.startICloudMonitoring()
+                            JournalManager.shared.ensureICloudReady(for: currentDate)
+                            
+                            // Load content
                             loadDrawing()
                             loadPhotos()
+                            
+                            // Listen for refresh notifications
+                            NotificationCenter.default.addObserver(
+                                forName: Notification.Name("RefreshJournalContent"),
+                                object: nil,
+                                queue: .main
+                            ) { _ in
+                                loadDrawing()
+                                loadPhotos()
+                            }
                         }
                     }
                     .onDisappear {
-                        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
-                        savePhotos()
-                        JournalManager.shared.stopICloudMonitoring()
+                        Task { @MainActor in
+                            // Save any pending changes
+                            await drawingManager.appWillResignActive()
+                            savePhotos()
+                            JournalManager.shared.stopICloudMonitoring()
+                        }
                     }
                     .onChange(of: currentDate) { oldValue, newValue in
-                        // Save old content
-                        JournalManager.shared.saveDrawing(for: oldValue, drawing: canvasView.drawing)
-                        savePhotos(for: oldValue)
-
-                        // Load new content
-                        loadDrawing()
-                        loadPhotos()
+                        Task { @MainActor in
+                            // Save old content
+                            await drawingManager.willSwitchDate(from: oldValue, to: newValue)
+                            savePhotos(for: oldValue)
+                            
+                            // Load new content
+                            loadDrawing()
+                            loadPhotos()
+                        }
                     }
             } else {
                 NavigationStack {
@@ -112,24 +120,36 @@ struct JournalView: View {
                     }
                         .navigationTitle("")
                         .toolbarTitleDisplayMode(.inline)
-                        .onAppear { loadDrawing(); loadPhotos() }
-                        .task {
-                            JournalManager.shared.migrateLocalToICloudIfNeeded()
-                            JournalManager.shared.startICloudMonitoring()
-                            JournalManager.shared.ensureICloudReady(for: currentDate)
+                        .onAppear {
+                            Task { @MainActor in
+                                // Ensure iCloud is ready
+                                JournalManager.shared.migrateLocalToICloudIfNeeded()
+                                JournalManager.shared.startICloudMonitoring()
+                                JournalManager.shared.ensureICloudReady(for: currentDate)
+                                
+                                // Load content
+                                loadDrawing()
+                                loadPhotos()
+                            }
                         }
                         .onChange(of: currentDate) { oldValue, newValue in
-                            JournalManager.shared.saveDrawing(for: oldValue, drawing: canvasView.drawing)
-                            savePhotos(for: oldValue)
-                            // Load new date
-                            loadDrawing()
-                            loadPhotos()
+                            Task { @MainActor in
+                                // Save old content
+                                await drawingManager.willSwitchDate(from: oldValue, to: newValue)
+                                savePhotos(for: oldValue)
+                                
+                                // Load new content
+                                loadDrawing()
+                                loadPhotos()
+                            }
                         }
                         .onDisappear {
-                            // Persist when view leaves hierarchy (e.g., day changed)
-                            JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
-                            savePhotos()
-                            JournalManager.shared.stopICloudMonitoring()
+                            Task { @MainActor in
+                                // Save any pending changes
+                                await drawingManager.appWillResignActive()
+                                savePhotos()
+                                JournalManager.shared.stopICloudMonitoring()
+                            }
                         }
                         .toolbar {
                             ToolbarItemGroup(placement: .navigationBarLeading) {
@@ -163,9 +183,12 @@ struct JournalView: View {
                             }
                             ToolbarItem(placement: .navigationBarTrailing) {
                                 Button("Done") {
-                                    JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
-                                    savePhotos()
-                                    dismiss()
+                                    Task { @MainActor in
+                                        // Save any pending changes
+                                        await drawingManager.appWillResignActive()
+                                        savePhotos()
+                                        dismiss()
+                                    }
                                 }
                             }
                         }
@@ -223,10 +246,20 @@ struct JournalView: View {
                 canvasView: $canvasView,
                 showsToolPicker: showToolPicker,
                 onDrawingChanged: {
-                    print("📝 Drawing changed, saving...")
-                    JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+                    Task { @MainActor in
+                        await drawingManager.handleDrawingChange(date: currentDate, drawing: canvasView.drawing)
+                    }
                 }
             )
+            .overlay(alignment: .topTrailing) {
+                if drawingManager.isSaving {
+                    ProgressView()
+                        .padding(8)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(8)
+                        .padding()
+                }
+            }
                 .ignoresSafeArea()
             // Movable photos overlay
             ForEach(photos.indices, id: \.self) { idx in
@@ -257,6 +290,28 @@ struct JournalView: View {
         }
         .onChange(of: pickerItems) { _ in
             loadSelectedPhotos()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            Task { @MainActor in
+                switch newPhase {
+                case .inactive, .background:
+                    // Save when app goes to background or becomes inactive
+                    await drawingManager.appWillResignActive()
+                    savePhotos()
+                case .active:
+                    // Ensure content is loaded and up to date when becoming active
+                    JournalManager.shared.ensureICloudReady(for: currentDate)
+                    loadDrawing()
+                    loadPhotos()
+                @unknown default:
+                    break
+                }
+            }
+        }
+        .onChange(of: currentDate) { oldDate, newDate in
+            Task { @MainActor in
+                await drawingManager.willSwitchDate(from: oldDate, to: newDate)
+            }
         }
     }
     
@@ -334,7 +389,7 @@ struct JournalView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         // Use UTC so filenames are consistent across devices/timezones
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = TimeZone.current // Use local timezone to match drawings
         formatter.dateFormat = "yyyy-MM-dd"
         let name = formatter.string(from: date) + "_photos.json"
         return photosDirectory().appendingPathComponent(name)

@@ -54,7 +54,7 @@ class JournalCache {
     private func keyForDate(_ date: Date) -> NSString {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = TimeZone.current // Use local timezone to match JournalManager
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date) as NSString
     }
