@@ -334,13 +334,33 @@ extension DayViewExpandedTwo {
     }
 
     private func filteredTasksDictForDay(_ dict: [String: [GoogleTask]], on date: Date) -> [String: [GoogleTask]] {
+        let calendar = Calendar.mondayFirst
+        let startOfViewedDate = calendar.startOfDay(for: date)
+        let startOfToday = calendar.startOfDay(for: Date())
+        let isViewingToday = startOfViewedDate == startOfToday
+        
         var result: [String: [GoogleTask]] = [:]
         for (listId, tasks) in dict {
             let filtered = tasks.filter { task in
-                if task.isCompleted, let comp = task.completionDate {
-                    return isSameDay(comp, date)
+                // For completed tasks, show only on completion date
+                if task.isCompleted {
+                    if let comp = task.completionDate {
+                        return isSameDay(comp, date)
+                    }
+                    return false
                 }
-                if let due = task.dueDate { return isSameDay(due, date) }
+                
+                // For incomplete tasks
+                if let dueDate = task.dueDate {
+                    let startOfDueDate = calendar.startOfDay(for: dueDate)
+                    let isViewingDueDate = startOfViewedDate == startOfDueDate
+                    let isOverdue = startOfDueDate < startOfToday
+                    
+                    // Show if:
+                    // 1. We're viewing its due date (past or future), OR
+                    // 2. We're viewing today AND it's overdue
+                    return isViewingDueDate || (isViewingToday && isOverdue)
+                }
                 return false
             }
             if !filtered.isEmpty { result[listId] = filtered }

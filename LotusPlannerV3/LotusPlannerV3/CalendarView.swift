@@ -3952,20 +3952,20 @@ struct CalendarView: View {
                     // For incomplete tasks, show them on due date OR, if viewing today, show overdue
                     guard let dueDate = task.dueDate else { return nil }
 
-                    let _ = calendar.startOfDay(for: date)
+                    let startOfViewedDate = calendar.startOfDay(for: date)
                     let startOfDueDate = calendar.startOfDay(for: dueDate)
+                    let startOfToday = calendar.startOfDay(for: Date())
+                    
                     let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: date)
                     let isViewingToday = calendar.isDate(date, inSameDayAs: Date())
-                    let startOfToday = calendar.startOfDay(for: Date())
-                    let isOverdueRelativeToToday = startOfDueDate < startOfToday
-
-                    // Include if due on the viewed date, or if we're looking at today and the task is overdue relative to today
-                    let include = isDueOnViewedDate || (isViewingToday && isOverdueRelativeToToday)
-
-                    if include {
-                    } else {
-                    }
-
+                    let isViewingDueDate = startOfViewedDate == startOfDueDate
+                    let isOverdue = startOfDueDate < startOfToday
+                    
+                    // Show task if:
+                    // 1. We're viewing its due date (past or future), OR
+                    // 2. We're viewing today AND it's overdue
+                    let include = isViewingDueDate || (isViewingToday && isOverdue)
+                    
                     return include ? task : nil
                 }
             }
