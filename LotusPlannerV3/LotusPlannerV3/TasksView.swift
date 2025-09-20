@@ -910,6 +910,36 @@ class TasksViewModel: ObservableObject {
         return taskLists
     }
     
+    func deleteAllCompletedTasks() async {
+        do {
+            // Delete from personal account if linked
+            if authManager.isLinked(kind: .personal) {
+                for (listId, tasks) in personalTasks {
+                    let completedTasks = tasks.filter { $0.isCompleted }
+                    for task in completedTasks {
+                        try await deleteTaskFromServer(task, from: listId, for: .personal)
+                    }
+                }
+            }
+            
+            // Delete from professional account if linked
+            if authManager.isLinked(kind: .professional) {
+                for (listId, tasks) in professionalTasks {
+                    let completedTasks = tasks.filter { $0.isCompleted }
+                    for task in completedTasks {
+                        try await deleteTaskFromServer(task, from: listId, for: .professional)
+                    }
+                }
+            }
+            
+            // Refresh tasks after deletion
+            await loadTasks(forceClear: true)
+        } catch {
+            print("Error deleting completed tasks: \(error)")
+            errorMessage = "Failed to delete completed tasks"
+        }
+    }
+    
     func moveTaskList(_ listId: String, toAccount targetAccount: GoogleAuthManager.AccountKind) async {
         await MainActor.run {
             if let listIndex = personalTaskLists.firstIndex(where: { $0.id == listId }) {

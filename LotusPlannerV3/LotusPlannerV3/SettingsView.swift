@@ -333,6 +333,7 @@ struct SettingsView: View {
     @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
+    @State private var showingDeleteCompletedTasksAlert = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     
 
@@ -403,8 +404,8 @@ struct SettingsView: View {
                     }
                 }
 
-                // Tasks View Preference
-                Section("Tasks View Preference") {
+                // Tasks Management
+                Section("Tasks Management") {
                     Toggle(isOn: Binding(
                         get: { appPrefs.tasksLayoutHorizontal },
                         set: { appPrefs.updateTasksLayoutHorizontal($0) }
@@ -416,6 +417,32 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
+                    }
+                    
+                    Button(role: .destructive) {
+                        showingDeleteCompletedTasksAlert = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Delete All Completed Tasks")
+                                    .foregroundColor(.red)
+                                Text("Remove completed tasks from all linked accounts")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .alert("Delete All Completed Tasks?", isPresented: $showingDeleteCompletedTasksAlert) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Delete", role: .destructive) {
+                            Task {
+                                await DataManager.shared.tasksViewModel.deleteAllCompletedTasks()
+                            }
+                        }
+                    } message: {
+                        Text("This will permanently delete all completed tasks from your linked Google accounts. This action cannot be undone.")
                     }
                 }
                 
