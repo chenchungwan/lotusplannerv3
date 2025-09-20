@@ -138,6 +138,26 @@ class CalendarViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
+    func refreshDataForCurrentView() async {
+        // Clear all caches first to ensure we get fresh data
+        clearAllData()
+        
+        let navigationManager = NavigationManager.shared
+        switch navigationManager.currentInterval {
+        case .month:
+            await loadCalendarDataForMonth(containing: navigationManager.currentDate)
+        case .week:
+            await loadCalendarDataForWeek(containing: navigationManager.currentDate)
+        case .day:
+            await loadCalendarData(for: navigationManager.currentDate)
+        case .year:
+            await loadCalendarDataForMonth(containing: navigationManager.currentDate)
+        }
+        
+        // Force a view update
+        objectWillChange.send()
+    }
+    
     private let authManager = GoogleAuthManager.shared
     
     // MARK: - Memory Cache
@@ -731,6 +751,7 @@ struct CalendarView: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
+    
     @State private var currentDate = Date()
     @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
     @State private var rightSectionTopHeight: CGFloat = UIScreen.main.bounds.height * 0.6
@@ -1228,7 +1249,7 @@ struct CalendarView: View {
                 // Refresh button
                 Button(action: {
                     Task {
-                        await calendarViewModel.loadCalendarData(for: currentDate)
+                        await calendarViewModel.refreshDataForCurrentView()
                         await tasksViewModel.loadTasks()
                         await MainActor.run { updateCachedTasks() }
                     }
@@ -1736,7 +1757,7 @@ struct CalendarView: View {
                 // Clear caches and load fresh data
                 calendarViewModel.clearAllData()
                 await tasksViewModel.loadTasks(forceClear: true)
-                await calendarViewModel.loadCalendarData(for: currentDate)
+                await calendarViewModel.refreshDataForCurrentView()
                 
                 await MainActor.run {
                     updateCachedTasks()
@@ -1769,7 +1790,7 @@ struct CalendarView: View {
                     // Load data based on interval
                     switch newValue {
                     case .day:
-                        await calendarViewModel.loadCalendarData(for: currentDate)
+                        await calendarViewModel.refreshDataForCurrentView()
                     case .week:
                         await calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
                     case .month:
@@ -4881,12 +4902,9 @@ struct AddItemView: View {
                     throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
                 }
 
-                // Refresh both original and new dates so UI reflects time/day changes
-                let originalEventDate = currentDate
-                let newEventDate = eventStart
+                // Refresh the current view to reflect changes
                 Task {
-                    await calendarViewModel.loadCalendarData(for: originalEventDate)
-                    await calendarViewModel.loadCalendarData(for: newEventDate)
+                    await calendarViewModel.refreshDataForCurrentView()
                 }
 
                 await MainActor.run { dismiss() }
@@ -4914,7 +4932,7 @@ struct AddItemView: View {
                     try await createEventInAccount(targetAccountKind)
                     
                     // Then delete the event from the original account
-                    try await deleteEventFromAccount(ev, from: originalAccountKind)
+                    try await deleteEventFromAccount(ev, from: originalAccountKind, viewModel: calendarViewModel)
                     
                 } else {
                     // Same account - just update the existing event
@@ -4923,7 +4941,7 @@ struct AddItemView: View {
 
                 // Refresh events for the currently visible date so UI reflects change immediately
                 Task {
-                    await calendarViewModel.loadCalendarData(for: currentDate)
+                    await calendarViewModel.refreshDataForCurrentView()
                 }
                 
                 await MainActor.run { dismiss() }
@@ -4984,7 +5002,7 @@ struct AddItemView: View {
         
     }
     
-    private func deleteEventFromAccount(_ event: GoogleCalendarEvent, from accountKind: GoogleAuthManager.AccountKind) async throws {
+    private func deleteEventFromAccount(_ event: GoogleCalendarEvent, from accountKind: GoogleAuthManager.AccountKind, viewModel: CalendarViewModel) async throws {
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
@@ -5087,7 +5105,7 @@ struct AddItemView: View {
                 guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 204 else {
                     throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
                 }
-                await calendarViewModel.loadCalendarData(for: currentDate)
+                await calendarViewModel.refreshDataForCurrentView()
                 await MainActor.run { dismiss() }
             } catch {
                 await MainActor.run { isCreating = false }
