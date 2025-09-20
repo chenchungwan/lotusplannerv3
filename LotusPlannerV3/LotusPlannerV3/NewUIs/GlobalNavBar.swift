@@ -19,6 +19,11 @@ struct GlobalNavBar: View {
     @State private var selectedDateForPicker = Date()
     
     private var dateLabel: String {
+        // Show "All Tasks" when in Tasks view and showing all tasks
+        if navigationManager.showTasksView && navigationManager.showingAllTasks {
+            return "All Tasks"
+        }
+        
         switch navigationManager.currentInterval {
         case .year:
             let year = Calendar.current.component(.year, from: navigationManager.currentDate)

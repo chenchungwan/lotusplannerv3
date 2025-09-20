@@ -4557,6 +4557,10 @@ struct AddItemView: View {
             _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
             if showEventOnly {
                 _selectedTab = State(initialValue: 1)
+                // Default to Personal account if available
+                if authManager.isLinked(kind: .personal) {
+                    _selectedAccountKind = State(initialValue: .personal)
+                }
             }
         }
     }
@@ -4576,16 +4580,30 @@ struct AddItemView: View {
 
                 Form {
                     Section("Basic Information") {
-                        HStack {
-                            Text(selectedTab == 0 ? "Task Title" : "Event Title")
-                            TextField("Enter title", text: $itemTitle)
-                                .multilineTextAlignment(.trailing)
+                        // Title field
+                        if selectedTab == 0 {
+                            HStack {
+                                Text("Task Title")
+                                TextField("Enter title", text: $itemTitle)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                        } else {
+                            TextField("Add event title", text: $itemTitle)
+                                .textFieldStyle(PlainTextFieldStyle())
                         }
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(selectedTab == 0 ? "Notes" : "Description")
-                            TextField("Add notes (optional)", text: $itemNotes, axis: .vertical)
-                                .lineLimit(2...4)
+                        // Notes/Description field
+                        if selectedTab == 0 {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Notes")
+                                TextField("Add notes (optional)", text: $itemNotes, axis: .vertical)
+                                    .lineLimit(2...4)
+                            }
+                        } else {
+                            TextField("Add description (optional)", text: $itemNotes, axis: .vertical)
+                                .lineLimit(itemNotes.isEmpty ? 1 : nil)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .frame(height: itemNotes.isEmpty ? 30 : nil)
                         }
                     }
 
