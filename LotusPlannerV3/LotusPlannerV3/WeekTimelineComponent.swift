@@ -232,7 +232,7 @@ struct WeekTimelineComponent: View {
             // Time column placeholder
             Spacer()
                 .frame(width: timeColumnWidth, height: dayHeaderHeight)
-                .background(Color(.systemGray6))
+                .background(Color.gray.opacity(0.1))
 
             // Day headers (now part of main horizontal scroll)
             HStack(spacing: 0) {
@@ -240,17 +240,17 @@ struct WeekTimelineComponent: View {
                     let data = dayData(for: date)
                     dayHeaderView(data: data)
                         .frame(width: dayColumnWidth, height: dayHeaderHeight)
-                        .background(Color(.systemGray6))
+                        .background(Color.gray.opacity(0.1))
                         .overlay(
                             Rectangle()
-                                .fill(Color(.systemGray4))
+                                .fill(Color.gray.opacity(0.3))
                                 .frame(width: 0.5),
                             alignment: .trailing
                         )
                 }
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color(uiColor: .systemBackground))
     }
     
     // MARK: - Daily Tasks Section
@@ -278,7 +278,7 @@ struct WeekTimelineComponent: View {
 
             // Thin separator line between personal and professional
             Rectangle()
-                .fill(Color(.systemGray4))
+                .fill(Color.gray.opacity(0.3))
                 .frame(height: 0.5)
 
             // Professional Tasks Row
@@ -325,7 +325,7 @@ struct WeekTimelineComponent: View {
                 }
             }
             .frame(width: timeColumnWidth, height: rowHeight)
-            .background(Color(.systemGray6))
+            .background(Color.gray.opacity(0.1))
             
             // Tasks for each day (now part of main horizontal scroll)
             HStack(spacing: 0) {
@@ -339,10 +339,10 @@ struct WeekTimelineComponent: View {
                         isPersonal: isPersonal
                     )
                     .frame(width: dayColumnWidth, height: rowHeight)
-                    .background(Color(.systemBackground))
+                    .background(Color(uiColor: .systemBackground))
                     .overlay(
                         Rectangle()
-                            .fill(Color(.systemGray4))
+                            .fill(Color.gray.opacity(0.3))
                             .frame(width: 0.5),
                         alignment: .trailing
                     )
@@ -530,26 +530,26 @@ struct WeekTimelineComponent: View {
         HStack(spacing: 0) {
             // Left column (matching time column width)
             Rectangle()
-                .fill(Color(.systemGray6))
+                .fill(Color.gray.opacity(0.1))
                 .frame(width: timeColumnWidth, height: 20)
             
             // Draggable slider area
             Rectangle()
-                .fill(isDraggingSlider ? Color(.systemGray4) : Color(.systemGray5))
+                .fill(isDraggingSlider ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2))
                 .frame(height: 20)
                 .overlay(
                     HStack {
                         // Draggable handle with visual indicators
                         HStack(spacing: 4) {
                             Rectangle()
-                                .fill(isDraggingSlider ? Color(.systemGray2) : Color(.systemGray3))
+                                .fill(isDraggingSlider ? Color.gray.opacity(0.5) : Color.gray.opacity(0.4))
                                 .frame(width: 30, height: isDraggingSlider ? 6 : 4)
                                 .cornerRadius(3)
                                 .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
                             
                             Image(systemName: "line.3.horizontal")
                                 .font(.caption)
-                                .foregroundColor(isDraggingSlider ? Color(.systemGray2) : Color(.systemGray3))
+                                .foregroundColor(isDraggingSlider ? Color.gray.opacity(0.5) : Color.gray.opacity(0.4))
                                 .scaleEffect(isDraggingSlider ? 1.1 : 1.0)
                                 .animation(.easeInOut(duration: 0.2), value: isDraggingSlider)
                         }
@@ -591,7 +591,7 @@ struct WeekTimelineComponent: View {
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)
                     .frame(width: timeColumnWidth, height: sectionHeight)
-                    .background(Color(.systemGray6))
+                    .background(Color.gray.opacity(0.1))
 
                 // All-day events for each day (now part of main horizontal scroll)
                 HStack(spacing: 0) {
@@ -599,10 +599,10 @@ struct WeekTimelineComponent: View {
                         let data = dayData(for: date)
                         allDayEventsColumn(data: data)
                             .frame(width: dayColumnWidth, height: sectionHeight)
-                            .background(Color(.systemBackground))
+                            .background(Color(uiColor: .systemBackground))
                             .overlay(
                                 Rectangle()
-                                    .fill(Color(.systemGray4))
+                                    .fill(Color.gray.opacity(0.3))
                                     .frame(width: 0.5),
                                 alignment: .trailing
                             )
@@ -611,7 +611,7 @@ struct WeekTimelineComponent: View {
             }
 
             Rectangle()
-                .fill(Color(.systemGray4))
+                .fill(Color.gray.opacity(0.3))
                 .frame(height: 0.5)
         }
     }
@@ -622,7 +622,7 @@ struct WeekTimelineComponent: View {
             // Time column
             timeColumn()
                 .frame(width: timeColumnWidth)
-                .background(Color(.systemGray6))
+                .background(Color.gray.opacity(0.1))
 
             // Day columns (now part of main horizontal scroll)
             HStack(spacing: 0) {
@@ -631,7 +631,7 @@ struct WeekTimelineComponent: View {
                     dayTimelineColumn(data: data, width: dayColumnWidth)
                         .overlay(
                             Rectangle()
-                                .fill(Color(.systemGray4))
+                                .fill(Color.gray.opacity(0.3))
                                 .frame(width: 0.5),
                             alignment: .trailing
                         )
@@ -757,18 +757,18 @@ struct WeekTimelineComponent: View {
         VStack(spacing: 0) {
             ForEach(startHour..<endHour, id: \.self) { hour in
                 Rectangle()
-                    .fill(Color(.systemBackground))
+                    .fill(Color(uiColor: .systemBackground))
                     .frame(height: hourHeight)
                     .overlay(
                         VStack(spacing: 0) {
                             Rectangle()
-                                .fill(Color(.systemGray5))
+                                .fill(Color.gray.opacity(0.2))
                                 .frame(height: 0.5)
                             
                             Spacer()
                             
                             Rectangle()
-                                .fill(Color(.systemGray6))
+                                .fill(Color.gray.opacity(0.1))
                                 .frame(height: 0.5)
                                 .offset(y: -hourHeight/2)
                         }
@@ -777,7 +777,7 @@ struct WeekTimelineComponent: View {
             
             // Final 12a line at the end of the day
             Rectangle()
-                .fill(Color(.systemGray5))
+                .fill(Color.gray.opacity(0.2))
                 .frame(height: 0.5)
         }
     }
