@@ -219,7 +219,14 @@ struct JournalView: View {
                 .ignoresSafeArea()
 
             // PencilKit canvas overlay
-            PencilKitView(canvasView: $canvasView, showsToolPicker: showToolPicker)
+            PencilKitView(
+                canvasView: $canvasView,
+                showsToolPicker: showToolPicker,
+                onDrawingChanged: {
+                    print("📝 Drawing changed, saving...")
+                    JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+                }
+            )
                 .ignoresSafeArea()
             // Movable photos overlay
             ForEach(photos.indices, id: \.self) { idx in
@@ -334,54 +341,61 @@ struct JournalView: View {
     }
     
     private func savePhotos(for date: Date? = nil) {
-        let targetDate = date ?? currentDate
-        // Always write a metadata file (can be empty) so existence checks are consistent
-        // across sessions. Remove per-photo images only when clearing all.
-        if photos.isEmpty {
-            let empty: [PhotoMeta] = []
-            if let jsonData = try? JSONEncoder().encode(empty) {
-                try? jsonData.write(to: metadataURL(for: targetDate), options: .atomic)
+        do {
+            let targetDate = date ?? currentDate
+            // Always write a metadata file (can be empty) so existence checks are consistent
+            // across sessions. Remove per-photo images only when clearing all.
+            if photos.isEmpty {
+                let empty: [PhotoMeta] = []
+                let jsonData = try JSONEncoder().encode(empty)
+                try jsonData.write(to: metadataURL(for: targetDate), options: .atomic)
+                return
             }
-            return
-        }
-        var metas: [PhotoMeta] = []
-        for photo in photos {
-            let id = photo.id.uuidString
-            let fileName = id + ".png"
-            let fileURL = photosDirectory().appendingPathComponent(fileName)
-            if let data = photo.image.pngData() {
-                try? data.write(to: fileURL, options: .atomic)
-            }
-            let cw = max(canvasSize.width, 1)
-            let ch = max(canvasSize.height, 1)
-            let nx = Double(photo.position.x / cw)
-            let ny = Double(photo.position.y / ch)
-            let nw = Double(photo.size.width / cw)
-            let nh = Double(photo.size.height / ch)
-            metas.append(
-                PhotoMeta(
-                    id: id,
-                    fileName: fileName,
-                    x: photo.position.x,
-                    y: photo.position.y,
-                    width: photo.size.width,
-                    height: photo.size.height,
-                    rotation: photo.rotation.radians,
-                    nx: nx,
-                    ny: ny,
-                    nw: nw,
-                    nh: nh,
-                    cw: Double(cw),
-                    ch: Double(ch)
+            
+            var metas: [PhotoMeta] = []
+            for photo in photos {
+                let id = photo.id.uuidString
+                let fileName = id + ".png"
+                let fileURL = photosDirectory().appendingPathComponent(fileName)
+                if let data = photo.image.pngData() {
+                    try data.write(to: fileURL, options: .atomic)
+                }
+                let cw = max(canvasSize.width, 1)
+                let ch = max(canvasSize.height, 1)
+                let nx = Double(photo.position.x / cw)
+                let ny = Double(photo.position.y / ch)
+                let nw = Double(photo.size.width / cw)
+                let nh = Double(photo.size.height / ch)
+                metas.append(
+                    PhotoMeta(
+                        id: id,
+                        fileName: fileName,
+                        x: photo.position.x,
+                        y: photo.position.y,
+                        width: photo.size.width,
+                        height: photo.size.height,
+                        rotation: photo.rotation.radians,
+                        nx: nx,
+                        ny: ny,
+                        nw: nw,
+                        nh: nh,
+                        cw: Double(cw),
+                        ch: Double(ch)
+                    )
                 )
-            )
-        }
-        if let jsonData = try? JSONEncoder().encode(metas) {
+            }
+            
+            let jsonData = try JSONEncoder().encode(metas)
             let url = metadataURL(for: targetDate)
-            JournalManager.shared.writeData(jsonData, to: url)
+            try JournalManager.shared.writeData(jsonData, to: url)
+            
+            // Ensure iCloud migration picks up newly saved photos/metadata
+            JournalManager.shared.migrateLocalToICloudIfNeeded()
+            
+            print("📝 Successfully saved photos for date: \(targetDate)")
+        } catch {
+            print("📝 Error saving photos: \(error)")
         }
-        // Ensure iCloud migration picks up newly saved photos/metadata
-        JournalManager.shared.migrateLocalToICloudIfNeeded()
     }
     private func loadPhotos(for date: Date? = nil) {
         let targetDate = date ?? currentDate

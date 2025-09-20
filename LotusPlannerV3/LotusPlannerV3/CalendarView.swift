@@ -4375,19 +4375,31 @@ struct PencilKitView: UIViewRepresentable {
     /// Controls whether the system PKToolPicker is visible. Defaults to `true` to
     /// keep existing behaviour for call-sites that don't specify the argument.
     var showsToolPicker: Bool = true
+    var onDrawingChanged: (() -> Void)?
     
-    class Coordinator {
+    class Coordinator: NSObject, PKCanvasViewDelegate {
         var toolPicker: PKToolPicker?
+        let parent: PencilKitView
+        
+        init(_ parent: PencilKitView) {
+            self.parent = parent
+            super.init()
+        }
+        
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            parent.onDrawingChanged?()
+        }
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(self)
     }
     
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 3)
-        canvasView.drawingPolicy = .pencilOnly
+        canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = .clear
+        canvasView.delegate = context.coordinator
 
         // Attach the scene-shared PKToolPicker once the view is in a window
         DispatchQueue.main.async {

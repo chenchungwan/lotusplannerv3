@@ -11,7 +11,7 @@ enum JournalLayoutType {
 }
 
 /// Handles storage & retrieval of the journal background PDF inside the app sandbox.
-struct JournalManager {
+class JournalManager {
     static let shared = JournalManager()
     private init() {}
     private static var metadataQuery: NSMetadataQuery?
@@ -20,6 +20,11 @@ struct JournalManager {
     /// iCloud Drive Documents directory for the app (if available)
     private var ubiquityDocsURL: URL? {
         FileManager.default.url(forUbiquityContainerIdentifier: nil)?.appendingPathComponent("Documents")
+    }
+    
+    /// Returns the iCloud Documents URL if available
+    func getICloudDocsURL() -> URL? {
+        return ubiquityDocsURL
     }
     /// Local Documents directory (always available)
     private var localDocsURL: URL {
@@ -181,32 +186,74 @@ struct JournalManager {
         return drawingsDirectory.appendingPathComponent(name)
     }
 
+    private lazy var storage = JournalStorage(baseURL: docsURL)
+    private lazy var versionManager = JournalVersionManager(baseURL: docsURL)
+    
     func saveDrawing(for date: Date, drawing: PKDrawing) {
-        let data = drawing.dataRepresentation()
-        let url = drawingURL(for: date)
-        writeData(data, to: url)
-        // If iCloud becomes available later, move local files automatically
-        migrateLocalToICloudIfNeeded()
+        do {
+            let data = drawing.dataRepresentation()
+            let url = drawingURL(for: date)
+            
+            // Ensure directory exists
+            try? FileManager.default.createDirectory(at: drawingsDirectory, withIntermediateDirectories: true)
+            
+            // Save drawing data
+            try writeData(data, to: url)
+            print("📝 Saving drawing to: \(url.path)")
+            
+            // Cache the drawing
+            JournalCache.shared.cacheDrawing(drawing, for: date)
+            
+            // If iCloud becomes available later, move local files automatically
+            migrateLocalToICloudIfNeeded()
+            
+            print("📝 Successfully saved drawing for date: \(date)")
+        } catch {
+            print("📝 Error saving drawing: \(error)")
+        }
     }
     
     func loadDrawing(for date: Date) -> PKDrawing? {
-        let url = drawingURL(for: date)
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        if let drawing = try? PKDrawing(data: data) {
-            return drawing
+        // Check cache first
+        if let cachedDrawing = JournalCache.shared.getCachedDrawing(for: date) {
+            print("📝 Found drawing in cache for date: \(date)")
+            return cachedDrawing
         }
-        // If not found at current root, try the other root (fallback) to bridge gaps
-        if let iCloudRoot = ubiquityDocsURL {
-            let altURL = iCloudRoot.appendingPathComponent("journal_drawings").appendingPathComponent(url.lastPathComponent)
-            if let data = try? Data(contentsOf: altURL), let drawing = try? PKDrawing(data: data) {
+        
+        do {
+            // Try loading from main location
+            let url = drawingURL(for: date)
+            print("📝 Attempting to load drawing from: \(url.path)")
+            
+            if let drawing = try? loadDrawingFromURL(url) {
+                print("📝 Successfully loaded drawing from main location")
+                JournalCache.shared.cacheDrawing(drawing, for: date)
                 return drawing
             }
+            
+            // If not found, try iCloud
+            if let iCloudRoot = ubiquityDocsURL {
+                let iCloudURL = iCloudRoot.appendingPathComponent("journal_drawings").appendingPathComponent(url.lastPathComponent)
+                print("📝 Attempting to load drawing from iCloud: \(iCloudURL.path)")
+                
+                if let drawing = try? loadDrawingFromURL(iCloudURL) {
+                    print("📝 Successfully loaded drawing from iCloud")
+                    JournalCache.shared.cacheDrawing(drawing, for: date)
+                    return drawing
+                }
+            }
+            
+            print("📝 No drawing found for date: \(date)")
+            return nil
+        } catch {
+            print("📝 Error loading drawing: \(error)")
+            return nil
         }
-        let altLocal = localDocsURL.appendingPathComponent("journal_drawings").appendingPathComponent(url.lastPathComponent)
-        if let data = try? Data(contentsOf: altLocal), let drawing = try? PKDrawing(data: data) {
-            return drawing
-        }
-        return nil
+    }
+    
+    private func loadDrawingFromURL(_ url: URL) throws -> PKDrawing? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? PKDrawing(data: data)
     }
 
     // MARK: - iCloud Monitoring / Download
@@ -269,18 +316,56 @@ struct JournalManager {
 
     // MARK: - Coordinated writes for iCloud reliability
     /// Write data to URL using NSFileCoordinator when iCloud is available to ensure sync picks up changes.
-    func writeData(_ data: Data, to url: URL) {
+    func writeData(_ data: Data, to url: URL) throws {
+        let fm = FileManager.default
+        
         if ubiquityDocsURL != nil {
             let coordinator = NSFileCoordinator(filePresenter: nil)
             var coordError: NSError?
-            coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordError) { targetURL in
-                try? data.write(to: targetURL, options: .atomic)
+            var writeError: Error?
+            
+            coordinator.coordinate(writingItemAt: url, options: [.forReplacing, .forDeleting], error: &coordError) { targetURL in
+                do {
+                    // Check if file is already in iCloud
+                    var isUbiquitous: AnyObject?
+                    try? (targetURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                    let isInICloud = (isUbiquitous as? Bool) == true
+                    
+                    if isInICloud {
+                        // If already in iCloud, just write the data
+                        print("📝 File already in iCloud, updating content: \(url.lastPathComponent)")
+                        try data.write(to: targetURL, options: [.atomic, .completeFileProtection])
+                    } else {
+                        // If not in iCloud, need to create new file and mark for sync
+                        print("📝 Creating new file in iCloud: \(url.lastPathComponent)")
+                        
+                        // Create a temporary file
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                        try data.write(to: tempURL, options: [.atomic, .completeFileProtection])
+                        
+                        // Move to iCloud
+                        try fm.setUbiquitous(true, itemAt: tempURL, destinationURL: targetURL)
+                    }
+                    
+                    print("📝 Successfully wrote data to: \(url.lastPathComponent)")
+                } catch {
+                    print("📝 Error writing data: \(error)")
+                    writeError = error
+                }
             }
-            if coordError != nil {
-                try? data.write(to: url, options: .atomic)
+            
+            if let error = coordError ?? writeError {
+                print("📝 Error during write: \(error)")
+                throw error
             }
         } else {
-            try? data.write(to: url, options: .atomic)
+            do {
+                try data.write(to: url, options: [.atomic, .completeFileProtection])
+                print("📝 Successfully wrote data locally: \(url.lastPathComponent)")
+            } catch {
+                print("📝 Error writing data locally: \(error)")
+                throw error
+            }
         }
     }
 
