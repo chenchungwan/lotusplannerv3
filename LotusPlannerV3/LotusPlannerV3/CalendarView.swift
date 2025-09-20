@@ -1858,7 +1858,7 @@ struct CalendarView: View {
         GeometryReader { outerGeometry in
             ScrollView(.horizontal, showsIndicators: true) {
                 dayViewContent(geometry: outerGeometry)
-                    .frame(width: (appPrefs.dayViewLayout == .expanded ? outerGeometry.size.width * 2 : outerGeometry.size.width)) // 100% of device width
+                    .frame(width: outerGeometry.size.width) // 100% of device width
             }
         }
         .background(Color(.systemBackground))
@@ -1985,8 +1985,6 @@ struct CalendarView: View {
     @ViewBuilder
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         switch appPrefs.dayViewLayout {
-        case .expanded:
-            dayViewContentExpanded(geometry: geometry)
         case .defaultNew:
             DayViewExpandedTwo(onEventTap: { ev in
                 selectedCalendarEvent = ev
@@ -2022,54 +2020,6 @@ struct CalendarView: View {
         }
     }
     
-    private func dayViewContentExpanded(geometry: GeometryProxy) -> some View {
-        let deviceWidth = UIScreen.main.bounds.width
-        let dividerWidth: CGFloat = 8
-        // Make column widths responsive to the draggable divider state
-        let column1Width = dayLeftSectionWidth
-        let column2Width = max(200, deviceWidth - column1Width - dividerWidth)
-        let column3Width = deviceWidth         // Journal: fixed to device width
-
-        return HStack(alignment: .top, spacing: 0) {
-            // Column 1 – timeline (25% device width)
-            eventsTimelineCard()
-                .frame(width: column1Width)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-                .padding(.trailing, 8)
-                .padding(.leading, 16 + geometry.safeAreaInsets.leading)
-
-            dayVerticalDivider
-
-            // Column 2 – Tasks + Logs (75% device width)
-            VStack(spacing: 0) {
-                topLeftDaySection
-                    .frame(height: rightSectionTopHeight)
-                    .padding(.all, 8)
-
-                rightSectionDivider
-
-                LogsComponent(currentDate: currentDate, horizontal: true)
-                    .frame(maxHeight: .infinity)
-                    .padding(.all, 8)
-            }
-            .frame(width: column2Width)
-
-            dayVerticalDivider
-
-            // Column 3 – Journal (100% device width)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Notes")
-                    .font(.headline)
-                    .padding(.horizontal, 8)
-                JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
-            }
-            .id(currentDate)
-            .frame(width: column3Width)
-            .padding(.all, 8)
-        }
-    }
-
     // MARK: - Vertical Layout
     private func dayViewContentVertical(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
@@ -2369,7 +2319,7 @@ struct CalendarView: View {
     
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Timeline section – reuse the same card as expanded
+            // Timeline section
             eventsTimelineCard(height: leftTimelineHeight)
                 .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                 .padding(.trailing, 8)
@@ -2408,7 +2358,7 @@ struct CalendarView: View {
         }
     }
 
-    // Shared Events timeline card used by both compact and expanded layouts
+    // Shared Events timeline card used by all layouts
     private func eventsTimelineCard(height: CGFloat? = nil) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Events")

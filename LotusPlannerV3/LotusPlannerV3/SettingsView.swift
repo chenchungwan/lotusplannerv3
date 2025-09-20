@@ -4,20 +4,18 @@ import SwiftUI
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
     case compactTwo = 1
-    case expanded = 2
     case defaultNew = 3
     case mobile = 4
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .expanded, .defaultNew, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile] }
 
     var displayName: String {
         switch self {
-        case .defaultNew: "Expanded Two"
-        case .compact: "Compact"
+        case .defaultNew: "Expanded"
+        case .compact: "Compact One"
         case .compactTwo: "Compact Two"
-        case .expanded: "Expanded"
-        case .mobile: "Mobile"
+        case .mobile: "Column"
         
         }
     }
@@ -27,7 +25,6 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .defaultNew: "Timeline & Tasks side-by-side, Logs row, then Journal"
         case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
         case .compactTwo: "Tasks first, then Timeline + Logs column next to Journal"
-        case .expanded: "Three columns: timeline, tasks & logs, and dedicated journal space"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         
         }
@@ -258,7 +255,7 @@ class AppPreferences: ObservableObject {
         // useDayViewDefault removed
 
         
-        // Load day view layout preference (default to Compact layout if unset)
+        // Load day view layout preference (default to Compact One layout if unset)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
         self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
         
