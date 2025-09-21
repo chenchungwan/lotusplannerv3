@@ -842,6 +842,7 @@ struct CalendarView: View {
             GlobalNavBar()
                 .background(.ultraThinMaterial)
         }
+        .id("baseContent-\(currentDate)-\(navigationManager.currentInterval)")
     }
 
     private var toolbarAndSheetsContent: some View {
@@ -988,9 +989,16 @@ struct CalendarView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
-                            // Always navigate to day view of the selected date
-                            currentDate = selectedDateForPicker
-                            navigationManager.updateInterval(.day, date: selectedDateForPicker)
+                            // Navigate based on current view context
+                            if navigationManager.showTasksView && navigationManager.showingAllTasks {
+                                // If in Tasks view filtered to ALL, go to yearly view
+                                currentDate = selectedDateForPicker
+                                navigationManager.updateInterval(.year, date: selectedDateForPicker)
+                            } else {
+                                // Otherwise, respect current interval but use selected date
+                                currentDate = selectedDateForPicker
+                                navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
+                            }
                             showingDatePicker = false
                         }
                     }
@@ -1131,9 +1139,16 @@ struct CalendarView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
-                            // Always navigate to day view of the selected date
-                            currentDate = selectedDateForPicker
-                            navigationManager.updateInterval(.day, date: selectedDateForPicker)
+                            // Navigate based on current view context
+                            if navigationManager.showTasksView && navigationManager.showingAllTasks {
+                                // If in Tasks view filtered to ALL, go to yearly view
+                                currentDate = selectedDateForPicker
+                                navigationManager.updateInterval(.year, date: selectedDateForPicker)
+                            } else {
+                                // Otherwise, respect current interval but use selected date
+                                currentDate = selectedDateForPicker
+                                navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
+                            }
                             showingDatePicker = false
                         }
                     }
@@ -1145,6 +1160,7 @@ struct CalendarView: View {
 
     var body: some View {
         finalContent
+            .id("CalendarView-\(currentDate)-\(navigationManager.currentInterval)")
     }
 
     private func splitScreenContent(geometry: GeometryProxy) -> some View {
@@ -1291,12 +1307,13 @@ struct CalendarView: View {
                     .background(Color(.systemBackground))
             }
         }
+        .id("mainContent-\(currentDate)-\(navigationManager.currentInterval)")
     }
 
     private func step(_ direction: Int) {
-        if let newDate = Calendar.current.date(byAdding: navigationManager.currentInterval.calendarComponent,
-                                               value: direction,
-                                               to: currentDate) {
+        if let newDate = Calendar.mondayFirst.date(byAdding: navigationManager.currentInterval.calendarComponent,
+                                                   value: direction,
+                                                   to: currentDate) {
             currentDate = newDate
             navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
         }
@@ -1305,6 +1322,7 @@ struct CalendarView: View {
     private var yearView: some View {
         monthsSection
             .background(Color(.systemBackground))
+            .id("yearView-\(currentDate)")
     }
     
     private var monthsSection: some View {
@@ -1319,20 +1337,20 @@ struct CalendarView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: columnSpacing), count: 3), spacing: gridSpacing) {
                     ForEach(1...12, id: \.self) { month in
+                        let calendar = Calendar.mondayFirst
+                        let monthDate = calendar.date(from: DateComponents(year: Calendar.current.component(.year, from: currentDate), month: month, day: 1))!
+
                         MonthCardView(
                             month: month,
                             year: Calendar.current.component(.year, from: currentDate),
-                            currentDate: currentDate,
+                            currentDate: monthDate,
                             onDayTap: { date in
                                 currentDate = date
                                 navigationManager.updateInterval(.day, date: date)
                             },
                             onMonthTap: {
-                                let cal = Calendar.mondayFirst
-                                if let first = cal.date(from: DateComponents(year: Calendar.current.component(.year, from: currentDate), month: month, day: 1)) {
-                                    currentDate = first
-                                    navigationManager.updateInterval(.month, date: first)
-                                }
+                                currentDate = monthDate
+                                navigationManager.updateInterval(.month, date: monthDate)
                             },
                             onWeekTap: { date in
                                 currentDate = date

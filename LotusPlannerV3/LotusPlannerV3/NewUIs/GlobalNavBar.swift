@@ -433,8 +433,14 @@ struct GlobalNavBar: View {
                 .navigationBarItems(
                     leading: Button("Cancel") { showingDatePicker = false },
                     trailing: Button("Done") {
-                        // Always navigate to day view of the selected date
-                        navigationManager.updateInterval(.day, date: selectedDateForPicker)
+                        // Navigate based on current view context
+                        if navigationManager.showTasksView && navigationManager.showingAllTasks {
+                            // If in Tasks view filtered to ALL, go to yearly view
+                            navigationManager.updateInterval(.year, date: selectedDateForPicker)
+                        } else {
+                            // Otherwise, respect current interval but use selected date
+                            navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
+                        }
                         showingDatePicker = false
                     }
                 )
