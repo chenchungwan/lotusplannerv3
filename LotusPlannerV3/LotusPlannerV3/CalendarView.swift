@@ -1226,6 +1226,7 @@ struct CalendarView: View {
                 Image(systemName: "chevron.right")
             }
         }
+        .id("toolbar-\(navigationManager.currentInterval)-\(currentDate)")
     }
     
     private var trailingToolbarButtons: some View {
@@ -1314,8 +1315,36 @@ struct CalendarView: View {
         if let newDate = Calendar.mondayFirst.date(byAdding: navigationManager.currentInterval.calendarComponent,
                                                    value: direction,
                                                    to: currentDate) {
-            currentDate = newDate
+            // First update the navigation manager
             navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
+            
+            // Then do a comprehensive data refresh
+            Task {
+                // Clear all caches first
+                calendarViewModel.clearAllData()
+                await tasksViewModel.loadTasks(forceClear: true)
+                
+                // Load fresh data based on interval
+                switch navigationManager.currentInterval {
+                case .day:
+                    await calendarViewModel.loadCalendarData(for: newDate)
+                case .week:
+                    await calendarViewModel.loadCalendarDataForWeek(containing: newDate)
+                case .month:
+                    await calendarViewModel.loadCalendarDataForMonth(containing: newDate)
+                case .year:
+                    await calendarViewModel.loadCalendarDataForMonth(containing: newDate)
+                }
+                
+                await MainActor.run {
+                    // Update local state after data is loaded
+                    currentDate = newDate
+                    updateCachedTasks()
+                    // Force view updates
+                    calendarViewModel.objectWillChange.send()
+                    tasksViewModel.objectWillChange.send()
+                }
+            }
         }
     }
     
@@ -4550,13 +4579,14 @@ struct AddItemView: View {
                     Section("Basic Information") {
                         // Title field
                         if selectedTab == 0 {
-                            HStack {
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text("Task Title")
-                                TextField("Enter title", text: $itemTitle)
-                                    .multilineTextAlignment(.trailing)
+                                TextField("Enter title", text: $itemTitle, axis: .vertical)
+                                    .lineLimit(1...3)
                             }
                         } else {
-                            TextField("Add event title", text: $itemTitle)
+                            TextField("Add event title", text: $itemTitle, axis: .vertical)
+                                .lineLimit(1...3)
                                 .textFieldStyle(PlainTextFieldStyle())
                         }
 

@@ -2275,8 +2275,9 @@ struct TaskDetailsView: View {
             Form {
                 // Title only (no section header, no label)
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField("Task title", text: $editedTitle)
+                    TextField("Task title", text: $editedTitle, axis: .vertical)
                         .font(.title3)
+                        .lineLimit(1...3)
                 }
                 
                 // Notes (no label)
