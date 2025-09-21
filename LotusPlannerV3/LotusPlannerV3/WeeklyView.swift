@@ -331,8 +331,8 @@ extension WeeklyView {
                 .clipped()
             }
             
-            // Empty state message when no tasks are present
-            if !personalHasAny && !professionalHasAny {
+            // Empty state message when no accounts are linked
+            if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.badge.plus")
@@ -352,6 +352,25 @@ extension WeeklyView {
                     .padding(.vertical, 60)
                 }
                 .buttonStyle(.plain)
+            }
+            // Show "No tasks" message when accounts are linked but no tasks exist
+            else if !personalHasAny && !professionalHasAny {
+                VStack(spacing: 16) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    
+                    Text("No Tasks This Week")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text("You're all caught up! No tasks are due this week.")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 60)
             }
         }
     }
