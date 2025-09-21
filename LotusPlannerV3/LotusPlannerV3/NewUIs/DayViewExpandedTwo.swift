@@ -243,14 +243,14 @@ struct DayViewExpandedTwo: View {
                 
                 // Right Column: Journal
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Notes")
+                    Text("Journal")
                         .font(.headline)
                         .padding(.horizontal, 8)
                         .padding(.top, 12)
                     JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
                 }
                 .id(navigationManager.currentDate)
-                .frame(width: UIScreen.main.bounds.width)
+                .frame(width: UIScreen.main.bounds.width*0.95)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .padding(12)
             }

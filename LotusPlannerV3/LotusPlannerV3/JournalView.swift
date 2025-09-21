@@ -251,6 +251,10 @@ struct JournalView: View {
                     }
                 }
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+            )
             .overlay(alignment: .topTrailing) {
                 if drawingManager.isSaving {
                     ProgressView()

@@ -252,7 +252,7 @@ struct DayViewAlt: View {
                         )
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Notes")
+                        Text("Journal")
                             .font(.headline)
                             .padding(.horizontal, 8)
                         JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
