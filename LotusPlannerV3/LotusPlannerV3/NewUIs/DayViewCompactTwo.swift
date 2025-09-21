@@ -256,9 +256,11 @@ struct DayViewAlt: View {
                             .font(.headline)
                             .padding(.horizontal, 8)
                         JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                     .id(navigationManager.currentDate)
-                    .frame(maxWidth: .infinity, alignment: .top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.bottom, 8)
                 }
                 .frame(height: bottomH)
             }
