@@ -2259,7 +2259,7 @@ struct CalendarView: View {
 
                 // Row 4: Notes full-screen below
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Notes")
+                    Text("Journal")
                         .font(.headline)
                         .padding(.horizontal, 12)
                     JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
@@ -2300,7 +2300,7 @@ struct CalendarView: View {
             // Bottom section - Journal
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Notes")
+                    Text("Journal")
                         .font(.headline)
                     Spacer()
                 }

@@ -168,6 +168,19 @@ struct DayViewMobile: View {
                 VStack(alignment: .leading, spacing: 6) {
                     LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                 }
+                
+                // Journal
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Journal")
+                        .font(.headline)
+                        .padding(.horizontal, 12)
+                    HStack {
+                        Spacer()
+                        JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                            .frame(width: UIScreen.main.bounds.width * 0.95, height: UIScreen.main.bounds.height * 0.95)
+                        Spacer()
+                    }
+                }
             }
          
         

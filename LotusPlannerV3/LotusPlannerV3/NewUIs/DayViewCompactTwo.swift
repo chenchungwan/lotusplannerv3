@@ -47,6 +47,7 @@ struct DayViewAlt: View {
 
             VStack(spacing: 12) {
                 // 1) Tasks (personal + professional)
+               
                 HStack(alignment: .top, spacing: 12) {
                     let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
