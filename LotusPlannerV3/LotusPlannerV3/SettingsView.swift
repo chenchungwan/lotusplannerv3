@@ -13,18 +13,17 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .defaultNew: "Expanded"
-        case .compact: "Compact One"
-        case .compactTwo: "Compact Two"
+        case .compact: "Classic"
+        case .compactTwo: "Compact"
         case .mobile: "Column"
-        
         }
     }
     
     var description: String {
         switch self {
         case .defaultNew: "Timeline & Tasks side-by-side, Logs row, then Journal"
-        case .compact: "Timeline on left, tasks and journal on right with adjustable divider"
-        case .compactTwo: "Tasks first, then Timeline + Logs column next to Journal"
+        case .compact: "Classic layout with Timeline on left, Tasks and Journal on right with adjustable divider"
+        case .compactTwo: "Compact layout with Tasks first, then Timeline + Logs column next to Journal"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         
         }
@@ -255,9 +254,15 @@ class AppPreferences: ObservableObject {
         // useDayViewDefault removed
 
         
-        // Load day view layout preference (default to Compact One layout if unset)
+        // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-        self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
+        // If no layout has been explicitly chosen (key doesn't exist), use Classic
+        if !UserDefaults.standard.object(forKey: "dayViewLayout").map({ _ in true }) ?? false {
+            self.dayViewLayout = .compact // Classic layout
+        } else {
+            // Otherwise use the saved layout or fallback to Classic if invalid
+            self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
+        }
         
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")

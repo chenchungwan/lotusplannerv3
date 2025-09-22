@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct DayViewAlt: View {
+struct DayViewCompact: View {
     @ObservedObject private var navigationManager: NavigationManager
     @ObservedObject private var appPrefs: AppPreferences
     private let calendarVM: CalendarViewModel
@@ -319,7 +319,7 @@ struct DayViewAlt: View {
 }
 
 // MARK: - Day Filters
-extension DayViewAlt {
+extension DayViewCompact {
     private func isSameDay(_ lhs: Date, _ rhs: Date) -> Bool {
         Calendar.mondayFirst.isDate(lhs, inSameDayAs: rhs)
     }
@@ -383,7 +383,5 @@ extension DayViewAlt {
 }
 
 #Preview {
-    DayViewAlt()
+    DayViewCompact()
 }
-
-

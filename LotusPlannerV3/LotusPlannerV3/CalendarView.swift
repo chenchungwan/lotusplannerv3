@@ -2038,7 +2038,7 @@ struct CalendarView: View {
                 showingEventDetails = true
             })
         case .compactTwo:
-            DayViewAlt(onEventTap: { ev in
+            DayViewCompact(onEventTap: { ev in
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
