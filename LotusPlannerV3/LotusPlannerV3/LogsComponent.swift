@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LogsComponent: View {
     @ObservedObject private var viewModel = LogsViewModel.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
     let currentDate: Date
     let horizontal: Bool
     
@@ -11,106 +12,122 @@ struct LogsComponent: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            HStack {
-                Text("Logs")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                // Refresh button - reload data from Core Data
-                Button(action: {
-                    viewModel.reloadData()
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Button(action: {
-                    viewModel.showingAddLogSheet = true
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(viewModel.accentColor)
-                }
-            }
-            
-            // All log sections in a scrollable view
-            ScrollView {
-                if horizontal {
-                    HStack(alignment: .top, spacing: 16) {
-                        // Weight Section
-                        weightSection
-                            .frame(maxWidth: .infinity, alignment: .top)
-                        
-                        // Workout Section  
-                        workoutSection
-                            .frame(maxWidth: .infinity, alignment: .top)
-                        
-                        // Food Section
-                        foodSection
-                            .frame(maxWidth: .infinity, alignment: .top)
-                    }
-                } else {
-                    VStack(spacing: 16) {
-                        // Weight Section
-                        weightSection
-                        
-                        // Workout Section  
-                        workoutSection
-                        
-                        // Food Section
-                        foodSection
-                    }
-                }
-            }
-            
-            if viewModel.isLoading {
+        if appPrefs.showAnyLogs {
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
                 HStack {
+                    Text("Logs")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                    
                     Spacer()
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Spacer()
+                    
+                    // Refresh button - reload data from Core Data
+                    Button(action: {
+                        viewModel.reloadData()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Button(action: {
+                        viewModel.showingAddLogSheet = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(viewModel.accentColor)
+                    }
                 }
-                .padding()
+                
+                // All log sections in a scrollable view
+                ScrollView {
+                    if horizontal {
+                        HStack(alignment: .top, spacing: 16) {
+                            // Weight Section
+                            if appPrefs.showWeightLogs {
+                                weightSection
+                                    .frame(maxWidth: .infinity, alignment: .top)
+                            }
+                            
+                            // Workout Section  
+                            if appPrefs.showWorkoutLogs {
+                                workoutSection
+                                    .frame(maxWidth: .infinity, alignment: .top)
+                            }
+                            
+                            // Food Section
+                            if appPrefs.showFoodLogs {
+                                foodSection
+                                    .frame(maxWidth: .infinity, alignment: .top)
+                            }
+                        }
+                    } else {
+                        VStack(spacing: 16) {
+                            // Weight Section
+                            if appPrefs.showWeightLogs {
+                                weightSection
+                            }
+                            
+                            // Workout Section  
+                            if appPrefs.showWorkoutLogs {
+                                workoutSection
+                            }
+                            
+                            // Food Section
+                            if appPrefs.showFoodLogs {
+                                foodSection
+                            }
+                        }
+                    }
+                }
+                
+                if viewModel.isLoading {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Spacer()
+                    }
+                    .padding()
+                }
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color(.tertiarySystemBackground))
-        .cornerRadius(12)
-        .sheet(isPresented: $viewModel.showingAddLogSheet) {
-            AddLogEntryView(viewModel: viewModel)
-        }
-        .sheet(isPresented: $viewModel.showingEditLogSheet) {
-            EditLogEntryView(viewModel: viewModel)
-        }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("OK") {
-                viewModel.errorMessage = nil
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color(.tertiarySystemBackground))
+            .cornerRadius(12)
+            .sheet(isPresented: $viewModel.showingAddLogSheet) {
+                AddLogEntryView(viewModel: viewModel)
             }
-        } message: {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
+            .sheet(isPresented: $viewModel.showingEditLogSheet) {
+                EditLogEntryView(viewModel: viewModel)
             }
-        }
-        .onAppear {
-            viewModel.currentDate = currentDate
-            viewModel.reloadData()
-            viewModel.loadLogsForCurrentDate()
-        }
-        .onChange(of: currentDate) { oldValue, newValue in
-            viewModel.currentDate = newValue
-            viewModel.loadLogsForCurrentDate()
+            .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+                Button("OK") {
+                    viewModel.errorMessage = nil
+                }
+            } message: {
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                }
+            }
+            .onAppear {
+                viewModel.currentDate = currentDate
+                viewModel.reloadData()
+                viewModel.loadLogsForCurrentDate()
+            }
+            .onChange(of: currentDate) { oldValue, newValue in
+                viewModel.currentDate = newValue
+                viewModel.loadLogsForCurrentDate()
+            }
         }
     }
-    
-    // MARK: - Weight Section
-    private var weightSection: some View {
+}
+
+// MARK: - Log Section Views
+extension LogsComponent {
+    var weightSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "scalemass")
@@ -121,14 +138,14 @@ struct LogsComponent: View {
                 Spacer()
             }
             
-                                    if viewModel.filteredWeightEntries.isEmpty {
+            if viewModel.filteredWeightEntries.isEmpty {
                 Text("No weight entries for today")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
             } else {
-                                        ForEach(viewModel.filteredWeightEntries) { entry in
+                ForEach(viewModel.filteredWeightEntries) { entry in
                     weightEntryRow(entry)
                 }
             }
@@ -138,7 +155,63 @@ struct LogsComponent: View {
         .cornerRadius(8)
     }
     
-    private func weightEntryRow(_ entry: WeightLogEntry) -> some View {
+    var workoutSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "figure.run")
+                    .foregroundColor(viewModel.accentColor)
+                Text("Workout")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            if viewModel.filteredWorkoutEntries.isEmpty {
+                Text("No workout entries for today")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            } else {
+                ForEach(viewModel.filteredWorkoutEntries) { entry in
+                    workoutEntryRow(entry)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+    }
+    
+    var foodSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "fork.knife")
+                    .foregroundColor(viewModel.accentColor)
+                Text("Food")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            if viewModel.filteredFoodEntries.isEmpty {
+                Text("No food entries for today")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            } else {
+                ForEach(viewModel.filteredFoodEntries) { entry in
+                    foodEntryRow(entry)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+    }
+    
+    func weightEntryRow(_ entry: WeightLogEntry) -> some View {
         HStack(spacing: 8) {
             Text("\(entry.weight, specifier: "%.1f") \(entry.unit.displayName)")
                 .font(.caption)
@@ -166,36 +239,7 @@ struct LogsComponent: View {
         }
     }
     
-    // MARK: - Workout Section
-    private var workoutSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "figure.run")
-                    .foregroundColor(viewModel.accentColor)
-                Text("Workout")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-            }
-            
-                                    if viewModel.filteredWorkoutEntries.isEmpty {
-                Text("No workout entries for today")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else {
-                                        ForEach(viewModel.filteredWorkoutEntries) { entry in
-                    workoutEntryRow(entry)
-                }
-            }
-        }
-        .padding(12)
-        .background(Color(.systemGray6).opacity(0.5))
-        .cornerRadius(8)
-    }
-    
-    private func workoutEntryRow(_ entry: WorkoutLogEntry) -> some View {
+    func workoutEntryRow(_ entry: WorkoutLogEntry) -> some View {
         HStack(spacing: 8) {
             Text(entry.name)
                 .font(.caption)
@@ -223,36 +267,7 @@ struct LogsComponent: View {
         .cornerRadius(6)
     }
     
-    // MARK: - Food Section
-    private var foodSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "fork.knife")
-                    .foregroundColor(viewModel.accentColor)
-                Text("Food")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-            }
-            
-                                    if viewModel.filteredFoodEntries.isEmpty {
-                Text("No food entries for today")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            } else {
-                                        ForEach(viewModel.filteredFoodEntries) { entry in
-                    foodEntryRow(entry)
-                }
-            }
-        }
-        .padding(12)
-        .background(Color(.systemGray6).opacity(0.5))
-        .cornerRadius(8)
-    }
-    
-    private func foodEntryRow(_ entry: FoodLogEntry) -> some View {
+    func foodEntryRow(_ entry: FoodLogEntry) -> some View {
         HStack(spacing: 8) {
             Text(entry.name)
                 .font(.caption)
@@ -279,185 +294,4 @@ struct LogsComponent: View {
         .background(Color(.systemBackground))
         .cornerRadius(6)
     }
-    
-    // MARK: - Helper Methods
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
 }
-
-// MARK: - Add Log Entry View
-struct AddLogEntryView: View {
-    @ObservedObject var viewModel: LogsViewModel
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Log Type") {
-                    Picker("Type", selection: $viewModel.selectedLogType) {
-                        ForEach(LogType.allCases, id: \.self) { logType in
-                            Label(logType.displayName, systemImage: logType.icon)
-                                .tag(logType)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-                
-                // Form fields based on log type
-                switch viewModel.selectedLogType {
-                case .weight:
-                    weightForm
-                case .workout:
-                    workoutForm
-                case .food:
-                    foodForm
-                }
-            }
-            .navigationTitle("Add \(viewModel.selectedLogType.displayName)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Add") {
-                        viewModel.addCurrentLogEntry()
-                    }
-                    .disabled(!viewModel.canAddCurrentLogType)
-                    .foregroundColor(viewModel.accentColor)
-                }
-            }
-        }
-    }
-    
-    private var weightForm: some View {
-        Section("Weight Details") {
-            HStack {
-                TextField("Weight", text: $viewModel.weightValue)
-                    .keyboardType(.decimalPad)
-                
-                Picker("Unit", selection: $viewModel.selectedWeightUnit) {
-                    ForEach(WeightUnit.allCases, id: \.self) { unit in
-                        Text(unit.displayName).tag(unit)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-            }
-            
-            DatePicker("Date", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-    
-    private var workoutForm: some View {
-        Section("Workout Details") {
-            TextField("Workout name", text: $viewModel.workoutName)
-            DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-    
-    private var foodForm: some View {
-        Section("Food Details") {
-            TextField("Food name", text: $viewModel.foodName)
-            DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-}
-
-// MARK: - Edit Log Entry View
-struct EditLogEntryView: View {
-    @ObservedObject var viewModel: LogsViewModel
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Log Type") {
-                    Text(viewModel.selectedLogType.displayName)
-                        .foregroundColor(.secondary)
-                }
-                
-                // Form fields based on log type
-                switch viewModel.selectedLogType {
-                case .weight:
-                    weightForm
-                case .workout:
-                    workoutForm
-                case .food:
-                    foodForm
-                }
-            }
-            .navigationTitle("Edit \(viewModel.selectedLogType.displayName)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Update") {
-                        viewModel.updateCurrentLogEntry()
-                        dismiss()
-                    }
-                    .disabled(!viewModel.canAddCurrentLogType)
-                    .foregroundColor(viewModel.accentColor)
-                }
-            }
-        }
-    }
-    
-    private var weightForm: some View {
-        Section("Weight Details") {
-            HStack {
-                TextField("Weight", text: $viewModel.weightValue)
-                    .keyboardType(.decimalPad)
-                
-                Picker("Unit", selection: $viewModel.selectedWeightUnit) {
-                    ForEach(WeightUnit.allCases, id: \.self) { unit in
-                        Text(unit.displayName).tag(unit)
-                    }
-                }
-                .pickerStyle(MenuPickerStyle())
-            }
-            
-            DatePicker("Date", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-    
-    private var workoutForm: some View {
-        Section("Workout Details") {
-            TextField("Workout name", text: $viewModel.workoutName)
-            DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-    
-    private var foodForm: some View {
-        Section("Food Details") {
-            TextField("Food name", text: $viewModel.foodName)
-            DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-}
-
-// MARK: - Preview
-struct LogsComponent_Previews: PreviewProvider {
-    static var previews: some View {
-        LogsComponent(currentDate: Date(), horizontal: false)
-            .previewLayout(.sizeThatFits)
-            .frame(height: 400)
-    }
-} 

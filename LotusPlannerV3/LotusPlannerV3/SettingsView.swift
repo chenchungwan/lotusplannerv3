@@ -236,7 +236,28 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Visibility toggles removed: Logs and Journal always shown
+    // Logs visibility preferences
+    @Published var showWeightLogs: Bool {
+        didSet {
+            UserDefaults.standard.set(showWeightLogs, forKey: "showWeightLogs")
+        }
+    }
+    
+    @Published var showWorkoutLogs: Bool {
+        didSet {
+            UserDefaults.standard.set(showWorkoutLogs, forKey: "showWorkoutLogs")
+        }
+    }
+    
+    @Published var showFoodLogs: Bool {
+        didSet {
+            UserDefaults.standard.set(showFoodLogs, forKey: "showFoodLogs")
+        }
+    }
+    
+    var showAnyLogs: Bool {
+        showWeightLogs || showWorkoutLogs || showFoodLogs
+    }
     
 
     
@@ -269,6 +290,11 @@ class AppPreferences: ObservableObject {
 
         // Load tasks layout preference (default false - vertical layout)
         self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
+
+        // Load logs visibility preferences (default all visible)
+        self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
+        self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
+        self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
 
 
         
@@ -410,6 +436,59 @@ struct SettingsView: View {
                 }
 
                 // Tasks Management
+                Section("Log Preferences") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showWeightLogs },
+                        set: { appPrefs.showWeightLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "scalemass")
+                                .foregroundColor(appPrefs.showWeightLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Weight Logs")
+                                    .font(.body)
+                                Text("Show weight tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showWorkoutLogs },
+                        set: { appPrefs.showWorkoutLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "figure.run")
+                                .foregroundColor(appPrefs.showWorkoutLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Workout Logs")
+                                    .font(.body)
+                                Text("Show workout tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showFoodLogs },
+                        set: { appPrefs.showFoodLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "fork.knife")
+                                .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Food Logs")
+                                    .font(.body)
+                                Text("Show food tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                
                 Section("Tasks Management") {
                     Toggle(isOn: Binding(
                         get: { appPrefs.tasksLayoutHorizontal },
