@@ -257,7 +257,7 @@ class AppPreferences: ObservableObject {
         // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
         // If no layout has been explicitly chosen (key doesn't exist), use Classic
-        if !UserDefaults.standard.object(forKey: "dayViewLayout").map({ _ in true }) ?? false {
+        if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
             self.dayViewLayout = .compact // Classic layout
         } else {
             // Otherwise use the saved layout or fallback to Classic if invalid
