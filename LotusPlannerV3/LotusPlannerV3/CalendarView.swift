@@ -2033,7 +2033,7 @@ struct CalendarView: View {
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         switch appPrefs.dayViewLayout {
         case .defaultNew:
-            DayViewExpandedTwo(onEventTap: { ev in
+            DayViewExpanded(onEventTap: { ev in
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct DayViewExpandedTwo: View {
+struct DayViewExpanded: View {
     @ObservedObject private var navigationManager: NavigationManager
     @ObservedObject private var appPrefs: AppPreferences
     private let calendarVM: CalendarViewModel
@@ -20,8 +20,6 @@ struct DayViewExpandedTwo: View {
     @State private var logsHeight: CGFloat = UIScreen.main.bounds.height * 0.25
 
     // MARK: - Selection State
-    @State private var selectedEvent: GoogleCalendarEvent?
-    @State private var showingEventDetails: Bool = false
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedTaskAccount: GoogleAuthManager.AccountKind?
@@ -308,7 +306,7 @@ struct DayViewExpandedTwo: View {
 }
 
 // MARK: - Day Filters
-extension DayViewExpandedTwo {
+extension DayViewExpanded {
     private func isSameDay(_ lhs: Date, _ rhs: Date) -> Bool {
         Calendar.mondayFirst.isDate(lhs, inSameDayAs: rhs)
     }
@@ -374,7 +372,7 @@ extension DayViewExpandedTwo {
 }
 
 #Preview {
-    DayViewExpandedTwo()
+    DayViewExpanded()
 }
 
 
