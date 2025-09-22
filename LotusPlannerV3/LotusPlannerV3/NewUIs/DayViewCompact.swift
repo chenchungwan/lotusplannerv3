@@ -201,32 +201,34 @@ struct DayViewCompact: View {
                                maxHeight: max(200, min(leftTopHeight, bottomH - dividerH - 160)),
                                alignment: .top)
 
-                        // Draggable divider between Timeline and Logs inside left column
-                        Rectangle()
-                            .fill(isLeftInnerDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                            .frame(height: 8)
-                            .overlay(
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.caption)
-                                    .foregroundColor(isLeftInnerDividerDragging ? .white : .gray)
-                            )
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        isLeftInnerDividerDragging = true
-                                        // dynamic bounds based on current bottomH
-                                        let minTop: CGFloat = 200
-                                        let minBottomLeft: CGFloat = 160
-                                        let maxTop = bottomH - dividerH - minBottomLeft
-                                        let newHeight = max(minTop, min(maxTop, leftTopHeight + value.translation.height))
-                                        leftTopHeight = newHeight
-                                    }
-                                    .onEnded { _ in isLeftInnerDividerDragging = false }
-                            )
+                        if appPrefs.showAnyLogs {
+                            // Draggable divider between Timeline and Logs inside left column
+                            Rectangle()
+                                .fill(isLeftInnerDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                                .frame(height: 8)
+                                .overlay(
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(.caption)
+                                        .foregroundColor(isLeftInnerDividerDragging ? .white : .gray)
+                                )
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            isLeftInnerDividerDragging = true
+                                            // dynamic bounds based on current bottomH
+                                            let minTop: CGFloat = 200
+                                            let minBottomLeft: CGFloat = 160
+                                            let maxTop = bottomH - dividerH - minBottomLeft
+                                            let newHeight = max(minTop, min(maxTop, leftTopHeight + value.translation.height))
+                                            leftTopHeight = newHeight
+                                        }
+                                        .onEnded { _ in isLeftInnerDividerDragging = false }
+                                )
 
-                        // Logs vertically: weight, workout, food
-                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
-                            .frame(height: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))))
+                            // Logs vertically: weight, workout, food
+                            LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                                .frame(height: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))))
+                        }
                     }
                     // Clamp left column width based on available width
                     .frame(width: max(180, min(leftColumnWidth, max(220, geo.size.width - 240))), alignment: .top)

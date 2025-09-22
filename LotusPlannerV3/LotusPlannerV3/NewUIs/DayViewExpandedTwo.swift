@@ -72,14 +72,14 @@ struct DayViewExpandedTwo: View {
                                 }
                                 .frame(
                                     width: leftTimelineWidth,
-                                    height: topRowHeight,
+                                    height: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24,
                                     alignment: .topLeading
                                 )
 
                                 // Vertical draggable divider between timeline and tasks
                                 Rectangle()
                                     .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                                    .frame(width: 8, height: topRowHeight)
+                                    .frame(width: 8, height: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24)
                                     .overlay(
                                         Image(systemName: "line.3.vertical")
                                             .font(.caption)
@@ -203,37 +203,39 @@ struct DayViewExpandedTwo: View {
                                 }
                                 .frame(
                                     maxWidth: .infinity,
-                                    maxHeight: topRowHeight,
+                                    maxHeight: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24,
                                     alignment: .top
                                 )
                             }
 
-                            // Draggable divider between top row and logs
-                            Rectangle()
-                                .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                                .frame(height: 8)
-                                .overlay(
-                                    Image(systemName: "line.3.horizontal")
-                                        .font(.caption)
-                                        .foregroundColor(isTopDividerDragging ? .white : .gray)
-                                )
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { value in
-                                            isTopDividerDragging = true
-                                            let newHeight = topRowHeight + value.translation.height
-                                            let minHeight: CGFloat = 200
-                                            let maxHeight: CGFloat = max(200, UIScreen.main.bounds.height - 300)
-                                            topRowHeight = max(minHeight, min(maxHeight, newHeight))
-                                        }
-                                        .onEnded { _ in
-                                            isTopDividerDragging = false
-                                        }
-                                )
+                            if appPrefs.showAnyLogs {
+                                // Draggable divider between top row and logs
+                                Rectangle()
+                                    .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                                    .frame(height: 8)
+                                    .overlay(
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.caption)
+                                            .foregroundColor(isTopDividerDragging ? .white : .gray)
+                                    )
+                                    .gesture(
+                                        DragGesture()
+                                            .onChanged { value in
+                                                isTopDividerDragging = true
+                                                let newHeight = topRowHeight + value.translation.height
+                                                let minHeight: CGFloat = 200
+                                                let maxHeight: CGFloat = max(200, UIScreen.main.bounds.height - 300)
+                                                topRowHeight = max(minHeight, min(maxHeight, newHeight))
+                                            }
+                                            .onEnded { _ in
+                                                isTopDividerDragging = false
+                                            }
+                                    )
 
-                            // 2) Logs laid out side-by-side (weight, workout, food)
-                            LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
-                                .frame(height: logsHeight)
+                                // 2) Logs laid out side-by-side (weight, workout, food)
+                                LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
+                                    .frame(height: logsHeight)
+                            }
                         }
                     }
                     .ignoresSafeArea(edges: .top)

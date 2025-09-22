@@ -164,9 +164,11 @@ struct DayViewMobile: View {
                     }
                 }
                 
-                // Logs (no label in Mobile layout)
-                VStack(alignment: .leading, spacing: 6) {
-                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                // Logs (only if any logs are enabled)
+                if appPrefs.showAnyLogs {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                    }
                 }
                 
                 // Journal

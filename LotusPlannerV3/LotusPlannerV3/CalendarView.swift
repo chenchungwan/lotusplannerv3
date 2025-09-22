@@ -2298,11 +2298,13 @@ struct CalendarView: View {
                 }
                 .padding(.horizontal, 8)
 
-                // Row 3: Logs (full width)
-                VStack(alignment: .leading, spacing: 6) {
-                    LogsComponent(currentDate: currentDate, horizontal: false)
+                // Row 3: Logs (full width, only if any logs are enabled)
+                if appPrefs.showAnyLogs {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LogsComponent(currentDate: currentDate, horizontal: false)
+                    }
+                    .padding(.horizontal, 8)
                 }
-                .padding(.horizontal, 8)
 
                 // Row 4: Notes full-screen below
                 VStack(alignment: .leading, spacing: 6) {
@@ -2371,13 +2373,14 @@ struct CalendarView: View {
                 .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                 .padding(.trailing, 8)
 
-            // Draggable divider between timeline and logs
-            leftTimelineDivider
-            
-            // Logs section (always visible)
-            LogsComponent(currentDate: currentDate, horizontal: false)
-                .frame(maxHeight: .infinity)
-                .padding(.all, 8)
+            // Logs section and divider (only if any logs are enabled)
+            if appPrefs.showAnyLogs {
+                leftTimelineDivider
+                
+                LogsComponent(currentDate: currentDate, horizontal: false)
+                    .frame(maxHeight: .infinity)
+                    .padding(.all, 8)
+            }
         }
         .frame(height: geometry.size.height)
         .padding(.top, 8)
