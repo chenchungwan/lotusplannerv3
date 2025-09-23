@@ -428,6 +428,7 @@ struct GlobalNavBar: View {
                     displayedComponents: .date
                 )
                 .datePickerStyle(.graphical)
+                .environment(\.calendar, Calendar.mondayFirst)
                 .navigationTitle("Select Date")
                 .navigationBarTitleDisplayMode(.inline)
                 .navigationBarItems(
