@@ -2389,7 +2389,7 @@ struct CalendarView: View {
     }
     
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             // Timeline section
             eventsTimelineCard(height: leftTimelineHeight)
                 .padding(.leading, 16 + geometry.safeAreaInsets.leading)
@@ -2404,7 +2404,7 @@ struct CalendarView: View {
                     .padding(.all, 8)
             }
         }
-        .frame(height: geometry.size.height)
+        .frame(height: geometry.size.height, alignment: .top)
         .padding(.top, 8)
         .padding(.bottom, 8)
     }
@@ -2428,18 +2428,22 @@ struct CalendarView: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     // Shared Events timeline card used by all layouts
     private func eventsTimelineCard(height: CGFloat? = nil) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Events")
-                .font(.headline)
-                .padding(.leading, 12)
-                .padding(.trailing, 8)
+            HStack {
+                Text("Events")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
             leftTimelineSection
         }
         .frame(height: height, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.top, 8)
         .padding(.bottom, 8)
         .padding(.leading, 8)
