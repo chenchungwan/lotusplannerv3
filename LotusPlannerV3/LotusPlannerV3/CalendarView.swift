@@ -899,19 +899,30 @@ struct CalendarView: View {
             )
         }
         .onChange(of: authManager.linkedStates) { oldValue, newValue in
-            // When an account is unlinked, clear associated tasks and refresh caches
+            // When an account is unlinked, clear associated tasks and calendar events
             if !(newValue[.personal] ?? false) {
                 tasksViewModel.clearTasks(for: .personal)
+                // Safely clear calendar data on main actor
+                Task { @MainActor in
+                    calendarViewModel.personalEvents = []
+                    calendarViewModel.personalCalendars = []
+                }
             }
             if !(newValue[.professional] ?? false) {
                 tasksViewModel.clearTasks(for: .professional)
+                // Safely clear calendar data on main actor
+                Task { @MainActor in
+                    calendarViewModel.professionalEvents = []
+                    calendarViewModel.professionalCalendars = []
+                }
             }
-            // When an account becomes linked, load tasks immediately
+            // When an account becomes linked, load tasks and calendar data immediately
             let personalJustLinked = (newValue[.personal] ?? false) && !(oldValue[.personal] ?? false)
             let professionalJustLinked = (newValue[.professional] ?? false) && !(oldValue[.professional] ?? false)
             if personalJustLinked || professionalJustLinked {
                 Task {
                     await tasksViewModel.loadTasks()
+                    await calendarViewModel.refreshDataForCurrentView()
                     await MainActor.run {
                         updateCachedTasks()
                         updateMonthCachedTasks()
@@ -1011,19 +1022,30 @@ struct CalendarView: View {
     private var finalContent: some View {
         toolbarAndSheetsContent
         .onChange(of: authManager.linkedStates) { oldValue, newValue in
-            // When an account is unlinked, clear associated tasks and refresh caches
+            // When an account is unlinked, clear associated tasks and calendar events
             if !(newValue[.personal] ?? false) {
                 tasksViewModel.clearTasks(for: .personal)
+                // Safely clear calendar data on main actor
+                Task { @MainActor in
+                    calendarViewModel.personalEvents = []
+                    calendarViewModel.personalCalendars = []
+                }
             }
             if !(newValue[.professional] ?? false) {
                 tasksViewModel.clearTasks(for: .professional)
+                // Safely clear calendar data on main actor
+                Task { @MainActor in
+                    calendarViewModel.professionalEvents = []
+                    calendarViewModel.professionalCalendars = []
+                }
             }
-            // When an account becomes linked, load tasks immediately
+            // When an account becomes linked, load tasks and calendar data immediately
             let personalJustLinked = (newValue[.personal] ?? false) && !(oldValue[.personal] ?? false)
             let professionalJustLinked = (newValue[.professional] ?? false) && !(oldValue[.professional] ?? false)
             if personalJustLinked || professionalJustLinked {
                 Task {
                     await tasksViewModel.loadTasks()
+                    await calendarViewModel.refreshDataForCurrentView()
                     await MainActor.run {
                         updateCachedTasks()
                         updateMonthCachedTasks()
