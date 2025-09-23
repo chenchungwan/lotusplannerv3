@@ -2350,12 +2350,24 @@ struct TaskDetailsView: View {
                         }
                     }
                 
-                // Inline Due Date picker (like events)
-                DatePicker("Due Date", selection: Binding(
-                    get: { editedDueDate ?? Date() },
-                    set: { editedDueDate = $0 }
-                ), displayedComponents: .date)
-                .environment(\.calendar, Calendar.mondayFirst)
+                // Due Date picker with clear button
+                HStack {
+                    DatePicker("Due Date", selection: Binding(
+                        get: { editedDueDate ?? Date() },
+                        set: { editedDueDate = $0 }
+                    ), displayedComponents: .date)
+                    .environment(\.calendar, Calendar.mondayFirst)
+                    
+                    if editedDueDate != nil {
+                        Button(action: {
+                            editedDueDate = nil
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
                 
                 // Removed Task Status section per request
                 
