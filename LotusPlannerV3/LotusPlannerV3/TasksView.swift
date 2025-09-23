@@ -2203,10 +2203,8 @@ struct TaskDetailsView: View {
     @State private var selectedListId: String
     @State private var newListName = ""
     @State private var isCreatingNewList = false
-    @State private var showingDatePicker = false
     @State private var showingDeleteAlert = false
     @State private var isSaving = false
-    @State private var tempDueDate: Date = Date()
     
     // Track original due date to detect changes properly
     private let originalDueDate: Date?
@@ -2352,37 +2350,12 @@ struct TaskDetailsView: View {
                         }
                     }
                 
-                // Inline Due Date row (no section, no label)
-                HStack(spacing: 12) {
-                    Button(action: {
-                        // Initialize temp picker date but do not change the actual due date yet
-                        tempDueDate = editedDueDate ?? Date()
-                        showingDatePicker = true
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "calendar")
-                                .foregroundColor(accentColor)
-                            if let dueDate = editedDueDate {
-                                Text(DateFormatter.standardDate.string(from: dueDate))
-                                    .font(DateDisplayStyle.bodyFont)
-                                    .foregroundColor(DateDisplayStyle.primaryColor)
-                            } else {
-                                Text("Add due date")
-                                    .font(DateDisplayStyle.bodyFont)
-                                    .foregroundColor(DateDisplayStyle.secondaryColor)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    if editedDueDate != nil {
-                        Button(action: { editedDueDate = nil }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                // Inline Due Date picker (like events)
+                DatePicker("Due Date", selection: Binding(
+                    get: { editedDueDate ?? Date() },
+                    set: { editedDueDate = $0 }
+                ), displayedComponents: .date)
+                .environment(\.calendar, Calendar.mondayFirst)
                 
                 // Removed Task Status section per request
                 
@@ -2414,33 +2387,6 @@ struct TaskDetailsView: View {
                     .fontWeight(.semibold)
                 }
             }
-        }
-        .sheet(isPresented: $showingDatePicker) {
-            NavigationStack {
-                DatePicker("Due Date", selection: $tempDueDate, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .environment(\.calendar, Calendar.mondayFirst)
-                .navigationTitle("Set Due Date")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Cancel") {
-                            showingDatePicker = false
-                        }
-                    }
-                    
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Done") {
-                            // Apply selected date to actual due date only on Done
-                            editedDueDate = tempDueDate
-                            showingDatePicker = false
-                        }
-                        .fontWeight(.semibold)
-                    }
-                }
-            }
-            .frame(maxHeight: 400)
-            .presentationDetents([.large])
         }
         .alert("Delete Task", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
