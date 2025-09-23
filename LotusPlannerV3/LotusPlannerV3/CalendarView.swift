@@ -2391,9 +2391,10 @@ struct CalendarView: View {
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Timeline section
-            eventsTimelineCard(height: leftTimelineHeight)
+            eventsTimelineCard(height: appPrefs.showAnyLogs ? leftTimelineHeight : nil)
                 .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                 .padding(.trailing, 8)
+                .frame(maxHeight: appPrefs.showAnyLogs ? nil : .infinity)
 
             // Logs section and divider (only if any logs are enabled)
             if appPrefs.showAnyLogs {
@@ -2405,7 +2406,7 @@ struct CalendarView: View {
             }
         }
         .frame(height: geometry.size.height, alignment: .top)
-        .padding(.top, 8)
+        .padding(.top, 0)
         .padding(.bottom, 8)
     }
     
@@ -2445,7 +2446,7 @@ struct CalendarView: View {
         .frame(height: height, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.bottom, 0)
         .padding(.leading, 8)
         // remove background and border for a flat look
     }

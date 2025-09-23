@@ -198,7 +198,7 @@ struct DayViewCompact: View {
                         }
                         // Clamp top (Timeline/Events list) height within left column
                         .frame(maxWidth: .infinity,
-                               maxHeight: max(200, min(leftTopHeight, bottomH - dividerH - 160)),
+                               maxHeight: appPrefs.showAnyLogs ? max(200, min(leftTopHeight, bottomH - dividerH - 160)) : .infinity,
                                alignment: .top)
 
                         if appPrefs.showAnyLogs {
