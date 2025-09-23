@@ -4486,6 +4486,7 @@ struct AddItemView: View {
     @State private var eventStart: Date
     @State private var eventEnd: Date
     @State private var isAllDay = false
+    @State private var showingDeleteEventAlert = false
     
     let currentDate: Date
     let tasksViewModel: TasksViewModel
@@ -4806,7 +4807,7 @@ struct AddItemView: View {
             .safeAreaInset(edge: .bottom) {
                 if isEditingEvent {
                     Button(role: .destructive) {
-                        deleteEvent()
+                        showingDeleteEventAlert = true
                     } label: {
                         Text("Delete Event")
                             .frame(maxWidth: .infinity)
@@ -4814,6 +4815,16 @@ struct AddItemView: View {
                     .buttonStyle(.bordered)
                     .padding()
                 }
+            }
+        }
+        .alert("Delete Event", isPresented: $showingDeleteEventAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteEvent()
+            }
+        } message: {
+            if let event = existingEvent {
+                Text("Are you sure you want to delete '\(event.summary ?? "this event")'? This action cannot be undone.")
             }
         }
     }
