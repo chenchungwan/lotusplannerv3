@@ -2204,6 +2204,7 @@ struct TaskDetailsView: View {
     @State private var newListName = ""
     @State private var isCreatingNewList = false
     @State private var showingDeleteAlert = false
+    @State private var showingDatePicker = false
     @State private var isSaving = false
     
     // Track original due date to detect changes properly
@@ -2350,15 +2351,23 @@ struct TaskDetailsView: View {
                         }
                     }
                 
-                // Due Date picker with clear button
-                HStack {
-                    DatePicker("Due Date", selection: Binding(
-                        get: { editedDueDate ?? Date() },
-                        set: { editedDueDate = $0 }
-                    ), displayedComponents: .date)
-                    .environment(\.calendar, Calendar.mondayFirst)
-                    
-                    if editedDueDate != nil {
+                // Due Date section
+                if let dueDate = editedDueDate {
+                    // Show date with calendar icon and trash can
+                    HStack {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.blue)
+                        
+                        Button(action: {
+                            showingDatePicker = true
+                        }) {
+                            Text(dueDateFormatter.string(from: dueDate))
+                                .foregroundColor(.primary)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        
+                        Spacer()
+                        
                         Button(action: {
                             editedDueDate = nil
                         }) {
@@ -2367,6 +2376,20 @@ struct TaskDetailsView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
+                } else {
+                    // Show placeholder button
+                    Button(action: {
+                        showingDatePicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundColor(.blue)
+                            Text("Add due date")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 
                 // Removed Task Status section per request
@@ -2408,6 +2431,35 @@ struct TaskDetailsView: View {
             }
         } message: {
             Text("Are you sure you want to delete '\(task.title)'? This action cannot be undone.")
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            NavigationStack {
+                DatePicker(
+                    "Select Date",
+                    selection: Binding(
+                        get: { editedDueDate ?? Date() },
+                        set: { editedDueDate = $0 }
+                    ),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .environment(\.calendar, Calendar.mondayFirst)
+                .navigationTitle("Due Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") {
+                            showingDatePicker = false
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            showingDatePicker = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.height(UIScreen.main.bounds.height * 0.5 + 30)])
         }
     }
     
