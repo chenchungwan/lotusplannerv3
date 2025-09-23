@@ -90,6 +90,7 @@ class NavigationManager: ObservableObject {
         case journal
         case weeklyView
         case gWeekView
+        case yearlyCalendar
     }
     
     @Published var currentView: CurrentView = .calendar
@@ -124,6 +125,10 @@ class NavigationManager: ObservableObject {
         currentInterval = .week // WeeklyView is always week view
     }
     
+    func switchToYearlyCalendar() {
+        currentView = .yearlyCalendar
+        showTasksView = false
+    }
     
     func showSettings() {
         showingSettings = true
