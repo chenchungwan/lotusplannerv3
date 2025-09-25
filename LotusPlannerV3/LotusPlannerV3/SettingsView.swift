@@ -103,7 +103,6 @@ class NavigationManager: ObservableObject {
     private init() {}
     
     func switchToCalendar() {
-        print("DEBUG: switchToCalendar called - currentInterval: \(currentInterval), currentDate: \(currentDate)")
         // Set the appropriate calendar view based on current interval
         if currentInterval == .year {
             currentView = .yearlyCalendar
@@ -111,7 +110,6 @@ class NavigationManager: ObservableObject {
             currentView = .calendar
         }
         showTasksView = false
-        print("DEBUG: switchToCalendar - posting RefreshCalendarData notification with currentDate: \(currentDate)")
         // Trigger data refresh when switching to calendar view
         NotificationCenter.default.post(name: Notification.Name("RefreshCalendarData"), object: nil)
     }
@@ -149,10 +147,8 @@ class NavigationManager: ObservableObject {
     
     // Update the current interval and date from calendar view
     func updateInterval(_ interval: TimelineInterval, date: Date = Date()) {
-        print("DEBUG: NavigationManager.updateInterval called with interval: \(interval), date: \(date)")
         currentInterval = interval
         currentDate = date
-        print("DEBUG: NavigationManager.currentDate is now: \(currentDate)")
     }
 }
 
@@ -453,7 +449,22 @@ struct SettingsView: View {
                     }
                 }
 
-                // Tasks Management
+                // Tasks View Preferences
+                Section("Tasks View Preferences") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.tasksLayoutHorizontal },
+                        set: { appPrefs.updateTasksLayoutHorizontal($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Horizontal Task Lists")
+                                .font(.body)
+                            Text("Display task lists side by side in a scrollable row")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
                 Section("Log Preferences") {
                     Toggle(isOn: Binding(
                         get: { appPrefs.showWeightLogs },
@@ -503,21 +514,6 @@ struct SettingsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                        }
-                    }
-                }
-                
-                Section("Tasks Management") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.tasksLayoutHorizontal },
-                        set: { appPrefs.updateTasksLayoutHorizontal($0) }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Horizontal Task Lists")
-                                .font(.body)
-                            Text("Display task lists side by side in a scrollable row")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                         }
                     }
                 }

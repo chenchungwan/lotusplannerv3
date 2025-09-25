@@ -166,12 +166,9 @@ struct GlobalNavBar: View {
                         }
                         // Toggle between Tasks and Calendar views
                         Button {
-                            print("DEBUG: GlobalNavBar toggle button pressed - showTasksView: \(navigationManager.showTasksView)")
                             if navigationManager.showTasksView {
-                                print("DEBUG: GlobalNavBar - switching to calendar")
                                 navigationManager.switchToCalendar()
                             } else {
-                                print("DEBUG: GlobalNavBar - switching to tasks")
                                 navigationManager.switchToTasks()
                                 // Don't force "All Tasks" - let tasks view sync with current calendar interval
                             }

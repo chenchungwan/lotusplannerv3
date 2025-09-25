@@ -22,10 +22,7 @@ struct MonthTimelineComponent: View {
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
         
-        print("DEBUG: MonthTimelineComponent init - Personal events: \(personalEvents.count), Professional events: \(professionalEvents.count)")
-        print("DEBUG: MonthTimelineComponent init - Month events: \(monthEvents.count) dates")
         let totalEventsInMonth = monthEvents.values.flatMap { $0 }.count
-        print("DEBUG: MonthTimelineComponent init - Total events in month: \(totalEventsInMonth)")
     }
     
     var body: some View {
@@ -128,7 +125,6 @@ struct MonthTimelineComponent: View {
         }
         let displayEvents = Array(sortedEvents.prefix(5)) // Show only first 5 events
         
-        print("DEBUG: MonthTimelineComponent eventsArea - Date: \(date), Events: \(events.count), DisplayEvents: \(displayEvents.count)")
         
         return VStack(spacing: 2) {
             ForEach(displayEvents, id: \.id) { event in

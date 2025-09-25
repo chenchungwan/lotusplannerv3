@@ -168,7 +168,6 @@ class CalendarViewModel: ObservableObject {
         // Debug: Check account linking status
         let personalLinked = authManager.isLinked(kind: .personal)
         let professionalLinked = authManager.isLinked(kind: .professional)
-        print("DEBUG: Personal linked: \(personalLinked), Professional linked: \(professionalLinked)")
         
         var personalError: Error?
         var professionalError: Error?
@@ -177,16 +176,13 @@ class CalendarViewModel: ObservableObject {
             if personalLinked {
                 group.addTask {
                     do {
-                        print("DEBUG: Loading personal events...")
                         let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
                         let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
-                        print("DEBUG: Personal events loaded: \(events.count) events")
                         await MainActor.run {
                             self.personalEvents = events
                             self.personalCalendars = calendars
                         }
                     } catch {
-                        print("DEBUG: Personal error: \(error)")
                         personalError = error
                     }
                 }
@@ -194,16 +190,13 @@ class CalendarViewModel: ObservableObject {
             if professionalLinked {
                 group.addTask {
                     do {
-                        print("DEBUG: Loading professional events...")
                         let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
                         let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
-                        print("DEBUG: Professional events loaded: \(events.count) events")
                         await MainActor.run {
                             self.professionalEvents = events
                             self.professionalCalendars = calendars
                         }
                     } catch {
-                        print("DEBUG: Professional error: \(error)")
                         professionalError = error
                     }
                 }
@@ -215,7 +208,6 @@ class CalendarViewModel: ObservableObject {
             let personalLinked = authManager.isLinked(kind: .personal)
             let professionalLinked = authManager.isLinked(kind: .professional)
             
-            print("DEBUG: Final state - Personal events: \(self.personalEvents.count), Professional events: \(self.professionalEvents.count)")
             
             if personalLinked && professionalLinked {
                 // Both accounts linked - only show error if both failed
@@ -1466,11 +1458,8 @@ struct CalendarView: View {
             .task {
                 // Load fresh data for the current year when view appears
                 let navDate = await navigationManager.currentDate
-                print("DEBUG: yearView task - Loading data for navigationManager.currentDate: \(navDate)")
-                print("DEBUG: yearView task - Local currentDate: \(currentDate)")
                 // Update local currentDate to match navigation manager
                 currentDate = navDate
-                print("DEBUG: yearView task - Updated local currentDate to: \(currentDate)")
                 await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
             }
             .onChange(of: currentDate) { oldValue, newValue in
@@ -1793,13 +1782,8 @@ struct CalendarView: View {
         .background(Color(.systemBackground))
         .task {
             let navDate = await navigationManager.currentDate
-            print("DEBUG: monthView task - Loading data for navigationManager.currentDate: \(navDate)")
-            print("DEBUG: monthView task - Local currentDate: \(currentDate)")
-            print("DEBUG: monthView task - Date difference: \(navDate.timeIntervalSince(currentDate))")
-            print("DEBUG: monthView task - Are dates equal? \(navDate == currentDate)")
             // Update local currentDate to match navigation manager
             currentDate = navDate
-            print("DEBUG: monthView task - Updated local currentDate to: \(currentDate)")
             // Load fresh data for the current month when view appears
             await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
         }
@@ -1923,8 +1907,6 @@ struct CalendarView: View {
         let personalEvents = calendarViewModel.personalEvents
         let professionalEvents = calendarViewModel.professionalEvents
         
-        print("DEBUG: singleMonthSection - Personal events: \(personalEvents.count), Professional events: \(professionalEvents.count)")
-        print("DEBUG: singleMonthSection - Month events grouped: \(monthEvents.count) dates")
         
         return MonthTimelineComponent(
             currentDate: currentDate,
@@ -2019,10 +2001,7 @@ struct CalendarView: View {
                 }
             }
             .onChange(of: navigationManager.currentDate) { oldValue, newValue in
-                print("DEBUG: CalendarView onChange - navigationManager.currentDate changed from \(oldValue) to \(newValue)")
-                print("DEBUG: CalendarView onChange - local currentDate before update: \(currentDate)")
                 currentDate = newValue
-                print("DEBUG: CalendarView onChange - local currentDate after update: \(currentDate)")
             }
             .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
                 updateCachedTasks()
@@ -2050,12 +2029,10 @@ struct CalendarView: View {
             }
 
             .onAppear {
-                print("DEBUG: CalendarView.onAppear called")
                 startCurrentTimeTimer()
                 // Sync currentDate with navigation manager's current date
                 Task {
                     let navDate = await navigationManager.currentDate
-                    print("DEBUG: CalendarView.onAppear - syncing currentDate from \(currentDate) to \(navDate)")
                     currentDate = navDate
                 }
                 // Ensure tasks are cached when view appears
@@ -2074,9 +2051,7 @@ struct CalendarView: View {
                     Task {
                         // Update local currentDate to match navigation manager
                         let navDate = await navigationManager.currentDate
-                        print("DEBUG: RefreshCalendarData received - navDate: \(navDate), local currentDate: \(currentDate)")
                         currentDate = navDate
-                        print("DEBUG: After setting currentDate = navDate, currentDate is now: \(currentDate)")
                         // Force load both accounts directly
                         await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
                         await MainActor.run {
@@ -3392,9 +3367,7 @@ struct CalendarView: View {
     
     // Group month events by date for the MonthTimelineComponent
     private func getMonthEventsGroupedByDate() -> [Date: [GoogleCalendarEvent]] {
-        print("DEBUG: getMonthEventsGroupedByDate called for currentDate: \(currentDate)")
         let monthDates = getMonthDates()
-        print("DEBUG: getMonthEventsGroupedByDate - Month dates count: \(monthDates.count)")
         var eventsGroupedByDate: [Date: [GoogleCalendarEvent]] = [:]
         
         var allEvents: [GoogleCalendarEvent] = []
@@ -3405,8 +3378,6 @@ struct CalendarView: View {
             allEvents += calendarViewModel.professionalEvents
         }
         
-        print("DEBUG: getMonthEventsGroupedByDate - Personal events: \(calendarViewModel.personalEvents.count), Professional events: \(calendarViewModel.professionalEvents.count)")
-        print("DEBUG: getMonthEventsGroupedByDate - Total events: \(allEvents.count)")
         
         // Filter out recurring events if the setting is enabled
         if appPrefs.hideRecurringEventsInMonth {
@@ -3426,13 +3397,10 @@ struct CalendarView: View {
             eventsGroupedByDate[date] = eventsForDate
             
             if !eventsForDate.isEmpty {
-                print("DEBUG: getMonthEventsGroupedByDate - Date \(date) has \(eventsForDate.count) events")
             }
         }
         
-        print("DEBUG: getMonthEventsGroupedByDate - Returning \(eventsGroupedByDate.count) dates with events")
         let totalEventsInGrouped = eventsGroupedByDate.values.flatMap { $0 }.count
-        print("DEBUG: getMonthEventsGroupedByDate - Total events in grouped result: \(totalEventsInGrouped)")
         
         return eventsGroupedByDate
     }
@@ -3564,15 +3532,12 @@ struct CalendarView: View {
         let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
                         (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
         
-        print("DEBUG: getAllEventsForDate - Personal events: \(calendarViewModel.personalEvents.count), Professional events: \(calendarViewModel.professionalEvents.count)")
-        print("DEBUG: getAllEventsForDate - Total events before filtering: \(allEvents.count)")
         
         let filteredEvents = allEvents.filter { event in
             guard let startTime = event.startTime else { return false }
             return calendar.isDate(startTime, inSameDayAs: date)
         }
         
-        print("DEBUG: getAllEventsForDate - Filtered events for date \(date): \(filteredEvents.count)")
         
         return filteredEvents
     }

@@ -25,7 +25,6 @@ struct TasksComponent: View {
         self.accountType = accountType
         self.onTaskToggle = onTaskToggle
         self.onTaskDetails = { task, listId in
-            print("DEBUG: TasksComponent onTaskDetails called with task: \(task.title), listId: \(listId)")
             onTaskDetails(task, listId)
         }
         self.onListRename = onListRename
@@ -93,10 +92,7 @@ extension TasksComponent {
                 accentColor: accentColor,
                 onTaskToggle: { task in onTaskToggle(task, taskList.id) },
                 onTaskDetails: { task, listId in 
-                    print("DEBUG: TaskComponentListCard callback triggered - \(task.title)")
-                    print("DEBUG: About to call onTaskDetails with task: \(task.title), listId: \(listId)")
                     onTaskDetails(task, listId) 
-                    print("DEBUG: onTaskDetails call completed")
                 },
                 onListRename: { newName in onListRename?(taskList.id, newName) },
                 hideDueDateTag: hideDueDateTag,
@@ -302,7 +298,6 @@ private struct TaskComponentListCard: View {
                         accentColor: accentColor,
                         onToggle: { onTaskToggle(task) },
                         onDetails: { task, listId in
-                            print("DEBUG: TaskComponentRow onDetails callback triggered for task: \(task.title)")
                             onTaskDetails(task, listId) 
                         },
                         isSingleDayView: isSingleDayView
@@ -325,7 +320,6 @@ private struct TaskComponentListCard: View {
                     accentColor: accentColor,
                     onToggle: { onTaskToggle(task) },
                     onDetails: { task, listId in
-                        print("DEBUG: TaskComponentRow onDetails callback triggered for task: \(task.title)")
                         onTaskDetails(task, listId) 
                     },
                     isSingleDayView: isSingleDayView
@@ -406,7 +400,6 @@ private struct TaskComponentRow: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { 
-                print("DEBUG: TaskComponentRow tap gesture triggered")
                 onDetails(task, listId) 
             }
         }
