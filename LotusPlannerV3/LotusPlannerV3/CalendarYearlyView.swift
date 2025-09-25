@@ -25,6 +25,12 @@ struct CalendarYearlyView: View {
         .onAppear {
             // Sync currentYear with navigationManager's currentDate
             currentYear = Calendar.current.component(.year, from: navigationManager.currentDate)
+            // Listen for calendar data refresh requests
+            NotificationCenter.default.addObserver(forName: Notification.Name("RefreshCalendarData"), object: nil, queue: .main) { _ in
+                // Update currentYear when switching to calendar view
+                currentYear = Calendar.current.component(.year, from: navigationManager.currentDate)
+                selectedDate = navigationManager.currentDate
+            }
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
             // Update currentYear when navigationManager's date changes

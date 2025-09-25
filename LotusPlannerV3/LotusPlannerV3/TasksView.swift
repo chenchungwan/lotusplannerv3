@@ -1741,28 +1741,34 @@ struct TasksView: View {
         // Always navigate to day view of the selected date
         selectedFilter = .day
         referenceDate = selectedDate
+        navigationManager.updateInterval(.day, date: selectedDate)
     }
     
     // MARK: - Step helper
     private func step(_ direction: Int) {
+        print("DEBUG: TasksView.step called with direction: \(direction), selectedFilter: \(selectedFilter), referenceDate: \(referenceDate)")
         switch selectedFilter {
         case .day:
             if let newDate = Calendar.mondayFirst.date(byAdding: .day, value: direction, to: referenceDate) {
+                print("DEBUG: TasksView.step - updating to day: \(newDate)")
                 referenceDate = newDate
                 navigationManager.updateInterval(.day, date: newDate)
             }
         case .week:
             if let newDate = Calendar.mondayFirst.date(byAdding: .weekOfYear, value: direction, to: referenceDate) {
+                print("DEBUG: TasksView.step - updating to week: \(newDate)")
                 referenceDate = newDate
                 navigationManager.updateInterval(.week, date: newDate)
             }
         case .month:
             if let newDate = Calendar.mondayFirst.date(byAdding: .month, value: direction, to: referenceDate) {
+                print("DEBUG: TasksView.step - updating to month: \(newDate)")
                 referenceDate = newDate
                 navigationManager.updateInterval(.month, date: newDate)
             }
         case .year:
             if let newDate = Calendar.mondayFirst.date(byAdding: .year, value: direction, to: referenceDate) {
+                print("DEBUG: TasksView.step - updating to year: \(newDate)")
                 referenceDate = newDate
                 navigationManager.updateInterval(.year, date: newDate)
             }
@@ -1777,8 +1783,7 @@ struct TasksView: View {
         selectedFilter = .all
         allSubfilter = .all
         referenceDate = Date()
-        
-        
+        navigationManager.updateInterval(.day, date: Date())
     }
 }
 

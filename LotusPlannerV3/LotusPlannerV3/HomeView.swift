@@ -35,8 +35,10 @@ struct ContentView: View {
                 // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
                     WeeklyView()
+                        .id("WeeklyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 } else {
                     CalendarView()
+                        .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 }
             }
         case .tasks:
@@ -47,8 +49,10 @@ struct ContentView: View {
                 // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
                     WeeklyView()
+                        .id("WeeklyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 } else {
                     CalendarView()
+                        .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 }
             }
 
@@ -60,6 +64,7 @@ struct ContentView: View {
                 CalendarView()
             case .yearlyCalendar:
                 CalendarYearlyView()
+                    .id("CalendarYearlyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
         }
     }
 }

@@ -25,11 +25,10 @@ struct SharedNavigationToolbar: View {
                     .foregroundColor(.secondary)
             }
             
-            // Tasks checklist button (always go to Tasks view with All filter)
+            // Tasks checklist button (go to Tasks view with current calendar filter)
             Button(action: {
                 navigationManager.switchToTasks()
-                // Attempt to broadcast desired filter change via NotificationCenter
-                NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                // Let tasks view sync with current calendar interval instead of forcing "All Tasks"
             }) {
                 Image(systemName: "checklist")
                     .font(.body)

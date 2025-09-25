@@ -103,13 +103,24 @@ class NavigationManager: ObservableObject {
     private init() {}
     
     func switchToCalendar() {
-        currentView = .calendar
+        print("DEBUG: switchToCalendar called - currentInterval: \(currentInterval), currentDate: \(currentDate)")
+        // Set the appropriate calendar view based on current interval
+        if currentInterval == .year {
+            currentView = .yearlyCalendar
+        } else {
+            currentView = .calendar
+        }
         showTasksView = false
+        print("DEBUG: switchToCalendar - posting RefreshCalendarData notification with currentDate: \(currentDate)")
+        // Trigger data refresh when switching to calendar view
+        NotificationCenter.default.post(name: Notification.Name("RefreshCalendarData"), object: nil)
     }
     
     func switchToTasks() {
         currentView = .tasks
         showTasksView = true
+        // Reset showingAllTasks to false so tasks view syncs with current calendar interval
+        showingAllTasks = false
     }
     
 
@@ -138,8 +149,10 @@ class NavigationManager: ObservableObject {
     
     // Update the current interval and date from calendar view
     func updateInterval(_ interval: TimelineInterval, date: Date = Date()) {
+        print("DEBUG: NavigationManager.updateInterval called with interval: \(interval), date: \(date)")
         currentInterval = interval
         currentDate = date
+        print("DEBUG: NavigationManager.currentDate is now: \(currentDate)")
     }
 }
 
@@ -507,32 +520,6 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
-                    Button(role: .destructive) {
-                        showingDeleteCompletedTasksAlert = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Delete All Completed Tasks")
-                                    .foregroundColor(.red)
-                                Text("Remove completed tasks from all linked accounts")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .alert("Delete All Completed Tasks?", isPresented: $showingDeleteCompletedTasksAlert) {
-                        Button("Cancel", role: .cancel) {}
-                        Button("Delete", role: .destructive) {
-                            Task {
-                                await DataManager.shared.tasksViewModel.deleteAllCompletedTasks()
-                            }
-                        }
-                    } message: {
-                        Text("This will permanently delete all completed tasks from your linked Google accounts. This action cannot be undone.")
-                    }
                 }
                 
                 Section("App Preferences") {
@@ -584,6 +571,32 @@ struct SettingsView: View {
                 }
 
                 Section("Danger Zone") {
+                    Button(role: .destructive) {
+                        showingDeleteCompletedTasksAlert = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Delete All Completed Tasks")
+                                    .foregroundColor(.red)
+                                Text("Remove completed tasks from all linked accounts")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .alert("Delete All Completed Tasks?", isPresented: $showingDeleteCompletedTasksAlert) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Delete", role: .destructive) {
+                            Task {
+                                await DataManager.shared.tasksViewModel.deleteAllCompletedTasks()
+                            }
+                        }
+                    } message: {
+                        Text("This will permanently delete all completed tasks from your linked Google accounts. This action cannot be undone.")
+                    }
+                    
                     Button(role: .destructive) {
                         showingDeleteAllAlert = true
                     } label: {

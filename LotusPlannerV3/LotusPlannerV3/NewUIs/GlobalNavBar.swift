@@ -166,11 +166,14 @@ struct GlobalNavBar: View {
                         }
                         // Toggle between Tasks and Calendar views
                         Button {
+                            print("DEBUG: GlobalNavBar toggle button pressed - showTasksView: \(navigationManager.showTasksView)")
                             if navigationManager.showTasksView {
+                                print("DEBUG: GlobalNavBar - switching to calendar")
                                 navigationManager.switchToCalendar()
                             } else {
+                                print("DEBUG: GlobalNavBar - switching to tasks")
                                 navigationManager.switchToTasks()
-                                NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                // Don't force "All Tasks" - let tasks view sync with current calendar interval
                             }
                         } label: {
                             Image(systemName: navigationManager.showTasksView ? "calendar" : "checklist")
@@ -254,7 +257,7 @@ struct GlobalNavBar: View {
                             }
                             Button {
                                 if navigationManager.showTasksView {
-                                    // In Tasks view: show yearly tasks
+                                    // In Tasks view: filter to yearly tasks
                                     navigationManager.showingAllTasks = false
                                     navigationManager.updateInterval(.year, date: Date())
                                 } else {
@@ -393,7 +396,7 @@ struct GlobalNavBar: View {
                             }
                             Button {
                                 if navigationManager.showTasksView {
-                                    // In Tasks view: show yearly tasks
+                                    // In Tasks view: filter to yearly tasks
                                     navigationManager.showingAllTasks = false
                                     navigationManager.updateInterval(.year, date: Date())
                                 } else {
