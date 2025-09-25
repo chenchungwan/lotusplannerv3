@@ -209,7 +209,12 @@ struct JournalView: View {
     // MARK: - Top toolbar inline (all icons on same line as title)
     private var topToolbar: some View {
         HStack {
+            Text("Journal")
+                .font(.headline)
+                .foregroundColor(.primary)
+            
             Spacer()
+            
             HStack(spacing: 16) {
                 Button(action: { showToolPicker.toggle() }) {
                     Image(systemName: "applepencil.and.scribble")
@@ -227,6 +232,12 @@ struct JournalView: View {
                     Image(systemName: "trash")
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.purple, lineWidth: 2)
+            )
         }
         .padding(.horizontal, 12)
         .frame(height: 44)

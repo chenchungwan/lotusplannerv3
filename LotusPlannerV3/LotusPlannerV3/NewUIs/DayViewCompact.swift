@@ -47,8 +47,12 @@ struct DayViewCompact: View {
 
             VStack(spacing: 12) {
                 // 1) Tasks (personal + professional)
-               
-                HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tasks")
+                        .font(.headline)
+                        .padding(.horizontal, 8)
+                    
+                    HStack(alignment: .top, spacing: 12) {
                     let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
                     let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
@@ -148,8 +152,13 @@ struct DayViewCompact: View {
                                 .padding(.vertical, 20)
                         }
                     }
+                    }
                 }
                 .frame(height: clampedTasks)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.red, lineWidth: 2)
+                )
 
                 // Draggable divider between Tasks and Timeline/Logs + Journal
                 Rectangle()
@@ -174,32 +183,42 @@ struct DayViewCompact: View {
                 // 2) HStack: VStack(Timeline, Logs) | Journal
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Group {
-                            if appPrefs.showEventsAsListInDay {
-                                EventsListComponent(
-                                    events: filteredEventsForDay(navigationManager.currentDate),
-                                    personalEvents: calendarVM.personalEvents,
-                                    professionalEvents: calendarVM.professionalEvents,
-                                    personalColor: appPrefs.personalColor,
-                                    professionalColor: appPrefs.professionalColor,
-                                    onEventTap: { ev in onEventTap?(ev) }
-                                )
-                            } else {
-                                TimelineComponent(
-                                    date: navigationManager.currentDate,
-                                    events: filteredEventsForDay(navigationManager.currentDate),
-                                    personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                                    professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                                    personalColor: appPrefs.personalColor,
-                                    professionalColor: appPrefs.professionalColor,
-                                    onEventTap: { ev in onEventTap?(ev) }
-                                )
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Events")
+                                .font(.headline)
+                                .padding(.horizontal, 8)
+                            
+                            Group {
+                                if appPrefs.showEventsAsListInDay {
+                                    EventsListComponent(
+                                        events: filteredEventsForDay(navigationManager.currentDate),
+                                        personalEvents: calendarVM.personalEvents,
+                                        professionalEvents: calendarVM.professionalEvents,
+                                        personalColor: appPrefs.personalColor,
+                                        professionalColor: appPrefs.professionalColor,
+                                        onEventTap: { ev in onEventTap?(ev) }
+                                    )
+                                } else {
+                                    TimelineComponent(
+                                        date: navigationManager.currentDate,
+                                        events: filteredEventsForDay(navigationManager.currentDate),
+                                        personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                                        professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                                        personalColor: appPrefs.personalColor,
+                                        professionalColor: appPrefs.professionalColor,
+                                        onEventTap: { ev in onEventTap?(ev) }
+                                    )
+                                }
                             }
                         }
                         // Clamp top (Timeline/Events list) height within left column
                         .frame(maxWidth: .infinity,
                                maxHeight: appPrefs.showAnyLogs ? max(200, min(leftTopHeight, bottomH - dividerH - 160)) : .infinity,
                                alignment: .top)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.blue, lineWidth: 2)
+                        )
 
                         if appPrefs.showAnyLogs {
                             // Draggable divider between Timeline and Logs inside left column
@@ -226,8 +245,18 @@ struct DayViewCompact: View {
                                 )
 
                             // Logs vertically: weight, workout, food
-                            LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
-                                .frame(height: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))))
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Logs")
+                                    .font(.headline)
+                                    .padding(.horizontal, 8)
+                                
+                                LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                            }
+                            .frame(height: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.green, lineWidth: 2)
+                            )
                         }
                     }
                     // Clamp left column width based on available width
@@ -254,16 +283,15 @@ struct DayViewCompact: View {
                                 .onEnded { _ in isMiddleDividerDragging = false }
                         )
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Journal")
-                            .font(.headline)
-                            .padding(.horizontal, 8)
-                        JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    }
+                    JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .id(navigationManager.currentDate)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.bottom, 8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.orange, lineWidth: 2)
+                    )
                 }
                 .frame(height: bottomH)
             }

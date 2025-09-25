@@ -44,34 +44,44 @@ struct DayViewExpanded: View {
                             // 1) Timeline + Tasks side-by-side
                             HStack(alignment: .top, spacing: 12) {
                                 // Timeline or Events List (based on preference)
-                                Group {
-                                    if appPrefs.showEventsAsListInDay {
-                                        EventsListComponent(
-                                            events: filteredEventsForDay(navigationManager.currentDate),
-                                            personalEvents: calendarVM.personalEvents,
-                                            professionalEvents: calendarVM.professionalEvents,
-                                            personalColor: appPrefs.personalColor,
-                                            professionalColor: appPrefs.professionalColor,
-                                            onEventTap: { ev in onEventTap?(ev) }
-                                        )
-                                    } else {
-                                        TimelineComponent(
-                                            date: navigationManager.currentDate,
-                                            events: filteredEventsForDay(navigationManager.currentDate),
-                                            personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                                            professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                                            personalColor: appPrefs.personalColor,
-                                            professionalColor: appPrefs.professionalColor,
-                                            onEventTap: { event in
-                                                onEventTap?(event)
-                                            }
-                                        )
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Events")
+                                        .font(.headline)
+                                        .padding(.horizontal, 8)
+                                    
+                                    Group {
+                                        if appPrefs.showEventsAsListInDay {
+                                            EventsListComponent(
+                                                events: filteredEventsForDay(navigationManager.currentDate),
+                                                personalEvents: calendarVM.personalEvents,
+                                                professionalEvents: calendarVM.professionalEvents,
+                                                personalColor: appPrefs.personalColor,
+                                                professionalColor: appPrefs.professionalColor,
+                                                onEventTap: { ev in onEventTap?(ev) }
+                                            )
+                                        } else {
+                                            TimelineComponent(
+                                                date: navigationManager.currentDate,
+                                                events: filteredEventsForDay(navigationManager.currentDate),
+                                                personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                                                professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                                                personalColor: appPrefs.personalColor,
+                                                professionalColor: appPrefs.professionalColor,
+                                                onEventTap: { event in
+                                                    onEventTap?(event)
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                                 .frame(
                                     width: leftTimelineWidth,
                                     height: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24,
                                     alignment: .topLeading
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.blue, lineWidth: 2)
                                 )
 
                                 // Vertical draggable divider between timeline and tasks
@@ -98,7 +108,12 @@ struct DayViewExpanded: View {
                                     )
 
                                 // Tasks (two side-by-side columns)
-                                HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Tasks")
+                                        .font(.headline)
+                                        .padding(.horizontal, 8)
+                                    
+                                    HStack(alignment: .top, spacing: 12) {
                                     let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
                                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
                                     let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
@@ -198,11 +213,16 @@ struct DayViewExpanded: View {
                                                 .padding(.vertical, 20)
                                         }
                                     }
+                                    }
                                 }
                                 .frame(
                                     maxWidth: .infinity,
                                     maxHeight: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24,
                                     alignment: .top
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.red, lineWidth: 2)
                                 )
                             }
 
@@ -231,8 +251,18 @@ struct DayViewExpanded: View {
                                     )
 
                                 // 2) Logs laid out side-by-side (weight, workout, food)
-                                LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
-                                    .frame(height: logsHeight)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Logs")
+                                        .font(.headline)
+                                        .padding(.horizontal, 8)
+                                    
+                                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
+                                }
+                                .frame(height: logsHeight)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.green, lineWidth: 2)
+                                )
                             }
                         }
                     }
@@ -242,16 +272,14 @@ struct DayViewExpanded: View {
                 .frame(width: UIScreen.main.bounds.width)
                 
                 // Right Column: Journal
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Journal")
-                        .font(.headline)
-                        .padding(.horizontal, 8)
-                        .padding(.top, 12)
-                    JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                }
+                JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
                 .id(navigationManager.currentDate)
                 .frame(width: UIScreen.main.bounds.width*0.95)
                 .frame(maxHeight: .infinity, alignment: .top)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.orange, lineWidth: 2)
+                )
                 .padding(12)
             }
         }
