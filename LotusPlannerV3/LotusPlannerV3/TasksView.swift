@@ -2205,6 +2205,7 @@ struct TaskDetailsView: View {
     @State private var showingDeleteAlert = false
     @State private var showingDatePicker = false
     @State private var isSaving = false
+    @State private var tempSelectedDate = Date()
     
     // Track original due date to detect changes properly
     private let originalDueDate: Date?
@@ -2358,6 +2359,7 @@ struct TaskDetailsView: View {
                             .foregroundColor(.blue)
                         
                         Button(action: {
+                            tempSelectedDate = dueDate
                             showingDatePicker = true
                         }) {
                             Text(dueDateFormatter.string(from: dueDate))
@@ -2378,6 +2380,7 @@ struct TaskDetailsView: View {
                 } else {
                     // Show placeholder button
                     Button(action: {
+                        tempSelectedDate = Date() // Initialize to today's date
                         showingDatePicker = true
                     }) {
                         HStack {
@@ -2435,16 +2438,17 @@ struct TaskDetailsView: View {
             NavigationStack {
                 DatePicker(
                     "Select Date",
-                    selection: Binding(
-                        get: { editedDueDate ?? Date() },
-                        set: { editedDueDate = $0 }
-                    ),
+                    selection: $tempSelectedDate,
                     displayedComponents: .date
                 )
                 .datePickerStyle(.graphical)
                 .environment(\.calendar, Calendar.mondayFirst)
                 .navigationTitle("Due Date")
                 .navigationBarTitleDisplayMode(.inline)
+                .onAppear {
+                    // Initialize tempSelectedDate with current editedDueDate or today
+                    tempSelectedDate = editedDueDate ?? Date()
+                }
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button("Cancel") {
@@ -2453,6 +2457,8 @@ struct TaskDetailsView: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
+                            // Sync the selected date to editedDueDate
+                            editedDueDate = tempSelectedDate
                             showingDatePicker = false
                         }
                     }
