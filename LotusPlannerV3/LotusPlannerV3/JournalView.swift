@@ -234,10 +234,6 @@ struct JournalView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.purple, lineWidth: 2)
-            )
         }
         .padding(.horizontal, 12)
         .frame(height: 44)

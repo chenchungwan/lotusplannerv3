@@ -155,10 +155,6 @@ struct DayViewCompact: View {
                     }
                 }
                 .frame(height: clampedTasks)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.red, lineWidth: 2)
-                )
 
                 // Draggable divider between Tasks and Timeline/Logs + Journal
                 Rectangle()
@@ -215,10 +211,6 @@ struct DayViewCompact: View {
                         .frame(maxWidth: .infinity,
                                maxHeight: appPrefs.showAnyLogs ? max(200, min(leftTopHeight, bottomH - dividerH - 160)) : .infinity,
                                alignment: .top)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.blue, lineWidth: 2)
-                        )
 
                         if appPrefs.showAnyLogs {
                             // Draggable divider between Timeline and Logs inside left column
@@ -251,10 +243,6 @@ struct DayViewCompact: View {
                                 LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                             }
                             .frame(height: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.green, lineWidth: 2)
-                            )
                         }
                     }
                     // Clamp left column width based on available width
@@ -286,10 +274,6 @@ struct DayViewCompact: View {
                     .id(navigationManager.currentDate)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.bottom, 8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.orange, lineWidth: 2)
-                    )
                 }
                 .frame(height: bottomH)
             }

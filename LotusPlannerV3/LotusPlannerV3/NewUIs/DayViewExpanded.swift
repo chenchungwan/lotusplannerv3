@@ -79,10 +79,6 @@ struct DayViewExpanded: View {
                                     height: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24,
                                     alignment: .topLeading
                                 )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.blue, lineWidth: 2)
-                                )
 
                                 // Vertical draggable divider between timeline and tasks
                                 Rectangle()
@@ -220,10 +216,6 @@ struct DayViewExpanded: View {
                                     maxHeight: appPrefs.showAnyLogs ? topRowHeight : UIScreen.main.bounds.height - 24,
                                     alignment: .top
                                 )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.red, lineWidth: 2)
-                                )
                             }
 
                             if appPrefs.showAnyLogs {
@@ -255,10 +247,6 @@ struct DayViewExpanded: View {
                                     LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
                                 }
                                 .frame(height: logsHeight)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.green, lineWidth: 2)
-                                )
                             }
                         }
                     }
@@ -272,10 +260,6 @@ struct DayViewExpanded: View {
                 .id(navigationManager.currentDate)
                 .frame(width: UIScreen.main.bounds.width*0.95)
                 .frame(maxHeight: .infinity, alignment: .top)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.orange, lineWidth: 2)
-                )
                 .padding(12)
             }
         }
