@@ -169,9 +169,7 @@ struct DayViewMobile: View {
                 
                 // Journal
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Journal")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
+               
                     HStack {
                         Spacer()
                         JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)

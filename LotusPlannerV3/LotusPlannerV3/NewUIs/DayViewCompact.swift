@@ -246,9 +246,7 @@ struct DayViewCompact: View {
 
                             // Logs vertically: weight, workout, food
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Logs")
-                                    .font(.headline)
-                                    .padding(.horizontal, 8)
+
                                 
                                 LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                             }

@@ -252,10 +252,6 @@ struct DayViewExpanded: View {
 
                                 // 2) Logs laid out side-by-side (weight, workout, food)
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Logs")
-                                        .font(.headline)
-                                        .padding(.horizontal, 8)
-                                    
                                     LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
                                 }
                                 .frame(height: logsHeight)

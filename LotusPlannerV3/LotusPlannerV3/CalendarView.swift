@@ -2341,8 +2341,8 @@ struct CalendarView: View {
                 // Notes (Journal) on the right
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Journal")
-                            .font(.headline)
+//                        Text("Journal")
+//                            .font(.headline)
                         Spacer()
                     }
                     .padding(.horizontal, 8)
@@ -2426,9 +2426,9 @@ struct CalendarView: View {
 
                 // Row 3: Notes full-screen width and height; make it tall so it occupies screen when reached
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Journal")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
+//                    Text("Journal")
+//                        .font(.headline)
+//                        .padding(.horizontal, 12)
                     JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
                         .id(currentDate)
                         .frame(minHeight: UIScreen.main.bounds.height)
@@ -2474,9 +2474,9 @@ struct CalendarView: View {
 
                 // Row 4: Notes full-screen below
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Journal")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
+//                    Text("Journal")
+//                        .font(.headline)
+//                        .padding(.horizontal, 12)
                     JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
                         .frame(maxWidth: .infinity, minHeight: 600)
                 }
@@ -2515,8 +2515,8 @@ struct CalendarView: View {
             // Bottom section - Journal
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Journal")
-                        .font(.headline)
+//                    Text("Journal")
+//                        .font(.headline)
                     Spacer()
                 }
                 .padding(.horizontal, 8)
