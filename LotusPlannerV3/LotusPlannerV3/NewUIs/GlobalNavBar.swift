@@ -270,17 +270,14 @@ struct GlobalNavBar: View {
                             }
                             
                             
-                            // Hide a.circle and ellipsis.circle in calendar views
+                            // Hide ellipsis.circle in calendar views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar {
-                                Button {
-                                    // Switch to "All" tasks view
-                                    NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                } label: {
-                                    Image(systemName: "a.circle")
-                                        .font(.title2)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
-                                }
                                 Menu {
+                                    Button("All") {
+                                        // Switch to "All" tasks view
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                    }
+                                    Divider()
                                     Button("Has Due Date") {
                                         // Switch to All view with Has Due Date filter
                                         NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
@@ -304,6 +301,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "ellipsis.circle")
                                         .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                 }
                             }
                             
@@ -409,17 +407,14 @@ struct GlobalNavBar: View {
                             }
                             
                             
-                            // Hide a.circle and ellipsis.circle in calendar views
+                            // Hide ellipsis.circle in calendar views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar {
-                                Button {
-                                    // Switch to "All" tasks view
-                                    NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                } label: {
-                                    Image(systemName: "a.circle")
-                                        .font(.title2)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
-                                }
                                 Menu {
+                                    Button("All") {
+                                        // Switch to "All" tasks view
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                    }
+                                    Divider()
                                     Button("Has Due Date") {
                                         // Switch to All view with Has Due Date filter
                                         NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
@@ -443,6 +438,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "ellipsis.circle")
                                         .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                 }
                             }
                             
