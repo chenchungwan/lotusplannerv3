@@ -545,7 +545,57 @@ struct SettingsView: View {
                 
                 // Components Visibility section removed: Logs and Journal are always visible
                 
-                
+                Section("iCloud Sync") {
+                    Button {
+                        Task {
+                            await iCloudManager.shared.syncJournalToiCloud()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "icloud.and.arrow.up")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sync Journal to iCloud")
+                                    .font(.body)
+                                Text("Force sync journal drawings to iCloud Drive")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button {
+                        Task {
+                            await iCloudManager.shared.forceCompleteSync()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.clockwise.icloud")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sync All Data")
+                                    .font(.body)
+                                Text("Force sync all app data to iCloud")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("iCloud Status")
+                                .font(.body)
+                            Text(iCloudManager.shared.getJournaliCloudStatus().message)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
                 
                 Section("Troubleshooting") {
                     Button {

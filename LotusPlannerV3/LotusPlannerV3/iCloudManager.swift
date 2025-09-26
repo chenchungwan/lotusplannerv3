@@ -442,6 +442,25 @@ final class iCloudManager: ObservableObject {
         return "Managed by CloudKit - Last sync: \(lastSyncDate?.formatted() ?? "Never")"
     }
     
+    // MARK: - Journal iCloud Drive Sync
+    /// Force sync journal data to iCloud Drive
+    func syncJournalToiCloud() async {
+        #if DEBUG
+        debugPrint("🔄 Starting journal sync to iCloud Drive...")
+        #endif
+        
+        await JournalManager.shared.forceSyncAllJournalData()
+        
+        #if DEBUG
+        debugPrint("✅ Journal sync to iCloud Drive completed")
+        #endif
+    }
+    
+    /// Get journal iCloud Drive status
+    func getJournaliCloudStatus() -> (isAvailable: Bool, message: String) {
+        return JournalManager.shared.getICloudDriveStatus()
+    }
+    
     // MARK: - Notifications Setup
     private func setupNotifications() {
         // Listen for CloudKit remote change notifications

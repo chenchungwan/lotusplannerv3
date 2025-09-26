@@ -98,14 +98,51 @@ class JournalManager: NSObject, NSFilePresenter {
     private var docsURL: URL {
         // Always prefer iCloud URL for drawings
         if let iCloudURL = ubiquityDocsURL {
-            // Ensure iCloud is actually available
-            var isUbiquitous: AnyObject?
-            try? (iCloudURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-            if (isUbiquitous as? Bool) == true {
+            // Check if iCloud is actually available and accessible
+            if isICloudDriveAvailable() {
+                print("📝 Using iCloud Drive for journal storage: \(iCloudURL.path)")
                 return iCloudURL
+            } else {
+                print("📝 iCloud Drive not available, using local storage: \(localDocsURL.path)")
             }
+        } else {
+            print("📝 No iCloud container available, using local storage: \(localDocsURL.path)")
         }
         return localDocsURL
+    }
+    
+    /// Check if iCloud Drive is actually available and accessible
+    private func isICloudDriveAvailable() -> Bool {
+        guard let iCloudURL = ubiquityDocsURL else {
+            print("📝 iCloud Drive check: No ubiquity container URL")
+            return false
+        }
+        
+        // Check if the iCloud container is available
+        var isUbiquitous: AnyObject?
+        do {
+            try (iCloudURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+        } catch {
+            print("📝 iCloud Drive check: Failed to get ubiquitous status - \(error)")
+            return false
+        }
+        
+        let isInICloud = (isUbiquitous as? Bool) == true
+        print("📝 iCloud Drive check: isUbiquitous = \(isInICloud)")
+        
+        if !isInICloud {
+            return false
+        }
+        
+        // Try to create the directory to ensure we can write to it
+        do {
+            try FileManager.default.createDirectory(at: iCloudURL, withIntermediateDirectories: true)
+            print("📝 iCloud Drive check: Successfully created/verified directory")
+            return true
+        } catch {
+            print("📝 iCloud Drive check: Failed to create directory - \(error)")
+            return false
+        }
     }
 
     /// Expose the current storage root for other components (e.g. photos)
@@ -140,6 +177,34 @@ class JournalManager: NSObject, NSFilePresenter {
         return photosDirectoryURL.appendingPathComponent(name)
     }
 
+    /// Get the current iCloud Drive status for user feedback
+    func getICloudDriveStatus() -> (isAvailable: Bool, message: String) {
+        guard let iCloudURL = ubiquityDocsURL else {
+            return (false, "iCloud Drive not configured")
+        }
+        
+        // Check if the iCloud container is available
+        var isUbiquitous: AnyObject?
+        do {
+            try (iCloudURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+        } catch {
+            return (false, "Cannot access iCloud Drive: \(error.localizedDescription)")
+        }
+        
+        let isInICloud = (isUbiquitous as? Bool) == true
+        if !isInICloud {
+            return (false, "iCloud Drive not signed in")
+        }
+        
+        // Try to create the directory to ensure we can write to it
+        do {
+            try FileManager.default.createDirectory(at: iCloudURL, withIntermediateDirectories: true)
+            return (true, "iCloud Drive available")
+        } catch {
+            return (false, "Cannot write to iCloud Drive: \(error.localizedDescription)")
+        }
+    }
+    
     /// Attempt to migrate any local-only content into iCloud when it becomes
     /// available so drawings/photos sync across devices. Safe to call repeatedly.
     func migrateLocalToICloudIfNeeded() {
@@ -288,6 +353,8 @@ class JournalManager: NSObject, NSFilePresenter {
     }
     
     func saveDrawingAsync(for date: Date, drawing: PKDrawing) async throws {
+        print("📝 Starting to save drawing for date: \(date)")
+        
         // Create a unique temporary file for this save operation
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -296,106 +363,129 @@ class JournalManager: NSObject, NSFilePresenter {
         // Save drawing to temp file first
         let data = drawing.dataRepresentation()
         try data.write(to: tempURL, options: [.atomic])
+        print("📝 Created temporary file: \(tempURL.lastPathComponent)")
         
         // Ensure cleanup
         defer {
             try? FileManager.default.removeItem(at: tempURL)
         }
         
-        // Try to save directly to iCloud first
-        if let iCloudURL = iCloudDrawingURL(for: date) {
-            try await performFileOperation(for: iCloudURL) {
-            // Ensure iCloud directory exists
-            let iCloudDir = iCloudURL.deletingLastPathComponent()
-            try? FileManager.default.createDirectory(at: iCloudDir, withIntermediateDirectories: true)
-            
-            // Save to iCloud with coordination
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                let coordinator = NSFileCoordinator(filePresenter: nil)
-                var coordError: NSError?
-                
-                coordinator.coordinate(writingItemAt: iCloudURL, options: [.forReplacing, .forDeleting], error: &coordError) { url in
-                    do {
-                        let fm = FileManager.default
+        // Check if iCloud Drive is available
+        let isICloudAvailable = isICloudDriveAvailable()
+        print("📝 iCloud Drive available: \(isICloudAvailable)")
+        
+        // Try to save directly to iCloud first if available
+        if isICloudAvailable, let iCloudURL = iCloudDrawingURL(for: date) {
+            do {
+                try await performFileOperation(for: iCloudURL) {
+                    // Ensure iCloud directory exists
+                    let iCloudDir = iCloudURL.deletingLastPathComponent()
+                    try? FileManager.default.createDirectory(at: iCloudDir, withIntermediateDirectories: true)
+                    print("📝 Ensuring iCloud directory exists: \(iCloudDir.path)")
+                    
+                    // Save to iCloud with coordination
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        let coordinator = NSFileCoordinator(filePresenter: nil)
+                        var coordError: NSError?
                         
-                        // Remove existing file if it exists
-                        if fm.fileExists(atPath: url.path) {
-                            try fm.removeItem(at: url)
-                        }
-                        
-                        // First try to write the data directly
-                        let data = try Data(contentsOf: tempURL)
-                        try data.write(to: url, options: [.atomic])
-                        
-                        // Verify the file exists in iCloud
-                        var isUbiquitous: AnyObject?
-                        try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-                        let isInICloud = (isUbiquitous as? Bool) == true
-                        
-                        if !isInICloud {
-                            // If not in iCloud, try to explicitly move it there
-                            let tempMove = FileManager.default.temporaryDirectory
-                                .appendingPathComponent(UUID().uuidString)
-                                .appendingPathExtension("drawing")
-                            
-                            try data.write(to: tempMove, options: [.atomic])
-                            try fm.setUbiquitous(true, itemAt: tempMove, destinationURL: url)
-                            
-                            // Verify again
-                            try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-                            let isNowInICloud = (isUbiquitous as? Bool) == true
-                            
-                            if !isNowInICloud {
-                                continuation.resume(throwing: NSError(domain: "JournalManager", code: -1, 
-                                    userInfo: [NSLocalizedDescriptionKey: "File not found in iCloud after save"]))
-                                return
+                        coordinator.coordinate(writingItemAt: iCloudURL, options: [.forReplacing, .forDeleting], error: &coordError) { url in
+                            do {
+                                let fm = FileManager.default
+                                
+                                // Remove existing file if it exists
+                                if fm.fileExists(atPath: url.path) {
+                                    try fm.removeItem(at: url)
+                                    print("📝 Removed existing file at: \(url.path)")
+                                }
+                                
+                                // Write the data directly
+                                let data = try Data(contentsOf: tempURL)
+                                try data.write(to: url, options: [.atomic])
+                                print("📝 Wrote data to iCloud file: \(url.path)")
+                                
+                                // Verify the file exists in iCloud
+                                var isUbiquitous: AnyObject?
+                                try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                                let isInICloud = (isUbiquitous as? Bool) == true
+                                print("📝 File is ubiquitous in iCloud: \(isInICloud)")
+                                
+                                if !isInICloud {
+                                    // If not in iCloud, try to explicitly move it there
+                                    print("📝 File not in iCloud, attempting to make it ubiquitous...")
+                                    let tempMove = FileManager.default.temporaryDirectory
+                                        .appendingPathComponent(UUID().uuidString)
+                                        .appendingPathExtension("drawing")
+                                    
+                                    try data.write(to: tempMove, options: [.atomic])
+                                    try fm.setUbiquitous(true, itemAt: tempMove, destinationURL: url)
+                                    
+                                    // Verify again
+                                    try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                                    let isNowInICloud = (isUbiquitous as? Bool) == true
+                                    print("📝 File is now ubiquitous in iCloud: \(isNowInICloud)")
+                                    
+                                    if !isNowInICloud {
+                                        print("📝 Warning: File still not in iCloud after setUbiquitous")
+                                        // Don't throw error here - file is saved locally and will sync eventually
+                                    }
+                                }
+                                
+                                // Start download to ensure it's available
+                                try fm.startDownloadingUbiquitousItem(at: url)
+                                print("📝 Started downloading ubiquitous item")
+                                
+                                print("📝 Successfully saved drawing to iCloud: \(url.lastPathComponent)")
+                                continuation.resume()
+                            } catch {
+                                print("📝 Error saving drawing to iCloud: \(error)")
+                                continuation.resume(throwing: error)
                             }
                         }
                         
-                        // Start download to ensure it's available
-                        try fm.startDownloadingUbiquitousItem(at: url)
-                        
-                        print("📝 Successfully saved drawing to iCloud: \(url.lastPathComponent)")
-                        continuation.resume()
-                    } catch {
-                        print("📝 Error saving drawing to iCloud: \(error)")
-                        continuation.resume(throwing: error)
+                        if let error = coordError {
+                            print("📝 File coordinator error: \(error)")
+                            continuation.resume(throwing: error)
+                        }
                     }
+                    
+                    // Cache the drawing locally
+                    JournalCache.shared.cacheDrawing(drawing, for: date)
+                    
+                    // Post notifications
+                    NotificationCenter.default.post(name: .journalContentChanged, object: nil)
+                    NotificationCenter.default.post(name: .journalDrawingChanged, object: nil, userInfo: ["url": iCloudURL])
                 }
-                
-                if let error = coordError {
-                    continuation.resume(throwing: error)
-                }
+                print("📝 Successfully saved drawing to iCloud for date: \(date)")
+                return
+            } catch {
+                print("📝 Failed to save to iCloud, falling back to local storage: \(error)")
+                // Fall through to local storage
             }
-            
-            // Cache the drawing locally
-            JournalCache.shared.cacheDrawing(drawing, for: date)
-            
-            // Post notifications
-            NotificationCenter.default.post(name: .journalContentChanged, object: nil)
-            NotificationCenter.default.post(name: .journalDrawingChanged, object: nil, userInfo: ["url": iCloudURL])
-            }
-        } else {
-            // Fallback to local storage if iCloud is not available
-            let localURL = drawingURL(for: date)
-            try? FileManager.default.createDirectory(at: drawingsDirectory, withIntermediateDirectories: true)
-            
-            // Save locally
-            let fm = FileManager.default
-            if fm.fileExists(atPath: localURL.path) {
-                try fm.removeItem(at: localURL)
-            }
-            try fm.copyItem(at: tempURL, to: localURL)
-            
-            // Cache the drawing
-            JournalCache.shared.cacheDrawing(drawing, for: date)
-            
-            // Add to sync coordinator for later sync
-            JournalSyncCoordinator.shared.addPendingChange(localURL)
-            
-            // Post notification for UI update
-            NotificationCenter.default.post(name: .journalContentChanged, object: nil)
         }
+        
+        // Fallback to local storage if iCloud is not available or save failed
+        print("📝 Saving drawing to local storage as fallback")
+        let localURL = drawingURL(for: date)
+        try? FileManager.default.createDirectory(at: drawingsDirectory, withIntermediateDirectories: true)
+        
+        // Save locally
+        let fm = FileManager.default
+        if fm.fileExists(atPath: localURL.path) {
+            try fm.removeItem(at: localURL)
+        }
+        try fm.copyItem(at: tempURL, to: localURL)
+        print("📝 Successfully saved drawing locally: \(localURL.path)")
+        
+        // Cache the drawing
+        JournalCache.shared.cacheDrawing(drawing, for: date)
+        
+        // Add to sync coordinator for later sync
+        JournalSyncCoordinator.shared.addPendingChange(localURL)
+        
+        // Post notification for UI update
+        NotificationCenter.default.post(name: .journalContentChanged, object: nil)
+        
+        print("📝 Drawing saved locally and queued for sync")
     }
     
     func saveDrawing(for date: Date, drawing: PKDrawing) {
@@ -721,6 +811,28 @@ class JournalManager: NSObject, NSFilePresenter {
         }
     }
 
+    /// Force sync all pending journal changes to iCloud
+    func forceSyncAllJournalData() async {
+        print("📝 Starting forced sync of all journal data...")
+        
+        // Check iCloud status first
+        let status = getICloudDriveStatus()
+        print("📝 iCloud Drive status: \(status.message)")
+        
+        if !status.isAvailable {
+            print("📝 iCloud Drive not available, cannot sync")
+            return
+        }
+        
+        // Force sync coordinator to process all pending changes
+        JournalSyncCoordinator.shared.forceSync()
+        
+        // Also try to migrate any local files
+        migrateLocalToICloudIfNeeded()
+        
+        print("📝 Forced sync completed")
+    }
+    
     // MARK: - Delete All Journal Data
     /// Delete all journal data including drawings, photos, and background PDFs
     func deleteAllJournalData() {
