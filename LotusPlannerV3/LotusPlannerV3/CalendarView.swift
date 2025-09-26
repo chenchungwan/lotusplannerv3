@@ -137,6 +137,25 @@ class CalendarViewModel: ObservableObject {
     @Published var professionalEvents: [GoogleCalendarEvent] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var showError = false
+    private var errorCheckTask: Task<Void, Never>?
+    
+    private func scheduleErrorCheck() {
+        // Cancel any existing error check task
+        errorCheckTask?.cancel()
+        
+        // Schedule a new error check after a delay
+        errorCheckTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+            
+            // Only show error if we're not loading and there's an error message
+            if !Task.isCancelled && !isLoading && errorMessage != nil {
+                await MainActor.run {
+                    showError = true
+                }
+            }
+        }
+    }
     
     func refreshDataForCurrentView() async {
         let navigationManager = NavigationManager.shared
@@ -164,6 +183,7 @@ class CalendarViewModel: ObservableObject {
         
         isLoading = true
         errorMessage = nil
+        showError = false
         
         // Debug: Check account linking status
         let personalLinked = authManager.isLinked(kind: .personal)
@@ -224,6 +244,9 @@ class CalendarViewModel: ObservableObject {
         }
         
         isLoading = false
+        
+        // Schedule error check after loading completes
+        scheduleErrorCheck()
     }
     
     private let authManager = GoogleAuthManager.shared
@@ -454,6 +477,7 @@ class CalendarViewModel: ObservableObject {
     func loadCalendarData(for date: Date) async {
         isLoading = true
         errorMessage = nil
+        showError = false
         
         await withTaskGroup(of: Void.self) { group in
             if authManager.isLinked(kind: .personal) {
@@ -470,11 +494,15 @@ class CalendarViewModel: ObservableObject {
         }
         
         isLoading = false
+        
+        // Schedule error check after loading completes
+        scheduleErrorCheck()
     }
     
     func loadCalendarDataForWeek(containing date: Date) async {
         isLoading = true
         errorMessage = nil
+        showError = false
         
         // Get the week range using Monday-first calendar
         let calendar = Calendar.mondayFirst
@@ -499,6 +527,9 @@ class CalendarViewModel: ObservableObject {
         }
         
         isLoading = false
+        
+        // Schedule error check after loading completes
+        scheduleErrorCheck()
     }
     
     func loadCalendarDataForMonth(containing date: Date) async {
@@ -539,6 +570,7 @@ class CalendarViewModel: ObservableObject {
         // This prevents the UI from flickering when we have cached data
         isLoading = true
         errorMessage = nil
+        showError = false
         
         var personalError: Error?
         var professionalError: Error?
@@ -593,8 +625,10 @@ class CalendarViewModel: ObservableObject {
             }
         }
         
-        
         isLoading = false
+        
+        // Schedule error check after loading completes
+        scheduleErrorCheck()
     }
     
     private func loadCalendarDataForAccount(_ kind: GoogleAuthManager.AccountKind, date: Date) async {
@@ -2076,8 +2110,9 @@ struct CalendarView: View {
         }
         .background(Color(.systemBackground))
         .overlay(loadingOverlay)
-        .alert("Calendar Error", isPresented: .constant(calendarViewModel.errorMessage != nil)) {
+        .alert("Calendar Error", isPresented: $calendarViewModel.showError) {
             Button("OK") {
+                calendarViewModel.showError = false
                 calendarViewModel.errorMessage = nil
             }
         } message: {
