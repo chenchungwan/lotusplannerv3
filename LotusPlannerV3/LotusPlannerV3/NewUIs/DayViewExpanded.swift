@@ -9,15 +9,15 @@ struct DayViewExpanded: View {
     private let onEventTap: ((GoogleCalendarEvent) -> Void)?
 
     // Divider state between top row and logs
-    @State private var topRowHeight: CGFloat = UIScreen.main.bounds.height * 0.5
+    @State private var topRowHeight: CGFloat
     @State private var isTopDividerDragging: Bool = false
 
     // Divider state between timeline (left) and tasks (right)
-    @State private var leftTimelineWidth: CGFloat = UIScreen.main.bounds.width * 0.25
+    @State private var leftTimelineWidth: CGFloat
     @State private var isLeftDividerDragging: Bool = false
 
     // Divider state between logs and notes
-    @State private var logsHeight: CGFloat = UIScreen.main.bounds.height * 0.25
+    @State private var logsHeight: CGFloat
 
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
@@ -32,6 +32,11 @@ struct DayViewExpanded: View {
         self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
         self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
         self.onEventTap = onEventTap
+        
+        // Initialize divider positions from AppPreferences
+        self._topRowHeight = State(initialValue: AppPreferences.shared.dayViewExpandedTopRowHeight)
+        self._leftTimelineWidth = State(initialValue: AppPreferences.shared.dayViewExpandedLeftTimelineWidth)
+        self._logsHeight = State(initialValue: AppPreferences.shared.dayViewExpandedLogsHeight)
     }
 
     var body: some View {
@@ -100,6 +105,7 @@ struct DayViewExpanded: View {
                                             }
                                             .onEnded { _ in
                                                 isLeftDividerDragging = false
+                                                appPrefs.updateDayViewExpandedLeftTimelineWidth(leftTimelineWidth)
                                             }
                                     )
 
@@ -239,6 +245,7 @@ struct DayViewExpanded: View {
                                             }
                                             .onEnded { _ in
                                                 isTopDividerDragging = false
+                                                appPrefs.updateDayViewExpandedTopRowHeight(topRowHeight)
                                             }
                                     )
 

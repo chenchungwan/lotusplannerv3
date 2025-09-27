@@ -273,6 +273,68 @@ class AppPreferences: ObservableObject {
         showWeightLogs || showWorkoutLogs || showFoodLogs
     }
     
+    // Day View Divider Positions
+    @Published var dayViewCompactTasksHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewCompactTasksHeight, forKey: "dayViewCompactTasksHeight")
+        }
+    }
+    
+    @Published var dayViewCompactLeftColumnWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewCompactLeftColumnWidth, forKey: "dayViewCompactLeftColumnWidth")
+        }
+    }
+    
+    @Published var dayViewCompactLeftTopHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewCompactLeftTopHeight, forKey: "dayViewCompactLeftTopHeight")
+        }
+    }
+    
+    @Published var dayViewExpandedTopRowHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewExpandedTopRowHeight, forKey: "dayViewExpandedTopRowHeight")
+        }
+    }
+    
+    @Published var dayViewExpandedLeftTimelineWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewExpandedLeftTimelineWidth, forKey: "dayViewExpandedLeftTimelineWidth")
+        }
+    }
+    
+    @Published var dayViewExpandedLogsHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewExpandedLogsHeight, forKey: "dayViewExpandedLogsHeight")
+        }
+    }
+    
+    // Calendar View Day Divider Positions
+    @Published var calendarDayLeftSectionWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarDayLeftSectionWidth, forKey: "calendarDayLeftSectionWidth")
+        }
+    }
+    
+    @Published var calendarDayRightColumn2Width: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarDayRightColumn2Width, forKey: "calendarDayRightColumn2Width")
+        }
+    }
+    
+    @Published var calendarDayLeftTimelineHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarDayLeftTimelineHeight, forKey: "calendarDayLeftTimelineHeight")
+        }
+    }
+    
+    @Published var calendarDayRightSectionTopHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarDayRightSectionTopHeight, forKey: "calendarDayRightSectionTopHeight")
+        }
+    }
+    
 
     
 
@@ -318,6 +380,18 @@ class AppPreferences: ObservableObject {
         
         self.personalColor = Color(hex: personalHex) ?? Color(hex: "#dcd6ff") ?? .purple
         self.professionalColor = Color(hex: professionalHex) ?? Color(hex: "#38eb50") ?? .green
+        
+        // Load divider positions from UserDefaults or use defaults
+        self.dayViewCompactTasksHeight = UserDefaults.standard.object(forKey: "dayViewCompactTasksHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.35
+        self.dayViewCompactLeftColumnWidth = UserDefaults.standard.object(forKey: "dayViewCompactLeftColumnWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
+        self.dayViewCompactLeftTopHeight = UserDefaults.standard.object(forKey: "dayViewCompactLeftTopHeight") as? CGFloat ?? 260
+        self.dayViewExpandedTopRowHeight = UserDefaults.standard.object(forKey: "dayViewExpandedTopRowHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.5
+        self.dayViewExpandedLeftTimelineWidth = UserDefaults.standard.object(forKey: "dayViewExpandedLeftTimelineWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
+        self.dayViewExpandedLogsHeight = UserDefaults.standard.object(forKey: "dayViewExpandedLogsHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.25
+        self.calendarDayLeftSectionWidth = UserDefaults.standard.object(forKey: "calendarDayLeftSectionWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
+        self.calendarDayRightColumn2Width = UserDefaults.standard.object(forKey: "calendarDayRightColumn2Width") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
+        self.calendarDayLeftTimelineHeight = UserDefaults.standard.object(forKey: "calendarDayLeftTimelineHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.6
+        self.calendarDayRightSectionTopHeight = UserDefaults.standard.object(forKey: "calendarDayRightSectionTopHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.6
     }
     
     func updateDarkMode(_ value: Bool) {
@@ -350,6 +424,47 @@ class AppPreferences: ObservableObject {
     
     func updateTasksLayoutHorizontal(_ value: Bool) {
         tasksLayoutHorizontal = value
+    }
+    
+    // Day View Divider Position Update Methods
+    func updateDayViewCompactTasksHeight(_ value: CGFloat) {
+        dayViewCompactTasksHeight = value
+    }
+    
+    func updateDayViewCompactLeftColumnWidth(_ value: CGFloat) {
+        dayViewCompactLeftColumnWidth = value
+    }
+    
+    func updateDayViewCompactLeftTopHeight(_ value: CGFloat) {
+        dayViewCompactLeftTopHeight = value
+    }
+    
+    func updateDayViewExpandedTopRowHeight(_ value: CGFloat) {
+        dayViewExpandedTopRowHeight = value
+    }
+    
+    func updateDayViewExpandedLeftTimelineWidth(_ value: CGFloat) {
+        dayViewExpandedLeftTimelineWidth = value
+    }
+    
+    func updateDayViewExpandedLogsHeight(_ value: CGFloat) {
+        dayViewExpandedLogsHeight = value
+    }
+    
+    func updateCalendarDayLeftSectionWidth(_ value: CGFloat) {
+        calendarDayLeftSectionWidth = value
+    }
+    
+    func updateCalendarDayRightColumn2Width(_ value: CGFloat) {
+        calendarDayRightColumn2Width = value
+    }
+    
+    func updateCalendarDayLeftTimelineHeight(_ value: CGFloat) {
+        calendarDayLeftTimelineHeight = value
+    }
+    
+    func updateCalendarDayRightSectionTopHeight(_ value: CGFloat) {
+        calendarDayRightSectionTopHeight = value
     }
 
     // removed updateUseDayViewDefault
@@ -547,24 +662,6 @@ struct SettingsView: View {
                 
                 
                 
-                Section("Troubleshooting") {
-                    Button {
-                        GoogleAuthManager.shared.clearAllAuthState()
-                    } label: {
-                        HStack {
-                            Image(systemName: "key.slash")
-                                .foregroundColor(.orange)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Clear Auth State")
-                                    .font(.body)
-                                Text("Fix authentication issues by clearing all Google auth data")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
 
                 Section("Danger Zone") {
                     Button(role: .destructive) {

@@ -867,9 +867,17 @@ struct CalendarView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     
+    init() {
+        // Initialize divider positions from AppPreferences
+        self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.calendarDayLeftSectionWidth)
+        self._dayRightColumn2Width = State(initialValue: AppPreferences.shared.calendarDayRightColumn2Width)
+        self._leftTimelineHeight = State(initialValue: AppPreferences.shared.calendarDayLeftTimelineHeight)
+        self._rightSectionTopHeight = State(initialValue: AppPreferences.shared.calendarDayRightSectionTopHeight)
+    }
+    
     @State private var currentDate = Date()
     @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
-    @State private var rightSectionTopHeight: CGFloat = UIScreen.main.bounds.height * 0.6
+    @State private var rightSectionTopHeight: CGFloat
     // Vertical layout row height
     @State private var verticalTopRowHeight: CGFloat = UIScreen.main.bounds.height * 0.55
     // Vertical layout column widths and drag states
@@ -915,16 +923,16 @@ struct CalendarView: View {
     @State private var cachedMonthProfessionalTasks: [String: [GoogleTask]] = [:]
     
     // Day view vertical slider state
-    @State private var dayLeftSectionWidth: CGFloat = UIScreen.main.bounds.width * 0.25 // Default 1/4 width
+    @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
     // Left section divider state (timeline vs logs)
-    @State private var leftTimelineHeight: CGFloat = UIScreen.main.bounds.height * 0.6
+    @State private var leftTimelineHeight: CGFloat
     @State private var isLeftTimelineDividerDragging = false
     
 
     
     // Day view right section column widths and divider state
-    @State private var dayRightColumn2Width: CGFloat = UIScreen.main.bounds.width * 0.25
+    @State private var dayRightColumn2Width: CGFloat
     @State private var isDayRightColumnDividerDragging = false
     
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
@@ -2656,6 +2664,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isRightDividerDragging = false
+                        appPrefs.updateCalendarDayRightSectionTopHeight(rightSectionTopHeight)
                     }
             )
     }
@@ -2678,6 +2687,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isLeftTimelineDividerDragging = false
+                        appPrefs.updateCalendarDayLeftTimelineHeight(leftTimelineHeight)
                     }
             )
     }
@@ -2724,6 +2734,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
+                        appPrefs.updateCalendarDayLeftSectionWidth(dayLeftSectionWidth)
                     }
             )
     }
@@ -2747,6 +2758,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isDayRightColumnDividerDragging = false
+                        appPrefs.updateCalendarDayRightColumn2Width(dayRightColumn2Width)
                     }
             )
     }

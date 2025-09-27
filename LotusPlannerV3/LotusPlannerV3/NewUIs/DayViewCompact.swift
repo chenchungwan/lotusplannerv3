@@ -15,15 +15,15 @@ struct DayViewCompact: View {
     @State private var showingTaskDetails: Bool = false
 
     // Draggable divider state between Tasks (top) and Timeline/Logs+Journal (bottom)
-    @State private var tasksSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.35
+    @State private var tasksSectionHeight: CGFloat
     @State private var isTopDividerDragging: Bool = false
 
     // Draggable divider state between Timeline+Logs (left) and Journal (right)
-    @State private var leftColumnWidth: CGFloat = UIScreen.main.bounds.width * 0.25 // default 25%
+    @State private var leftColumnWidth: CGFloat
     @State private var isMiddleDividerDragging: Bool = false
 
     // Draggable divider within left column between Timeline and Logs
-    @State private var leftTopHeight: CGFloat = 260
+    @State private var leftTopHeight: CGFloat
     @State private var isLeftInnerDividerDragging: Bool = false
 
     init(onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
@@ -33,6 +33,11 @@ struct DayViewCompact: View {
         self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
         self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
         self.onEventTap = onEventTap
+        
+        // Initialize divider positions from AppPreferences
+        self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewCompactTasksHeight)
+        self._leftColumnWidth = State(initialValue: AppPreferences.shared.dayViewCompactLeftColumnWidth)
+        self._leftTopHeight = State(initialValue: AppPreferences.shared.dayViewCompactLeftTopHeight)
     }
 
     var body: some View {
@@ -173,7 +178,10 @@ struct DayViewCompact: View {
                                 let maxTasksDyn: CGFloat = availableH - dividerH - minBottom
                                 tasksSectionHeight = max(minTasks, min(maxTasksDyn, newHeight))
                             }
-                            .onEnded { _ in isTopDividerDragging = false }
+                            .onEnded { _ in 
+                                isTopDividerDragging = false
+                                appPrefs.updateDayViewCompactTasksHeight(tasksSectionHeight)
+                            }
                     )
 
                 // 2) HStack: VStack(Timeline, Logs) | Journal
@@ -233,7 +241,10 @@ struct DayViewCompact: View {
                                             let newHeight = max(minTop, min(maxTop, leftTopHeight + value.translation.height))
                                             leftTopHeight = newHeight
                                         }
-                                        .onEnded { _ in isLeftInnerDividerDragging = false }
+                                        .onEnded { _ in 
+                                            isLeftInnerDividerDragging = false
+                                            appPrefs.updateDayViewCompactLeftTopHeight(leftTopHeight)
+                                        }
                                 )
 
                             // Logs vertically: weight, workout, food
@@ -266,7 +277,10 @@ struct DayViewCompact: View {
                                     let newWidth = leftColumnWidth + value.translation.width
                                     leftColumnWidth = max(minWidth, min(maxWidth, newWidth))
                                 }
-                                .onEnded { _ in isMiddleDividerDragging = false }
+                                .onEnded { _ in 
+                                    isMiddleDividerDragging = false
+                                    appPrefs.updateDayViewCompactLeftColumnWidth(leftColumnWidth)
+                                }
                         )
 
                     JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
