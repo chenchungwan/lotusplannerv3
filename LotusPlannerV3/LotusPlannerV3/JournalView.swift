@@ -2,7 +2,9 @@ import SwiftUI
 import PDFKit
 import PencilKit
 import PhotosUI
+#if canImport(UIKit)
 import UIKit
+#endif
 
 struct JournalView: View {
     @Environment(\.dismiss) private var dismiss

@@ -1,5 +1,14 @@
 import SwiftUI
 
+extension DateFormatter {
+    static let shortDateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
 // MARK: - Day View Layout Option Enum
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
@@ -482,6 +491,7 @@ struct SettingsView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var iCloudManagerInstance = iCloudManager.shared
     @Environment(\.dismiss) private var dismiss
     
     // State for show/hide account toggles (placeholder for future implementation)
@@ -656,6 +666,10 @@ struct SettingsView: View {
                     }
                     
 
+                }
+                
+                Section("iCloud Sync") {
+                    iCloudSyncSection()
                 }
                 
                 // Components Visibility section removed: Logs and Journal are always visible
@@ -852,6 +866,66 @@ struct SettingsView: View {
                 showingDeleteSuccessAlert = true
             }
         }
+    }
+    
+    @ViewBuilder
+    private func iCloudSyncSection() -> some View {
+        VStack(spacing: 12) {
+            // iCloud Status
+            HStack {
+                Image(systemName: iCloudManagerInstance.iCloudAvailable ? "icloud.fill" : "icloud.slash")
+                    .foregroundColor(iCloudManagerInstance.iCloudAvailable ? .blue : .red)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("iCloud Status")
+                        .font(.body)
+                    Text(iCloudManagerInstance.syncStatus.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            // Sync Progress (if syncing)
+            if case .syncing = iCloudManagerInstance.syncStatus {
+                ProgressView(value: JournalSyncCoordinator.shared.progress)
+                    .progressViewStyle(LinearProgressViewStyle())
+            }
+            
+            // Manual Sync Button
+            Button(action: {
+                Task {
+                    await performManualSync()
+                }
+            }) {
+                HStack {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Sync Now")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(JournalSyncCoordinator.shared.syncStatus == .syncing)
+            
+            // Last Sync Time
+            if let lastSync = iCloudManagerInstance.lastSyncDate {
+                Text("Last sync: \(lastSync, formatter: DateFormatter.shortDateTime)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private func performManualSync() async {
+        // Force iCloud sync
+        iCloudManagerInstance.forceCompleteSync()
+        
+        // Force journal sync
+        JournalSyncCoordinator.shared.forceSync()
+        
+        // Update last sync time
+        iCloudManagerInstance.lastSyncDate = Date()
     }
     
     private func refreshAllViewsAfterDelete() async {
