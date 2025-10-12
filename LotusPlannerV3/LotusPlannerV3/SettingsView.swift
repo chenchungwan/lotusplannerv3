@@ -252,6 +252,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Show events in Weekly view
+    @Published var showEventsInWeeklyView: Bool {
+        didSet {
+            UserDefaults.standard.set(showEventsInWeeklyView, forKey: "showEventsInWeeklyView")
+        }
+    }
+    
     // Tasks view layout preference
     @Published var tasksLayoutHorizontal: Bool {
         didSet {
@@ -373,6 +380,9 @@ class AppPreferences: ObservableObject {
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
 
+        // Load show events in weekly view preference (default false)
+        self.showEventsInWeeklyView = UserDefaults.standard.bool(forKey: "showEventsInWeeklyView")
+
         // Load tasks layout preference (default false - vertical layout)
         self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
 
@@ -429,6 +439,10 @@ class AppPreferences: ObservableObject {
     
     func updateShowEventsAsListInDay(_ value: Bool) {
         showEventsAsListInDay = value
+    }
+    
+    func updateShowEventsInWeeklyView(_ value: Bool) {
+        showEventsInWeeklyView = value
     }
     
     func updateTasksLayoutHorizontal(_ value: Bool) {
@@ -568,6 +582,22 @@ struct SettingsView: View {
                             Text("Show Events as List in Day View")
                                 .font(.body)
                             Text("Replaces timeline with a simple chronological list")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                // Weekly View Preferences
+                Section("Weekly View Preferences") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showEventsInWeeklyView },
+                        set: { appPrefs.updateShowEventsInWeeklyView($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show Events in Weekly View")
+                                .font(.body)
+                            Text("Display calendar events in a row above tasks")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

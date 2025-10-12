@@ -24,22 +24,23 @@ struct DayViewMobile: View {
     }
     
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading) {
-                // Events list (always list in Mobile layout)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Events")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
-                    EventsListComponent(
-                        events: filteredEventsForDay(navigationManager.currentDate),
-                        personalEvents: calendarVM.personalEvents,
-                        professionalEvents: calendarVM.professionalEvents,
-                        personalColor: appPrefs.personalColor,
-                        professionalColor: appPrefs.professionalColor,
-                        onEventTap: { ev in onEventTap?(ev) }
-                    )
-                }
+        GeometryReader { geometry in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading) {
+                    // Events list (always list in Mobile layout)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Events")
+                            .font(.headline)
+                            .padding(.horizontal, 12)
+                        EventsListComponent(
+                            events: filteredEventsForDay(navigationManager.currentDate),
+                            personalEvents: calendarVM.personalEvents,
+                            professionalEvents: calendarVM.professionalEvents,
+                            personalColor: appPrefs.personalColor,
+                            professionalColor: appPrefs.professionalColor,
+                            onEventTap: { ev in onEventTap?(ev) }
+                        )
+                    }
                 
                 // Personal tasks
                 VStack(alignment: .leading, spacing: 6) {
@@ -173,13 +174,14 @@ struct DayViewMobile: View {
                     HStack {
                         Spacer()
                         JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                            .frame(width: UIScreen.main.bounds.width * 0.95, height: UIScreen.main.bounds.height * 0.95)
+                            .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
                         Spacer()
                     }
                 }
             }
          
         
+            }
         }
         // Task details sheet
         .sheet(isPresented: Binding(
