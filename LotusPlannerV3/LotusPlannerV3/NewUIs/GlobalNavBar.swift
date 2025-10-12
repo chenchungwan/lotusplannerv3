@@ -149,6 +149,20 @@ struct GlobalNavBar: View {
                 VStack(alignment: .leading) {
                     HStack() {
                         Menu {
+                            Button(action: {
+                                navigationManager.switchToCalendar()
+                            }) {
+                                Label("Calendar", systemImage: "calendar")
+                            }
+                            
+                            Button(action: {
+                                navigationManager.switchToTasks()
+                            }) {
+                                Label("Tasks", systemImage: "checklist")
+                            }
+                            
+                            Divider()
+                            
                             Button("Settings") {
                                 showingSettings = true
                             }
@@ -164,20 +178,8 @@ struct GlobalNavBar: View {
                                 .frame(width: 25, height: 25)
                                 .foregroundColor(.secondary)
                         }
-                        // Toggle between Tasks and Calendar views
-                        Button {
-                            if navigationManager.showTasksView {
-                                navigationManager.switchToCalendar()
-                            } else {
-                                navigationManager.switchToTasks()
-                                // Don't force "All Tasks" - let tasks view sync with current calendar interval
-                            }
-                        } label: {
-                            Image(systemName: navigationManager.showTasksView ? "calendar" : "checklist")
-                                .font(.title2)
-                                .foregroundColor(navigationManager.showTasksView ? .secondary : .accentColor)
-                        }
-                        .padding(.trailing, 20)
+                        .buttonStyle(.borderless)
+                        .padding(.trailing, 10)
                         
                         Button { step(-1) } label: {
                             Image(systemName: "chevron.left")

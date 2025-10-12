@@ -434,49 +434,6 @@ extension WeeklyView {
     // MARK: - Row-Based Week View
     private var weekRowBasedView: some View {
         VStack(spacing: 0) {
-            // Header row
-            HStack(spacing: 0) {
-                // Day column header
-                Text("Day")
-                    .font(.headline)
-                    .frame(width: 120, alignment: .leading)
-                    .padding(.horizontal, 8)
-                
-                Divider()
-                
-                // Events column header
-                Text("Events")
-                    .font(.headline)
-                    .frame(minWidth: 200, maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                
-                Divider()
-                
-                // Personal Tasks column header
-                if authManager.isLinked(kind: .personal) {
-                    Text("Personal Tasks")
-                        .font(.headline)
-                        .frame(minWidth: 200, maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 8)
-                    
-                    Divider()
-                }
-                
-                // Professional Tasks column header
-                if authManager.isLinked(kind: .professional) {
-                    Text("Professional Tasks")
-                        .font(.headline)
-                        .frame(minWidth: 200, maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 8)
-                }
-            }
-            .frame(height: 50)
-            .background(Color(.systemGray6))
-            
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(height: 2)
-            
             // Day rows
             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                 weekDayRow(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
@@ -499,20 +456,22 @@ extension WeeklyView {
             }) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(DateFormatter.standardDayOfWeek.string(from: date).uppercased())
-                        .font(.caption)
+                        .font(DateDisplayStyle.bodyFont)
                         .fontWeight(.semibold)
-                        .foregroundColor(isToday ? .white : .secondary)
+                        .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
                     
                     Text(DateFormatter.standardDate.string(from: date))
-                        .font(.headline)
-                        .foregroundColor(isToday ? .white : .primary)
+                        .font(DateDisplayStyle.titleFont)
+                        .fontWeight(.bold)
+                        .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
                 }
-                .frame(width: 120, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .padding(.all, 8)
-                .background(isToday ? Color.blue : Color.clear)
-                .cornerRadius(8)
             }
             .buttonStyle(.plain)
+            .frame(width: 120)
+            .frame(maxHeight: .infinity)
+            .background(isToday ? Color.blue : Color(.systemGray6))
             
             Divider()
             
