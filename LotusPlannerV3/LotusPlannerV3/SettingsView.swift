@@ -252,10 +252,10 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Show events in Weekly view
-    @Published var showEventsInWeeklyView: Bool {
+    // Use alternative row-based weekly view layout
+    @Published var useRowBasedWeeklyView: Bool {
         didSet {
-            UserDefaults.standard.set(showEventsInWeeklyView, forKey: "showEventsInWeeklyView")
+            UserDefaults.standard.set(useRowBasedWeeklyView, forKey: "useRowBasedWeeklyView")
         }
     }
     
@@ -380,8 +380,8 @@ class AppPreferences: ObservableObject {
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
 
-        // Load show events in weekly view preference (default false)
-        self.showEventsInWeeklyView = UserDefaults.standard.bool(forKey: "showEventsInWeeklyView")
+        // Load row-based weekly view preference (default false - column layout)
+        self.useRowBasedWeeklyView = UserDefaults.standard.bool(forKey: "useRowBasedWeeklyView")
 
         // Load tasks layout preference (default false - vertical layout)
         self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
@@ -441,8 +441,8 @@ class AppPreferences: ObservableObject {
         showEventsAsListInDay = value
     }
     
-    func updateShowEventsInWeeklyView(_ value: Bool) {
-        showEventsInWeeklyView = value
+    func updateUseRowBasedWeeklyView(_ value: Bool) {
+        useRowBasedWeeklyView = value
     }
     
     func updateTasksLayoutHorizontal(_ value: Bool) {
@@ -591,13 +591,13 @@ struct SettingsView: View {
                 // Weekly View Preferences
                 Section("Weekly View Preferences") {
                     Toggle(isOn: Binding(
-                        get: { appPrefs.showEventsInWeeklyView },
-                        set: { appPrefs.updateShowEventsInWeeklyView($0) }
+                        get: { appPrefs.useRowBasedWeeklyView },
+                        set: { appPrefs.updateUseRowBasedWeeklyView($0) }
                     )) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Show Events in Weekly View")
+                            Text("Use Row-Based Layout")
                                 .font(.body)
-                            Text("Display calendar events in a row above tasks")
+                            Text("Display each day as a row with events and tasks in columns")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
