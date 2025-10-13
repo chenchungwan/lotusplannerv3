@@ -582,6 +582,48 @@ struct SettingsView: View {
                 
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
 
+                Section("Events View Preference") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: !appPrefs.showEventsAsListInDay ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(!appPrefs.showEventsAsListInDay ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Events in a 24-hour timeline")
+                                    .font(.body)
+                                    .fontWeight(!appPrefs.showEventsAsListInDay ? .semibold : .regular)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateShowEventsAsListInDay(false)
+                    }
+                    
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: appPrefs.showEventsAsListInDay ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(appPrefs.showEventsAsListInDay ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Events in a list")
+                                    .font(.body)
+                                    .fontWeight(appPrefs.showEventsAsListInDay ? .semibold : .regular)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateShowEventsAsListInDay(true)
+                    }
+                }
+
                 Section("Daily View Preference") {
                     // Day View Layout Options with Radio Buttons
                     ForEach(DayViewLayoutOption.allCases) { option in
@@ -610,50 +652,91 @@ struct SettingsView: View {
                             appPrefs.updateDayViewLayout(option)
                         }
                     }
+                }
+
+                // Weekly View Preference
+                Section("Weekly View Preference") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: !appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(!appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Vertical Layout (week in 7 columns)")
+                                    .font(.body)
+                                    .fontWeight(!appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateUseRowBasedWeeklyView(false)
+                    }
                     
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showEventsAsListInDay },
-                        set: { appPrefs.updateShowEventsAsListInDay($0) }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Show Events as List in Day View")
-                                .font(.body)
-                            Text("Replaces timeline with a simple chronological list")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Horizontal Layout (week in 7 rows)")
+                                    .font(.body)
+                                    .fontWeight(appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
+                            }
                         }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateUseRowBasedWeeklyView(true)
                     }
                 }
 
-                // Weekly View Preferences
-                Section("Weekly View Preferences") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.useRowBasedWeeklyView },
-                        set: { appPrefs.updateUseRowBasedWeeklyView($0) }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Week in 7 Day Rows")
-                                .font(.body)
-                            Text("ON: Week displayed as 7 day rows  |  OFF: Week displayed as 7 day columns")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                // Tasks View Preference
+                Section("Tasks View Preference") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: !appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(!appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Vertical stacks")
+                                    .font(.body)
+                                    .fontWeight(!appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                            }
                         }
+                        
+                        Spacer()
                     }
-                }
-
-                // Tasks View Preferences
-                Section("Tasks View Preferences") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.tasksLayoutHorizontal },
-                        set: { appPrefs.updateTasksLayoutHorizontal($0) }
-                    )) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Horizontal Task Lists")
-                                .font(.body)
-                            Text("Display task lists side by side in a scrollable row")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateTasksLayoutHorizontal(false)
+                    }
+                    
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Horizontal stacks")
+                                    .font(.body)
+                                    .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                            }
                         }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateTasksLayoutHorizontal(true)
                     }
                 }
                 

@@ -146,7 +146,7 @@ class CalendarViewModel: ObservableObject {
         
         // Schedule a new error check after a delay
         errorCheckTask = Task {
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 second delay - increased to avoid premature errors
             
             // Only show error if we're not loading and there's an error message
             if !Task.isCancelled && !isLoading && errorMessage != nil {
