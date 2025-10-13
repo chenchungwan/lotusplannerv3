@@ -305,6 +305,13 @@ class AppPreferences: ObservableObject {
         showWeightLogs || showWorkoutLogs || showFoodLogs
     }
     
+    // Show journal components
+    @Published var showJournal: Bool {
+        didSet {
+            UserDefaults.standard.set(showJournal, forKey: "showJournal")
+        }
+    }
+    
     // Day View Divider Positions
     @Published var dayViewCompactTasksHeight: CGFloat {
         didSet {
@@ -406,6 +413,9 @@ class AppPreferences: ObservableObject {
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
+        
+        // Load journal visibility preference (default visible)
+        self.showJournal = UserDefaults.standard.object(forKey: "showJournal") as? Bool ?? true
 
 
         
@@ -682,6 +692,25 @@ struct SettingsView: View {
                                 Text("Food Logs")
                                     .font(.body)
                                 Text("Show food tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                
+                Section("Journal Preferences") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showJournal },
+                        set: { appPrefs.showJournal = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "book.closed")
+                                .foregroundColor(appPrefs.showJournal ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Show Journal")
+                                    .font(.body)
+                                Text("Show journal components in all views")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

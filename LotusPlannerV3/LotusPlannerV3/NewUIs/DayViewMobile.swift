@@ -169,13 +169,15 @@ struct DayViewMobile: View {
                 }
                 
                 // Journal
-                VStack(alignment: .leading, spacing: 6) {
-               
-                    HStack {
-                        Spacer()
-                        JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                            .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
-                        Spacer()
+                if appPrefs.showJournal {
+                    VStack(alignment: .leading, spacing: 6) {
+                   
+                        HStack {
+                            Spacer()
+                            JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                                .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
+                            Spacer()
+                        }
                     }
                 }
             }

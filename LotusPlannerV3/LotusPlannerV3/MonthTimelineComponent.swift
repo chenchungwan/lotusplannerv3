@@ -33,8 +33,10 @@ struct MonthTimelineComponent: View {
                 // Month header with day names
                 monthHeader(columnWidth: columnWidth)
                 
-                // Month grid with events (takes up remaining space)
-                monthGrid(columnWidth: columnWidth, availableHeight: geometry.size.height)
+                // Month grid with events (scrollable)
+                ScrollView(.vertical, showsIndicators: true) {
+                    monthGrid(columnWidth: columnWidth)
+                }
             }
         }
     }
@@ -55,34 +57,30 @@ struct MonthTimelineComponent: View {
     }
     
     // MARK: - Month Grid
-    private func monthGrid(columnWidth: CGFloat, availableHeight: CGFloat) -> some View {
-        let headerHeight: CGFloat = 30 // Height of the day names header
-        let gridHeight = availableHeight - headerHeight
-        let rowHeight = gridHeight / 6 // Divide available space by 6 weeks
-        
-        return VStack(spacing: 0) {
+    private func monthGrid(columnWidth: CGFloat) -> some View {
+        return VStack(spacing: 10) {
             ForEach(0..<6, id: \.self) { weekIndex in
-                weekRow(weekIndex: weekIndex, columnWidth: columnWidth, rowHeight: rowHeight)
+                weekRow(weekIndex: weekIndex, columnWidth: columnWidth)
             }
         }
     }
     
-    private func weekRow(weekIndex: Int, columnWidth: CGFloat, rowHeight: CGFloat) -> some View {
-        HStack(spacing: 0) {
+    private func weekRow(weekIndex: Int, columnWidth: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: 0) {
             ForEach(0..<7, id: \.self) { dayIndex in
-                dayCell(weekIndex: weekIndex, dayIndex: dayIndex, columnWidth: columnWidth, rowHeight: rowHeight)
+                dayCell(weekIndex: weekIndex, dayIndex: dayIndex, columnWidth: columnWidth)
             }
         }
     }
     
-    private func dayCell(weekIndex: Int, dayIndex: Int, columnWidth: CGFloat, rowHeight: CGFloat) -> some View {
+    private func dayCell(weekIndex: Int, dayIndex: Int, columnWidth: CGFloat) -> some View {
         let dayNumber = getDayNumber(weekIndex: weekIndex, dayIndex: dayIndex)
         let date = getDateForDay(dayNumber: dayNumber)
         let isValidDay = dayNumber > 0 && dayNumber <= daysInMonth
         let isToday = isValidDay && date != nil && Calendar.current.isDate(date!, inSameDayAs: Date())
         let isCurrentMonth = isValidDay
         
-        return VStack(spacing: 0) {
+        return VStack(alignment: .leading, spacing: 0) {
             if isValidDay, let dayDate = date {
                 // Day number header
                 Text("\(dayNumber)")
@@ -94,17 +92,17 @@ struct MonthTimelineComponent: View {
                     .padding(.top, 4)
                     .background(isToday ? Color.blue : Color.clear)
                 
-                // Events area (show first 3 events)
+                // Events area - shows all events
                 eventsArea(for: dayDate)
-                    .frame(maxHeight: .infinity)
-                
-                Spacer(minLength: 0)
+                    .padding(.bottom, 4)
             } else {
-                // Empty day cell
+                // Empty day cell with minimum height
                 Color.clear
+                    .frame(height: 80)
             }
         }
-        .frame(width: columnWidth, height: rowHeight)
+        .frame(width: columnWidth, alignment: .top)
+        .frame(minHeight: 80, alignment: .top)
         .background(isCurrentMonth ? Color(.systemBackground) : Color(.systemGray6).opacity(0.3))
         .contentShape(Rectangle())
         .onTapGesture {
@@ -123,27 +121,15 @@ struct MonthTimelineComponent: View {
             if !first.isAllDay && second.isAllDay { return false }
             return (first.startTime ?? Date.distantPast) < (second.startTime ?? Date.distantPast)
         }
-        let displayEvents = Array(sortedEvents.prefix(5)) // Show only first 5 events
         
-        
-        return VStack(spacing: 2) {
-            ForEach(displayEvents, id: \.id) { event in
+        return VStack(alignment: .leading, spacing: 2) {
+            ForEach(sortedEvents, id: \.id) { event in
                 eventBlock(event: event)
             }
-            
-            // Show "+X more" if there are more than 5 events
-            if events.count > 5 {
-                Text("+\(events.count - 5) more")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-            }
-            
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 2)
-        .padding(.bottom, 2)
+        .padding(.top, 2)
     }
     
     private func eventBlock(event: GoogleCalendarEvent) -> some View {

@@ -270,11 +270,11 @@ extension WeeklyView {
             // Events Row (always shown)
             VStack(alignment: .leading, spacing: 4) {
                 // Fixed-width 7-day event columns
-                HStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     // 7-day event columns with fixed width
                     ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                         weekEventColumn(date: date)
-                            .frame(width: dayColumnWidth) // Fixed width matching timeline
+                            .frame(width: dayColumnWidth, alignment: .top) // Fixed width matching timeline
                             .background(Color(.systemBackground))
                             .overlay(
                                 Rectangle()
@@ -666,16 +666,8 @@ extension WeeklyView {
         let eventsForDate = getEventsForDate(date)
         
         return VStack(alignment: .leading, spacing: 4) {
-            if eventsForDate.isEmpty {
-                Text("No events")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 4)
-            } else {
-                ForEach(eventsForDate, id: \.id) { event in
-                    weekEventCard(event: event)
-                }
+            ForEach(eventsForDate, id: \.id) { event in
+                weekEventCard(event: event)
             }
         }
         .padding(.horizontal, 4)
@@ -701,7 +693,7 @@ extension WeeklyView {
                 
                 // Event title
                 Text(event.summary)
-                    .font(.caption)
+                    .font(.body)
                     .foregroundColor(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

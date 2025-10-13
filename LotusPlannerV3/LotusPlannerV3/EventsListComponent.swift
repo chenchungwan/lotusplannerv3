@@ -10,6 +10,15 @@ struct EventsListComponent: View {
 
     private var sortedEvents: [GoogleCalendarEvent] {
         events.sorted { (a, b) in
+            // All-day events always come first
+            if a.isAllDay && !b.isAllDay {
+                return true
+            }
+            if !a.isAllDay && b.isAllDay {
+                return false
+            }
+            
+            // For events of the same type, sort by time
             let aDate = a.startTime ?? Date.distantPast
             let bDate = b.startTime ?? Date.distantPast
             return aDate < bDate
@@ -24,7 +33,12 @@ struct EventsListComponent: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
             } else {
-                ForEach(sortedEvents, id: \.id) { ev in
+                ForEach(Array(sortedEvents.enumerated()), id: \.element.id) { index, ev in
+                    // Draw red line above event if current time is before event's end time
+                    if shouldShowCurrentTimeLineAbove(event: ev, atIndex: index) {
+                        currentTimeLine
+                    }
+                    
                     Button(action: { onEventTap(ev) }) {
                         HStack(alignment: .top, spacing: 10) {
                             Text(formatEventTime(ev))
@@ -60,6 +74,11 @@ struct EventsListComponent: View {
                         .cornerRadius(8)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    
+                    // Draw red line below event if it's the last event and is completely in the past
+                    if shouldShowCurrentTimeLineBelow(event: ev, atIndex: index) {
+                        currentTimeLine
+                    }
                 }
             }
         }
@@ -73,6 +92,92 @@ struct EventsListComponent: View {
             return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
         }
         return formatter.string(from: start)
+    }
+    
+    // MARK: - Current Time Line Logic
+    
+    private var currentTimeLine: some View {
+        HStack(spacing: 4) {
+            Text(currentTimeString)
+                .font(.caption2)
+                .foregroundColor(.red)
+                .fontWeight(.semibold)
+            
+            Rectangle()
+                .fill(Color.red)
+                .frame(height: 2)
+        }
+    }
+    
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: Date())
+    }
+    
+    private func shouldShowCurrentTimeLineAbove(event: GoogleCalendarEvent, atIndex index: Int) -> Bool {
+        let now = Date()
+        
+        // NEVER show line above all-day events
+        if event.isAllDay {
+            return false
+        }
+        
+        // Only show line above this event if:
+        // 1. Current time is before the event's end time
+        // 2. This is the first TIMED event whose end time is after current time
+        // 3. All previous events (all-day or timed) have ended or are all-day
+        
+        guard let endTime = event.endTime else { return false }
+        
+        // If current time is >= event's end time, don't show line above
+        if now >= endTime {
+            return false
+        }
+        
+        // Check if all previous events have ended (or are all-day)
+        for i in 0..<index {
+            let prevEvent = sortedEvents[i]
+            
+            // Skip all-day events - they don't affect line placement
+            if prevEvent.isAllDay {
+                continue
+            }
+            
+            // If any previous timed event hasn't ended, don't show line above this event
+            if let prevEndTime = prevEvent.endTime, now < prevEndTime {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    private func shouldShowCurrentTimeLineBelow(event: GoogleCalendarEvent, atIndex index: Int) -> Bool {
+        let now = Date()
+        
+        // Only show line below if this is the last event
+        guard index == sortedEvents.count - 1 else { return false }
+        
+        // Special case: If the last event is an all-day event
+        if event.isAllDay {
+            // Check if there are any timed events in the list
+            let hasTimedEvents = sortedEvents.contains { !$0.isAllDay }
+            
+            // If there are no timed events at all, show the line below the last all-day event
+            if !hasTimedEvents {
+                return true
+            }
+            
+            // If there are timed events but this all-day is last (shouldn't happen with our sorting),
+            // don't show line here
+            return false
+        }
+        
+        // For timed events at the end, only show if the event has ended
+        guard let endTime = event.endTime else { return false }
+        
+        return now >= endTime
     }
 }
 

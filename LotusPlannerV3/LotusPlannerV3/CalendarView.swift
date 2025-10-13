@@ -1683,11 +1683,13 @@ struct CalendarView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             
-            // Bottom section - Journal (always visible)
-            JournalView(currentDate: currentDate, embedded: true)
-                .id(currentDate)
-                .frame(maxHeight: .infinity)
-                .padding(.all, 8)
+            // Bottom section - Journal
+            if appPrefs.showJournal {
+                JournalView(currentDate: currentDate, embedded: true)
+                    .id(currentDate)
+                    .frame(maxHeight: .infinity)
+                    .padding(.all, 8)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -2400,42 +2402,44 @@ struct CalendarView: View {
             HStack(alignment: .top, spacing: 0) {
                 // Timeline on the left
                 eventsTimelineCard()
-                    .frame(width: verticalBottomLeftWidth, alignment: .topLeading)
+                    .frame(width: appPrefs.showJournal ? verticalBottomLeftWidth : nil, alignment: .topLeading)
                     .frame(maxHeight: .infinity, alignment: .top)
 
-                // Vertical divider between Events and Notes
-                Rectangle()
-                    .fill(isVerticalBottomDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                    .frame(width: 8)
-                    .overlay(
-                        Image(systemName: "line.3.vertical")
-                            .font(.caption)
-                            .foregroundColor(isVerticalBottomDividerDragging ? .white : .gray)
-                    )
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                isVerticalBottomDividerDragging = true
-                                let minWidth: CGFloat = 200
-                                let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
-                                let newWidth = verticalBottomLeftWidth + value.translation.width
-                                verticalBottomLeftWidth = max(minWidth, min(maxWidth, newWidth))
-                            }
-                            .onEnded { _ in
-                                isVerticalBottomDividerDragging = false
-                            }
-                    )
+                if appPrefs.showJournal {
+                    // Vertical divider between Events and Notes
+                    Rectangle()
+                        .fill(isVerticalBottomDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(width: 8)
+                        .overlay(
+                            Image(systemName: "line.3.vertical")
+                                .font(.caption)
+                                .foregroundColor(isVerticalBottomDividerDragging ? .white : .gray)
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    isVerticalBottomDividerDragging = true
+                                    let minWidth: CGFloat = 200
+                                    let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
+                                    let newWidth = verticalBottomLeftWidth + value.translation.width
+                                    verticalBottomLeftWidth = max(minWidth, min(maxWidth, newWidth))
+                                }
+                                .onEnded { _ in
+                                    isVerticalBottomDividerDragging = false
+                                }
+                        )
 
-                // Notes (Journal) on the right
-                VStack(alignment: .leading, spacing: 6) {
+                    // Notes (Journal) on the right
+                    VStack(alignment: .leading, spacing: 6) {
 
-                    JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
-                        .id(currentDate)
+                        JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                            .id(currentDate)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.all, 8)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.all, 8)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
@@ -2508,14 +2512,16 @@ struct CalendarView: View {
                 .padding(.horizontal, 8)
 
                 // Row 3: Notes full-screen width and height; make it tall so it occupies screen when reached
-                VStack(alignment: .leading, spacing: 6) {
-                   
-                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
-                        .id(currentDate)
-                        .frame(minHeight: UIScreen.main.bounds.height)
+                if appPrefs.showJournal {
+                    VStack(alignment: .leading, spacing: 6) {
+                       
+                        JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                            .id(currentDate)
+                            .frame(minHeight: UIScreen.main.bounds.height)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 16)
             }
             .padding(.top, 8)
         }
@@ -2554,12 +2560,14 @@ struct CalendarView: View {
                 }
 
                 // Row 4: Notes full-screen below
-                VStack(alignment: .leading, spacing: 6) {
-                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
-                        .frame(maxWidth: .infinity, minHeight: 600)
+                if appPrefs.showJournal {
+                    VStack(alignment: .leading, spacing: 6) {
+                        JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                            .frame(maxWidth: .infinity, minHeight: 600)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 12)
             }
             .padding(.vertical, 8)
         }
@@ -2584,20 +2592,22 @@ struct CalendarView: View {
                 topLeftDaySection
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(height: rightSectionTopHeight, alignment: .top)
+            .frame(height: appPrefs.showJournal ? rightSectionTopHeight : nil, alignment: .top)
             .padding(.all, 8)
             
-            // Draggable divider
-            rightSectionDivider
-            
-            // Bottom section - Journal
-            VStack(alignment: .leading, spacing: 6) {
-              
-                JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+            if appPrefs.showJournal {
+                // Draggable divider
+                rightSectionDivider
+                
+                // Bottom section - Journal
+                VStack(alignment: .leading, spacing: 6) {
+                  
+                    JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                }
+                .id(currentDate)
+                .frame(maxHeight: .infinity)
+                .padding(.all, 8)
             }
-            .id(currentDate)
-            .frame(maxHeight: .infinity)
-            .padding(.all, 8)
         }
     }
     
