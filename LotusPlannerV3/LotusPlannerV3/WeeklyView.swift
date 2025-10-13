@@ -205,35 +205,37 @@ struct WeeklyView: View {
         let fixedWidth: CGFloat = 1600
         let dayColumnWidth = fixedWidth / 7
         
-        return VStack(spacing: 0) {
-            // Fixed date header
-            ScrollView(.horizontal, showsIndicators: false) {
-                weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: 50)
-                    .frame(width: fixedWidth)
-            }
-            .background(Color(.systemGray6))
-            
-            // Divider below date header
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(height: 1)
-            
-            // Scrollable content (both vertical and horizontal)
-            GeometryReader { geometry in
-                ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                    ScrollViewReader { proxy in
-                        weekTasksContent(dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
-                            .onAppear {
-                                scrollToCurrentDayWithProxy(proxy)
-                            }
-                            .onChange(of: scrollToCurrentDayTrigger) { _ in
-                                scrollToCurrentDayWithProxy(proxy)
-                            }
+        return GeometryReader { geometry in
+            ScrollView(.horizontal, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    // Fixed header (stays at top when scrolling vertically)
+                    weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: 50)
+                        .frame(width: fixedWidth)
+                        .background(Color(.systemGray6))
+                    
+                    // Divider below date header
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 1)
+                    
+                    // Scrollable content (scrolls vertically)
+                    ScrollView(.vertical, showsIndicators: true) {
+                        ScrollViewReader { proxy in
+                            weekTasksContent(dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
+                                .onAppear {
+                                    scrollToCurrentDayWithProxy(proxy)
+                                }
+                                .onChange(of: scrollToCurrentDayTrigger) { _ in
+                                    scrollToCurrentDayWithProxy(proxy)
+                                }
+                                .padding([.horizontal, .bottom], 8)
+                        }
                     }
-                    .padding([.horizontal, .bottom], 8)
+                    .frame(maxHeight: .infinity)
                 }
-                .background(Color(.systemBackground))
+                .frame(width: fixedWidth)
             }
+            .background(Color(.systemBackground))
         }
     }
     }
