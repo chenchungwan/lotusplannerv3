@@ -9,7 +9,6 @@ struct AddLogEntryView: View {
         if appPrefs.showWeightLogs { return .weight }
         if appPrefs.showWorkoutLogs { return .workout }
         if appPrefs.showFoodLogs { return .food }
-        if appPrefs.showWaterLogs { return .water }
         return .weight // Fallback, though this case shouldn't happen as the + button should be hidden
     }
     
@@ -28,8 +27,6 @@ struct AddLogEntryView: View {
                                 viewModel.selectedLogType = .workout
                             case .food where appPrefs.showFoodLogs:
                                 viewModel.selectedLogType = .food
-                            case .water where appPrefs.showWaterLogs:
-                                viewModel.selectedLogType = .water
                             default:
                                 // If trying to select a disabled type, select the first available one
                                 viewModel.selectedLogType = getFirstAvailableLogType()
@@ -48,10 +45,6 @@ struct AddLogEntryView: View {
                             Label(LogType.food.displayName, systemImage: LogType.food.icon)
                                 .tag(LogType.food)
                         }
-                        if appPrefs.showWaterLogs {
-                            Label(LogType.water.displayName, systemImage: LogType.water.icon)
-                                .tag(LogType.water)
-                        }
                     }
                     .pickerStyle(SegmentedPickerStyle())
                     .onAppear {
@@ -59,8 +52,10 @@ struct AddLogEntryView: View {
                         switch viewModel.selectedLogType {
                         case .weight where !appPrefs.showWeightLogs,
                              .workout where !appPrefs.showWorkoutLogs,
-                             .food where !appPrefs.showFoodLogs,
-                             .water where !appPrefs.showWaterLogs:
+                             .food where !appPrefs.showFoodLogs:
+                            viewModel.selectedLogType = getFirstAvailableLogType()
+                        case .water:
+                            // Water is tracked via cups, not through add form
                             viewModel.selectedLogType = getFirstAvailableLogType()
                         default:
                             break
@@ -75,8 +70,6 @@ struct AddLogEntryView: View {
                     workoutForm
                 } else if case .food = viewModel.selectedLogType, appPrefs.showFoodLogs {
                     foodForm
-                } else if case .water = viewModel.selectedLogType, appPrefs.showWaterLogs {
-                    waterInfo
                 }
             }
             .navigationTitle("Add \(viewModel.selectedLogType.displayName)")
@@ -131,14 +124,6 @@ struct AddLogEntryView: View {
         Section("Food Details") {
             TextField("Food name", text: $viewModel.foodName)
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
-        }
-    }
-    
-    private var waterInfo: some View {
-        Section("Water Tracking") {
-            Text("Water intake is tracked by tapping the cup icons in the Logs section.")
-                .font(.body)
-                .foregroundColor(.secondary)
         }
     }
 }
