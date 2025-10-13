@@ -183,7 +183,6 @@ struct TasksDetailColumn: View {
     @ObservedObject var tasksVM: TasksViewModel
     @ObservedObject var appPrefs: AppPreferences
     @State private var selectedTask: GoogleTask?
-    @State private var showingTaskDetails = false
     
     var tasks: [GoogleTask] {
         guard let listId = selectedListId, let accountKind = selectedAccountKind else {
@@ -286,7 +285,6 @@ struct TasksDetailColumn: View {
                                     },
                                     onTap: {
                                         selectedTask = task
-                                        showingTaskDetails = true
                                     }
                                 )
                                 Divider()
@@ -311,9 +309,8 @@ struct TasksDetailColumn: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .sheet(isPresented: $showingTaskDetails) {
-            if let task = selectedTask,
-               let listId = selectedListId,
+        .sheet(item: $selectedTask) { task in
+            if let listId = selectedListId,
                let accountKind = selectedAccountKind {
                 TaskDetailsView(
                     task: task,

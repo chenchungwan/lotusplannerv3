@@ -95,7 +95,7 @@ struct AddLogEntryView: View {
                 TextField("Weight", text: $viewModel.weightValue)
                     .keyboardType(.decimalPad)
                 
-                Picker("Unit", selection: $viewModel.selectedWeightUnit) {
+                Picker("", selection: $viewModel.selectedWeightUnit) {
                     ForEach(WeightUnit.allCases, id: \.self) { unit in
                         Text(unit.displayName).tag(unit)
                     }

@@ -58,6 +58,12 @@ struct ContentView: View {
         
         case .lists:
             ListsView()
+        
+        case .logs:
+            LogsTableView()
+        
+        case .goals:
+            GoalsView()
 
         case .journal:
                 JournalView(currentDate: Date())
