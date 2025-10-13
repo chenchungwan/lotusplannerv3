@@ -45,16 +45,19 @@ struct EditLogEntryView: View {
     
     private var weightForm: some View {
         Section("Weight Details") {
-            HStack {
-                TextField("Weight", text: $viewModel.weightValue)
-                    .keyboardType(.decimalPad)
-                
-                Picker("", selection: $viewModel.selectedWeightUnit) {
-                    ForEach(WeightUnit.allCases, id: \.self) { unit in
-                        Text(unit.displayName).tag(unit)
+            Group {
+                HStack {
+                    TextField("Weight", text: $viewModel.weightValue)
+                        .keyboardType(.decimalPad)
+                    
+                    Picker("", selection: $viewModel.selectedWeightUnit) {
+                        ForEach(WeightUnit.allCases, id: \.self) { unit in
+                            Text(unit.displayName).tag(unit)
+                        }
                     }
+                    .pickerStyle(MenuPickerStyle())
+                    .labelsHidden()
                 }
-                .pickerStyle(MenuPickerStyle())
             }
             
             DatePicker("Date", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
