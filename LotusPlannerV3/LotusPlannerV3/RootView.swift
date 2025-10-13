@@ -13,6 +13,8 @@ struct RootView: View {
     @State private var isCoverOpened = false // Restore normal cover behavior
     // Auto-dismiss timer
     @State private var autoSkipTimer: Timer?
+    // Screen width for animations (set from GeometryReader)
+    @State private var screenWidth: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -24,48 +26,57 @@ struct RootView: View {
 
             // Cover image overlay
             if !isCoverOpened {
-                ZStack {
-                    // Solid background to prevent any system defaults from showing
-                    Color(.systemBackground)
-                        .ignoresSafeArea()
+                GeometryReader { geometry in
+                    ZStack {
+                        // Solid background to prevent any system defaults from showing
+                        Color(.systemBackground)
+                            .ignoresSafeArea()
 
-                    // Fallback background in case image doesn't load
-                    Rectangle()
-                        .fill(Color.blue.gradient)
-                        .ignoresSafeArea()
+                        // Fallback background in case image doesn't load
+                        Rectangle()
+                            .fill(Color.blue.gradient)
+                            .ignoresSafeArea()
 
-                    // Try to load cover image, but don't break if it fails
-                    Image("CoverImage")
-                        .resizable()
-                        .scaledToFill()
-                        .ignoresSafeArea()
-                        .offset(x: coverOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    // Allow dragging only from right to left (negative translation)
-                                    if value.translation.width < 0 {
-                                        coverOffset = value.translation.width
-                                    }
-                                }
-                                .onEnded { value in
-                                    let screenWidth = UIScreen.main.bounds.width
-                                    // If dragged more than 25% of width, complete opening
-                                    if value.translation.width < -screenWidth * 0.25 {
-                                        dismissCover()
-                                    } else {
-                                        // Otherwise, snap back to closed position
-                                        withAnimation {
-                                            coverOffset = 0
+                        // Try to load cover image, but don't break if it fails
+                        Image("CoverImage")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .clipped()
+                            .offset(x: coverOffset)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        // Allow dragging only from right to left (negative translation)
+                                        if value.translation.width < 0 {
+                                            coverOffset = value.translation.width
                                         }
                                     }
-                                }
-                        )
-                        // Keep the sliding animation in sync with state changes
-                        .animation(.interactiveSpring(), value: coverOffset)
+                                    .onEnded { value in
+                                        // If dragged more than 25% of width, complete opening
+                                        if value.translation.width < -geometry.size.width * 0.25 {
+                                            dismissCover()
+                                        } else {
+                                            // Otherwise, snap back to closed position
+                                            withAnimation {
+                                                coverOffset = 0
+                                            }
+                                        }
+                                    }
+                            )
+                            // Keep the sliding animation in sync with state changes
+                            .animation(.interactiveSpring(), value: coverOffset)
 
-                    // Removed Tap-to-Skip button overlay per requirement
+                        // Removed Tap-to-Skip button overlay per requirement
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .ignoresSafeArea()
+                    .onAppear {
+                        // Capture screen width for animation
+                        screenWidth = geometry.size.width
+                    }
                 }
+                .ignoresSafeArea()
                 .onAppear {
                     startAutoSkipTimer()
                 }
@@ -81,7 +92,6 @@ struct RootView: View {
     @MainActor
     private func dismissCover() {
         stopAutoSkipTimer()
-        let screenWidth = UIScreen.main.bounds.width
 
         // Set navigation state immediately (ContentView is already rendered)
         let navigationManager = NavigationManager.shared

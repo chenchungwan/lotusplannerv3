@@ -1,7 +1,9 @@
 import Foundation
 import UniformTypeIdentifiers
 import PencilKit
+#if canImport(UIKit)
 import UIKit
+#endif
 // import CloudKit (removed for iCloud Drive-only sync)
 
 /// Layout type for journal views
@@ -540,7 +542,10 @@ class JournalManager: NSObject, NSFilePresenter {
     // MARK: - iCloud Monitoring / Download
     /// Start monitoring the iCloud Documents scope for journal files and trigger downloads.
     func startICloudMonitoring() {
-        guard ubiquityDocsURL != nil else { return }
+        guard ubiquityDocsURL != nil else { 
+            print("📝 iCloud monitoring not started - no ubiquity container")
+            return 
+        }
         if JournalManager.metadataQuery != nil { return }
         
         let query = NSMetadataQuery()
@@ -550,21 +555,25 @@ class JournalManager: NSObject, NSFilePresenter {
         // Add notification observers
         let center = NotificationCenter.default
         center.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main) { [weak self] _ in
+            print("📝 iCloud query finished gathering")
             self?.handleQueryResults(query, isInitialGathering: true)
             query.enableUpdates()
         }
         
         center.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main) { [weak self] _ in
+            print("📝 iCloud query updated")
             self?.handleQueryResults(query, isInitialGathering: false)
         }
         
         // Monitor iCloud availability changes
         center.addObserver(forName: .NSUbiquityIdentityDidChange, object: nil, queue: .main) { [weak self] _ in
+            print("📝 iCloud identity changed")
             self?.handleICloudAvailabilityChange()
         }
         
         JournalManager.metadataQuery = query
         query.start()
+        print("📝 Started iCloud monitoring")
     }
 
     func stopICloudMonitoring() {
@@ -577,6 +586,59 @@ class JournalManager: NSObject, NSFilePresenter {
         center.removeObserver(self, name: .NSUbiquityIdentityDidChange, object: nil)
         
         JournalManager.metadataQuery = nil
+    }
+    
+    // MARK: - Sync Diagnostics and Repair
+    func diagnoseSyncIssues() async -> [String] {
+        var issues: [String] = []
+        
+        // Check iCloud availability
+        guard ubiquityDocsURL != nil else {
+            issues.append("iCloud not available - no ubiquity container")
+            return issues
+        }
+        
+        // Check if iCloud Drive is enabled
+        do {
+            let resourceValues = try ubiquityDocsURL!.resourceValues(forKeys: [.isUbiquitousItemKey])
+            if resourceValues.isUbiquitousItem != true {
+                issues.append("iCloud Drive not properly configured")
+            }
+        } catch {
+            issues.append("Error checking iCloud Drive status: \(error.localizedDescription)")
+        }
+        
+        // Check for pending sync files
+        let pendingCount = JournalSyncCoordinator.shared.pendingChanges.count
+        if pendingCount > 0 {
+            issues.append("\(pendingCount) files pending sync")
+        }
+        
+        // Check for local files that should be in iCloud
+        let localDrawings = try? FileManager.default.contentsOfDirectory(at: drawingsDirectory, includingPropertiesForKeys: nil)
+        let localDrawingCount = localDrawings?.filter { $0.pathExtension == "drawing" }.count ?? 0
+        
+        if localDrawingCount > 0 {
+            issues.append("\(localDrawingCount) local drawings not yet synced to iCloud")
+        }
+        
+        return issues
+    }
+    
+    func repairSyncIssues() async {
+        print("📝 Starting sync repair...")
+        
+        // Force sync all pending changes
+        JournalSyncCoordinator.shared.forceSync()
+        
+        // Restart iCloud monitoring
+        stopICloudMonitoring()
+        startICloudMonitoring()
+        
+        // Clear cache to force reload
+        JournalCache.shared.clearCache()
+        
+        print("📝 Sync repair completed")
     }
 
     private func handleQueryResults(_ query: NSMetadataQuery, isInitialGathering: Bool) {

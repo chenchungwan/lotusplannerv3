@@ -14,7 +14,6 @@ struct WeeklyView: View {
     @State private var selectedDate = Date()
     @State private var viewMode: WeeklyViewMode = .week
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
-    @State private var showingEventDetails = false
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
@@ -46,15 +45,30 @@ struct WeeklyView: View {
     // No section width management needed since we removed the events section
     
     var body: some View {
-        mainContent
-            .sidebarToggleHidden()
-            .navigationTitle("")
-            .toolbarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top) {
-                GlobalNavBar()
-                    .background(.ultraThinMaterial)
-            }
-        // Event details sheet removed
+        VStack(spacing: 0) {
+            GlobalNavBar()
+                .background(.ultraThinMaterial)
+            
+            mainContent
+        }
+        .sidebarToggleHidden()
+        .navigationTitle("")
+        .toolbarTitleDisplayMode(.inline)
+        .sheet(item: Binding<GoogleCalendarEvent?>(
+            get: { selectedCalendarEvent },
+            set: { selectedCalendarEvent = $0 }
+        )) { ev in
+            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind,
+                showEventOnly: true
+            )
+        }
         .sheet(isPresented: $showingAddEvent) {
             AddItemView(
                 currentDate: selectedDate,
@@ -193,30 +207,33 @@ struct WeeklyView: View {
     
     // MARK: - Main Content
     private var mainContent: some View {
-        // Main content area with only tasks section (no events section)
-        VStack(spacing: 0) {
-            // Tasks section - Full width
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: true) {
-                    VStack(spacing: 0) {
-                        // Week view - 7-column tasks layout
-                        weekTasksView
-                        
+        // Main content area with vertical scrolling support
+        ScrollView(.vertical, showsIndicators: true) {
+            if appPrefs.useRowBasedWeeklyView {
+                // Row-based layout: each day is a row
+                weekRowBasedView
+                    .background(Color(.systemBackground))
+                    .padding(.all, 8)
+            } else {
+                // Column-based layout: 7 columns for days
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            // Week view - 7-column tasks layout
+                            weekTasksView
+                        }
                     }
-                    .frame(maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
-                .padding(.all, 8)
-                .onAppear {
-                    scrollToCurrentDayWithProxy(proxy)
-                }
-                .onChange(of: scrollToCurrentDayTrigger) { _ in
-                    scrollToCurrentDayWithProxy(proxy)
+                    .background(Color(.systemBackground))
+                    .padding(.all, 8)
+                    .onAppear {
+                        scrollToCurrentDayWithProxy(proxy)
+                    }
+                    .onChange(of: scrollToCurrentDayTrigger) { _ in
+                        scrollToCurrentDayWithProxy(proxy)
+                    }
                 }
             }
         }
-        .frame(minHeight: 0, maxHeight: .infinity)
     }
     }
 
@@ -250,7 +267,35 @@ extension WeeklyView {
                 .fill(Color(.systemGray4))
                 .frame(height: 1)
 
-            // Personal Tasks Row (top 50%)
+            // Events Row (always shown)
+            VStack(alignment: .leading, spacing: 4) {
+                // Fixed-width 7-day event columns
+                HStack(spacing: 0) {
+                    // 7-day event columns with fixed width
+                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                        weekEventColumn(date: date)
+                            .frame(width: dayColumnWidth) // Fixed width matching timeline
+                            .background(Color(.systemBackground))
+                            .overlay(
+                                Rectangle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(width: 0.5),
+                                alignment: .trailing
+                            )
+                            .id("event_day_\(index)")
+                    }
+                }
+                .frame(width: fixedWidth) // Total fixed width
+            }
+            .padding(.all, 8)
+            .background(Color(.systemGray6).opacity(0.15))
+            
+            // Divider after events row (before personal tasks)
+            Rectangle()
+                .fill(Color(.systemGray3))
+                .frame(height: 2)
+
+            // Personal Tasks Row
             if authManager.isLinked(kind: .personal) && personalHasAny {
                 VStack(alignment: .leading, spacing: 4) {
                     
@@ -274,27 +319,36 @@ extension WeeklyView {
                 }
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
-                .frame(height: (authManager.isLinked(kind: .professional) && professionalHasAny) ? v2TopTasksHeight : nil, alignment: .top)
-                .clipped()
+                .if(authManager.isLinked(kind: .professional) && professionalHasAny) { view in
+                    view.frame(height: v2TopTasksHeight, alignment: .top)
+                        .clipped()
+                }
             }
             
             // Draggable divider between task types (only when both present)
             if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && personalHasAny && professionalHasAny {
                 Rectangle()
                     .fill(isV2DividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                    .frame(height: 8)
+                    .frame(height: 12)
                     .overlay(
-                        Image(systemName: "line.3.horizontal")
-                            .font(.caption)
-                            .foregroundColor(isV2DividerDragging ? .white : .gray)
+                        VStack(spacing: 2) {
+                            Rectangle()
+                                .fill(isV2DividerDragging ? .white : .gray)
+                                .frame(width: 40, height: 3)
+                                .cornerRadius(1.5)
+                            Rectangle()
+                                .fill(isV2DividerDragging ? .white : .gray)
+                                .frame(width: 40, height: 3)
+                                .cornerRadius(1.5)
+                        }
                     )
                     .gesture(
                         DragGesture()
                             .onChanged { value in
                                 isV2DividerDragging = true
                                 let newHeight = v2TopTasksHeight + value.translation.height
-                                let minHeight: CGFloat = 150
-                                let maxHeight: CGFloat = max(250, UIScreen.main.bounds.height - 350)
+                                let minHeight: CGFloat = 200
+                                let maxHeight: CGFloat = 800
                                 v2TopTasksHeight = max(minHeight, min(maxHeight, newHeight))
                             }
                             .onEnded { _ in
@@ -303,7 +357,7 @@ extension WeeklyView {
                     )
             }
             
-            // Professional Tasks Row (bottom 50%)
+            // Professional Tasks Row
             if authManager.isLinked(kind: .professional) && professionalHasAny {
                 VStack(alignment: .leading, spacing: 4) {
                     
@@ -327,8 +381,10 @@ extension WeeklyView {
                 }
                 .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
-                .frame(height: (authManager.isLinked(kind: .personal) && personalHasAny) ? (availableHeight - v2TopTasksHeight) : nil, alignment: .top)
-                .clipped()
+                .if(authManager.isLinked(kind: .personal) && personalHasAny) { view in
+                    view.frame(height: v2TopTasksHeight, alignment: .top)
+                        .clipped()
+                }
             }
             
             // Empty state message when no accounts are linked
@@ -375,6 +431,201 @@ extension WeeklyView {
         }
     }
     
+    // MARK: - Row-Based Week View
+    private var weekRowBasedView: some View {
+        VStack(spacing: 0) {
+            // Day rows
+            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                weekDayRow(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
+                
+                if index < weekDates.count - 1 {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 1)
+                }
+            }
+        }
+    }
+    
+    private func weekDayRow(date: Date, isToday: Bool) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Day column - clickable
+            Button(action: {
+                // Navigate to day view for this date
+                navigationManager.updateInterval(.day, date: date)
+            }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(DateFormatter.standardDayOfWeek.string(from: date).uppercased())
+                        .font(DateDisplayStyle.bodyFont)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
+                    
+                    Text(DateFormatter.standardDate.string(from: date))
+                        .font(DateDisplayStyle.titleFont)
+                        .fontWeight(.bold)
+                        .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .padding(.all, 8)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 120)
+            .frame(maxHeight: .infinity)
+            .background(isToday ? Color.blue : Color(.systemGray6))
+            
+            Divider()
+            
+            // Events column
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 4) {
+                    let eventsForDate = getEventsForDate(date)
+                    ForEach(eventsForDate, id: \.id) { event in
+                        rowEventCard(event: event)
+                    }
+                }
+                .padding(.all, 8)
+            }
+            .frame(minWidth: 200, maxWidth: .infinity, alignment: .topLeading)
+            
+            Divider()
+            
+            // Personal Tasks column
+            if authManager.isLinked(kind: .personal) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+                        if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                            TasksComponent(
+                                taskLists: tasksViewModel.personalTaskLists,
+                                tasksDict: personalTasksForDate,
+                                accentColor: appPrefs.personalColor,
+                                accountType: .personal,
+                                onTaskToggle: { task, listId in
+                                    Task {
+                                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                    }
+                                },
+                                onTaskDetails: { task, listId in
+                                    taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                },
+                                onListRename: { listId, newName in
+                                    Task {
+                                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                    }
+                                },
+                                onOrderChanged: { newOrder in
+                                    Task {
+                                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                                    }
+                                },
+                                hideDueDateTag: true,
+                                showEmptyState: false,
+                                isSingleDayView: true
+                            )
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(minWidth: 200, maxWidth: .infinity, alignment: .topLeading)
+                
+                Divider()
+            }
+            
+            // Professional Tasks column
+            if authManager.isLinked(kind: .professional) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+                        if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                            TasksComponent(
+                                taskLists: tasksViewModel.professionalTaskLists,
+                                tasksDict: professionalTasksForDate,
+                                accentColor: appPrefs.professionalColor,
+                                accountType: .professional,
+                                onTaskToggle: { task, listId in
+                                    Task {
+                                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                    }
+                                },
+                                onTaskDetails: { task, listId in
+                                    taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                },
+                                onListRename: { listId, newName in
+                                    Task {
+                                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                    }
+                                },
+                                onOrderChanged: { newOrder in
+                                    Task {
+                                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                                    }
+                                },
+                                hideDueDateTag: true,
+                                showEmptyState: false,
+                                isSingleDayView: true
+                            )
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(minWidth: 200, maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+        .frame(minHeight: 120)
+    }
+    
+    private func rowEventCard(event: GoogleCalendarEvent) -> some View {
+        let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
+        let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        
+        return Button(action: {
+            selectedCalendarEvent = event
+        }) {
+            HStack(alignment: .top, spacing: 8) {
+                // Time
+                if let startTime = event.startTime {
+                    Text(formatEventTimeShort(startTime))
+                        .font(.caption)
+                        .foregroundColor(eventColor)
+                        .fontWeight(.semibold)
+                        .frame(width: 50, alignment: .leading)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    // Title
+                    Text(event.summary)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    
+                    // Location
+                    if let location = event.location, !location.isEmpty {
+                        Text(location)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                
+                Spacer()
+                
+                Circle()
+                    .fill(eventColor)
+                    .frame(width: 6, height: 6)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(eventColor.opacity(0.1))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(eventColor.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
     // Calendar-related views removed since we only show tasks now
     
 
@@ -409,6 +660,91 @@ extension WeeklyView {
     }
     
     // Calendar event helper functions removed since we only show tasks now
+    
+    // MARK: - Week Event Functions
+    private func weekEventColumn(date: Date) -> some View {
+        let eventsForDate = getEventsForDate(date)
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            if eventsForDate.isEmpty {
+                Text("No events")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(eventsForDate, id: \.id) { event in
+                    weekEventCard(event: event)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+    
+    private func weekEventCard(event: GoogleCalendarEvent) -> some View {
+        let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
+        let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        
+        return Button(action: {
+            selectedCalendarEvent = event
+        }) {
+            VStack(alignment: .leading, spacing: 2) {
+                // Event time
+                if let startTime = event.startTime {
+                    Text(formatEventTimeShort(startTime))
+                        .font(.caption2)
+                        .foregroundColor(eventColor)
+                        .fontWeight(.semibold)
+                }
+                
+                // Event title
+                Text(event.summary)
+                    .font(.caption)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                // Event location (if available)
+                if let location = event.location, !location.isEmpty {
+                    Text(location)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .background(eventColor.opacity(0.15))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(eventColor.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func formatEventTimeShort(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
+        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        
+        return allEvents.filter { event in
+            guard let startTime = event.startTime else { return false }
+            return Calendar.current.isDate(startTime, inSameDayAs: date)
+        }.sorted { (a, b) in
+            let aDate = a.startTime ?? Date.distantPast
+            let bDate = b.startTime ?? Date.distantPast
+            return aDate < bDate
+        }
+    }
     
     // MARK: - Week Task Functions
     private func weekTasksDateHeader(dayColumnWidth: CGFloat, timeColumnWidth: CGFloat) -> some View {
@@ -617,6 +953,18 @@ extension WeeklyViewMode {
     var displayName: String {
         switch self {
         case .week: return "Week"
+        }
+    }
+}
+
+// MARK: - View Extension for Conditional Modifiers
+extension View {
+    @ViewBuilder
+    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
         }
     }
 }

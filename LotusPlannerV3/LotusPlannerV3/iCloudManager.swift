@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import CloudKit
 import CoreData
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Debug Helper
 private func debugPrint(_ message: String) {
@@ -291,8 +294,10 @@ final class iCloudManager: ObservableObject {
                         #endif
                         
                         // Provide haptic success feedback
+                        #if canImport(UIKit) && !targetEnvironment(macCatalyst)
                         let successFeedback = UINotificationFeedbackGenerator()
                         successFeedback.notificationOccurred(.success)
+                        #endif
                         
                         NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
                     } catch {
@@ -304,8 +309,10 @@ final class iCloudManager: ObservableObject {
                         #endif
                         
                         // Provide haptic error feedback
+                        #if canImport(UIKit) && !targetEnvironment(macCatalyst)
                         let errorFeedback = UINotificationFeedbackGenerator()
                         errorFeedback.notificationOccurred(.error)
+                        #endif
                     }
                 } else {
                     lastSyncDate = Date()
@@ -317,8 +324,10 @@ final class iCloudManager: ObservableObject {
                     #endif
                     
                     // Provide haptic success feedback
+                    #if canImport(UIKit) && !targetEnvironment(macCatalyst)
                     let successFeedback = UINotificationFeedbackGenerator()
                     successFeedback.notificationOccurred(.success)
+                    #endif
                 }
             }
         }
@@ -498,8 +507,10 @@ final class iCloudManager: ObservableObject {
                         NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
                         
                         // Provide haptic feedback
+                        #if canImport(UIKit) && !targetEnvironment(macCatalyst)
                         let feedback = UINotificationFeedbackGenerator()
                         feedback.notificationOccurred(.success)
+                        #endif
                     }
                 } catch {
                     await MainActor.run {
@@ -509,8 +520,10 @@ final class iCloudManager: ObservableObject {
                         #endif
                         
                         // Provide error feedback
+                        #if canImport(UIKit) && !targetEnvironment(macCatalyst)
                         let feedback = UINotificationFeedbackGenerator()
                         feedback.notificationOccurred(.error)
+                        #endif
                     }
                 }
             }

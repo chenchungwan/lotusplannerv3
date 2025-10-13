@@ -7,7 +7,7 @@ class JournalSyncCoordinator: ObservableObject {
     
     @Published var syncStatus: SyncStatus = .idle
     @Published var progress: Double = 0
-    private var pendingChanges: Set<URL> = []
+    private(set) var pendingChanges: Set<URL> = []
     private var syncTimer: Timer?
     private var batchTimer: Timer?
     private var currentBatch: Set<URL> = []
@@ -100,6 +100,13 @@ class JournalSyncCoordinator: ObservableObject {
     @MainActor
     private func sync(urls: Set<URL>) async {
         guard !urls.isEmpty else { return }
+        
+        // Check iCloud availability before starting sync
+        guard await checkICloudAvailability() else {
+            syncStatus = .error("iCloud not available")
+            NotificationCenter.default.post(name: .journalDrawingSyncFailed, object: nil, userInfo: ["error": "iCloud not available"])
+            return
+        }
         
         syncStatus = .syncing
         progress = 0
@@ -270,6 +277,23 @@ class JournalSyncCoordinator: ObservableObject {
         Task {
             let allChanges = pendingChanges.union(currentBatch)
             await self.sync(urls: allChanges)
+        }
+    }
+    
+    // MARK: - iCloud Availability Check
+    private func checkICloudAvailability() async -> Bool {
+        guard let ubiquityURL = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
+            print("📝 iCloud not available - no ubiquity container")
+            return false
+        }
+        
+        // Check if iCloud Drive is available
+        do {
+            let resourceValues = try ubiquityURL.resourceValues(forKeys: [.isUbiquitousItemKey])
+            return resourceValues.isUbiquitousItem == true
+        } catch {
+            print("📝 Error checking iCloud availability: \(error)")
+            return false
         }
     }
 }

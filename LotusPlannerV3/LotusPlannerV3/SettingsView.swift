@@ -1,5 +1,14 @@
 import SwiftUI
 
+extension DateFormatter {
+    static let shortDateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
 // MARK: - Day View Layout Option Enum
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
@@ -243,6 +252,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Use alternative row-based weekly view layout
+    @Published var useRowBasedWeeklyView: Bool {
+        didSet {
+            UserDefaults.standard.set(useRowBasedWeeklyView, forKey: "useRowBasedWeeklyView")
+        }
+    }
+    
     // Tasks view layout preference
     @Published var tasksLayoutHorizontal: Bool {
         didSet {
@@ -364,6 +380,9 @@ class AppPreferences: ObservableObject {
         // Load events-as-list preference (default false)
         self.showEventsAsListInDay = UserDefaults.standard.bool(forKey: "showEventsAsListInDay")
 
+        // Load row-based weekly view preference (default false - column layout)
+        self.useRowBasedWeeklyView = UserDefaults.standard.bool(forKey: "useRowBasedWeeklyView")
+
         // Load tasks layout preference (default false - vertical layout)
         self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
 
@@ -420,6 +439,10 @@ class AppPreferences: ObservableObject {
     
     func updateShowEventsAsListInDay(_ value: Bool) {
         showEventsAsListInDay = value
+    }
+    
+    func updateUseRowBasedWeeklyView(_ value: Bool) {
+        useRowBasedWeeklyView = value
     }
     
     func updateTasksLayoutHorizontal(_ value: Bool) {
@@ -482,6 +505,7 @@ struct SettingsView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var iCloudManagerInstance = iCloudManager.shared
     @Environment(\.dismiss) private var dismiss
     
     // State for show/hide account toggles (placeholder for future implementation)
@@ -558,6 +582,22 @@ struct SettingsView: View {
                             Text("Show Events as List in Day View")
                                 .font(.body)
                             Text("Replaces timeline with a simple chronological list")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                // Weekly View Preferences
+                Section("Weekly View Preferences") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.useRowBasedWeeklyView },
+                        set: { appPrefs.updateUseRowBasedWeeklyView($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use Row-Based Layout")
+                                .font(.body)
+                            Text("Display each day as a row with events and tasks in columns")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -656,6 +696,10 @@ struct SettingsView: View {
                     }
                     
 
+                }
+                
+                Section("iCloud Sync") {
+                    iCloudSyncSection()
                 }
                 
                 // Components Visibility section removed: Logs and Journal are always visible
@@ -852,6 +896,66 @@ struct SettingsView: View {
                 showingDeleteSuccessAlert = true
             }
         }
+    }
+    
+    @ViewBuilder
+    private func iCloudSyncSection() -> some View {
+        VStack(spacing: 12) {
+            // iCloud Status
+            HStack {
+                Image(systemName: iCloudManagerInstance.iCloudAvailable ? "icloud.fill" : "icloud.slash")
+                    .foregroundColor(iCloudManagerInstance.iCloudAvailable ? .blue : .red)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("iCloud Status")
+                        .font(.body)
+                    Text(iCloudManagerInstance.syncStatus.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            
+            // Sync Progress (if syncing)
+            if case .syncing = iCloudManagerInstance.syncStatus {
+                ProgressView(value: JournalSyncCoordinator.shared.progress)
+                    .progressViewStyle(LinearProgressViewStyle())
+            }
+            
+            // Manual Sync Button
+            Button(action: {
+                Task {
+                    await performManualSync()
+                }
+            }) {
+                HStack {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Sync Now")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(JournalSyncCoordinator.shared.syncStatus == .syncing)
+            
+            // Last Sync Time
+            if let lastSync = iCloudManagerInstance.lastSyncDate {
+                Text("Last sync: \(lastSync, formatter: DateFormatter.shortDateTime)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private func performManualSync() async {
+        // Force iCloud sync
+        iCloudManagerInstance.forceCompleteSync()
+        
+        // Force journal sync
+        JournalSyncCoordinator.shared.forceSync()
+        
+        // Update last sync time
+        iCloudManagerInstance.lastSyncDate = Date()
     }
     
     private func refreshAllViewsAfterDelete() async {

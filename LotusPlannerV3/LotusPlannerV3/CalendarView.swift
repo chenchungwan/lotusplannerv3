@@ -479,17 +479,47 @@ class CalendarViewModel: ObservableObject {
         errorMessage = nil
         showError = false
         
+        var personalError: Error?
+        var professionalError: Error?
+        
         await withTaskGroup(of: Void.self) { group in
             if authManager.isLinked(kind: .personal) {
                 group.addTask {
-                    await self.loadCalendarDataForAccount(.personal, date: date)
+                    do {
+                        try await self.loadCalendarDataForAccountThrowing(.personal, date: date)
+                    } catch {
+                        personalError = error
+                    }
                 }
             }
             
             if authManager.isLinked(kind: .professional) {
                 group.addTask {
-                    await self.loadCalendarDataForAccount(.professional, date: date)
+                    do {
+                        try await self.loadCalendarDataForAccountThrowing(.professional, date: date)
+                    } catch {
+                        professionalError = error
+                    }
                 }
+            }
+        }
+        
+        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
+        await MainActor.run {
+            let personalLinked = authManager.isLinked(kind: .personal)
+            let professionalLinked = authManager.isLinked(kind: .professional)
+            
+            if personalLinked && professionalLinked {
+                // Both accounts linked - only show error if both failed
+                if personalError != nil && professionalError != nil {
+                    self.errorMessage = "Failed to load calendar data for both accounts"
+                }
+            } else if personalLinked && personalError != nil {
+                // Only personal linked and it failed
+                self.errorMessage = personalError!.localizedDescription
+            } else if professionalLinked && professionalError != nil {
+                // Only professional linked and it failed
+                self.errorMessage = professionalError!.localizedDescription
             }
         }
         
@@ -512,17 +542,47 @@ class CalendarViewModel: ObservableObject {
             return
         }
         
+        var personalError: Error?
+        var professionalError: Error?
+        
         await withTaskGroup(of: Void.self) { group in
             if authManager.isLinked(kind: .personal) {
                 group.addTask {
-                    await self.loadCalendarDataForWeekRange(.personal, startDate: weekStart, endDate: weekEnd)
+                    do {
+                        try await self.loadCalendarDataForWeekRangeThrowing(.personal, startDate: weekStart, endDate: weekEnd)
+                    } catch {
+                        personalError = error
+                    }
                 }
             }
             
             if authManager.isLinked(kind: .professional) {
                 group.addTask {
-                    await self.loadCalendarDataForWeekRange(.professional, startDate: weekStart, endDate: weekEnd)
+                    do {
+                        try await self.loadCalendarDataForWeekRangeThrowing(.professional, startDate: weekStart, endDate: weekEnd)
+                    } catch {
+                        professionalError = error
+                    }
                 }
+            }
+        }
+        
+        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
+        await MainActor.run {
+            let personalLinked = authManager.isLinked(kind: .personal)
+            let professionalLinked = authManager.isLinked(kind: .professional)
+            
+            if personalLinked && professionalLinked {
+                // Both accounts linked - only show error if both failed
+                if personalError != nil && professionalError != nil {
+                    self.errorMessage = "Failed to load calendar data for both accounts"
+                }
+            } else if personalLinked && personalError != nil {
+                // Only personal linked and it failed
+                self.errorMessage = personalError!.localizedDescription
+            } else if professionalLinked && professionalError != nil {
+                // Only professional linked and it failed
+                self.errorMessage = professionalError!.localizedDescription
             }
         }
         
@@ -631,24 +691,18 @@ class CalendarViewModel: ObservableObject {
         scheduleErrorCheck()
     }
     
-    private func loadCalendarDataForAccount(_ kind: GoogleAuthManager.AccountKind, date: Date) async {
-        do {
-            let calendars = try await fetchCalendars(for: kind)
-            let events = try await fetchEventsForDate(date, calendars: calendars, for: kind)
-            
-            await MainActor.run {
-                switch kind {
-                case .personal:
-                    self.personalCalendars = calendars
-                    self.personalEvents = events
-                case .professional:
-                    self.professionalCalendars = calendars
-                    self.professionalEvents = events
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to load \(kind.rawValue) calendar data: \(error.localizedDescription)"
+    private func loadCalendarDataForAccountThrowing(_ kind: GoogleAuthManager.AccountKind, date: Date) async throws {
+        let calendars = try await fetchCalendars(for: kind)
+        let events = try await fetchEventsForDate(date, calendars: calendars, for: kind)
+        
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                self.personalCalendars = calendars
+                self.personalEvents = events
+            case .professional:
+                self.professionalCalendars = calendars
+                self.professionalEvents = events
             }
         }
     }
@@ -752,52 +806,40 @@ class CalendarViewModel: ObservableObject {
         }
     }
     
-    private func loadCalendarDataForWeekRange(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async {
-        do {
-            let calendars = try await fetchCalendars(for: kind)
-            let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
-            
-            await MainActor.run {
-                switch kind {
-                case .personal:
-                    self.personalCalendars = calendars
-                    self.personalEvents = events
-                case .professional:
-                    self.professionalCalendars = calendars
-                    self.professionalEvents = events
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to load \(kind.rawValue) calendar data for week: \(error.localizedDescription)"
+    private func loadCalendarDataForWeekRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
+        let calendars = try await fetchCalendars(for: kind)
+        let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
+        
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                self.personalCalendars = calendars
+                self.personalEvents = events
+            case .professional:
+                self.professionalCalendars = calendars
+                self.professionalEvents = events
             }
         }
     }
     
-    private func loadCalendarDataForMonthRange(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async {
-        do {
-            let calendars = try await fetchCalendars(for: kind)
-            
-            let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
-            
-            // Cache the fresh data
-            let cacheKey = self.cacheKey(for: kind, startDate: startDate, endDate: endDate)
-            cacheEvents(events, for: cacheKey)
-            cacheCalendars(calendars, for: cacheKey)
-            
-            await MainActor.run {
-                switch kind {
-                case .personal:
-                    self.personalCalendars = calendars
-                    self.personalEvents = events
-                case .professional:
-                    self.professionalCalendars = calendars
-                    self.professionalEvents = events
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to load \(kind.rawValue) calendar data for month: \(error.localizedDescription)"
+    private func loadCalendarDataForMonthRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
+        let calendars = try await fetchCalendars(for: kind)
+        
+        let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
+        
+        // Cache the fresh data
+        let cacheKey = self.cacheKey(for: kind, startDate: startDate, endDate: endDate)
+        cacheEvents(events, for: cacheKey)
+        cacheCalendars(calendars, for: cacheKey)
+        
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                self.personalCalendars = calendars
+                self.personalEvents = events
+            case .professional:
+                self.professionalCalendars = calendars
+                self.professionalEvents = events
             }
         }
     }
