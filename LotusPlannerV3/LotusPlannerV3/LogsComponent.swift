@@ -62,6 +62,12 @@ struct LogsComponent: View {
                                 foodSection
                                     .frame(maxWidth: .infinity, alignment: .top)
                             }
+                            
+                            // Water Section
+                            if appPrefs.showWaterLogs {
+                                waterSection
+                                    .frame(maxWidth: .infinity, alignment: .top)
+                            }
                         }
                     } else {
                         VStack(spacing: 16) {
@@ -78,6 +84,11 @@ struct LogsComponent: View {
                             // Food Section
                             if appPrefs.showFoodLogs {
                                 foodSection
+                            }
+                            
+                            // Water Section
+                            if appPrefs.showWaterLogs {
+                                waterSection
                             }
                         }
                     }
@@ -293,5 +304,66 @@ extension LogsComponent {
         }
         .background(Color(.systemBackground))
         .cornerRadius(6)
+    }
+    
+    var waterSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "drop.fill")
+                    .foregroundColor(viewModel.accentColor)
+                Text("Water")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            // Water cups display in rows of 5
+            let entry = viewModel.getOrCreateWaterEntry(for: currentDate)
+            let cupCount = entry.cupsFilled.count
+            let totalItems = cupCount + 1 // cups + plus button
+            let rows = (totalItems + 4) / 5 // Calculate number of rows needed (ceiling division)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(0..<rows, id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(0..<5, id: \.self) { col in
+                            let index = row * 5 + col
+                            if index < cupCount {
+                                // Show a cup
+                                waterCupButton(index: index, isFilled: entry.cupsFilled[index])
+                            } else if index == cupCount {
+                                // Show the plus button
+                                Button(action: {
+                                    viewModel.addWaterCup(for: currentDate)
+                                }) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(viewModel.accentColor)
+                                }
+                            }
+                        }
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+            
+            Text("\(entry.filledCount) cups filled")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+    }
+    
+    func waterCupButton(index: Int, isFilled: Bool) -> some View {
+        Button(action: {
+            viewModel.toggleWaterCup(at: index, for: currentDate)
+        }) {
+            Image(systemName: isFilled ? "drop.fill" : "drop")
+                .font(.title2)
+                .foregroundColor(isFilled ? .blue : .gray)
+        }
     }
 }

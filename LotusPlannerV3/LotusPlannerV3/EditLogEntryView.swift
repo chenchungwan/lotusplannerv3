@@ -20,6 +20,8 @@ struct EditLogEntryView: View {
                     workoutForm
                 case .food:
                     foodForm
+                case .water:
+                    waterInfo
                 }
             }
             .navigationTitle("Edit \(viewModel.selectedLogType.displayName)")
@@ -75,6 +77,14 @@ struct EditLogEntryView: View {
         Section("Food Details") {
             TextField("Food name", text: $viewModel.foodName)
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+    
+    private var waterInfo: some View {
+        Section("Water Tracking") {
+            Text("Water intake is tracked by tapping the cup icons in the Logs section.")
+                .font(.body)
+                .foregroundColor(.secondary)
         }
     }
 }

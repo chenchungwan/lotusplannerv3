@@ -256,6 +256,15 @@ struct LogTypeRow: View {
             }
             guard !entries.isEmpty else { return "-" }
             return entries.map { $0.name }.joined(separator: "\n")
+            
+        case .water:
+            let entries = logsVM.waterEntries.filter { entry in
+                calendar.isDate(entry.date, inSameDayAs: date)
+            }
+            guard !entries.isEmpty else { return "-" }
+            return entries.map { entry in
+                "\(entry.filledCount) cups"
+            }.joined(separator: "\n")
         }
     }
     
@@ -267,6 +276,8 @@ struct LogTypeRow: View {
             return logsVM.workoutEntries.filter { calendar.isDate($0.date, inSameDayAs: date) }.isEmpty
         case .food:
             return logsVM.foodEntries.filter { calendar.isDate($0.date, inSameDayAs: date) }.isEmpty
+        case .water:
+            return logsVM.waterEntries.filter { calendar.isDate($0.date, inSameDayAs: date) }.isEmpty
         }
     }
 }

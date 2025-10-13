@@ -197,11 +197,36 @@ struct TasksDetailColumn: View {
             allTasks = tasksVM.professionalTasks[listId] ?? []
         }
         
+        // Sort by: 1) completion status, 2) due date, 3) alphabetically
+        let sorted = allTasks.sorted { (a, b) in
+            // 1. Sort by completion status (incomplete first)
+            if a.isCompleted != b.isCompleted {
+                return !a.isCompleted // incomplete (false) comes before completed (true)
+            }
+            
+            // 2. Sort by due date (soonest first, no due date goes last)
+            switch (a.dueDate, b.dueDate) {
+            case let (dateA?, dateB?):
+                if dateA != dateB {
+                    return dateA < dateB
+                }
+            case (_?, nil):
+                return true // tasks with due dates come before tasks without
+            case (nil, _?):
+                return false // tasks without due dates come after tasks with
+            case (nil, nil):
+                break // both have no due date, continue to alphabetical sort
+            }
+            
+            // 3. Sort alphabetically by title
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+        }
+        
         // Filter based on hideCompletedTasks setting
         if appPrefs.hideCompletedTasks {
-            return allTasks.filter { !$0.isCompleted }
+            return sorted.filter { !$0.isCompleted }
         }
-        return allTasks
+        return sorted
     }
     
     var selectedListTitle: String? {

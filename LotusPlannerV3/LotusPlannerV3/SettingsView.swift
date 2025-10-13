@@ -301,8 +301,14 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    @Published var showWaterLogs: Bool {
+        didSet {
+            UserDefaults.standard.set(showWaterLogs, forKey: "showWaterLogs")
+        }
+    }
+    
     var showAnyLogs: Bool {
-        showWeightLogs || showWorkoutLogs || showFoodLogs
+        showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs
     }
     
     // Show journal components
@@ -413,6 +419,7 @@ class AppPreferences: ObservableObject {
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
+        self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         
         // Load journal visibility preference (default visible)
         self.showJournal = UserDefaults.standard.object(forKey: "showJournal") as? Bool ?? true
@@ -692,6 +699,23 @@ struct SettingsView: View {
                                 Text("Food Logs")
                                     .font(.body)
                                 Text("Show food tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showWaterLogs },
+                        set: { appPrefs.showWaterLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "drop.fill")
+                                .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Water Logs")
+                                    .font(.body)
+                                Text("Show water intake tracking in day views")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

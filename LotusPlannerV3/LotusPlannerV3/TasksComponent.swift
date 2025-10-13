@@ -71,15 +71,33 @@ extension TasksComponent {
 
     private func filteredTasksForList(_ taskList: GoogleTaskList) -> [GoogleTask] {
         let tasks = tasksDict[taskList.id] ?? []
-        let sortedByPosition: [GoogleTask] = tasks.sorted { (a, b) in
-            switch (a.position, b.position) {
-            case let (pa?, pb?): return pa < pb
-            case (nil, _?): return false
-            case (_?, nil): return true
-            case (nil, nil): return a.id < b.id
+        
+        // Sort by: 1) completion status, 2) due date, 3) alphabetically
+        let sorted: [GoogleTask] = tasks.sorted { (a, b) in
+            // 1. Sort by completion status (incomplete first)
+            if a.isCompleted != b.isCompleted {
+                return !a.isCompleted // incomplete (false) comes before completed (true)
             }
+            
+            // 2. Sort by due date (soonest first, no due date goes last)
+            switch (a.dueDate, b.dueDate) {
+            case let (dateA?, dateB?):
+                if dateA != dateB {
+                    return dateA < dateB
+                }
+            case (_?, nil):
+                return true // tasks with due dates come before tasks without
+            case (nil, _?):
+                return false // tasks without due dates come after tasks with
+            case (nil, nil):
+                break // both have no due date, continue to alphabetical sort
+            }
+            
+            // 3. Sort alphabetically by title
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
-        return appPrefs.hideCompletedTasks ? sortedByPosition.filter { !$0.isCompleted } : sortedByPosition
+        
+        return appPrefs.hideCompletedTasks ? sorted.filter { !$0.isCompleted } : sorted
     }
 
     @ViewBuilder

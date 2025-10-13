@@ -188,12 +188,73 @@ class CoreDataManager: ObservableObject {
         }
     }
     
+    // MARK: - Water Entries
+    func saveWaterEntry(_ entry: WaterLogEntry) {
+        let waterLog = WaterLog(context: context)
+        waterLog.id = entry.id
+        waterLog.date = entry.date
+        waterLog.userId = entry.userId
+        waterLog.createdAt = entry.createdAt
+        
+        // Encode cups array as JSON
+        if let cupsData = try? JSONEncoder().encode(entry.cupsFilled) {
+            waterLog.cupsFilled = cupsData
+        }
+        
+        save()
+    }
+    
+    func loadWaterEntries() -> [WaterLogEntry] {
+        let request: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \WaterLog.date, ascending: false)]
+        
+        do {
+            let logs = try context.fetch(request)
+            return logs.compactMap { log in
+                guard let id = log.id,
+                      let date = log.date,
+                      let userId = log.userId,
+                      let createdAt = log.createdAt else { return nil }
+                
+                // Decode cups array from JSON
+                var cupsFilled: [Bool] = Array(repeating: false, count: 8)
+                if let cupsData = log.cupsFilled,
+                   let decoded = try? JSONDecoder().decode([Bool].self, from: cupsData) {
+                    cupsFilled = decoded
+                }
+                
+                return WaterLogEntry(
+                    id: id,
+                    date: date,
+                    cupsFilled: cupsFilled,
+                    userId: userId,
+                    createdAt: createdAt
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+    
+    func deleteWaterEntry(_ entry: WaterLogEntry) {
+        let request: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id)
+        
+        do {
+            let logs = try context.fetch(request)
+            logs.forEach(context.delete)
+            save()
+        } catch {
+        }
+    }
+    
     // MARK: - Danger Zone: Delete All Logs
     func deleteAllLogs() {
         let deleteRequests: [NSFetchRequest<NSFetchRequestResult>] = [
             WeightLog.fetchRequest(),
             WorkoutLog.fetchRequest(),
-            FoodLog.fetchRequest()
+            FoodLog.fetchRequest(),
+            WaterLog.fetchRequest()
         ]
         do {
             for request in deleteRequests {
