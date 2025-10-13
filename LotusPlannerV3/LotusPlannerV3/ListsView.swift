@@ -182,18 +182,27 @@ struct TasksDetailColumn: View {
     let selectedAccountKind: GoogleAuthManager.AccountKind?
     @ObservedObject var tasksVM: TasksViewModel
     @ObservedObject var appPrefs: AppPreferences
+    @State private var selectedTask: GoogleTask?
+    @State private var showingTaskDetails = false
     
     var tasks: [GoogleTask] {
         guard let listId = selectedListId, let accountKind = selectedAccountKind else {
             return []
         }
         
+        let allTasks: [GoogleTask]
         switch accountKind {
         case .personal:
-            return tasksVM.personalTasks[listId] ?? []
+            allTasks = tasksVM.personalTasks[listId] ?? []
         case .professional:
-            return tasksVM.professionalTasks[listId] ?? []
+            allTasks = tasksVM.professionalTasks[listId] ?? []
         }
+        
+        // Filter based on hideCompletedTasks setting
+        if appPrefs.hideCompletedTasks {
+            return allTasks.filter { !$0.isCompleted }
+        }
+        return allTasks
     }
     
     var selectedListTitle: String? {
@@ -231,6 +240,17 @@ struct TasksDetailColumn: View {
                     
                     Spacer()
                     
+                    // Eye filter toggle
+                    Button {
+                        appPrefs.hideCompletedTasks.toggle()
+                    } label: {
+                        Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 8)
+                    
                     Text("\(tasks.count) \(tasks.count == 1 ? "Task" : "Tasks")")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -249,7 +269,7 @@ struct TasksDetailColumn: View {
                         Text("No Tasks")
                             .font(.headline)
                             .foregroundColor(.secondary)
-                        Text("This list is empty")
+                        Text(appPrefs.hideCompletedTasks ? "All tasks are completed" : "This list is empty")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -258,7 +278,17 @@ struct TasksDetailColumn: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(tasks) { task in
-                                SimpleTaskRow(task: task, accentColor: accentColor)
+                                SimpleTaskRow(
+                                    task: task,
+                                    accentColor: accentColor,
+                                    onToggle: {
+                                        toggleTask(task)
+                                    },
+                                    onTap: {
+                                        selectedTask = task
+                                        showingTaskDetails = true
+                                    }
+                                )
                                 Divider()
                             }
                         }
@@ -281,22 +311,63 @@ struct TasksDetailColumn: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .sheet(isPresented: $showingTaskDetails) {
+            if let task = selectedTask,
+               let listId = selectedListId,
+               let accountKind = selectedAccountKind {
+                TaskDetailsView(
+                    task: task,
+                    taskListId: listId,
+                    accountKind: accountKind,
+                    accentColor: accentColor,
+                    personalTaskLists: tasksVM.personalTaskLists,
+                    professionalTaskLists: tasksVM.professionalTaskLists,
+                    appPrefs: appPrefs,
+                    viewModel: tasksVM,
+                    onSave: { _ in },
+                    onDelete: {
+                        Task {
+                            await deleteTask(task, from: listId, for: accountKind)
+                        }
+                    },
+                    onMove: { _, _ in },
+                    onCrossAccountMove: { _, _, _ in },
+                    isNew: false
+                )
+            }
+        }
+    }
+    
+    private func toggleTask(_ task: GoogleTask) {
+        guard let listId = selectedListId, let accountKind = selectedAccountKind else { return }
+        Task {
+            await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+        }
+    }
+    
+    private func deleteTask(_ task: GoogleTask, from listId: String, for accountKind: GoogleAuthManager.AccountKind) async {
+        await tasksVM.deleteTask(task, from: listId, for: accountKind)
     }
 }
 
-// MARK: - Simple Task Row (Read-only)
+// MARK: - Simple Task Row (Interactive)
 struct SimpleTaskRow: View {
     let task: GoogleTask
     let accentColor: Color
+    let onToggle: () -> Void
+    let onTap: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
-            // Checkbox
-            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                .font(.title3)
-                .foregroundColor(task.isCompleted ? accentColor : .secondary)
+            // Checkbox - tappable to toggle completion
+            Button(action: onToggle) {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundColor(task.isCompleted ? accentColor : .secondary)
+            }
+            .buttonStyle(.plain)
             
-            // Task details
+            // Task details - tappable to open edit sheet
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
                     .font(.body)
@@ -320,12 +391,15 @@ struct SimpleTaskRow: View {
                     .foregroundColor(.secondary)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onTap()
+            }
             
             Spacer()
         }
         .padding()
         .background(Color(.systemBackground))
-        .contentShape(Rectangle())
     }
     
     private func formatDate(_ date: Date) -> String {
