@@ -318,6 +318,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Show goals view
+    @Published var showGoals: Bool {
+        didSet {
+            UserDefaults.standard.set(showGoals, forKey: "showGoals")
+        }
+    }
+    
     // Day View Divider Positions
     @Published var dayViewCompactTasksHeight: CGFloat {
         didSet {
@@ -423,6 +430,9 @@ class AppPreferences: ObservableObject {
         
         // Load journal visibility preference (default visible)
         self.showJournal = UserDefaults.standard.object(forKey: "showJournal") as? Bool ?? true
+        
+        // Load goals visibility preference (default visible)
+        self.showGoals = UserDefaults.standard.object(forKey: "showGoals") as? Bool ?? true
 
 
         
@@ -628,9 +638,9 @@ struct SettingsView: View {
                         set: { appPrefs.updateUseRowBasedWeeklyView($0) }
                     )) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Use Row-Based Layout")
+                            Text("Week in 7 Day Rows")
                                 .font(.body)
-                            Text("Display each day as a row with events and tasks in columns")
+                            Text("ON: Week displayed as 7 day rows  |  OFF: Week displayed as 7 day columns")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -735,6 +745,25 @@ struct SettingsView: View {
                                 Text("Show Journal")
                                     .font(.body)
                                 Text("Show journal components in all views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                
+                Section("Goals Preferences") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showGoals },
+                        set: { appPrefs.showGoals = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundColor(appPrefs.showGoals ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Show Goals")
+                                    .font(.body)
+                                Text("Show Goals menu option")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

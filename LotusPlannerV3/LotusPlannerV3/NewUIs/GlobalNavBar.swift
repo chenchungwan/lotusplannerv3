@@ -173,10 +173,12 @@ struct GlobalNavBar: View {
                                 Label("Logs", systemImage: "chart.bar.doc.horizontal")
                             }
                             
-                            Button(action: {
-                                navigationManager.switchToGoals()
-                            }) {
-                                Label("Goals", systemImage: "target")
+                            if appPrefs.showGoals {
+                                Button(action: {
+                                    navigationManager.switchToGoals()
+                                }) {
+                                    Label("Goals", systemImage: "target")
+                                }
                             }
                             
                             Divider()
