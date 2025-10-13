@@ -167,12 +167,6 @@ struct GlobalNavBar: View {
                                 Label("Lists", systemImage: "list.bullet")
                             }
                             
-                            Button(action: {
-                                navigationManager.switchToLogs()
-                            }) {
-                                Label("Logs", systemImage: "chart.bar.doc.horizontal")
-                            }
-                            
                             if appPrefs.showGoals {
                                 Button(action: {
                                     navigationManager.switchToGoals()

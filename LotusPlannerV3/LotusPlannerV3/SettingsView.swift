@@ -97,7 +97,6 @@ class NavigationManager: ObservableObject {
         case calendar
         case tasks
         case lists
-        case logs
         case goals
         case journal
         case weeklyView
@@ -135,11 +134,6 @@ class NavigationManager: ObservableObject {
     
     func switchToLists() {
         currentView = .lists
-        showTasksView = false
-    }
-    
-    func switchToLogs() {
-        currentView = .logs
         showTasksView = false
     }
     

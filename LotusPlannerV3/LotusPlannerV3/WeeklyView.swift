@@ -378,6 +378,102 @@ extension WeeklyView {
                 .background(Color(.systemGray6).opacity(0.15))
             }
             
+            // Divider after weight logs (before workout logs)
+            if appPrefs.showWorkoutLogs {
+                Rectangle()
+                    .fill(Color(.systemGray3))
+                    .frame(height: 2)
+            }
+            
+            // Workout Logs Row
+            if appPrefs.showWorkoutLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    
+                    // Fixed-width 7-day workout log columns
+                    HStack(spacing: 0) {
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                            weekWorkoutLogColumn(date: date)
+                                .frame(width: dayColumnWidth)
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                                .id("workout_day_\(index)")
+                        }
+                    }
+                    .frame(width: fixedWidth)
+                }
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.15))
+            }
+            
+            // Divider after workout logs (before food logs)
+            if appPrefs.showFoodLogs {
+                Rectangle()
+                    .fill(Color(.systemGray3))
+                    .frame(height: 2)
+            }
+            
+            // Food Logs Row
+            if appPrefs.showFoodLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    
+                    // Fixed-width 7-day food log columns
+                    HStack(spacing: 0) {
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                            weekFoodLogColumn(date: date)
+                                .frame(width: dayColumnWidth)
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                                .id("food_day_\(index)")
+                        }
+                    }
+                    .frame(width: fixedWidth)
+                }
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.15))
+            }
+            
+            // Divider after food logs (before water logs)
+            if appPrefs.showWaterLogs {
+                Rectangle()
+                    .fill(Color(.systemGray3))
+                    .frame(height: 2)
+            }
+            
+            // Water Logs Row
+            if appPrefs.showWaterLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    
+                    // Fixed-width 7-day water log columns
+                    HStack(spacing: 0) {
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                            weekWaterLogColumn(date: date)
+                                .frame(width: dayColumnWidth)
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                                .id("water_day_\(index)")
+                        }
+                    }
+                    .frame(width: fixedWidth)
+                }
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.15))
+            }
+            
             // Empty state message when no accounts are linked
             if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
                 Button(action: { NavigationManager.shared.showSettings() }) {
@@ -507,9 +603,11 @@ extension WeeklyView {
                 ForEach(eventsForDate, id: \.id) { event in
                     rowEventCard(event: event)
                 }
+                Spacer(minLength: 0)
             }
             .padding(.all, 8)
             .frame(width: 228.6, alignment: .topLeading)
+            .frame(minHeight: 80)
             
             Divider()
             
@@ -546,9 +644,11 @@ extension WeeklyView {
                             isSingleDayView: true
                         )
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
                 .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
                 
                 Divider()
             }
@@ -586,9 +686,11 @@ extension WeeklyView {
                             isSingleDayView: true
                         )
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
                 .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
                 
                 Divider()
             }
@@ -600,9 +702,59 @@ extension WeeklyView {
                     ForEach(weightLogsForDate, id: \.id) { entry in
                         weightLogCard(entry: entry)
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
                 .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Workout Logs column
+            if appPrefs.showWorkoutLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let workoutLogsForDate = getWorkoutLogsForDate(date)
+                    ForEach(workoutLogsForDate, id: \.id) { entry in
+                        workoutLogCard(entry: entry)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Food Logs column
+            if appPrefs.showFoodLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let foodLogsForDate = getFoodLogsForDate(date)
+                    ForEach(foodLogsForDate, id: \.id) { entry in
+                        foodLogCard(entry: entry)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Water Logs column
+            if appPrefs.showWaterLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let waterLogsForDate = getWaterLogsForDate(date)
+                    if !waterLogsForDate.isEmpty {
+                        waterLogSummary(entries: waterLogsForDate)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
             }
         }
     }
@@ -886,6 +1038,103 @@ extension WeeklyView {
         .cornerRadius(6)
     }
     
+    private func weekWorkoutLogColumn(date: Date) -> some View {
+        let workoutLogsForDate = getWorkoutLogsForDate(date)
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(workoutLogsForDate, id: \.id) { entry in
+                weekWorkoutLogCard(entry: entry)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
+    private func weekWorkoutLogCard(entry: WorkoutLogEntry) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // Time
+            Text(formatLogTime(entry.date))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+            
+            // Workout name
+            Text(entry.name)
+                .font(.body)
+                .foregroundColor(.primary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(6)
+    }
+    
+    private func weekFoodLogColumn(date: Date) -> some View {
+        let foodLogsForDate = getFoodLogsForDate(date)
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(foodLogsForDate, id: \.id) { entry in
+                weekFoodLogCard(entry: entry)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
+    private func weekFoodLogCard(entry: FoodLogEntry) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            // Bullet point
+            Text("•")
+                .font(.body)
+                .foregroundColor(.secondary)
+            
+            // Food name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+    
+    private func weekWaterLogColumn(date: Date) -> some View {
+        let waterLogsForDate = getWaterLogsForDate(date)
+        let totalCups = waterLogsForDate.reduce(0) { total, entry in
+            total + entry.cupsFilled.filter { $0 }.count
+        }
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            if totalCups > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "drop.fill")
+                        .font(.body)
+                        .foregroundColor(.blue)
+                    Text("\(totalCups) cups")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+                .background(Color(.systemGray6).opacity(0.5))
+                .cornerRadius(6)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
     private func weekEventCard(event: GoogleCalendarEvent) -> some View {
         let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
         let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
@@ -955,6 +1204,24 @@ extension WeeklyView {
         }.sorted { $0.timestamp < $1.timestamp }
     }
     
+    private func getWorkoutLogsForDate(_ date: Date) -> [WorkoutLogEntry] {
+        return logsViewModel.workoutEntries.filter { entry in
+            Calendar.current.isDate(entry.date, inSameDayAs: date)
+        }.sorted { $0.date < $1.date }
+    }
+    
+    private func getFoodLogsForDate(_ date: Date) -> [FoodLogEntry] {
+        return logsViewModel.foodEntries.filter { entry in
+            Calendar.current.isDate(entry.date, inSameDayAs: date)
+        }.sorted { $0.date < $1.date }
+    }
+    
+    private func getWaterLogsForDate(_ date: Date) -> [WaterLogEntry] {
+        return logsViewModel.waterEntries.filter { entry in
+            Calendar.current.isDate(entry.date, inSameDayAs: date)
+        }.sorted { $0.date < $1.date }
+    }
+    
     private func weightLogCard(entry: WeightLogEntry) -> some View {
         HStack(alignment: .top, spacing: 8) {
             // Time
@@ -982,6 +1249,69 @@ extension WeeklyView {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
+    }
+    
+    private func workoutLogCard(entry: WorkoutLogEntry) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            // Time
+            Text(formatLogTime(entry.date))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 60, alignment: .leading)
+            
+            // Workout name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.body)
+                    .fontWeight(.medium)
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(6)
+    }
+    
+    private func foodLogCard(entry: FoodLogEntry) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            // Bullet point
+            Text("•")
+                .font(.body)
+                .foregroundColor(.secondary)
+            
+            // Food name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.body)
+                    .fontWeight(.medium)
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
+    
+    private func waterLogSummary(entries: [WaterLogEntry]) -> some View {
+        let totalCups = entries.reduce(0) { total, entry in
+            total + entry.cupsFilled.filter { $0 }.count
+        }
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "drop.fill")
+                    .font(.body)
+                    .foregroundColor(.blue)
+                Text("\(totalCups) cups")
+                    .font(.body)
+                    .fontWeight(.medium)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(6)
     }
     
     // MARK: - Week Task Functions

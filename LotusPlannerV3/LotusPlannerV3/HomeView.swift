@@ -59,9 +59,6 @@ struct ContentView: View {
         case .lists:
             ListsView()
         
-        case .logs:
-            LogsTableView()
-        
         case .goals:
             GoalsView()
 
