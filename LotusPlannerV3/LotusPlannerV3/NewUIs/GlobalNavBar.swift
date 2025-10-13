@@ -161,6 +161,12 @@ struct GlobalNavBar: View {
                                 Label("Tasks", systemImage: "checklist")
                             }
                             
+                            Button(action: {
+                                navigationManager.switchToLists()
+                            }) {
+                                Label("Lists", systemImage: "list.bullet")
+                            }
+                            
                             Divider()
                             
                             Button("Settings") {

@@ -55,8 +55,11 @@ struct ContentView: View {
                         .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 }
             }
+        
+        case .lists:
+            ListsView()
 
-            case .journal:
+        case .journal:
                 JournalView(currentDate: Date())
             case .weeklyView:
                 WeeklyView()

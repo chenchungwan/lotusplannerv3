@@ -96,6 +96,7 @@ class NavigationManager: ObservableObject {
     enum CurrentView {
         case calendar
         case tasks
+        case lists
         case journal
         case weeklyView
         case gWeekView
@@ -130,7 +131,10 @@ class NavigationManager: ObservableObject {
         showingAllTasks = false
     }
     
-
+    func switchToLists() {
+        currentView = .lists
+        showTasksView = false
+    }
     
     func switchToJournal() {
         currentView = .journal
