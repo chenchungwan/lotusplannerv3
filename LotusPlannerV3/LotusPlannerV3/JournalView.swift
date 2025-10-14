@@ -9,7 +9,7 @@ import UIKit
 struct JournalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var drawingManager = JournalDrawingManager.shared
+    @StateObject private var drawingManager = JournalDrawingManagerNew.shared
     @State private var currentDate: Date
     @State private var canvasView = PKCanvasView()
     // Track previous date to save when date changes
@@ -52,7 +52,7 @@ struct JournalView: View {
     private func loadDrawing() {
         // Load on main to avoid race with view lifecycle
         DispatchQueue.main.async {
-            if let drawing = JournalManager.shared.loadDrawing(for: currentDate) {
+            if let drawing = JournalStorageNew.shared.load(for: currentDate) {
                 canvasView.drawing = drawing
             } else {
                 canvasView.drawing = PKDrawing()
@@ -75,39 +75,21 @@ struct JournalView: View {
                         .padding(.bottom, 12)
                 }
                     .onAppear {
-                        Task { @MainActor in
-                            // Ensure iCloud is ready
-                            JournalManager.shared.migrateLocalToICloudIfNeeded()
-                            JournalManager.shared.startICloudMonitoring()
-                            JournalManager.shared.ensureICloudReady(for: currentDate)
-                            
-                            // Load content
-                            loadDrawing()
-                            loadPhotos()
-                            
-                            // Listen for refresh notifications
-                            NotificationCenter.default.addObserver(
-                                forName: Notification.Name("RefreshJournalContent"),
-                                object: nil,
-                                queue: .main
-                            ) { _ in
-                                loadDrawing()
-                                loadPhotos()
-                            }
-                        }
+                        // Load content
+                        loadDrawing()
+                        loadPhotos()
                     }
                     .onDisappear {
                         Task { @MainActor in
                             // Save any pending changes
-                            await drawingManager.appWillResignActive()
+                            await drawingManager.saveImmediately()
                             savePhotos()
-                            JournalManager.shared.stopICloudMonitoring()
                         }
                     }
                     .onChange(of: currentDate) { oldValue, newValue in
                         Task { @MainActor in
                             // Save old content
-                            await drawingManager.willSwitchDate(from: oldValue, to: newValue)
+                            await drawingManager.willSwitchDate()
                             savePhotos(for: oldValue)
                             
                             // Load new content
@@ -124,21 +106,14 @@ struct JournalView: View {
                         .navigationTitle("")
                         .toolbarTitleDisplayMode(.inline)
                         .onAppear {
-                            Task { @MainActor in
-                                // Ensure iCloud is ready
-                                JournalManager.shared.migrateLocalToICloudIfNeeded()
-                                JournalManager.shared.startICloudMonitoring()
-                                JournalManager.shared.ensureICloudReady(for: currentDate)
-                                
-                                // Load content
-                                loadDrawing()
-                                loadPhotos()
-                            }
+                            // Load content
+                            loadDrawing()
+                            loadPhotos()
                         }
                         .onChange(of: currentDate) { oldValue, newValue in
                             Task { @MainActor in
                                 // Save old content
-                                await drawingManager.willSwitchDate(from: oldValue, to: newValue)
+                                await drawingManager.willSwitchDate()
                                 savePhotos(for: oldValue)
                                 
                                 // Load new content
@@ -149,9 +124,8 @@ struct JournalView: View {
                         .onDisappear {
                             Task { @MainActor in
                                 // Save any pending changes
-                                await drawingManager.appWillResignActive()
+                                await drawingManager.saveImmediately()
                                 savePhotos()
-                                JournalManager.shared.stopICloudMonitoring()
                             }
                         }
                         .toolbar {
@@ -188,7 +162,7 @@ struct JournalView: View {
                                 Button("Done") {
                                     Task { @MainActor in
                                         // Save any pending changes
-                                        await drawingManager.appWillResignActive()
+                                        await drawingManager.saveImmediately()
                                         savePhotos()
                                         dismiss()
                                     }
@@ -311,21 +285,15 @@ struct JournalView: View {
                 switch newPhase {
                 case .inactive, .background:
                     // Save when app goes to background or becomes inactive
-                    await drawingManager.appWillResignActive()
+                    await drawingManager.saveImmediately()
                     savePhotos()
                 case .active:
-                    // Ensure content is loaded and up to date when becoming active
-                    JournalManager.shared.ensureICloudReady(for: currentDate)
+                    // Reload content when becoming active
                     loadDrawing()
                     loadPhotos()
                 @unknown default:
                     break
                 }
-            }
-        }
-        .onChange(of: currentDate) { oldDate, newDate in
-            Task { @MainActor in
-                await drawingManager.willSwitchDate(from: oldDate, to: newDate)
             }
         }
     }
@@ -336,7 +304,7 @@ struct JournalView: View {
     private func clearJournal() {
         // Clear drawing
         canvasView.drawing = PKDrawing()
-        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+        JournalStorageNew.shared.saveSync(canvasView.drawing, for: currentDate)
         
         // Clear photos from memory
         photos.removeAll()
@@ -357,14 +325,11 @@ struct JournalView: View {
         if let jsonData = try? JSONEncoder().encode(empty) {
             try? jsonData.write(to: metaURL, options: .atomic)
         }
-        
-        // Ensure changes sync to iCloud
-        JournalManager.shared.migrateLocalToICloudIfNeeded()
     }
 
     private func exportJournal() {
         // Save current drawing/photos first
-        JournalManager.shared.saveDrawing(for: currentDate, drawing: canvasView.drawing)
+        JournalStorageNew.shared.saveSync(canvasView.drawing, for: currentDate)
         savePhotos()
         // Stub: actual export (PDF/image) can be implemented as needed
     }
@@ -387,14 +352,10 @@ struct JournalView: View {
     }
     
     /// Directory where per-day photo PNGs are stored.
-    /// – If the user has iCloud Drive enabled for this app we store them in the
-    ///   app’s ubiquity container so they sync across devices.
-    /// – Otherwise we fall back to the local Documents directory so the feature
-    ///   still works offline / on simulator.
+    /// Stored in local Documents directory for now (simpler, more reliable)
     private func photosDirectory() -> URL {
-        // Persist locally to ensure reliability across sessions (matches drawing storage)
-        let rootDocs = JournalManager.shared.storageRootURL()
-        let dir = rootDocs.appendingPathComponent("journal_photos", isDirectory: true)
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("journal_photos", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
@@ -457,10 +418,7 @@ struct JournalView: View {
             
             let jsonData = try JSONEncoder().encode(metas)
             let url = metadataURL(for: targetDate)
-            try JournalManager.shared.writeData(jsonData, to: url)
-            
-            // Ensure iCloud migration picks up newly saved photos/metadata
-            JournalManager.shared.migrateLocalToICloudIfNeeded()
+            try jsonData.write(to: url, options: [.atomic])
             
             print("📝 Successfully saved photos for date: \(targetDate)")
         } catch {
@@ -474,14 +432,7 @@ struct JournalView: View {
         guard let data = try? Data(contentsOf: url), let metas = try? JSONDecoder().decode([PhotoMeta].self, from: data) else { return }
         for meta in metas {
             let fileURL = photosDirectory().appendingPathComponent(meta.fileName)
-            var dataOpt = try? Data(contentsOf: fileURL)
-            if dataOpt == nil {
-                // Try alternate roots if not found
-                let iCloudRoot = JournalManager.shared.storageRootURL()
-                let alt = iCloudRoot.appendingPathComponent("journal_photos").appendingPathComponent(meta.fileName)
-                dataOpt = try? Data(contentsOf: alt)
-            }
-            guard let data = dataOpt, let uiImg = UIImage(data: data) else { continue }
+            guard let data = try? Data(contentsOf: fileURL), let uiImg = UIImage(data: data) else { continue }
             let width = canvasSize.width > 0 ? canvasSize.width : UIScreen.main.bounds.width
             let height = canvasSize.height > 0 ? canvasSize.height : UIScreen.main.bounds.height
             let posX: CGFloat
