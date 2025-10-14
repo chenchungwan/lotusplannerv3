@@ -56,7 +56,11 @@ struct ListsView: View {
                             selectedListId: selectedListId,
                             selectedAccountKind: selectedAccountKind,
                             tasksVM: tasksVM,
-                            appPrefs: appPrefs
+                            appPrefs: appPrefs,
+                            onListDeleted: {
+                                selectedListId = nil
+                                selectedAccountKind = nil
+                            }
                         )
                         .frame(width: geometry.size.width * 0.65)
                     }
@@ -90,6 +94,13 @@ struct AllTaskListsColumn: View {
     let hasPersonal: Bool
     let hasProfessional: Bool
     
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    
+    // State for creating new list
+    @State private var showingNewListSheet = false
+    @State private var newListAccountKind: GoogleAuthManager.AccountKind?
+    @State private var newListName = ""
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
@@ -100,10 +111,17 @@ struct AllTaskListsColumn: View {
                 
                 Spacer()
                 
-                let totalCount = personalLists.count + professionalLists.count
-                Text("\(totalCount) \(totalCount == 1 ? "List" : "Lists")")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Button {
+                    // Reset the account selection when opening sheet
+                    newListAccountKind = nil
+                    newListName = ""
+                    showingNewListSheet = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
             }
             .padding()
             .background(Color(.systemGray6))
@@ -118,10 +136,13 @@ struct AllTaskListsColumn: View {
                         // Personal Header
                         HStack {
                             Text("Personal")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
+                                .font(.title2)
+                                .fontWeight(.bold)
                                 .foregroundColor(personalColor)
                             Spacer()
+                            Text("\(personalLists.count) \(personalLists.count == 1 ? "List" : "Lists")")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 8)
@@ -132,6 +153,7 @@ struct AllTaskListsColumn: View {
                             TaskListRow(
                                 taskList: taskList,
                                 accentColor: personalColor,
+                                taskCount: tasksVM.personalTasks[taskList.id]?.count ?? 0,
                                 isSelected: selectedListId == taskList.id && selectedAccountKind == .personal,
                                 onTap: {
                                     selectedListId = taskList.id
@@ -147,10 +169,13 @@ struct AllTaskListsColumn: View {
                         // Professional Header
                         HStack {
                             Text("Professional")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
+                                .font(.title2)
+                                .fontWeight(.bold)
                                 .foregroundColor(professionalColor)
                             Spacer()
+                            Text("\(professionalLists.count) \(professionalLists.count == 1 ? "List" : "Lists")")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 8)
@@ -161,6 +186,7 @@ struct AllTaskListsColumn: View {
                             TaskListRow(
                                 taskList: taskList,
                                 accentColor: professionalColor,
+                                taskCount: tasksVM.professionalTasks[taskList.id]?.count ?? 0,
                                 isSelected: selectedListId == taskList.id && selectedAccountKind == .professional,
                                 onTap: {
                                     selectedListId = taskList.id
@@ -173,6 +199,48 @@ struct AllTaskListsColumn: View {
                 }
             }
         }
+        .sheet(isPresented: $showingNewListSheet) {
+            NewListSheet(
+                accountKind: newListAccountKind,
+                hasPersonal: hasPersonal,
+                hasProfessional: hasProfessional,
+                personalColor: personalColor,
+                professionalColor: professionalColor,
+                listName: $newListName,
+                selectedAccount: $newListAccountKind,
+                onCreate: {
+                    createNewList()
+                }
+            )
+        }
+    }
+    
+    private func createNewList() {
+        // Determine which account to use
+        let accountToUse: GoogleAuthManager.AccountKind?
+        if hasPersonal && hasProfessional {
+            // Use the selected account from the sheet
+            accountToUse = newListAccountKind
+        } else if hasPersonal {
+            accountToUse = .personal
+        } else if hasProfessional {
+            accountToUse = .professional
+        } else {
+            accountToUse = nil
+        }
+        
+        guard let accountKind = accountToUse,
+              !newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
+        Task {
+            await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            await MainActor.run {
+                showingNewListSheet = false
+                newListName = ""
+            }
+        }
     }
 }
 
@@ -183,6 +251,19 @@ struct TasksDetailColumn: View {
     @ObservedObject var tasksVM: TasksViewModel
     @ObservedObject var appPrefs: AppPreferences
     @State private var selectedTask: GoogleTask?
+    
+    // State for renaming list
+    @State private var showingRenameSheet = false
+    @State private var renameText = ""
+    
+    // State for deleting list
+    @State private var showingDeleteConfirmation = false
+    
+    // State for deleting completed tasks
+    @State private var showingDeleteCompletedConfirmation = false
+    
+    // Callback to clear selection when list is deleted
+    var onListDeleted: () -> Void = {}
     
     var tasks: [GoogleTask] {
         guard let listId = selectedListId, let accountKind = selectedAccountKind else {
@@ -257,27 +338,43 @@ struct TasksDetailColumn: View {
             if let listTitle = selectedListTitle {
                 // Header with selected list name
                 HStack {
-                    Text(listTitle)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(accentColor)
-                    
-                    Spacer()
-                    
-                    // Eye filter toggle
                     Button {
-                        appPrefs.hideCompletedTasks.toggle()
+                        renameText = listTitle
+                        showingRenameSheet = true
                     } label: {
-                        Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
+                        Text(listTitle)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(accentColor)
                     }
                     .buttonStyle(.plain)
-                    .padding(.trailing, 8)
+                    
+                    Spacer()
                     
                     Text("\(tasks.count) \(tasks.count == 1 ? "Task" : "Tasks")")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    Menu {
+                        Button(role: .destructive) {
+                            showingDeleteCompletedConfirmation = true
+                        } label: {
+                            Label("Delete Completed Tasks", systemImage: "checkmark.circle")
+                        }
+                        
+                        Divider()
+                        
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete List", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding()
                 .background(accentColor.opacity(0.1))
@@ -285,22 +382,63 @@ struct TasksDetailColumn: View {
                 Divider()
                 
                 // Tasks list
-                if tasks.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle")
-                            .font(.system(size: 50))
-                            .foregroundColor(.secondary)
-                        Text("No Tasks")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text(appPrefs.hideCompletedTasks ? "All tasks are completed" : "This list is empty")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        // Quick "New Task" row at the top
+                        Button {
+                            // Create a new task with pre-filled values
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+                            let todayString = formatter.string(from: Calendar.current.startOfDay(for: Date()))
+                            
+                            let newTask = GoogleTask(
+                                id: UUID().uuidString,
+                                title: "",
+                                notes: nil,
+                                status: "needsAction",
+                                due: todayString,
+                                completed: nil,
+                                updated: nil,
+                                position: nil
+                            )
+                            selectedTask = newTask
+                        } label: {
+                            HStack(spacing: 12) {
+                                // Plus icon
+                                Image(systemName: "plus.circle")
+                                    .font(.title3)
+                                    .foregroundColor(accentColor)
+                                
+                                // Placeholder text
+                                Text("New task")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                            }
+                            .padding()
+                            .background(Color(.systemBackground))
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Divider()
+                        
+                        // Existing tasks
+                        if tasks.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.secondary)
+                                Text("No Tasks")
+                                    .font(.headline)
+                                    .foregroundColor(.secondary)
+                                Text(appPrefs.hideCompletedTasks ? "All tasks are completed" : "This list is empty")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 40)
+                        } else {
                             ForEach(tasks) { task in
                                 SimpleTaskRow(
                                     task: task,
@@ -337,6 +475,9 @@ struct TasksDetailColumn: View {
         .sheet(item: $selectedTask) { task in
             if let listId = selectedListId,
                let accountKind = selectedAccountKind {
+                // Check if this is a new task (empty ID means new)
+                let isNewTask = task.title.isEmpty && task.id.count > 30 // New UUID has length > 30
+                
                 TaskDetailsView(
                     task: task,
                     taskListId: listId,
@@ -354,8 +495,80 @@ struct TasksDetailColumn: View {
                     },
                     onMove: { _, _ in },
                     onCrossAccountMove: { _, _, _ in },
-                    isNew: false
+                    isNew: isNewTask
                 )
+            }
+        }
+        .sheet(isPresented: $showingRenameSheet) {
+            if let listTitle = selectedListTitle,
+               let listId = selectedListId,
+               let accountKind = selectedAccountKind {
+                RenameListSheet(
+                    listName: listTitle,
+                    accentColor: accentColor,
+                    newName: $renameText,
+                    onRename: {
+                        renameList(listId: listId, accountKind: accountKind)
+                    }
+                )
+            }
+        }
+        .alert("Delete List", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let listId = selectedListId,
+                   let accountKind = selectedAccountKind {
+                    deleteList(listId: listId, accountKind: accountKind)
+                }
+            }
+        } message: {
+            if let listTitle = selectedListTitle {
+                Text("Are you sure you want to delete '\(listTitle)'? ALL tasks in this list (completed and incomplete) will be permanently deleted. This action cannot be undone.")
+            }
+        }
+        .alert("Delete Completed Tasks", isPresented: $showingDeleteCompletedConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let listId = selectedListId,
+                   let accountKind = selectedAccountKind {
+                    deleteCompletedTasks(listId: listId, accountKind: accountKind)
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete all completed tasks from this list? This action cannot be undone.")
+        }
+    }
+    
+    private func renameList(listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        guard !renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        
+        Task {
+            await tasksVM.renameTaskList(listId: listId, newTitle: renameText.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            await MainActor.run {
+                showingRenameSheet = false
+                renameText = ""
+            }
+        }
+    }
+    
+    private func deleteList(listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        Task {
+            await tasksVM.deleteTaskList(listId: listId, for: accountKind)
+            await MainActor.run {
+                onListDeleted()
+            }
+        }
+    }
+    
+    private func deleteCompletedTasks(listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        let completedTasks = tasks.filter { $0.isCompleted }
+        
+        Task {
+            // Delete each completed task
+            for task in completedTasks {
+                await tasksVM.deleteTask(task, from: listId, for: accountKind)
             }
         }
     }
@@ -436,6 +649,7 @@ struct SimpleTaskRow: View {
 struct TaskListRow: View {
     let taskList: GoogleTaskList
     let accentColor: Color
+    var taskCount: Int = 0
     var isSelected: Bool = false
     var onTap: () -> Void = {}
     
@@ -450,6 +664,11 @@ struct TaskListRow: View {
                 
                 Spacer()
                 
+                // Task count
+                Text("(\(taskCount))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
                 // Chevron
                 if isSelected {
                     Image(systemName: "chevron.right")
@@ -462,6 +681,199 @@ struct TaskListRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - New List Sheet
+struct NewListSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let accountKind: GoogleAuthManager.AccountKind?
+    let hasPersonal: Bool
+    let hasProfessional: Bool
+    let personalColor: Color
+    let professionalColor: Color
+    @Binding var listName: String
+    @Binding var selectedAccount: GoogleAuthManager.AccountKind?
+    let onCreate: () -> Void
+    @FocusState private var isTextFieldFocused: Bool
+    
+    private var showAccountPicker: Bool {
+        // Always show picker if both accounts are available
+        return hasPersonal && hasProfessional
+    }
+    
+    private var accentColor: Color {
+        if let account = selectedAccount ?? accountKind {
+            return account == .personal ? personalColor : professionalColor
+        }
+        return .accentColor
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                // Account Picker (if both accounts are linked)
+                if showAccountPicker {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Account")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        HStack(spacing: 12) {
+                            if hasPersonal {
+                                Button(action: {
+                                    selectedAccount = .personal
+                                }) {
+                                    HStack {
+                                        Image(systemName: "person.circle.fill")
+                                        Text("Personal")
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(selectedAccount == .personal ? personalColor.opacity(0.2) : Color(.systemGray6))
+                                    )
+                                    .foregroundColor(selectedAccount == .personal ? personalColor : .primary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(selectedAccount == .personal ? personalColor : Color.clear, lineWidth: 2)
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                            
+                            if hasProfessional {
+                                Button(action: {
+                                    selectedAccount = .professional
+                                }) {
+                                    HStack {
+                                        Image(systemName: "briefcase.circle.fill")
+                                        Text("Professional")
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(selectedAccount == .professional ? professionalColor.opacity(0.2) : Color(.systemGray6))
+                                    )
+                                    .foregroundColor(selectedAccount == .professional ? professionalColor : .primary)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(selectedAccount == .professional ? professionalColor : Color.clear, lineWidth: 2)
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("List Name")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    TextField("Enter list name", text: $listName)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isTextFieldFocused)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            if !listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                               (selectedAccount != nil || accountKind != nil) {
+                                onCreate()
+                            }
+                        }
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding(.top)
+            .navigationTitle("New Task List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create") {
+                        onCreate()
+                    }
+                    .disabled(listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || 
+                             (showAccountPicker && selectedAccount == nil))
+                    .fontWeight(.semibold)
+                    .foregroundColor(accentColor)
+                }
+            }
+            .onAppear {
+                // Always set default account to Personal if not already set
+                if selectedAccount == nil {
+                    selectedAccount = .personal
+                }
+                isTextFieldFocused = true
+            }
+        }
+    }
+}
+
+// MARK: - Rename List Sheet
+struct RenameListSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let listName: String
+    let accentColor: Color
+    @Binding var newName: String
+    let onRename: () -> Void
+    @FocusState private var isTextFieldFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("List Name")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    TextField("Enter new name", text: $newName)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isTextFieldFocused)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            if !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                onRename()
+                            }
+                        }
+                }
+                .padding()
+                
+                Spacer()
+            }
+            .navigationTitle("Rename List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onRename()
+                    }
+                    .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .fontWeight(.semibold)
+                    .foregroundColor(accentColor)
+                }
+            }
+            .onAppear {
+                isTextFieldFocused = true
+            }
+        }
     }
 }
 
