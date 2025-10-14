@@ -6,11 +6,9 @@ import CoreData
 import UIKit
 #endif
 
-// MARK: - Debug Helper
+// MARK: - Debug Helper (disabled for performance)
 private func debugPrint(_ message: String) {
-    #if DEBUG
-    print(message)
-    #endif
+    // Debug printing disabled for performance
 }
 
 final class iCloudManager: ObservableObject {

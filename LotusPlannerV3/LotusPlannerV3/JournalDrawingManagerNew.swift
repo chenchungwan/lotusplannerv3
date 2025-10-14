@@ -17,8 +17,6 @@ class JournalDrawingManagerNew: ObservableObject {
     private let debounceDelay: TimeInterval = 1.0
     
     private init() {
-        print("📝 JournalDrawingManagerNew initialized")
-        
         // Save on app background
         NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
@@ -71,10 +69,8 @@ class JournalDrawingManagerNew: ObservableObject {
         do {
             try await JournalStorageNew.shared.save(pending.drawing, for: pending.date)
             pendingDrawing = nil
-            print("✅ Drawing saved successfully")
         } catch {
             lastSaveError = error.localizedDescription
-            print("❌ Save failed: \(error.localizedDescription)")
         }
         
         isSaving = false

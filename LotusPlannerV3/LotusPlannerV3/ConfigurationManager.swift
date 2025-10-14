@@ -1,10 +1,8 @@
 import Foundation
 
-// MARK: - Debug Helper
+// MARK: - Debug Helper (disabled for performance)
 private func debugPrint(_ message: String) {
-    #if DEBUG
-    print(message)
-    #endif
+    // Debug printing disabled for performance
 }
 
 /// Manages secure configuration and API keys for the app

@@ -935,7 +935,6 @@ class TasksViewModel: ObservableObject {
             // Refresh tasks after deletion
             await loadTasks(forceClear: true)
         } catch {
-            print("Error deleting completed tasks: \(error)")
             errorMessage = "Failed to delete completed tasks"
         }
     }
