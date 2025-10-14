@@ -24,7 +24,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .defaultNew: "Expanded"
         case .compact: "Classic"
         case .compactTwo: "Compact"
-        case .mobile: "Column"
+        case .mobile: "Mobile"
         }
     }
     
