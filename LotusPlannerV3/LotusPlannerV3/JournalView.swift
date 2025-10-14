@@ -50,9 +50,9 @@ struct JournalView: View {
     }
 
     private func loadDrawing() {
-        // Load on main to avoid race with view lifecycle
-        DispatchQueue.main.async {
-            if let drawing = JournalStorageNew.shared.load(for: currentDate) {
+        // Load asynchronously to support iCloud evict/download
+        Task { @MainActor in
+            if let drawing = await JournalStorageNew.shared.load(for: currentDate) {
                 canvasView.drawing = drawing
             } else {
                 canvasView.drawing = PKDrawing()

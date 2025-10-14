@@ -140,8 +140,8 @@ class JournalStorageNew {
     
     // MARK: - Load Drawing
     
-    /// Load a drawing from storage
-    func load(for date: Date) -> PKDrawing? {
+    /// Load a drawing from storage (async to support evict/download)
+    func load(for date: Date) async -> PKDrawing? {
         let dateStr = formatDate(date)
         
         print("📝 ==================== LOAD OPERATION ====================")
@@ -186,8 +186,24 @@ class JournalStorageNew {
             print("📝 File is in iCloud")
             print("📝 Download status: \(String(describing: downloadStatus))")
             
-            // Try to start download if needed
-            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+            // CRITICAL: Evict and re-download to get latest version
+            // This prevents loading stale cached versions
+            do {
+                print("📝 Evicting cached version to force fresh download...")
+                try FileManager.default.evictUbiquitousItem(at: url)
+                print("✅ Evicted old version")
+                
+                // Now download the latest version
+                try FileManager.default.startDownloadingUbiquitousItem(at: url)
+                print("✅ Downloading latest version from iCloud")
+                
+                // Wait a moment for download to start
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            } catch {
+                print("⚠️ Evict failed (may not have been downloaded): \(error.localizedDescription)")
+                // Still try to download
+                try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+            }
         } else {
             print("📝 File is LOCAL only")
         }
