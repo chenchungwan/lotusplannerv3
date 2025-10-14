@@ -102,7 +102,7 @@ class CoreDataManager: ObservableObject {
     
     func loadWorkoutEntries() -> [WorkoutLogEntry] {
         let request: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \WorkoutLog.date, ascending: false)]
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \WorkoutLog.createdAt, ascending: false)]
         
         do {
             let logs = try context.fetch(request)
@@ -152,7 +152,7 @@ class CoreDataManager: ObservableObject {
     
     func loadFoodEntries() -> [FoodLogEntry] {
         let request: NSFetchRequest<FoodLog> = FoodLog.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \FoodLog.date, ascending: false)]
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \FoodLog.createdAt, ascending: false)]
         
         do {
             let logs = try context.fetch(request)
@@ -206,7 +206,7 @@ class CoreDataManager: ObservableObject {
     
     func loadWaterEntries() -> [WaterLogEntry] {
         let request: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \WaterLog.date, ascending: false)]
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \WaterLog.createdAt, ascending: false)]
         
         do {
             let logs = try context.fetch(request)

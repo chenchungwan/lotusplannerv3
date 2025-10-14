@@ -49,25 +49,25 @@ class LogsViewModel: ObservableObject {
     var filteredWeightEntries: [WeightLogEntry] {
         return weightEntries.filter { entry in
             Calendar.current.isDate(entry.timestamp, inSameDayAs: currentDate)
-        }
+        }.sorted { $0.timestamp > $1.timestamp }  // Newest first
     }
     
     var filteredWorkoutEntries: [WorkoutLogEntry] {
         return workoutEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }
+        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
     }
     
     var filteredFoodEntries: [FoodLogEntry] {
         return foodEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }
+        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
     }
     
     var filteredWaterEntries: [WaterLogEntry] {
         return waterEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }
+        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
     }
     
     var accentColor: Color {

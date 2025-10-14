@@ -1203,25 +1203,25 @@ extension WeeklyView {
     private func getWeightLogsForDate(_ date: Date) -> [WeightLogEntry] {
         return logsViewModel.weightEntries.filter { entry in
             Calendar.current.isDate(entry.timestamp, inSameDayAs: date)
-        }.sorted { $0.timestamp < $1.timestamp }
+        }.sorted { $0.timestamp > $1.timestamp }  // Newest first
     }
     
     private func getWorkoutLogsForDate(_ date: Date) -> [WorkoutLogEntry] {
         return logsViewModel.workoutEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: date)
-        }.sorted { $0.date < $1.date }
+        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
     }
     
     private func getFoodLogsForDate(_ date: Date) -> [FoodLogEntry] {
         return logsViewModel.foodEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: date)
-        }.sorted { $0.date < $1.date }
+        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
     }
     
     private func getWaterLogsForDate(_ date: Date) -> [WaterLogEntry] {
         return logsViewModel.waterEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: date)
-        }.sorted { $0.date < $1.date }
+        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
     }
     
     private func weightLogCard(entry: WeightLogEntry) -> some View {
