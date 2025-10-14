@@ -396,12 +396,26 @@ struct JournalView: View {
             }
             
             var metas: [PhotoMeta] = []
+            let photoDir = photosDirectory()
+            print("📸 Photo directory: \(photoDir.path)")
+            
             for photo in photos {
                 let id = photo.id.uuidString
                 let fileName = id + ".png"
-                let fileURL = photosDirectory().appendingPathComponent(fileName)
+                let fileURL = photoDir.appendingPathComponent(fileName)
+                
                 if let data = photo.image.pngData() {
                     try data.write(to: fileURL, options: .atomic)
+                    print("📸 Wrote photo file: \(fileName) (\(data.count) bytes)")
+                    
+                    // Check if it's in iCloud
+                    var isUbiquitous: AnyObject?
+                    try? (fileURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                    if (isUbiquitous as? Bool) == true {
+                        print("✅ Photo file is in iCloud: \(fileName)")
+                    } else {
+                        print("⚠️ Photo file is LOCAL only: \(fileName)")
+                    }
                 }
                 let cw = max(canvasSize.width, 1)
                 let ch = max(canvasSize.height, 1)
@@ -430,14 +444,17 @@ struct JournalView: View {
             
             let jsonData = try JSONEncoder().encode(metas)
             let url = metadataURL(for: targetDate)
+            print("📸 Metadata file path: \(url.path)")
             try jsonData.write(to: url, options: [.atomic])
             
             // Check if saved to iCloud
             var isUbiquitous: AnyObject?
             try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
             if (isUbiquitous as? Bool) == true {
+                print("✅ Metadata saved to iCloud")
                 print("✅ Saved \(photos.count) photo(s) to iCloud")
             } else {
+                print("⚠️ Metadata saved LOCALLY")
                 print("⚠️ Saved \(photos.count) photo(s) LOCALLY (not in iCloud)")
             }
         } catch {
@@ -449,7 +466,12 @@ struct JournalView: View {
         photos.removeAll()
         let url = metadataURL(for: targetDate)
         
+        print("📸 ==================== LOAD PHOTOS ====================")
         print("📸 Loading photos for date: \(targetDate)")
+        print("📸 Metadata file path: \(url.path)")
+        
+        let photoDir = photosDirectory()
+        print("📸 Photo directory: \(photoDir.path)")
         
         // For iCloud files, evict cache to get fresh version
         let fm = FileManager.default
@@ -460,6 +482,8 @@ struct JournalView: View {
             // Evict and re-download metadata file
             try? fm.evictUbiquitousItem(at: url)
             try? fm.startDownloadingUbiquitousItem(at: url)
+            // Wait for download
+            Thread.sleep(forTimeInterval: 0.3)
         }
         
         guard let data = try? Data(contentsOf: url), let metas = try? JSONDecoder().decode([PhotoMeta].self, from: data) else { 
@@ -471,14 +495,36 @@ struct JournalView: View {
         for meta in metas {
             let fileURL = photosDirectory().appendingPathComponent(meta.fileName)
             
-            // For iCloud photo files, evict cache to get fresh version
-            try? (fileURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-            if (isUbiquitous as? Bool) == true {
-                try? fm.evictUbiquitousItem(at: fileURL)
-                try? fm.startDownloadingUbiquitousItem(at: fileURL)
+            print("📸 Loading photo file: \(meta.fileName)")
+            
+            // Check if file exists
+            let fileExists = fm.fileExists(atPath: fileURL.path)
+            print("📸 Photo file exists: \(fileExists)")
+            
+            if !fileExists {
+                print("❌ Photo file NOT found: \(fileURL.path)")
+                continue
             }
             
-            guard let data = try? Data(contentsOf: fileURL), let uiImg = UIImage(data: data) else { continue }
+            // For iCloud photo files, evict cache to get fresh version
+            try? (fileURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+            let isInCloud = (isUbiquitous as? Bool) == true
+            print("📸 Photo is in iCloud: \(isInCloud)")
+            
+            if isInCloud {
+                print("📸 Evicting and downloading photo from iCloud...")
+                try? fm.evictUbiquitousItem(at: fileURL)
+                try? fm.startDownloadingUbiquitousItem(at: fileURL)
+                // Wait a moment for download
+                Thread.sleep(forTimeInterval: 0.3)
+            }
+            
+            guard let data = try? Data(contentsOf: fileURL), let uiImg = UIImage(data: data) else {
+                print("❌ Failed to load photo data or create image")
+                continue
+            }
+            
+            print("✅ Photo loaded successfully: \(meta.fileName)")
             let width = canvasSize.width > 0 ? canvasSize.width : UIScreen.main.bounds.width
             let height = canvasSize.height > 0 ? canvasSize.height : UIScreen.main.bounds.height
             let posX: CGFloat
@@ -503,6 +549,7 @@ struct JournalView: View {
         }
         
         print("✅ Loaded \(photos.count) photo(s) successfully")
+        print("📸 ======================================================")
     }
     private func loadSelectedPhotos() {
         guard !pickerItems.isEmpty else { return }
