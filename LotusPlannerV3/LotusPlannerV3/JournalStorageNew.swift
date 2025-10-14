@@ -7,7 +7,16 @@ class JournalStorageNew {
     static let shared = JournalStorageNew()
     
     private init() {
-        print("📝 JournalStorageNew initialized")
+        print("📝 ============ JournalStorageNew Initialized ============")
+        print("📝 iCloud Available: \(iCloudURL != nil)")
+        if let iCloudPath = iCloudURL?.path {
+            print("📝 iCloud Container: \(iCloudPath)")
+        } else {
+            print("⚠️ iCloud NOT available - will use local storage only")
+            print("⚠️ Drawings will NOT sync between devices")
+        }
+        print("📝 Local Storage: \(localURL.path)")
+        print("📝 ========================================================")
     }
     
     // MARK: - Storage Locations
@@ -81,25 +90,45 @@ class JournalStorageNew {
         let data = drawing.dataRepresentation()
         let dateStr = formatDate(date)
         
+        print("📝 ==================== SAVE OPERATION ====================")
         print("📝 Saving drawing for \(dateStr), size: \(data.count) bytes")
+        print("📝 iCloud Available: \(iCloudURL != nil)")
+        if let iCloudPath = iCloudURL?.path {
+            print("📝 iCloud Path: \(iCloudPath)")
+        }
         
         guard let url = storageURL(for: date) else {
             throw NSError(domain: "JournalStorage", code: -1, 
                          userInfo: [NSLocalizedDescriptionKey: "No storage location available"])
         }
         
+        print("📝 Full Save Path: \(url.path)")
+        
         // Write directly to the URL (iCloud or local)
         try data.write(to: url, options: [.atomic])
+        
+        // Verify file was written
+        let fileExists = FileManager.default.fileExists(atPath: url.path)
+        print("📝 File exists after write: \(fileExists)")
+        
+        // Check if file is actually in iCloud
+        var isUbiquitous: AnyObject?
+        try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+        let isInCloud = (isUbiquitous as? Bool) == true
         
         // Cache it
         setCache(drawing, for: date)
         
-        // Check if it's in iCloud
-        if url.path.contains("Mobile Documents") {
+        // Report results
+        if isInCloud {
             print("✅ Saved to iCloud: \(url.lastPathComponent)")
+            print("✅ File should sync to other devices automatically")
         } else {
-            print("✅ Saved locally: \(url.lastPathComponent)")
+            print("⚠️ Saved LOCALLY (NOT in iCloud): \(url.lastPathComponent)")
+            print("⚠️ File will NOT sync to other devices")
+            print("⚠️ Check: Is iCloud Drive enabled for this app?")
         }
+        print("📝 ========================================================")
     }
     
     /// Synchronous save wrapper for convenience
@@ -115,21 +144,52 @@ class JournalStorageNew {
     func load(for date: Date) -> PKDrawing? {
         let dateStr = formatDate(date)
         
+        print("📝 ==================== LOAD OPERATION ====================")
+        print("📝 Loading drawing for: \(dateStr)")
+        
         // Check cache first
         if let cached = getCached(date) {
-            print("📝 Loaded from cache: \(dateStr)")
+            print("✅ Loaded from in-memory cache")
+            print("📝 ========================================================")
             return cached
         }
         
+        print("📝 Not in cache, checking storage...")
+        print("📝 iCloud Available: \(iCloudURL != nil)")
+        
         guard let url = storageURL(for: date) else {
-            print("⚠️ No storage location available")
+            print("❌ No storage location available")
+            print("📝 ========================================================")
             return nil
         }
         
+        print("📝 Full Load Path: \(url.path)")
+        
         // Check if file exists
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            print("📝 No drawing file for: \(dateStr)")
+        let fileExists = FileManager.default.fileExists(atPath: url.path)
+        print("📝 File exists: \(fileExists)")
+        
+        guard fileExists else {
+            print("📝 No drawing file found for: \(dateStr)")
+            print("📝 ========================================================")
             return nil
+        }
+        
+        // Check if file is in iCloud
+        var isUbiquitous: AnyObject?
+        var downloadStatus: AnyObject?
+        try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+        try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
+        let isInCloud = (isUbiquitous as? Bool) == true
+        
+        if isInCloud {
+            print("📝 File is in iCloud")
+            print("📝 Download status: \(String(describing: downloadStatus))")
+            
+            // Try to start download if needed
+            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        } else {
+            print("📝 File is LOCAL only")
         }
         
         // Try to load
@@ -141,9 +201,11 @@ class JournalStorageNew {
             setCache(drawing, for: date)
             
             print("✅ Loaded drawing: \(dateStr) (\(drawing.strokes.count) strokes)")
+            print("📝 ========================================================")
             return drawing
         } catch {
             print("❌ Failed to load drawing: \(error.localizedDescription)")
+            print("📝 ========================================================")
             return nil
         }
     }
