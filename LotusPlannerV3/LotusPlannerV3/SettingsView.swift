@@ -15,26 +15,28 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compactTwo = 1
     case defaultNew = 3
     case mobile = 4
+    case expVertical = 5
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .expVertical, .mobile] }
 
     var displayName: String {
         switch self {
-        case .defaultNew: "Expanded"
+        case .defaultNew: "Expanded Horizontal"
         case .compact: "Classic"
         case .compactTwo: "Compact"
         case .mobile: "Mobile"
+        case .expVertical: "Expanded Vertical"
         }
     }
     
     var description: String {
         switch self {
-        case .defaultNew: "Timeline & Tasks side-by-side, Logs row, then Journal"
+        case .defaultNew: "Horizontal layout: Timeline & Tasks side-by-side, Logs row, then Journal"
         case .compact: "Classic layout with Timeline on left, Tasks and Journal on right with adjustable divider"
         case .compactTwo: "Compact layout with Tasks first, then Timeline + Logs column next to Journal"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
-        
+        case .expVertical: "Vertical layout: Events & Tasks on top, Logs in middle, Journal at bottom"
         }
     }
 }

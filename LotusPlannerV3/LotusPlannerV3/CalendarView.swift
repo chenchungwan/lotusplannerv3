@@ -2300,6 +2300,11 @@ struct CalendarView: View {
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
+        case .expVertical:
+            DayViewExpVertical(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         default:
             dayViewContentCompact(geometry: geometry)
         }
