@@ -59,8 +59,6 @@ struct ContentView: View {
         case .lists:
             ListsView()
         
-        case .goals:
-            GoalsView()
 
         case .journal:
                 JournalView(currentDate: Date())

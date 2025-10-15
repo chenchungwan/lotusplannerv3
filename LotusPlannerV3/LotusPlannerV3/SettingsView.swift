@@ -99,7 +99,6 @@ class NavigationManager: ObservableObject {
         case calendar
         case tasks
         case lists
-        case goals
         case journal
         case weeklyView
         case gWeekView
@@ -139,10 +138,6 @@ class NavigationManager: ObservableObject {
         showTasksView = false
     }
     
-    func switchToGoals() {
-        currentView = .goals
-        showTasksView = false
-    }
     
     func switchToJournal() {
         currentView = .journal
@@ -314,12 +309,6 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Show goals view
-    @Published var showGoals: Bool {
-        didSet {
-            UserDefaults.standard.set(showGoals, forKey: "showGoals")
-        }
-    }
     
     // Day View Divider Positions
     @Published var dayViewCompactTasksHeight: CGFloat {
@@ -427,8 +416,6 @@ class AppPreferences: ObservableObject {
         // Load journal visibility preference (default visible)
         self.showJournal = UserDefaults.standard.object(forKey: "showJournal") as? Bool ?? true
         
-        // Load goals visibility preference (default visible)
-        self.showGoals = UserDefaults.standard.object(forKey: "showGoals") as? Bool ?? true
 
 
         
@@ -831,24 +818,6 @@ struct SettingsView: View {
                     }
                 }
                 
-                Section("Goals Preferences") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showGoals },
-                        set: { appPrefs.showGoals = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "target")
-                                .foregroundColor(appPrefs.showGoals ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Show Goals")
-                                    .font(.body)
-                                Text("Show Goals menu option")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
                 
                 Section("App Preferences") {
                     HStack {
