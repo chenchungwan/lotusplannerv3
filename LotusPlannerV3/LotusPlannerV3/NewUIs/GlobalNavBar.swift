@@ -14,14 +14,15 @@ struct GlobalNavBar: View {
     @State private var showingDatePicker = false
     @State private var showingAddEvent = false
     @State private var showingAddTask = false
+    @State private var showingAddGoal = false
     
     // Date picker state
     @State private var selectedDateForPicker = Date()
     
     private var dateLabel: String {
-        // Show "Lists" when in Lists view
+        // Hide title when in Lists view
         if navigationManager.currentView == .lists {
-            return "Lists"
+            return ""
         }
         
         // Show "All Tasks" when in Tasks view and showing all tasks
@@ -235,8 +236,8 @@ struct GlobalNavBar: View {
                         
                         if !isNarrow {
                         Spacer()
-                            // Hide navigation buttons in Lists view
-                            if navigationManager.currentView != .lists {
+                            // Hide navigation buttons in Lists view and Goals view
+                            if navigationManager.currentView != .lists && navigationManager.currentView != .goals {
                                 Button {
                                     if navigationManager.showTasksView {
                                         // In Tasks view: filter to current day
@@ -365,6 +366,9 @@ struct GlobalNavBar: View {
                                 }
                                 Button("Task") {
                                     showingAddTask = true
+                                }
+                                Button("Goal") {
+                                    showingAddGoal = true
                                 }
                             } label: {
                                 Image(systemName: "plus")
@@ -508,6 +512,9 @@ struct GlobalNavBar: View {
                                 Button("Task") {
                                     showingAddTask = true
                                 }
+                                Button("Goal") {
+                                    showingAddGoal = true
+                                }
                             } label: {
                                 Image(systemName: "plus")
                                     .font(.title2)
@@ -599,6 +606,11 @@ struct GlobalNavBar: View {
                     onCrossAccountMove: { _, _, _ in },
                     isNew: true
                 )
+            }
+        }
+        .sheet(isPresented: $showingAddGoal) {
+            NavigationStack {
+                AddGoalView()
             }
         }
     }

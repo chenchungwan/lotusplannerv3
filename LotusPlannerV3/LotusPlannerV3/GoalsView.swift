@@ -1,13 +1,214 @@
 import SwiftUI
 
+enum GoalFilter: String, CaseIterable {
+    case all = "all"
+    case hasDueDate = "hasDueDate"
+    case noDueDate = "noDueDate"
+    case completed = "completed"
+    case overdue = "overdue"
+    
+    var displayName: String {
+        switch self {
+        case .all: return "All"
+        case .hasDueDate: return "Has Due Date"
+        case .noDueDate: return "No Due Date"
+        case .completed: return "Completed"
+        case .overdue: return "Overdue"
+        }
+    }
+}
+
 struct GoalsView: View {
-    @StateObject private var viewModel = GoalsViewModel()
+    @ObservedObject private var viewModel = DataManager.shared.goalsViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @State private var showingEditGoal = false
+    @State private var selectedGoalForEdit: Goal?
+    @State private var selectedCategoryForEdit: UUID?
+    
+    // Filtering state
+    @State private var currentFilter: GoalFilter = .all
+    @State private var currentTimeframeFilter: String? = nil
+    
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        return formatter
+    }()
+    
+    // Filtered categories based on current filters
+    private var filteredCategories: [GoalCategory] {
+        var filtered = viewModel.categories
+        
+        // Apply status filtering
+        switch currentFilter {
+        case .all:
+            break
+        case .hasDueDate:
+            filtered = filtered.map { category in
+                var filteredCategory = category
+                filteredCategory.goals = category.goals.filter { goal in
+                    // Goals with due dates (not the default calculated date)
+                    let calendar = Calendar.current
+                    let now = Date()
+                    let defaultDueDate = calculateDefaultDueDate(for: goal.timeframe, from: now)
+                    return goal.dueDate != defaultDueDate
+                }
+                return filteredCategory
+            }
+        case .noDueDate:
+            filtered = filtered.map { category in
+                var filteredCategory = category
+                filteredCategory.goals = category.goals.filter { goal in
+                    // Goals without due dates (using default calculated date)
+                    let calendar = Calendar.current
+                    let now = Date()
+                    let defaultDueDate = calculateDefaultDueDate(for: goal.timeframe, from: now)
+                    return goal.dueDate == defaultDueDate
+                }
+                return filteredCategory
+            }
+        case .completed:
+            filtered = filtered.map { category in
+                var filteredCategory = category
+                filteredCategory.goals = category.goals.filter { $0.isCompleted }
+                return filteredCategory
+            }
+        case .overdue:
+            filtered = filtered.map { category in
+                var filteredCategory = category
+                filteredCategory.goals = category.goals.filter { goal in
+                    !goal.isCompleted && goal.dueDate < Date()
+                }
+                return filteredCategory
+            }
+        }
+        
+        // Apply timeframe filtering
+        if let timeframe = currentTimeframeFilter {
+            filtered = filtered.map { category in
+                var filteredCategory = category
+                filteredCategory.goals = category.goals.filter { goal in
+                    goal.timeframe.rawValue == timeframe
+                }
+                return filteredCategory
+            }
+        }
+        
+        return filtered
+    }
+    
+    private func calculateDefaultDueDate(for timeframe: Timeframe, from date: Date) -> Date {
+        let calendar = Calendar.current
+        
+        switch timeframe {
+        case .week:
+            // Due at end of current week (Sunday)
+            let weekday = calendar.component(.weekday, from: date)
+            let daysUntilSunday = (7 - weekday) % 7
+            return calendar.date(byAdding: .day, value: daysUntilSunday, to: date) ?? date
+        case .month:
+            // Due at end of current month
+            let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) ?? date
+            let startOfNextMonth = calendar.dateInterval(of: .month, for: nextMonth)?.start ?? nextMonth
+            return calendar.date(byAdding: .day, value: -1, to: startOfNextMonth) ?? date
+        case .year:
+            // Due at end of current year
+            let nextYear = calendar.date(byAdding: .year, value: 1, to: date) ?? date
+            let startOfNextYear = calendar.dateInterval(of: .year, for: nextYear)?.start ?? nextYear
+            return calendar.date(byAdding: .day, value: -1, to: startOfNextYear) ?? date
+        }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             // Navigation Bar
             GlobalNavBar()
+            
+            // Filter Status Display (for testing)
+            if currentFilter != .all || currentTimeframeFilter != nil {
+                HStack {
+                    Text("Filter: ")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    if currentFilter != .all {
+                        Text(currentFilter.displayName)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.2))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                    }
+                    
+                    if let timeframe = currentTimeframeFilter {
+                        Text(timeframe.capitalized)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.green.opacity(0.2))
+                            .foregroundColor(.green)
+                            .cornerRadius(4)
+                    }
+                    
+                    Spacer()
+                    
+                    // Test buttons for filtering
+                    HStack(spacing: 8) {
+                        Button("W") {
+                            currentTimeframeFilter = "week"
+                            currentFilter = .all
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        
+                        Button("M") {
+                            currentTimeframeFilter = "month"
+                            currentFilter = .all
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        
+                        Button("Y") {
+                            currentTimeframeFilter = "year"
+                            currentFilter = .all
+                        }
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        
+                        Button("All") {
+                            currentFilter = .all
+                            currentTimeframeFilter = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.green)
+                        
+                        Button("Comp") {
+                            currentFilter = .completed
+                            currentTimeframeFilter = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        
+                        Button("Over") {
+                            currentFilter = .overdue
+                            currentTimeframeFilter = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        
+                        Button("Clear") {
+                            currentFilter = .all
+                            currentTimeframeFilter = nil
+                        }
+                        .font(.caption)
+                        .foregroundColor(.red)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6))
+            }
             
             // Main Content
             GeometryReader { geometry in
@@ -19,14 +220,14 @@ struct GoalsView: View {
                         ],
                         spacing: 16
                     ) {
-                        ForEach(viewModel.categories) { category in
+                        ForEach(filteredCategories) { category in
                             GoalCategoryCard(
                                 category: category,
                                 onRename: { newName in
                                     viewModel.renameCategory(category.id, to: newName)
                                 },
-                                onAddGoal: { goalTitle in
-                                    viewModel.addGoal(to: category.id, title: goalTitle)
+                                onAddGoal: { goalTitle, timeframe in
+                                    viewModel.addGoal(to: category.id, title: goalTitle, timeframe: timeframe)
                                 },
                                 onToggleGoal: { goalId in
                                     viewModel.toggleGoalCompletion(goalId, in: category.id)
@@ -39,6 +240,11 @@ struct GoalsView: View {
                                 },
                                 onDeleteCategory: {
                                     viewModel.deleteCategory(category.id)
+                                },
+                                onTapGoal: { goal in
+                                    selectedGoalForEdit = goal
+                                    selectedCategoryForEdit = category.id
+                                    showingEditGoal = true
                                 }
                             )
                             .frame(height: geometry.size.height / 3 - 16)
@@ -65,6 +271,43 @@ struct GoalsView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingEditGoal) {
+            if let goal = selectedGoalForEdit, let categoryId = selectedCategoryForEdit {
+                EditGoalView(
+                    goal: goal,
+                    categoryId: categoryId,
+                    onDelete: { goalId in
+                        viewModel.deleteGoal(goalId, from: categoryId)
+                    }
+                )
+            }
+        }
+        .onChange(of: showingEditGoal) { _, newValue in
+            if !newValue {
+                // Reset state when sheet is dismissed
+                selectedGoalForEdit = nil
+                selectedCategoryForEdit = nil
+            }
+        }
+        .onAppear {
+            setupNotificationListeners()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FilterGoalsByStatus"))) { notification in
+            if let status = notification.object as? String {
+                currentFilter = GoalFilter(rawValue: status) ?? .all
+                currentTimeframeFilter = nil // Clear timeframe filter when status filter is applied
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("FilterGoalsByTimeframe"))) { notification in
+            if let timeframe = notification.object as? String {
+                currentTimeframeFilter = timeframe
+                currentFilter = .all // Clear status filter when timeframe filter is applied
+            }
+        }
+    }
+    
+    private func setupNotificationListeners() {
+        // Notification listeners are set up via onReceive modifiers
     }
 }
 
@@ -72,16 +315,18 @@ struct GoalsView: View {
 struct GoalCategoryCard: View {
     let category: GoalCategory
     let onRename: (String) -> Void
-    let onAddGoal: (String) -> Void
+    let onAddGoal: (String, Timeframe) -> Void
     let onToggleGoal: (UUID) -> Void
     let onDeleteGoal: (UUID) -> Void
     let onEditGoal: (UUID, String) -> Void
     let onDeleteCategory: () -> Void
+    let onTapGoal: (Goal) -> Void
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
     @State private var showingAddGoal = false
     @State private var newGoalTitle = ""
+    @State private var selectedTimeframe: Timeframe = .year
     @State private var editingGoalId: UUID?
     @State private var editingGoalText = ""
     @State private var showingDeleteAlert = false
@@ -127,17 +372,6 @@ struct GoalCategoryCard: View {
                         .foregroundColor(.red)
                 }
                 .buttonStyle(.plain)
-                
-                // Add goal button
-                Button(action: {
-                    showingAddGoal = true
-                    newGoalTitle = ""
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.blue)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -149,78 +383,116 @@ struct GoalCategoryCard: View {
                 VStack(spacing: 8) {
                     // Add goal input (when active)
                     if showingAddGoal {
-                        HStack(spacing: 8) {
+                        VStack(spacing: 8) {
                             TextField("New goal", text: $newGoalTitle)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .onSubmit {
                                     addNewGoal()
                                 }
                             
-                            Button("Add") {
-                                addNewGoal()
+                            // Timeframe selection
+                            HStack {
+                                Text("Timeframe:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Picker("Timeframe", selection: $selectedTimeframe) {
+                                    ForEach(Timeframe.allCases, id: \.self) { timeframe in
+                                        Text(timeframe.displayName).tag(timeframe)
+                                    }
+                                }
+                                .pickerStyle(SegmentedPickerStyle())
+                                .frame(maxWidth: 200)
+                                
+                                Spacer()
                             }
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                            .disabled(newGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             
-                            Button("Cancel") {
-                                showingAddGoal = false
-                                newGoalTitle = ""
+                            HStack(spacing: 8) {
+                                Button("Add") {
+                                    addNewGoal()
+                                }
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                                .disabled(newGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                
+                                Button("Cancel") {
+                                    showingAddGoal = false
+                                    newGoalTitle = ""
+                                    selectedTimeframe = .year
+                                }
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                             }
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 8)
                     }
                     
                     // Existing goals
                     ForEach(category.goals) { goal in
-                        HStack(spacing: 8) {
-                            // Checkbox
-                            Button(action: {
-                                onToggleGoal(goal.id)
-                            }) {
-                                Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .font(.body)
-                                    .foregroundColor(goal.isCompleted ? .green : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            // Goal title (editable on tap)
-                            if editingGoalId == goal.id {
-                                TextField("Goal", text: $editingGoalText)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .onSubmit {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                // Checkbox
+                                Button(action: {
+                                    onToggleGoal(goal.id)
+                                }) {
+                                    Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.body)
+                                        .foregroundColor(goal.isCompleted ? .green : .secondary)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                // Goal title (editable on tap)
+                                if editingGoalId == goal.id {
+                                    TextField("Goal", text: $editingGoalText)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        .onSubmit {
+                                            saveGoalEdit()
+                                        }
+                                    
+                                    Button("Save") {
                                         saveGoalEdit()
                                     }
-                                
-                                Button("Save") {
-                                    saveGoalEdit()
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                                } else {
+                                    Text(goal.title)
+                                        .font(.body)
+                                        .strikethrough(goal.isCompleted)
+                                        .foregroundColor(goal.isCompleted ? .secondary : .primary)
+                                        .lineLimit(2)
+                                        .onTapGesture {
+                                            onTapGoal(goal)
+                                        }
                                 }
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                            } else {
-                                Text(goal.title)
-                                    .font(.body)
-                                    .strikethrough(goal.isCompleted)
-                                    .foregroundColor(goal.isCompleted ? .secondary : .primary)
-                                    .lineLimit(2)
-                                    .onTapGesture {
-                                        startEditingGoal(goal)
-                                    }
+                            }
+                            
+                            // Goal details
+                            HStack {
+                                // Timeframe badge
+                                Text(goal.timeframe.displayName)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.2))
+                                    .foregroundColor(.blue)
+                                    .cornerRadius(4)
+                                
+                                // Due date
+                                Text("Due: \(goal.dueDate, formatter: DateFormatter.shortDate)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                                 
                                 Spacer()
                                 
-                                // Delete button
-                                Button(action: {
-                                    onDeleteGoal(goal.id)
-                                }) {
-                                    Image(systemName: "trash")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
+                                // Completion status
+                                if goal.isCompleted {
+                                    Text("Completed")
+                                        .font(.caption2)
+                                        .foregroundColor(.green)
+                                        .fontWeight(.medium)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding(.leading, 24) // Align with goal title
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -267,8 +539,9 @@ struct GoalCategoryCard: View {
     private func addNewGoal() {
         let trimmed = newGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            onAddGoal(trimmed)
+            onAddGoal(trimmed, selectedTimeframe)
             newGoalTitle = ""
+            selectedTimeframe = .year
             showingAddGoal = false
         }
     }
@@ -393,15 +666,35 @@ struct GoalCategoryDropDelegate: DropDelegate {
 }
 
 // MARK: - Data Models
+enum Timeframe: String, CaseIterable, Codable {
+    case week = "week"
+    case month = "month"
+    case year = "year"
+    
+    var displayName: String {
+        switch self {
+        case .week: return "Week"
+        case .month: return "Month"
+        case .year: return "Year"
+        }
+    }
+}
+
 struct Goal: Identifiable, Codable {
     let id: UUID
     var title: String
+    var category: String
+    var timeframe: Timeframe
+    var dueDate: Date
     var isCompleted: Bool
     var createdAt: Date
     
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, createdAt: Date = Date()) {
+    init(id: UUID = UUID(), title: String, category: String, timeframe: Timeframe, dueDate: Date, isCompleted: Bool = false, createdAt: Date = Date()) {
         self.id = id
         self.title = title
+        self.category = category
+        self.timeframe = timeframe
+        self.dueDate = dueDate
         self.isCompleted = isCompleted
         self.createdAt = createdAt
     }
@@ -466,11 +759,36 @@ class GoalsViewModel: ObservableObject {
         saveCategories()
     }
     
-    func addGoal(to categoryId: UUID, title: String) {
+    func addGoal(to categoryId: UUID, title: String, timeframe: Timeframe = .year) {
         if let index = categories.firstIndex(where: { $0.id == categoryId }) {
-            let newGoal = Goal(title: title)
+            let categoryTitle = categories[index].title
+            let dueDate = calculateDueDate(for: timeframe)
+            let newGoal = Goal(title: title, category: categoryTitle, timeframe: timeframe, dueDate: dueDate)
             categories[index].goals.append(newGoal)
             saveCategories()
+        }
+    }
+    
+    private func calculateDueDate(for timeframe: Timeframe) -> Date {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch timeframe {
+        case .week:
+            // Due at end of current week (Sunday)
+            let weekday = calendar.component(.weekday, from: now)
+            let daysUntilSunday = (7 - weekday) % 7
+            return calendar.date(byAdding: .day, value: daysUntilSunday, to: now) ?? now
+        case .month:
+            // Due at end of current month
+            let nextMonth = calendar.date(byAdding: .month, value: 1, to: now) ?? now
+            let startOfNextMonth = calendar.dateInterval(of: .month, for: nextMonth)?.start ?? nextMonth
+            return calendar.date(byAdding: .day, value: -1, to: startOfNextMonth) ?? now
+        case .year:
+            // Due at end of current year
+            let nextYear = calendar.date(byAdding: .year, value: 1, to: now) ?? now
+            let startOfNextYear = calendar.dateInterval(of: .year, for: nextYear)?.start ?? nextYear
+            return calendar.date(byAdding: .day, value: -1, to: startOfNextYear) ?? now
         }
     }
     
@@ -497,7 +815,24 @@ class GoalsViewModel: ObservableObject {
         }
     }
     
-    private func saveCategories() {
+    func updateGoalTimeframe(_ goalId: UUID, in categoryId: UUID, newTimeframe: Timeframe) {
+        if let categoryIndex = categories.firstIndex(where: { $0.id == categoryId }),
+           let goalIndex = categories[categoryIndex].goals.firstIndex(where: { $0.id == goalId }) {
+            categories[categoryIndex].goals[goalIndex].timeframe = newTimeframe
+            categories[categoryIndex].goals[goalIndex].dueDate = calculateDueDate(for: newTimeframe)
+            saveCategories()
+        }
+    }
+    
+    func updateGoalDueDate(_ goalId: UUID, in categoryId: UUID, newDueDate: Date) {
+        if let categoryIndex = categories.firstIndex(where: { $0.id == categoryId }),
+           let goalIndex = categories[categoryIndex].goals.firstIndex(where: { $0.id == goalId }) {
+            categories[categoryIndex].goals[goalIndex].dueDate = newDueDate
+            saveCategories()
+        }
+    }
+    
+    func saveCategories() {
         if let encoded = try? JSONEncoder().encode(categories) {
             userDefaults.set(encoded, forKey: categoriesKey)
         }
