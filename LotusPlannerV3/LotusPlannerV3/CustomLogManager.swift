@@ -44,6 +44,9 @@ class CustomLogManager: ObservableObject {
         self.privateDatabase = cloudKitContainer.privateCloudDatabase
         loadData()
         setupCloudKitSubscription()
+        Task {
+            await fetchFromiCloud()
+        }
     }
     
     // MARK: - Data Loading
@@ -279,12 +282,128 @@ class CustomLogManager: ObservableObject {
     }
     
     private func performCloudKitSync() async {
-        // Implementation for CloudKit sync
-        // Similar to other managers' sync logic
+        syncStatus = .syncing
+        
+        do {
+            // Create container for sync
+            let container = CustomLogContainer(
+                items: items,
+                entries: entries,
+                lastSyncDate: Date()
+            )
+            
+            // Encode to JSON
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(container)
+            
+            // Create CloudKit record
+            let record = CKRecord(recordType: "CustomLogData")
+            record["data"] = data
+            record["lastSyncDate"] = Date()
+            
+            // Save to CloudKit
+            _ = try await privateDatabase.save(record)
+            
+            // Update local sync date
+            UserDefaults.standard.set(Date(), forKey: lastSyncKey)
+            
+            syncStatus = .success
+        } catch {
+            syncStatus = .error(error.localizedDescription)
+            print("Custom Log CloudKit sync error: \(error)")
+        }
     }
     
     func forceSync() async {
         await performCloudKitSync()
+    }
+    
+    private func fetchFromiCloud() async {
+        do {
+            let query = CKQuery(recordType: "CustomLogData", predicate: NSPredicate(value: true))
+            let results = try await privateDatabase.records(matching: query)
+            
+            for (_, result) in results.matchResults {
+                switch result {
+                case .success(let record):
+                    if let data = record["data"] as? Data {
+                        let decoder = JSONDecoder()
+                        decoder.dateDecodingStrategy = .iso8601
+                        let container = try decoder.decode(CustomLogContainer.self, from: data)
+                        
+                        // Update local data if CloudKit data is newer
+                        if let cloudSyncDate = record["lastSyncDate"] as? Date,
+                           let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date,
+                           cloudSyncDate > localSyncDate {
+                            
+                            await updateCoreDataFromCloudKit(container: container)
+                        }
+                    }
+                case .failure(let error):
+                    print("Custom Log CloudKit fetch error: \(error)")
+                }
+            }
+        } catch {
+            print("Custom Log CloudKit fetch error: \(error)")
+        }
+    }
+    
+    private func saveItemToCoreData(_ item: CustomLogItemData) {
+        let entity = CustomLogItem(context: context)
+        entity.id = item.id.uuidString
+        entity.title = item.title
+        entity.isEnabled = item.isEnabled
+        entity.displayOrder = Int16(item.displayOrder)
+        entity.createdAt = item.createdAt
+        entity.updatedAt = item.updatedAt
+        entity.userId = "default" // Add default userId for CloudKit sync
+    }
+    
+    private func saveEntryToCoreData(_ entry: CustomLogEntryData) {
+        let entity = CustomLogEntry(context: context)
+        entity.id = entry.id.uuidString
+        entity.itemId = entry.itemId.uuidString
+        entity.date = entry.date
+        entity.isCompleted = entry.isCompleted
+        entity.createdAt = entry.createdAt
+        entity.updatedAt = entry.updatedAt
+        entity.userId = "default" // Add default userId for CloudKit sync
+    }
+    
+    private func updateCoreDataFromCloudKit(container: CustomLogContainer) async {
+        // Clear existing data
+        let itemRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogItem.fetchRequest()
+        let deleteItemRequest = NSBatchDeleteRequest(fetchRequest: itemRequest)
+        
+        let entryRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogEntry.fetchRequest()
+        let deleteEntryRequest = NSBatchDeleteRequest(fetchRequest: entryRequest)
+        
+        do {
+            try context.execute(deleteItemRequest)
+            try context.execute(deleteEntryRequest)
+            
+            // Save new data
+            for item in container.items {
+                saveItemToCoreData(item)
+            }
+            
+            for entry in container.entries {
+                saveEntryToCoreData(entry)
+            }
+            
+            try context.save()
+            
+            // Update local arrays
+            await MainActor.run {
+                items = container.items
+                entries = container.entries
+                updateCustomLogVisibility()
+            }
+            
+        } catch {
+            print("Error updating Core Data from CloudKit: \(error)")
+        }
     }
     
     func refreshData() {

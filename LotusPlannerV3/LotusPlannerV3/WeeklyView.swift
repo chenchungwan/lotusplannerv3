@@ -485,7 +485,7 @@ extension WeeklyView {
             }
             
             // Custom Logs Row
-            if appPrefs.showCustomLogs {
+            if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
                 VStack(alignment: .leading, spacing: 4) {
                     
                     // Fixed-width 7-day custom log columns
@@ -795,12 +795,10 @@ extension WeeklyView {
             }
             
             // Custom Logs column
-            if appPrefs.showCustomLogs {
+            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                 VStack(alignment: .leading, spacing: 4) {
                     let enabledItems = customLogManager.items.filter { $0.isEnabled }
-                    if !enabledItems.isEmpty {
-                        customLogSummary(items: enabledItems, date: date)
-                    }
+                    customLogSummary(items: enabledItems, date: date)
                     Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
@@ -1193,7 +1191,7 @@ extension WeeklyView {
         }
         
         return VStack(alignment: .leading, spacing: 4) {
-            if !enabledItems.isEmpty {
+            if !enabledItems.isEmpty && completedCount > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.body)
@@ -1422,30 +1420,32 @@ extension WeeklyView {
         }
         
         return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.body)
-                    .foregroundColor(.accentColor)
-                Text("\(completedCount)/\(items.count)")
-                    .font(.body)
-                    .fontWeight(.medium)
-            }
-            
-            // Show individual items
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(items) { item in
-                    HStack(spacing: 4) {
-                        Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
-                            .font(.caption)
-                            .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
-                        
-                        Text(item.title)
-                            .font(.caption)
-                            .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
-                            .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
-                            .lineLimit(1)
-                        
-                        Spacer()
+            if completedCount > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.body)
+                        .foregroundColor(.accentColor)
+                    Text("\(completedCount)/\(items.count)")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+                
+                // Show individual items
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(items) { item in
+                        HStack(spacing: 4) {
+                            Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
+                                .font(.caption)
+                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                            
+                            Text(item.title)
+                                .font(.caption)
+                                .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
+                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
+                                .lineLimit(1)
+                            
+                            Spacer()
+                        }
                     }
                 }
             }
@@ -1664,6 +1664,29 @@ extension WeeklyViewMode {
         switch self {
         case .week: return "Week"
         }
+    }
+}
+
+// MARK: - Custom Log Helpers
+extension WeeklyView {
+    private func hasCustomLogsForWeek() -> Bool {
+        let enabledItems = customLogManager.items.filter { $0.isEnabled }
+        guard !enabledItems.isEmpty else { return false }
+        
+        return weekDates.contains { date in
+            hasCustomLogsForDate(date)
+        }
+    }
+    
+    private func hasCustomLogsForDate(_ date: Date) -> Bool {
+        let enabledItems = customLogManager.items.filter { $0.isEnabled }
+        guard !enabledItems.isEmpty else { return false }
+        
+        let completedCount = enabledItems.reduce(0) { count, item in
+            count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
+        }
+        
+        return completedCount > 0
     }
 }
 

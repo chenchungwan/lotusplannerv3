@@ -655,6 +655,9 @@ struct GlobalNavBar: View {
         // Reload goals data
         await DataManager.shared.goalsManager.forceSync()
         
+        // Reload custom logs data
+        await DataManager.shared.customLogManager.forceSync()
+        
         // Reload logs data
         LogsViewModel.shared.reloadData()
         
@@ -681,6 +684,9 @@ struct GlobalNavBar: View {
         
         // Reload goals data
         await DataManager.shared.goalsManager.forceSync()
+        
+        // Reload custom logs data
+        await DataManager.shared.customLogManager.forceSync()
         
         // Reload logs data
         LogsViewModel.shared.reloadData()
