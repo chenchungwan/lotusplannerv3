@@ -99,6 +99,7 @@ class NavigationManager: ObservableObject {
         case calendar
         case tasks
         case lists
+        case goals
         case journal
         case weeklyView
         case gWeekView
@@ -138,6 +139,17 @@ class NavigationManager: ObservableObject {
         showTasksView = false
     }
     
+    func switchToGoals() {
+        currentView = .goals
+        showTasksView = false
+        
+        // Set appropriate time interval based on current view
+        if currentInterval == .day {
+            // If coming from day view, switch to year view (show all goals)
+            currentInterval = .year
+        }
+        // Otherwise keep the current interval (week, month, year)
+    }
     
     func switchToJournal() {
         currentView = .journal
@@ -1100,6 +1112,9 @@ struct SettingsView: View {
         // Force journal sync
         JournalSyncCoordinator.shared.forceSync()
         
+        // Force goals sync
+        await DataManager.shared.goalsManager.forceSync()
+        
         // Update last sync time
         iCloudManagerInstance.lastSyncDate = Date()
     }
@@ -1121,6 +1136,9 @@ struct SettingsView: View {
         
         // Reload tasks with forced cache clear
         await DataManager.shared.tasksViewModel.loadTasks(forceClear: true)
+        
+        // Reload goals data
+        await DataManager.shared.goalsManager.forceSync()
         
         // Reload logs data
         LogsViewModel.shared.reloadData()
