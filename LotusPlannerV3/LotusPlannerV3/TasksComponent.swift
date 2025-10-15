@@ -97,7 +97,7 @@ extension TasksComponent {
             return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
         
-        return appPrefs.hideCompletedTasks ? sorted.filter { !$0.isCompleted } : sorted
+        return sorted
     }
 
     @ViewBuilder
@@ -160,8 +160,7 @@ extension TasksComponent {
 
     private var noVisibleTasks: Bool {
         tasksDict.allSatisfy { entry in
-            let visible = appPrefs.hideCompletedTasks ? entry.value.filter { !$0.isCompleted } : entry.value
-            return visible.isEmpty
+            return entry.value.isEmpty
         }
     }
 }

@@ -11,6 +11,7 @@ struct WeeklyView: View {
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var logsViewModel = LogsViewModel.shared
+    @ObservedObject private var customLogManager = CustomLogManager.shared
     
     @State private var selectedDate = Date()
     @State private var viewMode: WeeklyViewMode = .week
@@ -476,6 +477,38 @@ extension WeeklyView {
                 .background(Color(.systemGray6).opacity(0.15))
             }
             
+            // Divider after water logs row (before custom logs)
+            if appPrefs.showCustomLogs {
+                Rectangle()
+                    .fill(Color(.systemGray3))
+                    .frame(height: 2)
+            }
+            
+            // Custom Logs Row
+            if appPrefs.showCustomLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    
+                    // Fixed-width 7-day custom log columns
+                    HStack(spacing: 0) {
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                            weekCustomLogColumn(date: date)
+                                .frame(width: dayColumnWidth)
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                                .id("custom_day_\(index)")
+                        }
+                    }
+                    .frame(width: fixedWidth)
+                }
+                .padding(.all, 8)
+                .background(Color(.systemGray6).opacity(0.15))
+            }
+            
             // Empty state message when no accounts are linked
             if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
                 Button(action: { NavigationManager.shared.showSettings() }) {
@@ -751,6 +784,22 @@ extension WeeklyView {
                     let waterLogsForDate = getWaterLogsForDate(date)
                     if !waterLogsForDate.isEmpty {
                         waterLogSummary(entries: waterLogsForDate)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Custom Logs column
+            if appPrefs.showCustomLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                    if !enabledItems.isEmpty {
+                        customLogSummary(items: enabledItems, date: date)
                     }
                     Spacer(minLength: 0)
                 }
@@ -1137,6 +1186,57 @@ extension WeeklyView {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
+    private func weekCustomLogColumn(date: Date) -> some View {
+        let enabledItems = customLogManager.items.filter { $0.isEnabled }
+        let completedCount = enabledItems.reduce(0) { count, item in
+            count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
+        }
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            if !enabledItems.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.body)
+                        .foregroundColor(.accentColor)
+                    Text("\(completedCount)/\(enabledItems.count)")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+                .background(Color(.systemGray6).opacity(0.5))
+                .cornerRadius(6)
+                
+                // Show individual items
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(enabledItems) { item in
+                        HStack(spacing: 4) {
+                            Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
+                                .font(.caption)
+                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                            
+                            Text(item.title)
+                                .font(.caption)
+                                .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
+                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
+                                .lineLimit(1)
+                            
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color(.systemGray6).opacity(0.3))
+                .cornerRadius(4)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    
     private func weekEventCard(event: GoogleCalendarEvent) -> some View {
         let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
         let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
@@ -1308,6 +1408,46 @@ extension WeeklyView {
                 Text("\(totalCups) cups")
                     .font(.body)
                     .fontWeight(.medium)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(6)
+    }
+    
+    private func customLogSummary(items: [CustomLogItemData], date: Date) -> some View {
+        let completedCount = items.reduce(0) { count, item in
+            count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
+        }
+        
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.body)
+                    .foregroundColor(.accentColor)
+                Text("\(completedCount)/\(items.count)")
+                    .font(.body)
+                    .fontWeight(.medium)
+            }
+            
+            // Show individual items
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(items) { item in
+                    HStack(spacing: 4) {
+                        Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
+                            .font(.caption)
+                            .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                        
+                        Text(item.title)
+                            .font(.caption)
+                            .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
+                            .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                    }
+                }
             }
         }
         .padding(.vertical, 4)

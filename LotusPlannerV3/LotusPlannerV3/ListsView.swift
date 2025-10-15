@@ -303,10 +303,6 @@ struct TasksDetailColumn: View {
             return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
         
-        // Filter based on hideCompletedTasks setting
-        if appPrefs.hideCompletedTasks {
-            return sorted.filter { !$0.isCompleted }
-        }
         return sorted
     }
     
@@ -432,7 +428,7 @@ struct TasksDetailColumn: View {
                                 Text("No Tasks")
                                     .font(.headline)
                                     .foregroundColor(.secondary)
-                                Text(appPrefs.hideCompletedTasks ? "All tasks are completed" : "This list is empty")
+                                Text("This list is empty")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

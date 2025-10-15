@@ -1443,12 +1443,7 @@ struct CalendarView: View {
             
             // Show eye and plus only in Day view
             if navigationManager.currentInterval == .day {
-                // Hide Completed toggle
-                Button(action: { appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks) }) {
-                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash.circle" : "eye.circle")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
+                // Hide Completed toggle removed
                 
                 // Refresh button
                 Button(action: {
@@ -2107,12 +2102,7 @@ struct CalendarView: View {
                     tasksViewModel.objectWillChange.send()
                 }
             }
-            .onChange(of: appPrefs.hideCompletedTasks) { oldValue, newValue in
-                updateCachedTasks()
-                // Force view updates
-                calendarViewModel.objectWillChange.send()
-                tasksViewModel.objectWillChange.send()
-            }
+            // hideCompletedTasks onChange removed
 
             .onAppear {
                 startCurrentTimeTimer()
@@ -4248,10 +4238,7 @@ struct CalendarView: View {
         return tasksDict.mapValues { tasks in
             var filteredTasks = tasks
             
-            // First, filter by hide completed tasks setting if enabled
-            if appPrefs.hideCompletedTasks {
-                filteredTasks = filteredTasks.filter { !$0.isCompleted }
-            }
+            // No longer filtering by hide completed tasks setting
             
             // Then filter tasks based on date logic
             filteredTasks = filteredTasks.compactMap { task in
@@ -4304,10 +4291,7 @@ struct CalendarView: View {
         return tasksDict.mapValues { tasks in
             var filteredTasks = tasks
             
-            // First, filter by hide completed tasks setting if enabled
-            if appPrefs.hideCompletedTasks {
-                filteredTasks = filteredTasks.filter { !$0.isCompleted }
-            }
+            // No longer filtering by hide completed tasks setting
             
             // Then filter tasks based on week date logic
             filteredTasks = filteredTasks.compactMap { task in
@@ -4341,10 +4325,7 @@ struct CalendarView: View {
         return tasksDict.mapValues { tasks in
             var filteredTasks = tasks
             
-            // First, filter by hide completed tasks setting if enabled
-            if appPrefs.hideCompletedTasks {
-                filteredTasks = filteredTasks.filter { !$0.isCompleted }
-            }
+            // No longer filtering by hide completed tasks setting
             
             // Then filter tasks based on month date logic
             filteredTasks = filteredTasks.compactMap { task in

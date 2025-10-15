@@ -44,29 +44,30 @@ struct LogsComponent: View {
                 // All log sections in a scrollable view
                 ScrollView {
                     if horizontal {
-                        HStack(alignment: .top, spacing: 16) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
                             // Weight Section
                             if appPrefs.showWeightLogs {
                                 weightSection
-                                    .frame(maxWidth: .infinity, alignment: .top)
                             }
                             
                             // Workout Section  
                             if appPrefs.showWorkoutLogs {
                                 workoutSection
-                                    .frame(maxWidth: .infinity, alignment: .top)
                             }
                             
                             // Food Section
                             if appPrefs.showFoodLogs {
                                 foodSection
-                                    .frame(maxWidth: .infinity, alignment: .top)
                             }
                             
                             // Water Section
                             if appPrefs.showWaterLogs {
                                 waterSection
-                                    .frame(maxWidth: .infinity, alignment: .top)
+                            }
+                            
+                            // Custom Log Section
+                            if appPrefs.showCustomLogs {
+                                customLogSection
                             }
                         }
                     } else {
@@ -89,6 +90,11 @@ struct LogsComponent: View {
                             // Water Section
                             if appPrefs.showWaterLogs {
                                 waterSection
+                            }
+                            
+                            // Custom Log Section
+                            if appPrefs.showCustomLogs {
+                                customLogSection
                             }
                         }
                     }
@@ -351,6 +357,24 @@ extension LogsComponent {
             Text("\(entry.filledCount) cups filled")
                 .font(.caption2)
                 .foregroundColor(.secondary)
+        }
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+    }
+    
+    var customLogSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "list.bullet.rectangle")
+                    .foregroundColor(viewModel.accentColor)
+                Text("Custom Logs")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            CustomLogView()
         }
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))

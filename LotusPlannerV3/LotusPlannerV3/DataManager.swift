@@ -10,6 +10,7 @@ class DataManager: ObservableObject {
     let calendarViewModel = CalendarViewModel()
     let tasksViewModel = TasksViewModel()
     let goalsManager = GoalsManager.shared
+    let customLogManager = CustomLogManager.shared
     
     // Global loading state
     @Published var isInitializing = true

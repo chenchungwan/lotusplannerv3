@@ -1153,11 +1153,7 @@ struct TasksView: View {
         if selectedFilter == .all {
             filteredTasks = applyAllSubfilter(filteredTasks, calendar: calendar, startOfToday: startOfToday)
         } else {
-            // For time-based filters, apply hide completed tasks setting
-            if appPrefs.hideCompletedTasks {
-                filteredTasks = filteredTasks.filter { !$0.isCompleted }
-            }
-            // Then apply time-based filter
+            // Apply time-based filter
             filteredTasks = applyTimeBasedFilter(filteredTasks, calendar: calendar, now: now, startOfToday: startOfToday)
         }
         
@@ -1182,17 +1178,10 @@ struct TasksView: View {
                 return false
             }
         case .completed:
-            // When filtering for completed tasks, automatically turn off hide completed tasks
-            if appPrefs.hideCompletedTasks {
-                appPrefs.hideCompletedTasks = false
-            }
             filteredTasks = filteredTasks.filter { $0.isCompleted }
         }
         
-        // Apply hide completed tasks setting for non-completed filters
-        if allSubfilter != .completed && appPrefs.hideCompletedTasks {
-            filteredTasks = filteredTasks.filter { !$0.isCompleted }
-        }
+        // No longer hiding completed tasks
         
         return filteredTasks
     }

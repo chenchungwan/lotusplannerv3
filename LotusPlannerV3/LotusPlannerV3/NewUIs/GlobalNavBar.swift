@@ -386,12 +386,6 @@ struct GlobalNavBar: View {
                                     .font(.title2)
                             }
                             Button {
-                                appPrefs.hideCompletedTasks.toggle()
-                            } label: {
-                                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
-                                    .font(.title2)
-                            }
-                            Button {
                                 // Comprehensive data reload
                                 Task {
                                     await reloadAllData()
@@ -519,12 +513,6 @@ struct GlobalNavBar: View {
                             // Hide vertical separator in Lists view
                             if navigationManager.currentView != .lists  {
                                 Text("|")
-                                    .font(.title2)
-                            }
-                            Button {
-                                appPrefs.hideCompletedTasks.toggle()
-                            } label: {
-                                Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                     .font(.title2)
                             }
                             Button {
