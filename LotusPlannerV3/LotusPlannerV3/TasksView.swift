@@ -1181,7 +1181,10 @@ struct TasksView: View {
             filteredTasks = filteredTasks.filter { $0.isCompleted }
         }
         
-        // No longer hiding completed tasks
+        // Hide completed tasks if setting is enabled
+        if appPrefs.hideCompletedTasks {
+            filteredTasks = filteredTasks.filter { !$0.isCompleted }
+        }
         
         return filteredTasks
     }

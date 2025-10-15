@@ -278,8 +278,11 @@ struct TasksDetailColumn: View {
             allTasks = tasksVM.professionalTasks[listId] ?? []
         }
         
+        // Filter out completed tasks if hideCompletedTasks is enabled
+        let filtered = appPrefs.hideCompletedTasks ? allTasks.filter { !$0.isCompleted } : allTasks
+        
         // Sort by: 1) completion status, 2) due date, 3) alphabetically
-        let sorted = allTasks.sorted { (a, b) in
+        let sorted = filtered.sorted { (a, b) in
             // 1. Sort by completion status (incomplete first)
             if a.isCompleted != b.isCompleted {
                 return !a.isCompleted // incomplete (false) comes before completed (true)

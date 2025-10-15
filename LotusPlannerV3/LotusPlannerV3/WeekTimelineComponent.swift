@@ -12,7 +12,7 @@ struct WeekTimelineComponent: View {
     let personalTasks: [String: [GoogleTask]]
     let professionalTaskLists: [GoogleTaskList]
     let professionalTasks: [String: [GoogleTask]]
-    // hideCompletedTasks removed
+    let hideCompletedTasks: Bool
     let fixedStartHour: Int?
     let showTasksSection: Bool
 
@@ -40,7 +40,7 @@ struct WeekTimelineComponent: View {
     private let minTimelineHeight: CGFloat = 100 // Minimum height for timeline section
     
     // MARK: - Initializer
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil, onTaskTap: ((GoogleTask, String) -> Void)? = nil, showTasksSection: Bool = true, fixedStartHour: Int? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil, onTaskTap: ((GoogleTask, String) -> Void)? = nil, showTasksSection: Bool = true, fixedStartHour: Int? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
         self.personalEvents = personalEvents
@@ -51,7 +51,7 @@ struct WeekTimelineComponent: View {
         self.personalTasks = personalTasks
         self.professionalTaskLists = professionalTaskLists
         self.professionalTasks = professionalTasks
-        // hideCompletedTasks removed
+        self.hideCompletedTasks = hideCompletedTasks
 
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
@@ -917,9 +917,12 @@ struct WeekTimelineComponent: View {
         // Flatten all tasks from all task lists first
         let allTasks = tasksDict.values.flatMap { $0 }
         
+        // Filter out completed tasks if hideCompletedTasks is enabled
+        let filteredTasks = hideCompletedTasks ? allTasks.filter { !$0.isCompleted } : allTasks
+        
         // Group tasks by each day in the week using the same logic as day view
         for date in weekDates {
-            let tasksForDate = filteredTasksForDate(allTasks, date: date)
+            let tasksForDate = filteredTasksForDate(filteredTasks, date: date)
             if !tasksForDate.isEmpty {
                 groupedTasks[calendar.startOfDay(for: date)] = tasksForDate
             }
@@ -1153,7 +1156,7 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
             personalTasks: [:],
             professionalTaskLists: [],
             professionalTasks: [:],
-            // hideCompletedTasks removed
+            hideCompletedTasks: false
         )
         .previewLayout(.sizeThatFits)
     }

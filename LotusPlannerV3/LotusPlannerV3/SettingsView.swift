@@ -273,6 +273,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Hide completed tasks
+    @Published var hideCompletedTasks: Bool {
+        didSet {
+            UserDefaults.standard.set(hideCompletedTasks, forKey: "hideCompletedTasks")
+        }
+    }
+    
     // Use alternative row-based weekly view layout
     @Published var useRowBasedWeeklyView: Bool {
         didSet {
@@ -426,6 +433,7 @@ class AppPreferences: ObservableObject {
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
         self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
+        self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         
         // Load journal visibility preference (default visible)
         self.showJournal = UserDefaults.standard.object(forKey: "showJournal") as? Bool ?? true
@@ -468,6 +476,10 @@ class AppPreferences: ObservableObject {
     
     func updateShowCustomLogs(_ value: Bool) {
         showCustomLogs = value
+    }
+    
+    func updateHideCompletedTasks(_ value: Bool) {
+        hideCompletedTasks = value
     }
     
     func updateHideRecurringEventsInMonth(_ value: Bool) {

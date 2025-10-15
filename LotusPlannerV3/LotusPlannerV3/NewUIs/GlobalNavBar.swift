@@ -394,6 +394,16 @@ struct GlobalNavBar: View {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.title2)
                             }
+                            
+                            // Hide completed tasks toggle (in Tasks, Calendar, and Lists views)
+                            if navigationManager.currentView == .tasks || navigationManager.currentView == .calendar || navigationManager.currentView == .lists {
+                                Button {
+                                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
+                                } label: {
+                                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
+                                        .font(.title2)
+                                }
+                            }
                             Menu {
                                 if navigationManager.currentView == .goals {
                                     Button("Goal") {
@@ -523,6 +533,16 @@ struct GlobalNavBar: View {
                             } label: {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.title2)
+                            }
+                            
+                            // Hide completed tasks toggle (in Tasks, Calendar, and Lists views)
+                            if navigationManager.currentView == .tasks || navigationManager.currentView == .calendar || navigationManager.currentView == .lists {
+                                Button {
+                                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
+                                } label: {
+                                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
+                                        .font(.title2)
+                                }
                             }
                             Menu {
                                 if navigationManager.currentView == .goals {

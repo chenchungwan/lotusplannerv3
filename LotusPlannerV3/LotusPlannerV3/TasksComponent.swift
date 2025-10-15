@@ -72,8 +72,11 @@ extension TasksComponent {
     private func filteredTasksForList(_ taskList: GoogleTaskList) -> [GoogleTask] {
         let tasks = tasksDict[taskList.id] ?? []
         
+        // Filter out completed tasks if hideCompletedTasks is enabled
+        let filtered = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
+        
         // Sort by: 1) completion status, 2) due date, 3) alphabetically
-        let sorted: [GoogleTask] = tasks.sorted { (a, b) in
+        let sorted: [GoogleTask] = filtered.sorted { (a, b) in
             // 1. Sort by completion status (incomplete first)
             if a.isCompleted != b.isCompleted {
                 return !a.isCompleted // incomplete (false) comes before completed (true)
