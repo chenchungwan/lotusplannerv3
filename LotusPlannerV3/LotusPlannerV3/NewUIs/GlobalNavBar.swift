@@ -19,6 +19,11 @@ struct GlobalNavBar: View {
     @State private var selectedDateForPicker = Date()
     
     private var dateLabel: String {
+        // Show "Lists" when in Lists view
+        if navigationManager.currentView == .lists {
+            return "Lists"
+        }
+        
         // Show "All Tasks" when in Tasks view and showing all tasks
         if navigationManager.showTasksView && navigationManager.showingAllTasks {
             return "All Tasks"
@@ -195,15 +200,21 @@ struct GlobalNavBar: View {
                         .buttonStyle(.borderless)
                         .padding(.trailing, 10)
                         
-                        Button { step(-1) } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.title2)
+                        // Hide navigation arrows in Lists view
+                        if navigationManager.currentView != .lists {
+                            Button { step(-1) } label: {
+                                Image(systemName: "chevron.left")
+                                    .font(.title2)
+                            }
+                            .padding(.trailing, 15)
                         }
-                        .padding(.trailing, 15)
                         
                         Button {
-                            selectedDateForPicker = navigationManager.currentDate
-                            showingDatePicker = true
+                            // Only open date picker if not in Lists view
+                            if navigationManager.currentView != .lists {
+                                selectedDateForPicker = navigationManager.currentDate
+                                showingDatePicker = true
+                            }
                         } label: {
                             Text(dateLabel)
                                 .font(.title)
@@ -211,83 +222,90 @@ struct GlobalNavBar: View {
                                 .minimumScaleFactor(0.7)
                                 .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary)
                         }
+                        .disabled(navigationManager.currentView == .lists)
                         .padding(.trailing, 15)
                         
-                        Button { step(1) } label: {
-                            Image(systemName: "chevron.right")
-                                .font(.title2)
+                        // Hide navigation arrows in Lists view
+                        if navigationManager.currentView != .lists {
+                            Button { step(1) } label: {
+                                Image(systemName: "chevron.right")
+                                    .font(.title2)
+                            }
                         }
                         
                         if !isNarrow {
                         Spacer()
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to current day
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.day, date: Date())
-                                } else {
-                                    // In Calendar view: go to current day
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.switchToCalendar()
-                                    navigationManager.updateInterval(.day, date: Date())
+                            // Hide navigation buttons in Lists view
+                            if navigationManager.currentView != .lists {
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to current day
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.day, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current day
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.switchToCalendar()
+                                        navigationManager.updateInterval(.day, date: Date())
+                                    }
+                                } label: {
+                                    Image(systemName: "d.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                 }
-                            } label: {
-                                Image(systemName: "d.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
-                            }
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to current week
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.week, date: Date())
-                                } else {
-                                    // In Calendar view: go to current week
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.switchToCalendar()
-                                    navigationManager.updateInterval(.week, date: Date())
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to current week
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.week, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current week
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.switchToCalendar()
+                                        navigationManager.updateInterval(.week, date: Date())
+                                    }
+                                } label: {
+                                    Image(systemName: "w.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                 }
-                            } label: {
-                                Image(systemName: "w.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
-                            }
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to current month
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.month, date: Date())
-                                } else {
-                                    // In Calendar view: go to current month
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.switchToCalendar()
-                                    navigationManager.updateInterval(.month, date: Date())
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to current month
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.month, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current month
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.switchToCalendar()
+                                        navigationManager.updateInterval(.month, date: Date())
+                                    }
+                                } label: {
+                                    Image(systemName: "m.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
                                 }
-                            } label: {
-                                Image(systemName: "m.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
-                            }
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to yearly tasks
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.year, date: Date())
-                                } else {
-                                    // In Calendar view: go to current year's yearly calendar view
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.year, date: Date())
-                                    navigationManager.switchToYearlyCalendar()
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to yearly tasks
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.year, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current year's yearly calendar view
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.year, date: Date())
+                                        navigationManager.switchToYearlyCalendar()
+                                    }
+                                } label: {
+                                    Image(systemName: "y.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
                                 }
-                            } label: {
-                                Image(systemName: "y.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
                             }
                             
                             
-                            // Hide ellipsis.circle in calendar views
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar {
+                            // Hide ellipsis.circle in calendar views and lists view
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists {
                                 Menu {
                                     Button("All") {
                                         // Switch to "All" tasks view
@@ -321,8 +339,11 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            Text("|")
-                                .font(.title2)
+                            // Hide vertical separator in Lists view
+                            if navigationManager.currentView != .lists {
+                                Text("|")
+                                    .font(.title2)
+                            }
                             Button {
                                 appPrefs.hideCompletedTasks.toggle()
                             } label: {
@@ -356,75 +377,77 @@ struct GlobalNavBar: View {
                     
                     if isNarrow {
                         HStack{
+                            // Hide navigation buttons in Lists view
+                            if navigationManager.currentView != .lists {
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to current day
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.day, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current day
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.switchToCalendar()
+                                        navigationManager.updateInterval(.day, date: Date())
+                                    }
+                                } label: {
+                                    Image(systemName: "d.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
+                                }
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to current week
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.week, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current week
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.switchToCalendar()
+                                        navigationManager.updateInterval(.week, date: Date())
+                                    }
+                                } label: {
+                                    Image(systemName: "w.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                }
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to current month
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.month, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current month
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.switchToCalendar()
+                                        navigationManager.updateInterval(.month, date: Date())
+                                    }
+                                } label: {
+                                    Image(systemName: "m.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
+                                }
+                                Button {
+                                    if navigationManager.showTasksView {
+                                        // In Tasks view: filter to yearly tasks
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.year, date: Date())
+                                    } else {
+                                        // In Calendar view: go to current year's yearly calendar view
+                                        navigationManager.showingAllTasks = false
+                                        navigationManager.updateInterval(.year, date: Date())
+                                        navigationManager.switchToYearlyCalendar()
+                                    }
+                                } label: {
+                                    Image(systemName: "y.circle")
+                                        .font(.title2)
+                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
+                                }
+                            }
                             
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to current day
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.day, date: Date())
-                                } else {
-                                    // In Calendar view: go to current day
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.switchToCalendar()
-                                    navigationManager.updateInterval(.day, date: Date())
-                                }
-                            } label: {
-                                Image(systemName: "d.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
-                            }
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to current week
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.week, date: Date())
-                                } else {
-                                    // In Calendar view: go to current week
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.switchToCalendar()
-                                    navigationManager.updateInterval(.week, date: Date())
-                                }
-                            } label: {
-                                Image(systemName: "w.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
-                            }
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to current month
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.month, date: Date())
-                                } else {
-                                    // In Calendar view: go to current month
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.switchToCalendar()
-                                    navigationManager.updateInterval(.month, date: Date())
-                                }
-                            } label: {
-                                Image(systemName: "m.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
-                            }
-                            Button {
-                                if navigationManager.showTasksView {
-                                    // In Tasks view: filter to yearly tasks
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.year, date: Date())
-                                } else {
-                                    // In Calendar view: go to current year's yearly calendar view
-                                    navigationManager.showingAllTasks = false
-                                    navigationManager.updateInterval(.year, date: Date())
-                                    navigationManager.switchToYearlyCalendar()
-                                }
-                            } label: {
-                                Image(systemName: "y.circle")
-                                    .font(.title2)
-                                    .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
-                            }
                             
-                            
-                            // Hide ellipsis.circle in calendar views
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar {
+                            // Hide ellipsis.circle in calendar views and lists view
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists {
                                 Menu {
                                     Button("All") {
                                         // Switch to "All" tasks view
@@ -458,8 +481,11 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            Text("|")
-                                .font(.title2)
+                            // Hide vertical separator in Lists view
+                            if navigationManager.currentView != .lists {
+                                Text("|")
+                                    .font(.title2)
+                            }
                             Button {
                                 appPrefs.hideCompletedTasks.toggle()
                             } label: {
