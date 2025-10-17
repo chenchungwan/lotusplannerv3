@@ -35,14 +35,14 @@ struct GoalsView: View {
             return "All Goals"
         case .week:
             let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: navigationManager.currentDate)
-            return "Week \(weekNumber) Goals"
+            return "Week \(weekNumber) Weekly Goals"
         case .month:
             let formatter = DateFormatter()
             formatter.dateFormat = "MMMM yyyy"
-            return "\(formatter.string(from: navigationManager.currentDate)) Goals"
+            return "\(formatter.string(from: navigationManager.currentDate)) Monthly Goals"
         case .year:
             let year = Calendar.current.component(.year, from: navigationManager.currentDate)
-            return "\(year) Goals"
+            return "\(year) Yearly Goals"
         }
     }
     
@@ -152,7 +152,10 @@ struct GoalsView: View {
         }
         
         return goals.filter { goal in
-            goal.dueDate >= weekInterval.start && goal.dueDate < weekInterval.end
+            // Filter by goal type (weekly goals only) AND due date within the week
+            goal.targetTimeframe == .week && 
+            goal.dueDate >= weekInterval.start && 
+            goal.dueDate < weekInterval.end
         }
     }
     
@@ -162,7 +165,10 @@ struct GoalsView: View {
         }
         
         return goals.filter { goal in
-            goal.dueDate >= monthInterval.start && goal.dueDate < monthInterval.end
+            // Filter by goal type (monthly goals only) AND due date within the month
+            goal.targetTimeframe == .month && 
+            goal.dueDate >= monthInterval.start && 
+            goal.dueDate < monthInterval.end
         }
     }
     
@@ -172,7 +178,10 @@ struct GoalsView: View {
         }
         
         return goals.filter { goal in
-            goal.dueDate >= yearInterval.start && goal.dueDate < yearInterval.end
+            // Filter by goal type (yearly goals only) AND due date within the year
+            goal.targetTimeframe == .year && 
+            goal.dueDate >= yearInterval.start && 
+            goal.dueDate < yearInterval.end
         }
     }
 }

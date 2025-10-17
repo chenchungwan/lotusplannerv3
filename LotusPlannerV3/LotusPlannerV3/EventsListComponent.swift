@@ -7,6 +7,7 @@ struct EventsListComponent: View {
     let personalColor: Color
     let professionalColor: Color
     let onEventTap: (GoogleCalendarEvent) -> Void
+    let date: Date
 
     private var sortedEvents: [GoogleCalendarEvent] {
         events.sorted { (a, b) in
@@ -116,6 +117,11 @@ struct EventsListComponent: View {
     }
     
     private func shouldShowCurrentTimeLineAbove(event: GoogleCalendarEvent, atIndex index: Int) -> Bool {
+        // Only show red line if this is the current day
+        guard Calendar.current.isDate(date, inSameDayAs: Date()) else {
+            return false
+        }
+        
         let now = Date()
         
         // NEVER show line above all-day events
@@ -154,6 +160,11 @@ struct EventsListComponent: View {
     }
     
     private func shouldShowCurrentTimeLineBelow(event: GoogleCalendarEvent, atIndex index: Int) -> Bool {
+        // Only show red line if this is the current day
+        guard Calendar.current.isDate(date, inSameDayAs: Date()) else {
+            return false
+        }
+        
         let now = Date()
         
         // Only show line below if this is the last event

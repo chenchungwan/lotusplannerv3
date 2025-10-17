@@ -2688,7 +2688,8 @@ struct CalendarView: View {
             onEventTap: { ev in
                 selectedCalendarEvent = ev
                 showingEventDetails = true
-            }
+            },
+            date: currentDate
         )
     }
     

@@ -60,7 +60,8 @@ struct DayViewExpVertical: View {
                                         professionalEvents: calendarVM.professionalEvents,
                                         personalColor: appPrefs.personalColor,
                                         professionalColor: appPrefs.professionalColor,
-                                        onEventTap: { ev in onEventTap?(ev) }
+                                        onEventTap: { ev in onEventTap?(ev) },
+                                        date: navigationManager.currentDate
                                     )
                                 } else {
                                     TimelineComponent(
