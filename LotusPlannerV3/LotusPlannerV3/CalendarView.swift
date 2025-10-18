@@ -2310,20 +2310,23 @@ struct CalendarView: View {
     }
     
     private func dayViewContentCompact(geometry: GeometryProxy) -> some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 0) {
-                // Left section (dynamic width)
-                leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
-                
-                // Vertical divider
-                dayVerticalDivider
+        ScrollView(.vertical, showsIndicators: true) {
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 0) {
+                    // Left section (dynamic width)
+                    leftDaySectionWithDivider(geometry: geometry)
+                        .frame(width: dayLeftSectionWidth)
+                    
+                    // Vertical divider
+                    dayVerticalDivider
 
-                // Right section expands to fill remaining space
-                rightDaySection(geometry: geometry)
-                    .frame(maxWidth: .infinity)
+                    // Right section expands to fill remaining space
+                    rightDaySection(geometry: geometry)
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(minWidth: geometry.size.width)
             }
-            .frame(minWidth: geometry.size.width)
+            .frame(minHeight: geometry.size.height)
         }
     }
     
@@ -2636,11 +2639,11 @@ struct CalendarView: View {
                 leftTimelineDivider
                 
                 LogsComponent(currentDate: currentDate, horizontal: false)
-                    .frame(maxHeight: .infinity)
+                    .frame(maxHeight: geometry.size.height * 0.95 - leftTimelineHeight - 24) // Align to bottom of journal component (16 + 8 for bottom padding)
                     .padding(.all, 8)
             }
         }
-        .frame(height: geometry.size.height, alignment: .top)
+        .frame(minHeight: geometry.size.height, alignment: .top)
         .padding(.top, 0)
         .padding(.bottom, 8)
     }
