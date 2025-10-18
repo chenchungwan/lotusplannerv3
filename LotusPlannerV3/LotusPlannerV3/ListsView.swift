@@ -118,7 +118,7 @@ struct AllTaskListsColumn: View {
                         }) {
                             HStack {
                                 Text("Personal")
-                                    .font(.title2)
+                                    .font(.headline)
                                     .fontWeight(.bold)
                                     .foregroundColor(personalColor)
                                 Spacer()
@@ -161,7 +161,7 @@ struct AllTaskListsColumn: View {
                         }) {
                             HStack {
                                 Text("Professional")
-                                    .font(.title2)
+                                    .font(.headline)
                                     .fontWeight(.bold)
                                     .foregroundColor(professionalColor)
                                 Spacer()
@@ -656,7 +656,7 @@ struct TaskListRow: View {
             HStack(spacing: 12) {
                 // List title
                 Text(taskList.title)
-                    .font(.body)
+                    .font(.subheadline)
                     .fontWeight(isSelected ? .semibold : .medium)
                     .foregroundColor(isSelected ? accentColor : .primary)
                 

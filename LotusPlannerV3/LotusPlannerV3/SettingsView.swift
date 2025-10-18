@@ -137,6 +137,13 @@ class NavigationManager: ObservableObject {
     }
     
     func switchToGoals() {
+        // Check if goals are hidden
+        if AppPreferences.shared.hideGoals {
+            // Redirect to calendar view if goals are hidden
+            switchToCalendar()
+            return
+        }
+        
         currentView = .goals
         showTasksView = false
         
@@ -256,6 +263,18 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Available day view layout options based on screen width
+    var availableDayViewLayouts: [DayViewLayoutOption] {
+        let screenWidth = UIScreen.main.bounds.width
+        if screenWidth < 700 {
+            // Only show mobile layout for small screens
+            return [.mobile]
+        } else {
+            // Show all layouts for larger screens
+            return DayViewLayoutOption.allCases
+        }
+    }
+    
     // Show events as list vs timeline in Day view
     @Published var showEventsAsListInDay: Bool {
         didSet {
@@ -274,6 +293,13 @@ class AppPreferences: ObservableObject {
     @Published var hideCompletedTasks: Bool {
         didSet {
             UserDefaults.standard.set(hideCompletedTasks, forKey: "hideCompletedTasks")
+        }
+    }
+    
+    // Hide goals
+    @Published var hideGoals: Bool {
+        didSet {
+            UserDefaults.standard.set(hideGoals, forKey: "hideGoals")
         }
     }
     
@@ -401,8 +427,13 @@ class AppPreferences: ObservableObject {
         
         // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-        // If no layout has been explicitly chosen (key doesn't exist), use Classic
-        if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
+        let screenWidth = UIScreen.main.bounds.width
+        
+        // If screen width is less than 700px, force mobile layout
+        if screenWidth < 700 {
+            self.dayViewLayout = .mobile
+        } else if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
+            // If no layout has been explicitly chosen (key doesn't exist), use Classic
             self.dayViewLayout = .compact // Classic layout
         } else {
             // Otherwise use the saved layout or fallback to Classic if invalid
@@ -425,6 +456,7 @@ class AppPreferences: ObservableObject {
         self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
+        self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? false
         
         
 
@@ -469,6 +501,10 @@ class AppPreferences: ObservableObject {
     
     func updateHideCompletedTasks(_ value: Bool) {
         hideCompletedTasks = value
+    }
+    
+    func updateHideGoals(_ value: Bool) {
+        hideGoals = value
     }
     
     func updateHideRecurringEventsInMonth(_ value: Bool) {
@@ -586,7 +622,7 @@ struct SettingsView: View {
                 
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
 
-                Section("Events View Preference") {
+                Section("Events View Preferences") {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -628,9 +664,9 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Daily View Preference") {
+                Section("Daily View Preferences") {
                     // Day View Layout Options with Radio Buttons
-                    ForEach(DayViewLayoutOption.allCases) { option in
+                    ForEach(appPrefs.availableDayViewLayouts) { option in
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
@@ -659,7 +695,7 @@ struct SettingsView: View {
                 }
 
                 // Weekly View Preference
-                Section("Weekly View Preference") {
+                Section("Weekly View Preferences") {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -702,7 +738,7 @@ struct SettingsView: View {
                 }
 
                 // Tasks View Preference
-                Section("Tasks View Preference") {
+                Section("Tasks View Preferences") {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -864,6 +900,26 @@ get: { appPrefs.showFoodLogs },
                         ))
                     }
                     
+                    HStack {
+                        Image(systemName: "target")
+                            .foregroundColor(.secondary)
+                            .font(.title2)
+                        
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show Goals")
+                        .font(.body)
+                    Text("Show goals in all views")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Toggle("", isOn: Binding(
+                    get: { !appPrefs.hideGoals },
+                    set: { appPrefs.updateHideGoals(!$0) }
+                ))
+                    }
 
                 }
                 

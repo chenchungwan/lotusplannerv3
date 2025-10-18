@@ -230,10 +230,12 @@ struct GlobalNavBar: View {
                                 Label("Lists", systemImage: "list.bullet")
                             }
                             
-                            Button(action: {
-                                navigationManager.switchToGoals()
-                            }) {
-                                Label("Goals", systemImage: "target")
+                            if !appPrefs.hideGoals {
+                                Button(action: {
+                                    navigationManager.switchToGoals()
+                                }) {
+                                    Label("Goals", systemImage: "target")
+                                }
                             }
                             
                             Divider()

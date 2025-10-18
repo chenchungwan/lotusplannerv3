@@ -44,30 +44,39 @@ struct LogsComponent: View {
                 // All log sections in a scrollable view
                 ScrollView {
                     if horizontal {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 2), spacing: 16) {
-                            // Weight Section
-                            if appPrefs.showWeightLogs {
-                                weightSection
+                        VStack(alignment: .leading, spacing: 16) {
+                            // First row: Weight and Workout
+                            HStack(alignment: .top, spacing: 16) {
+                                if appPrefs.showWeightLogs {
+                                    weightSection
+                                }
+                                
+                                if appPrefs.showWorkoutLogs {
+                                    workoutSection
+                                }
+                                
+                                Spacer()
                             }
                             
-                            // Workout Section  
-                            if appPrefs.showWorkoutLogs {
-                                workoutSection
+                            // Second row: Water and Food
+                            HStack(alignment: .top, spacing: 16) {
+                                if appPrefs.showWaterLogs {
+                                    waterSection
+                                }
+                                
+                                if appPrefs.showFoodLogs {
+                                    foodSection
+                                }
+                                
+                                Spacer()
                             }
                             
-                            // Water Section
-                            if appPrefs.showWaterLogs {
-                                waterSection
-                            }
-                            
-                            // Food Section
-                            if appPrefs.showFoodLogs {
-                                foodSection
-                            }
-                            
-                            // Custom Log Section
+                            // Third row: Custom Logs (same width as other logs)
                             if appPrefs.showCustomLogs {
-                                customLogSection
+                                HStack(alignment: .top, spacing: 16) {
+                                    customLogSectionHorizontal
+                                    Spacer()
+                                }
                             }
                         }
                     } else {
@@ -171,6 +180,10 @@ extension LogsComponent {
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
     
     var workoutSection: some View {
@@ -200,6 +213,10 @@ extension LogsComponent {
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
     
     var foodSection: some View {
@@ -229,6 +246,10 @@ extension LogsComponent {
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
     
     func weightEntryRow(_ entry: WeightLogEntry) -> some View {
@@ -365,6 +386,10 @@ extension LogsComponent {
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
     
     var customLogSection: some View {
@@ -384,6 +409,33 @@ extension LogsComponent {
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
+    }
+    
+    var customLogSectionHorizontal: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "list.bullet.rectangle")
+                    .foregroundColor(viewModel.accentColor)
+                Text("Custom Logs")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+            
+            CustomLogView()
+        }
+        .frame(alignment: .topLeading)
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
     
     func waterCupButton(index: Int, isFilled: Bool) -> some View {

@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @StateObject private var appPrefs = AppPreferences.shared
 
     var body: some View {
         NavigationStack {
@@ -60,7 +61,13 @@ struct ContentView: View {
             ListsView()
         
         case .goals:
-            GoalsView()
+            if !appPrefs.hideGoals {
+                GoalsView()
+            } else {
+                // Fallback to calendar view when goals are hidden
+                CalendarView()
+                    .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
+            }
 
         case .journal:
                 JournalView(currentDate: Date())
