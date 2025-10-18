@@ -14,6 +14,9 @@ struct GlobalNavBar: View {
     @State private var showingDatePicker = false
     @State private var showingAddEvent = false
     @State private var showingAddTask = false
+    @State private var showingAddList = false
+    @State private var newListName = ""
+    @State private var newListAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingAddGoal = false
     @State private var showingAddCategory = false
     
@@ -21,9 +24,9 @@ struct GlobalNavBar: View {
     @State private var selectedDateForPicker = Date()
     
     private var dateLabel: String {
-        // Show "Lists" when in Lists view
+        // Show "Task Lists" when in Lists view
         if navigationManager.currentView == .lists {
-            return "Lists"
+            return "Task Lists"
         }
         
         // Show filtered goals title when in Goals view
@@ -273,7 +276,7 @@ struct GlobalNavBar: View {
                                 .font(.title)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
-                                .foregroundColor(isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary)
+                                .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
                         }
                         .disabled(navigationManager.currentView == .lists)
                         .padding(.trailing, 15)
@@ -371,6 +374,8 @@ struct GlobalNavBar: View {
                                             // Switch to All view with Complete filter
                                             NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
                                             NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                                            // Turn off hide completed setting to show completed tasks
+                                            appPrefs.updateHideCompletedTasks(false)
                                         }
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
@@ -415,6 +420,9 @@ struct GlobalNavBar: View {
                                     }
                                     Button("Task") {
                                         showingAddTask = true
+                                    }
+                                    Button("List") {
+                                        showingAddList = true
                                     }
                                 }
                             } label: {
@@ -511,6 +519,8 @@ struct GlobalNavBar: View {
                                             // Switch to All view with Complete filter
                                             NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
                                             NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                                            // Turn off hide completed setting to show completed tasks
+                                            appPrefs.updateHideCompletedTasks(false)
                                         }
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
@@ -555,6 +565,9 @@ struct GlobalNavBar: View {
                                     }
                                     Button("Task") {
                                         showingAddTask = true
+                                    }
+                                    Button("List") {
+                                        showingAddList = true
                                     }
                                 }
                             } label: {
@@ -648,6 +661,39 @@ struct GlobalNavBar: View {
                     onCrossAccountMove: { _, _, _ in },
                     isNew: true
                 )
+            }
+        }
+        .sheet(isPresented: $showingAddList) {
+            NewListSheet(
+                accountKind: newListAccountKind,
+                hasPersonal: auth.isLinked(kind: .personal),
+                hasProfessional: auth.isLinked(kind: .professional),
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor,
+                listName: $newListName,
+                selectedAccount: $newListAccountKind,
+                onCreate: {
+                    createNewList()
+                }
+            )
+            .onAppear {
+                // Reset state when sheet appears
+                newListName = ""
+                newListAccountKind = nil
+            }
+        }
+    }
+    
+    // MARK: - Create New List Function
+    private func createNewList() {
+        guard let accountKind = newListAccountKind else { return }
+        
+        Task {
+            await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            await MainActor.run {
+                showingAddList = false
+                newListName = ""
+                newListAccountKind = nil
             }
         }
     }

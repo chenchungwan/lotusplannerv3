@@ -248,7 +248,7 @@ struct DayViewCompact: View {
                                         }
                                 )
 
-                            // Logs vertically: weight, workout, food
+                            // Logs vertically: weight, workout, water, food
                             VStack(alignment: .leading, spacing: 6) {
 
                                 

@@ -45,220 +45,221 @@ struct DayViewExpanded: View {
                 HStack(spacing: 0) {
                     // Left Column: Timeline + Tasks + Logs
                     VStack(spacing: 0) {
-                        ScrollView(.vertical, showsIndicators: true) {
-                            VStack(spacing: 12) {
-                                // 1) Timeline + Tasks side-by-side
-                                HStack(alignment: .top, spacing: 12) {
-                                    // Timeline or Events List (based on preference)
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Events")
-                                            .font(.headline)
-                                            .padding(.horizontal, 8)
-                                        
-                                        Group {
-                                            if appPrefs.showEventsAsListInDay {
-                                                EventsListComponent(
-                                                    events: filteredEventsForDay(navigationManager.currentDate),
-                                                    personalEvents: calendarVM.personalEvents,
-                                                    professionalEvents: calendarVM.professionalEvents,
-                                                    personalColor: appPrefs.personalColor,
-                                                    professionalColor: appPrefs.professionalColor,
-                                                    onEventTap: { ev in onEventTap?(ev) },
-                                                    date: navigationManager.currentDate
-                                                )
-                                            } else {
-                                                TimelineComponent(
-                                                    date: navigationManager.currentDate,
-                                                    events: filteredEventsForDay(navigationManager.currentDate),
-                                                    personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                                                    professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                                                    personalColor: appPrefs.personalColor,
-                                                    professionalColor: appPrefs.professionalColor,
-                                                    onEventTap: { event in
-                                                        onEventTap?(event)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                    .frame(
-                                        width: leftTimelineWidth,
-                                        height: appPrefs.showAnyLogs ? topRowHeight : geometry.size.height - 24,
-                                        alignment: .topLeading
-                                    )
-
-                                    // Vertical draggable divider between timeline and tasks
-                                    Rectangle()
-                                        .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                                        .frame(width: 8, height: appPrefs.showAnyLogs ? topRowHeight : geometry.size.height - 24)
-                                    .overlay(
-                                        Image(systemName: "line.3.vertical")
-                                            .font(.caption)
-                                            .foregroundColor(isLeftDividerDragging ? .white : .gray)
-                                    )
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { value in
-                                                isLeftDividerDragging = true
-                                                let newWidth = leftTimelineWidth + value.translation.width
-                                                let minWidth: CGFloat = 150
-                                                let maxWidth: CGFloat = max(200, geometry.size.width - 300)
-                                                leftTimelineWidth = max(minWidth, min(maxWidth, newWidth))
-                                            }
-                                            .onEnded { _ in
-                                                isLeftDividerDragging = false
-                                                appPrefs.updateDayViewExpandedLeftTimelineWidth(leftTimelineWidth)
-                                            }
-                                    )
-
-                                // Tasks (two side-by-side columns)
+                        VStack(spacing: 12) {
+                            // 1) Timeline + Tasks side-by-side
+                            HStack(alignment: .top, spacing: 12) {
+                                // Timeline or Events List (based on preference)
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Tasks")
+                                    Text("Events")
                                         .font(.headline)
                                         .padding(.horizontal, 8)
                                     
-                                    HStack(alignment: .top, spacing: 12) {
-                                    let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
-                                    let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
-                                    let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
-                                    let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
-                                    let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
-                                    
-                                    if hasPersonalTasks {
-                                        TasksComponent(
-                                            taskLists: tasksVM.personalTaskLists,
-                                            tasksDict: personalTasks,
-                                            accentColor: appPrefs.personalColor,
-                                            accountType: .personal,
-                                            onTaskToggle: { task, listId in
-                                                let viewModel = tasksVM // Capture the view model
-                                                Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .personal) }
-                                            },
-                                            onTaskDetails: { task, listId in
-                                                selectedTask = task
-                                                selectedTaskListId = listId
-                                                selectedTaskAccount = .personal
-                                                showingTaskDetails = true
-                                            },
-                                            onListRename: { listId, newName in
-                                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
-                                            },
-                                            onOrderChanged: { newOrder in
-                                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
-                                            },
-                                            hideDueDateTag: false,
-                                            showEmptyState: true,
-                                            horizontalCards: false,
-                                            isSingleDayView: true
-                                        )
-                                        .frame(maxWidth: .infinity, alignment: .top)
-                                    }
-
-                                    if hasProfessionalTasks {
-                                        TasksComponent(
-                                            taskLists: tasksVM.professionalTaskLists,
-                                            tasksDict: professionalTasks,
-                                            accentColor: appPrefs.professionalColor,
-                                            accountType: .professional,
-                                            onTaskToggle: { task, listId in
-                                                let viewModel = tasksVM // Capture the view model
-                                                Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .professional) }
-                                            },
-                                            onTaskDetails: { task, listId in
-                                                selectedTask = task
-                                                selectedTaskListId = listId
-                                                selectedTaskAccount = .professional
-                                                showingTaskDetails = true
-                                            },
-                                            onListRename: { listId, newName in
-                                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
-                                            },
-                                            onOrderChanged: { newOrder in
-                                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
-                                            },
-                                            hideDueDateTag: false,
-                                            showEmptyState: true,
-                                            horizontalCards: false,
-                                            isSingleDayView: true
-                                        )
-                                        .frame(maxWidth: .infinity, alignment: .top)
-                                    }
-                                    
-                                    if !hasPersonalTasks && !hasProfessionalTasks {
-                                        if !hasAnyLinkedAccount {
-                                            // No accounts linked - show link account UI
-                                            Button(action: { NavigationManager.shared.showSettings() }) {
-                                                VStack(spacing: 16) {
-                                                    Image(systemName: "person.crop.circle.badge.plus")
-                                                        .font(.system(size: 48))
-                                                        .foregroundColor(.secondary)
-                                                    
-                                                    Text("Link Your Google Account")
-                                                        .font(.title2)
-                                                        .fontWeight(.semibold)
-                                                    
-                                                    Text("Connect your Google account to view and manage your calendar events and tasks")
-                                                        .font(.body)
-                                                        .foregroundColor(.secondary)
-                                                        .multilineTextAlignment(.center)
-                                                }
-                                                .frame(maxWidth: .infinity, alignment: .center)
-                                                .padding(.vertical, 40)
-                                                .padding(.horizontal, 20)
-                                            }
-                                            .buttonStyle(.plain)
+                                    Group {
+                                        if appPrefs.showEventsAsListInDay {
+                                            EventsListComponent(
+                                                events: filteredEventsForDay(navigationManager.currentDate),
+                                                personalEvents: calendarVM.personalEvents,
+                                                professionalEvents: calendarVM.professionalEvents,
+                                                personalColor: appPrefs.personalColor,
+                                                professionalColor: appPrefs.professionalColor,
+                                                onEventTap: { ev in onEventTap?(ev) },
+                                                date: navigationManager.currentDate
+                                            )
                                         } else {
-                                            // Accounts linked but no tasks
-                                            Text("No tasks for today")
-                                                .font(.body)
-                                                .foregroundColor(.secondary)
-                                                .italic()
-                                                .frame(maxWidth: .infinity, alignment: .center)
-                                                .padding(.vertical, 20)
+                                            TimelineComponent(
+                                                date: navigationManager.currentDate,
+                                                events: filteredEventsForDay(navigationManager.currentDate),
+                                                personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                                                professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                                                personalColor: appPrefs.personalColor,
+                                                professionalColor: appPrefs.professionalColor,
+                                                onEventTap: { event in
+                                                    onEventTap?(event)
+                                                }
+                                            )
                                         }
-                                    }
                                     }
                                 }
                                 .frame(
-                                    maxWidth: .infinity,
-                                    maxHeight: appPrefs.showAnyLogs ? topRowHeight : geometry.size.height - 24,
-                                    alignment: .top
+                                    width: leftTimelineWidth,
+                                    height: geometry.size.height - 24,
+                                    alignment: .topLeading
                                 )
-                            }
 
-                            if appPrefs.showAnyLogs {
-                                // Draggable divider between top row and logs
+                                // Vertical draggable divider between timeline and tasks
                                 Rectangle()
-                                    .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                                    .frame(height: 8)
-                                    .overlay(
-                                        Image(systemName: "line.3.horizontal")
-                                            .font(.caption)
-                                            .foregroundColor(isTopDividerDragging ? .white : .gray)
-                                    )
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { value in
-                                                isTopDividerDragging = true
-                                                let newHeight = topRowHeight + value.translation.height
-                                                let minHeight: CGFloat = 200
-                                                let maxHeight: CGFloat = max(200, geometry.size.height - 300)
-                                                topRowHeight = max(minHeight, min(maxHeight, newHeight))
-                                            }
-                                            .onEnded { _ in
-                                                isTopDividerDragging = false
-                                                appPrefs.updateDayViewExpandedTopRowHeight(topRowHeight)
-                                            }
-                                    )
+                                    .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                                    .frame(width: 8, height: geometry.size.height - 24)
+                                .overlay(
+                                    Image(systemName: "line.3.vertical")
+                                        .font(.caption)
+                                        .foregroundColor(isLeftDividerDragging ? .white : .gray)
+                                )
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            isLeftDividerDragging = true
+                                            let newWidth = leftTimelineWidth + value.translation.width
+                                            let minWidth: CGFloat = 150
+                                            let maxWidth: CGFloat = max(200, geometry.size.width - 300)
+                                            leftTimelineWidth = max(minWidth, min(maxWidth, newWidth))
+                                        }
+                                        .onEnded { _ in
+                                            isLeftDividerDragging = false
+                                            appPrefs.updateDayViewExpandedLeftTimelineWidth(leftTimelineWidth)
+                                        }
+                                )
 
-                                // 2) Logs laid out side-by-side (weight, workout, food)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
+                            // Tasks (two side-by-side columns)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Tasks")
+                                    .font(.headline)
+                                    .padding(.horizontal, 8)
+                                
+                                HStack(alignment: .top, spacing: 12) {
+                                let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
+                                let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
+                                let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
+                                let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
+                                let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
+                                
+                                if hasPersonalTasks {
+                                    TasksComponent(
+                                        taskLists: tasksVM.personalTaskLists,
+                                        tasksDict: personalTasks,
+                                        accentColor: appPrefs.personalColor,
+                                        accountType: .personal,
+                                        onTaskToggle: { task, listId in
+                                            let viewModel = tasksVM // Capture the view model
+                                            Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .personal) }
+                                        },
+                                        onTaskDetails: { task, listId in
+                                            selectedTask = task
+                                            selectedTaskListId = listId
+                                            selectedTaskAccount = .personal
+                                            showingTaskDetails = true
+                                        },
+                                        onListRename: { listId, newName in
+                                            Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                                        },
+                                        onOrderChanged: { newOrder in
+                                            Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
+                                        },
+                                        hideDueDateTag: false,
+                                        showEmptyState: true,
+                                        horizontalCards: false,
+                                        isSingleDayView: true
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .top)
                                 }
-                                .frame(height: logsHeight)
+
+                                if hasProfessionalTasks {
+                                    TasksComponent(
+                                        taskLists: tasksVM.professionalTaskLists,
+                                        tasksDict: professionalTasks,
+                                        accentColor: appPrefs.professionalColor,
+                                        accountType: .professional,
+                                        onTaskToggle: { task, listId in
+                                            let viewModel = tasksVM // Capture the view model
+                                            Task { await viewModel.toggleTaskCompletion(task, in: listId, for: .professional) }
+                                        },
+                                        onTaskDetails: { task, listId in
+                                            selectedTask = task
+                                            selectedTaskListId = listId
+                                            selectedTaskAccount = .professional
+                                            showingTaskDetails = true
+                                        },
+                                        onListRename: { listId, newName in
+                                            Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                                        },
+                                        onOrderChanged: { newOrder in
+                                            Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
+                                        },
+                                        hideDueDateTag: false,
+                                        showEmptyState: true,
+                                        horizontalCards: false,
+                                        isSingleDayView: true
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .top)
+                                }
+                                
+                                if !hasPersonalTasks && !hasProfessionalTasks {
+                                    if !hasAnyLinkedAccount {
+                                        // No accounts linked - show link account UI
+                                        Button(action: { NavigationManager.shared.showSettings() }) {
+                                            VStack(spacing: 16) {
+                                                Image(systemName: "person.crop.circle.badge.plus")
+                                                    .font(.system(size: 48))
+                                                    .foregroundColor(.secondary)
+                                                
+                                                Text("Link Your Google Account")
+                                                    .font(.title2)
+                                                    .fontWeight(.semibold)
+                                                
+                                                Text("Connect your Google account to view and manage your calendar events and tasks")
+                                                    .font(.body)
+                                                    .foregroundColor(.secondary)
+                                                    .multilineTextAlignment(.center)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                            .padding(.vertical, 40)
+                                            .padding(.horizontal, 20)
+                                        }
+                                        .buttonStyle(.plain)
+                                    } else {
+                                        // Accounts linked but no tasks
+                                        Text("No tasks for today")
+                                            .font(.body)
+                                            .foregroundColor(.secondary)
+                                            .italic()
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                            .padding(.vertical, 20)
+                                    }
+                                }
+                                }
+                                
+                                // Draggable divider between tasks and logs
+                                if appPrefs.showAnyLogs {
+                                    Rectangle()
+                                        .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                                        .frame(height: 8)
+                                        .overlay(
+                                            Image(systemName: "line.3.horizontal")
+                                                .font(.caption)
+                                                .foregroundColor(isTopDividerDragging ? .white : .gray)
+                                        )
+                                        .gesture(
+                                            DragGesture()
+                                                .onChanged { value in
+                                                    isTopDividerDragging = true
+                                                    let newHeight = logsHeight - value.translation.height
+                                                    let minHeight: CGFloat = 100
+                                                    let maxHeight: CGFloat = max(200, geometry.size.height - 300)
+                                                    logsHeight = max(minHeight, min(maxHeight, newHeight))
+                                                }
+                                                .onEnded { _ in
+                                                    isTopDividerDragging = false
+                                                    appPrefs.updateDayViewExpandedLogsHeight(logsHeight)
+                                                }
+                                        )
+                                }
+                                
+                                // Logs component below tasks
+                                if appPrefs.showAnyLogs {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
+                                    }
+                                    .frame(height: logsHeight)
+                                }
                             }
+                            .frame(
+                                maxWidth: .infinity,
+                                maxHeight: .infinity,
+                                alignment: .top
+                            )
                         }
                     }
+                    .frame(height: geometry.size.height)
                     .ignoresSafeArea(edges: .top)
                     .padding(12)
                 }

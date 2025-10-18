@@ -61,7 +61,7 @@ class LogsViewModel: ObservableObject {
     var filteredFoodEntries: [FoodLogEntry] {
         return foodEntries.filter { entry in
             Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
+        }.sorted { $0.createdAt < $1.createdAt }  // Oldest first (newest at bottom)
     }
     
     var filteredWaterEntries: [WaterLogEntry] {

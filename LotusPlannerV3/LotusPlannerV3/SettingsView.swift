@@ -16,9 +16,10 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case defaultNew = 3
     case mobile = 4
     case expVertical = 5
+    case a5 = 6
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .expVertical, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .expVertical, .mobile, .a5] }
 
     var displayName: String {
         switch self {
@@ -27,6 +28,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compactTwo: "Compact"
         case .mobile: "Mobile"
         case .expVertical: "Expanded Vertical"
+        case .a5: "A5 Fixed Layout"
         }
     }
     
@@ -37,6 +39,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compactTwo: "Compact layout with Tasks first, then Timeline + Logs column next to Journal"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .expVertical: "Vertical layout: Events & Tasks on top, Logs in middle, Journal at bottom"
+        case .a5: "Fixed A5 page (1480x1748px): Events (1/6), Tasks+Logs (1/3), Journal (1/2) with scrolling"
         }
     }
 }
@@ -791,23 +794,6 @@ struct SettingsView: View {
                     }
                     
                     Toggle(isOn: Binding(
-                        get: { appPrefs.showFoodLogs },
-                        set: { appPrefs.showFoodLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "fork.knife")
-                                .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Food Logs")
-                                    .font(.body)
-                                Text("Show food tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    
-                    Toggle(isOn: Binding(
                         get: { appPrefs.showWaterLogs },
                         set: { appPrefs.showWaterLogs = $0 }
                     )) {
@@ -818,6 +804,23 @@ struct SettingsView: View {
                                 Text("Water Logs")
                                     .font(.body)
                                 Text("Show water intake tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    Toggle(isOn: Binding(
+get: { appPrefs.showFoodLogs },
+                        set: { appPrefs.showFoodLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "fork.knife")
+                                .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Food Logs")
+                                    .font(.body)
+                                Text("Show food tracking in day views")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

@@ -1250,7 +1250,7 @@ struct TasksView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Personal")
                                         .font(.headline)
-                                        .foregroundColor(appPrefs.personalColor)
+                                        .foregroundColor(allSubfilter == .all ? appPrefs.personalColor : .primary)
                                         .padding(.horizontal, 12)
                                     TasksComponent(
                                         taskLists: viewModel.personalTaskLists,
@@ -1286,7 +1286,7 @@ struct TasksView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Professional")
                                         .font(.headline)
-                                        .foregroundColor(appPrefs.professionalColor)
+                                        .foregroundColor(allSubfilter == .all ? appPrefs.professionalColor : .primary)
                                         .padding(.horizontal, 12)
                                     TasksComponent(
                                         taskLists: viewModel.professionalTaskLists,

@@ -101,99 +101,98 @@ struct AllTaskListsColumn: View {
     @State private var newListAccountKind: GoogleAuthManager.AccountKind?
     @State private var newListName = ""
     
+    // State for collapsing/expanding sections
+    @State private var isPersonalExpanded = true
+    @State private var isProfessionalExpanded = true
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text("Task Lists")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Button {
-                    // Reset the account selection when opening sheet
-                    newListAccountKind = nil
-                    newListName = ""
-                    showingNewListSheet = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            
-            Divider()
-            
             // All Lists
             ScrollView {
                 LazyVStack(spacing: 0) {
                     // Personal Lists Section
                     if hasPersonal {
                         // Personal Header
-                        HStack {
-                            Text("Personal")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(personalColor)
-                            Spacer()
-                            Text("\(personalLists.count) \(personalLists.count == 1 ? "List" : "Lists")")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        Button(action: {
+                            isPersonalExpanded.toggle()
+                        }) {
+                            HStack {
+                                Text("Personal")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(personalColor)
+                                Spacer()
+                                Text("\(personalLists.count) \(personalLists.count == 1 ? "List" : "Lists")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Image(systemName: isPersonalExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .background(personalColor.opacity(0.1))
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                        .background(personalColor.opacity(0.1))
+                        .buttonStyle(.plain)
                         
                         // Personal Lists
-                        ForEach(personalLists) { taskList in
-                            TaskListRow(
-                                taskList: taskList,
-                                accentColor: personalColor,
-                                taskCount: tasksVM.personalTasks[taskList.id]?.count ?? 0,
-                                isSelected: selectedListId == taskList.id && selectedAccountKind == .personal,
-                                onTap: {
-                                    selectedListId = taskList.id
-                                    selectedAccountKind = .personal
-                                }
-                            )
-                            Divider()
+                        if isPersonalExpanded {
+                            ForEach(personalLists) { taskList in
+                                TaskListRow(
+                                    taskList: taskList,
+                                    accentColor: personalColor,
+                                    taskCount: tasksVM.personalTasks[taskList.id]?.count ?? 0,
+                                    isSelected: selectedListId == taskList.id && selectedAccountKind == .personal,
+                                    onTap: {
+                                        selectedListId = taskList.id
+                                        selectedAccountKind = .personal
+                                    }
+                                )
+                                Divider()
+                            }
                         }
                     }
                     
                     // Professional Lists Section
                     if hasProfessional {
                         // Professional Header
-                        HStack {
-                            Text("Professional")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(professionalColor)
-                            Spacer()
-                            Text("\(professionalLists.count) \(professionalLists.count == 1 ? "List" : "Lists")")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        Button(action: {
+                            isProfessionalExpanded.toggle()
+                        }) {
+                            HStack {
+                                Text("Professional")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(professionalColor)
+                                Spacer()
+                                Text("\(professionalLists.count) \(professionalLists.count == 1 ? "List" : "Lists")")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Image(systemName: isProfessionalExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .background(professionalColor.opacity(0.1))
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                        .background(professionalColor.opacity(0.1))
+                        .buttonStyle(.plain)
                         
                         // Professional Lists
-                        ForEach(professionalLists) { taskList in
-                            TaskListRow(
-                                taskList: taskList,
-                                accentColor: professionalColor,
-                                taskCount: tasksVM.professionalTasks[taskList.id]?.count ?? 0,
-                                isSelected: selectedListId == taskList.id && selectedAccountKind == .professional,
-                                onTap: {
-                                    selectedListId = taskList.id
-                                    selectedAccountKind = .professional
-                                }
-                            )
-                            Divider()
+                        if isProfessionalExpanded {
+                            ForEach(professionalLists) { taskList in
+                                TaskListRow(
+                                    taskList: taskList,
+                                    accentColor: professionalColor,
+                                    taskCount: tasksVM.professionalTasks[taskList.id]?.count ?? 0,
+                                    isSelected: selectedListId == taskList.id && selectedAccountKind == .professional,
+                                    onTap: {
+                                        selectedListId = taskList.id
+                                        selectedAccountKind = .professional
+                                    }
+                                )
+                                Divider()
+                            }
                         }
                     }
                 }

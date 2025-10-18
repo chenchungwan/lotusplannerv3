@@ -2295,6 +2295,15 @@ struct CalendarView: View {
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
+        case .a5:
+            DayViewA5(
+                navigationManager: navigationManager,
+                appPreferences: appPrefs,
+                calendarViewModel: calendarViewModel,
+                tasksViewModel: tasksViewModel,
+                googleAuthManager: authManager,
+                logsViewModel: LogsViewModel.shared
+            )
         default:
             dayViewContentCompact(geometry: geometry)
         }
@@ -2359,7 +2368,7 @@ struct CalendarView: View {
                             }
                     )
 
-                // Logs on the right with weight, workout, food in a column
+                // Logs on the right with weight, workout, water, food in a column
                 LogsComponent(currentDate: currentDate, horizontal: false)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(.all, 8)
@@ -2496,7 +2505,7 @@ struct CalendarView: View {
                                 }
                         )
 
-                    // Logs with weight, workout, and food laid out side-by-side
+                    // Logs with weight, workout, water, and food laid out side-by-side
                     VStack(alignment: .leading, spacing: 6) {
                         // No label per latest style
                         // Reuse LogsComponent in horizontal mode to display categories side-by-side

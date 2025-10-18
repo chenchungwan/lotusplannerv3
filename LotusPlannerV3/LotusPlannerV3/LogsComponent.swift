@@ -44,7 +44,7 @@ struct LogsComponent: View {
                 // All log sections in a scrollable view
                 ScrollView {
                     if horizontal {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 2), spacing: 16) {
                             // Weight Section
                             if appPrefs.showWeightLogs {
                                 weightSection
@@ -55,14 +55,14 @@ struct LogsComponent: View {
                                 workoutSection
                             }
                             
-                            // Food Section
-                            if appPrefs.showFoodLogs {
-                                foodSection
-                            }
-                            
                             // Water Section
                             if appPrefs.showWaterLogs {
                                 waterSection
+                            }
+                            
+                            // Food Section
+                            if appPrefs.showFoodLogs {
+                                foodSection
                             }
                             
                             // Custom Log Section
@@ -82,14 +82,14 @@ struct LogsComponent: View {
                                 workoutSection
                             }
                             
-                            // Food Section
-                            if appPrefs.showFoodLogs {
-                                foodSection
-                            }
-                            
                             // Water Section
                             if appPrefs.showWaterLogs {
                                 waterSection
+                            }
+                            
+                            // Food Section
+                            if appPrefs.showFoodLogs {
+                                foodSection
                             }
                             
                             // Custom Log Section
@@ -167,6 +167,7 @@ extension LogsComponent {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
@@ -195,6 +196,7 @@ extension LogsComponent {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
@@ -223,6 +225,7 @@ extension LogsComponent {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
@@ -358,6 +361,7 @@ extension LogsComponent {
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
@@ -376,6 +380,7 @@ extension LogsComponent {
             
             CustomLogView()
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)

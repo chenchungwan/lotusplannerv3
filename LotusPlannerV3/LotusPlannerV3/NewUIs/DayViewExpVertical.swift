@@ -249,7 +249,7 @@ struct DayViewExpVertical: View {
                                     }
                             )
 
-                        // Logs laid out side-by-side (weight, workout, food)
+                        // Logs laid out side-by-side (weight, workout, water, food)
                         VStack(alignment: .leading, spacing: 6) {
                             LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
                         }
