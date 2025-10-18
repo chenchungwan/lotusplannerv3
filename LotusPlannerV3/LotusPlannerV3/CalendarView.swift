@@ -2310,17 +2310,20 @@ struct CalendarView: View {
     }
     
     private func dayViewContentCompact(geometry: GeometryProxy) -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Left section (dynamic width)
-            leftDaySectionWithDivider(geometry: geometry)
-                .frame(width: dayLeftSectionWidth)
-            
-            // Vertical divider
-            dayVerticalDivider
+        ScrollView(.horizontal, showsIndicators: true) {
+            HStack(alignment: .top, spacing: 0) {
+                // Left section (dynamic width)
+                leftDaySectionWithDivider(geometry: geometry)
+                    .frame(width: dayLeftSectionWidth)
+                
+                // Vertical divider
+                dayVerticalDivider
 
-            // Right section expands to fill remaining space
-            rightDaySection(geometry: geometry)
-                .frame(maxWidth: .infinity)
+                // Right section expands to fill remaining space
+                rightDaySection(geometry: geometry)
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(minWidth: geometry.size.width)
         }
     }
     
@@ -2607,6 +2610,7 @@ struct CalendarView: View {
                 VStack(alignment: .leading, spacing: 6) {
                   
                     JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                        .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
                 }
                 .id(currentDate)
                 .frame(maxHeight: .infinity)
@@ -2717,7 +2721,8 @@ struct CalendarView: View {
                     .onChanged { value in
                         isRightDividerDragging = true
                         let newHeight = rightSectionTopHeight + value.translation.height
-                        rightSectionTopHeight = max(200, min(UIScreen.main.bounds.height - 300, newHeight))
+                        // Allow dragging up to show entire journal area (minimum 100pt for tasks, maximum screen height - 100pt)
+                        rightSectionTopHeight = max(100, min(UIScreen.main.bounds.height - 100, newHeight))
                     }
                     .onEnded { _ in
                         isRightDividerDragging = false

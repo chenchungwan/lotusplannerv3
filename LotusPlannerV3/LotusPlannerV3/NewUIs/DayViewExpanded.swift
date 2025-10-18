@@ -269,7 +269,7 @@ struct DayViewExpanded: View {
                 if appPrefs.showJournal {
                     JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
                     .id(navigationManager.currentDate)
-                    .frame(width: geometry.size.width * 0.95)
+                    .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(12)
                 }
