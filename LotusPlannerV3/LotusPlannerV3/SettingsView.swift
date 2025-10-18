@@ -15,20 +15,16 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compactTwo = 1
     case defaultNew = 3
     case mobile = 4
-    case expVertical = 5
-    case a5 = 6
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .expVertical, .mobile, .a5] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile] }
 
     var displayName: String {
         switch self {
-        case .defaultNew: "Expanded Horizontal"
+        case .defaultNew: "Expanded"
         case .compact: "Classic"
         case .compactTwo: "Compact"
         case .mobile: "Mobile"
-        case .expVertical: "Expanded Vertical"
-        case .a5: "A5 Fixed Layout"
         }
     }
     
@@ -38,8 +34,6 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compact: "Classic layout with Timeline on left, Tasks and Journal on right with adjustable divider"
         case .compactTwo: "Compact layout with Tasks first, then Timeline + Logs column next to Journal"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
-        case .expVertical: "Vertical layout: Events & Tasks on top, Logs in middle, Journal at bottom"
-        case .a5: "Fixed A5 page (1480x1748px): Events (1/6), Tasks+Logs (1/3), Journal (1/2) with scrolling"
         }
     }
 }
@@ -326,12 +320,6 @@ class AppPreferences: ObservableObject {
         showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs
     }
     
-    // Show journal components
-    @Published var showJournal: Bool {
-        didSet {
-            UserDefaults.standard.set(showJournal, forKey: "showJournal")
-        }
-    }
     
     
     // Day View Divider Positions
@@ -438,8 +426,6 @@ class AppPreferences: ObservableObject {
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         
-        // Load journal visibility preference (default visible)
-        self.showJournal = UserDefaults.standard.object(forKey: "showJournal") as? Bool ?? true
         
 
 
@@ -843,30 +829,17 @@ get: { appPrefs.showFoodLogs },
                             }
                         }
                     }
-                }
-                
-                Section("Custom Logs Items") {
-                    CustomLogItemsInlineView()
-                }
-                
-                Section("Journal Preferences") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showJournal },
-                        set: { appPrefs.showJournal = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "book.closed")
-                                .foregroundColor(appPrefs.showJournal ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Show Journal")
-                                    .font(.body)
-                                Text("Show journal components in all views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
+                    
+                    // Custom Logs Items subsection
+                    if appPrefs.showCustomLogs {
+                        VStack(alignment: .leading, spacing: 0) {
+                            CustomLogItemsInlineView()
                         }
+                        .padding(.leading, 20)
+                        .padding(.top, 8)
                     }
                 }
+                
                 
                 
                 Section("App Preferences") {

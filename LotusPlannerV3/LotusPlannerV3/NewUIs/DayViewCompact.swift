@@ -258,39 +258,37 @@ struct DayViewCompact: View {
                         }
                     }
                     // Clamp left column width based on available width
-                    .frame(width: appPrefs.showJournal ? max(180, min(leftColumnWidth, max(220, geo.size.width - 240))) : .infinity, alignment: .top)
+                    .frame(width: max(180, min(leftColumnWidth, max(220, geo.size.width - 240))), alignment: .top)
 
-                    if appPrefs.showJournal {
-                        // Draggable vertical divider between left column and journal
-                        Rectangle()
-                            .fill(isMiddleDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                            .frame(width: 8)
-                            .overlay(
-                                Image(systemName: "line.3.vertical")
-                                    .font(.caption)
-                                    .foregroundColor(isMiddleDividerDragging ? .white : .gray)
-                            )
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        isMiddleDividerDragging = true
-                                        let minWidth: CGFloat = 180
-                                        let maxWidth: CGFloat = max(220, geo.size.width - 240)
-                                        let newWidth = leftColumnWidth + value.translation.width
-                                        leftColumnWidth = max(minWidth, min(maxWidth, newWidth))
-                                    }
-                                    .onEnded { _ in 
-                                        isMiddleDividerDragging = false
-                                        appPrefs.updateDayViewCompactLeftColumnWidth(leftColumnWidth)
-                                    }
-                            )
+                    // Draggable vertical divider between left column and journal
+                    Rectangle()
+                        .fill(isMiddleDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                        .frame(width: 8)
+                        .overlay(
+                            Image(systemName: "line.3.vertical")
+                                .font(.caption)
+                                .foregroundColor(isMiddleDividerDragging ? .white : .gray)
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    isMiddleDividerDragging = true
+                                    let minWidth: CGFloat = 180
+                                    let maxWidth: CGFloat = max(220, geo.size.width - 240)
+                                    let newWidth = leftColumnWidth + value.translation.width
+                                    leftColumnWidth = max(minWidth, min(maxWidth, newWidth))
+                                }
+                                .onEnded { _ in 
+                                    isMiddleDividerDragging = false
+                                    appPrefs.updateDayViewCompactLeftColumnWidth(leftColumnWidth)
+                                }
+                        )
 
-                        JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .id(navigationManager.currentDate)
+                    JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .padding(.bottom, 8)
-                    }
+                    .id(navigationManager.currentDate)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.bottom, 8)
                 }
                 .frame(height: bottomH)
             }
