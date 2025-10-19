@@ -98,6 +98,7 @@ class NavigationManager: ObservableObject {
         case lists
         case goals
         case journal
+        case journalDayViews
         case weeklyView
         case gWeekView
         case yearlyCalendar
@@ -158,6 +159,12 @@ class NavigationManager: ObservableObject {
     func switchToJournal() {
         currentView = .journal
         showTasksView = false
+    }
+    
+    func switchToJournalDayViews() {
+        currentView = .journalDayViews
+        showTasksView = false
+        currentInterval = .day // Journal day views are always day view
     }
     
     func switchToWeeklyView() {

@@ -165,6 +165,22 @@ struct GlobalNavBar: View {
             return
         }
         
+        // Handle journal day views navigation
+        if navigationManager.currentView == .journalDayViews {
+            print("🔄 GlobalNavBar: Step called for journalDayViews, direction: \(direction)")
+            let component = navigationManager.currentInterval.calendarComponent
+            if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
+                print("🔄 GlobalNavBar: Updating date from \(navigationManager.currentDate) to \(newDate)")
+                // Update the navigation manager
+                navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
+                
+                // Post notification for journal content refresh
+                NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+                print("🔄 GlobalNavBar: Posted RefreshJournalContent notification")
+            }
+            return
+        }
+        
         let component = navigationManager.currentInterval.calendarComponent
         if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
             // First update the navigation
@@ -230,6 +246,12 @@ struct GlobalNavBar: View {
                                 Label("Lists", systemImage: "list.bullet")
                             }
                             
+                            Button(action: {
+                                navigationManager.switchToJournalDayViews()
+                            }) {
+                                Label("Journals", systemImage: "book")
+                            }
+                            
                             if !appPrefs.hideGoals {
                                 Button(action: {
                                     navigationManager.switchToGoals()
@@ -293,8 +315,8 @@ struct GlobalNavBar: View {
                         
                         if !isNarrow {
                         Spacer()
-                            // Hide navigation buttons only in Lists view
-                            if navigationManager.currentView != .lists {
+                            // Hide navigation buttons in Lists view and Journal Day Views
+                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 // Only show d.circle in non-Goals views
                                 if navigationManager.currentView != .goals {
                                     Button {
@@ -338,8 +360,8 @@ struct GlobalNavBar: View {
                             }
                             
                             
-                            // Hide ellipsis.circle in calendar views and lists view
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists  {
+                            // Hide ellipsis.circle in calendar views, lists view, and journal day views
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
                                     // In Goals view: simple button to show all goals
                                     Button {
@@ -387,8 +409,8 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            // Hide vertical separator in Lists view
-                            if navigationManager.currentView != .lists  {
+                            // Hide vertical separator in Lists view and Journal Day Views
+                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 Text("|")
                                     .font(.title2)
                             }
@@ -411,25 +433,29 @@ struct GlobalNavBar: View {
                                         .font(.title2)
                                 }
                             }
-                            Menu {
-                                if navigationManager.currentView == .goals {
-                                    Button("Goal") {
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                            
+                            // Hide all icons to the right of > when in journalDayViews
+                            if navigationManager.currentView != .journalDayViews {
+                                Menu {
+                                    if navigationManager.currentView == .goals {
+                                        Button("Goal") {
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                        }
+                                    } else {
+                                        Button("Event") {
+                                            showingAddEvent = true
+                                        }
+                                        Button("Task") {
+                                            showingAddTask = true
+                                        }
+                                        Button("List") {
+                                            showingAddList = true
+                                        }
                                     }
-                                } else {
-                                    Button("Event") {
-                                        showingAddEvent = true
-                                    }
-                                    Button("Task") {
-                                        showingAddTask = true
-                                    }
-                                    Button("List") {
-                                        showingAddList = true
-                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.title2)
                                 }
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.title2)
                             }
                         }
                     }
@@ -438,8 +464,8 @@ struct GlobalNavBar: View {
                     
                     if isNarrow {
                         HStack{
-                            // Hide navigation buttons only in Lists view
-                            if navigationManager.currentView != .lists  {
+                            // Hide navigation buttons in Lists view and Journal Day Views
+                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 // Only show d.circle in non-Goals views
                                 if navigationManager.currentView != .goals {
                                     Button {
@@ -483,8 +509,8 @@ struct GlobalNavBar: View {
                             }
                             
                             
-                            // Hide ellipsis.circle in calendar views and lists view
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists  {
+                            // Hide ellipsis.circle in calendar views, lists view, and journal day views
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
                                     // In Goals view: simple button to show all goals
                                     Button {
@@ -532,8 +558,8 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            // Hide vertical separator in Lists view
-                            if navigationManager.currentView != .lists  {
+                            // Hide vertical separator in Lists view and Journal Day Views
+                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 Text("|")
                                     .font(.title2)
                             }
@@ -556,25 +582,29 @@ struct GlobalNavBar: View {
                                         .font(.title2)
                                 }
                             }
-                            Menu {
-                                if navigationManager.currentView == .goals {
-                                    Button("Goal") {
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                            
+                            // Hide all icons to the right of > when in journalDayViews
+                            if navigationManager.currentView != .journalDayViews {
+                                Menu {
+                                    if navigationManager.currentView == .goals {
+                                        Button("Goal") {
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                        }
+                                    } else {
+                                        Button("Event") {
+                                            showingAddEvent = true
+                                        }
+                                        Button("Task") {
+                                            showingAddTask = true
+                                        }
+                                        Button("List") {
+                                            showingAddList = true
+                                        }
                                     }
-                                } else {
-                                    Button("Event") {
-                                        showingAddEvent = true
-                                    }
-                                    Button("Task") {
-                                        showingAddTask = true
-                                    }
-                                    Button("List") {
-                                        showingAddList = true
-                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.title2)
                                 }
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.title2)
                             }
                         }
                     }

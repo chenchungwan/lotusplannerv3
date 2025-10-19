@@ -10,7 +10,7 @@ struct JournalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var drawingManager = JournalDrawingManagerNew.shared
-    @State private var currentDate: Date
+    @Binding var currentDate: Date
     @State private var canvasView = PKCanvasView()
     // Track previous date to save when date changes
     @State private var previousDate: Date
@@ -34,9 +34,9 @@ struct JournalView: View {
     /// Layout type for determining which background PDF to use
     var layoutType: JournalLayoutType = .compact
     
-    init(currentDate: Date, embedded: Bool = false, layoutType: JournalLayoutType = .compact) {
-        _currentDate = State(initialValue: currentDate)
-        _previousDate = State(initialValue: currentDate)
+    init(currentDate: Binding<Date>, embedded: Bool = false, layoutType: JournalLayoutType = .compact) {
+        _currentDate = currentDate
+        _previousDate = State(initialValue: currentDate.wrappedValue)
         self.embedded = embedded
         self.layoutType = layoutType
     }
@@ -87,12 +87,21 @@ struct JournalView: View {
                         }
                     }
                     .onChange(of: currentDate) { oldValue, newValue in
+                        print("🔄 JournalView (embedded): Date changed from \(oldValue) to \(newValue)")
                         Task { @MainActor in
                             // Save old content
                             await drawingManager.willSwitchDate()
                             savePhotos(for: oldValue)
                             
                             // Load new content
+                            loadDrawing()
+                            loadPhotos()
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshJournalContent"))) { _ in
+                        print("🔄 JournalView (embedded): Received RefreshJournalContent notification")
+                        Task { @MainActor in
+                            // Refresh journal content when notification is received
                             loadDrawing()
                             loadPhotos()
                         }
@@ -117,6 +126,13 @@ struct JournalView: View {
                                 savePhotos(for: oldValue)
                                 
                                 // Load new content
+                                loadDrawing()
+                                loadPhotos()
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshJournalContent"))) { _ in
+                            Task { @MainActor in
+                                // Refresh journal content when notification is received
                                 loadDrawing()
                                 loadPhotos()
                             }
@@ -610,5 +626,5 @@ struct JournalView: View {
 
 
 #Preview {
-    JournalView(currentDate: Date())
+    JournalView(currentDate: .constant(Date()))
 } 

@@ -284,7 +284,7 @@ struct DayViewCompact: View {
                                 }
                         )
 
-                    JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                    JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .id(navigationManager.currentDate)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

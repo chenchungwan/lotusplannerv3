@@ -266,7 +266,7 @@ struct DayViewExpanded: View {
                 .frame(width: geometry.size.width)
                 
                 // Right Column: Journal
-                JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
                 .id(navigationManager.currentDate)
                 .frame(width: geometry.size.width * 0.95)
                 .frame(maxHeight: .infinity, alignment: .top)

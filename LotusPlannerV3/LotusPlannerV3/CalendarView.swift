@@ -1679,7 +1679,7 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             
             // Bottom section - Journal
-            JournalView(currentDate: currentDate, embedded: true)
+            JournalView(currentDate: $currentDate, embedded: true)
                 .id(currentDate)
                 .frame(maxHeight: .infinity)
                 .padding(.all, 8)
@@ -2419,7 +2419,7 @@ struct CalendarView: View {
                 // Notes (Journal) on the right
                 VStack(alignment: .leading, spacing: 6) {
 
-                    JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                    JournalView(currentDate: $currentDate, embedded: true, layoutType: .compact)
                         .id(currentDate)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -2500,7 +2500,7 @@ struct CalendarView: View {
                 // Row 3: Notes full-screen width and height; make it tall so it occupies screen when reached
                 VStack(alignment: .leading, spacing: 6) {
                    
-                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                    JournalView(currentDate: $currentDate, embedded: true, layoutType: .expanded)
                         .id(currentDate)
                         .frame(minHeight: UIScreen.main.bounds.height)
                 }
@@ -2545,7 +2545,7 @@ struct CalendarView: View {
 
                 // Row 4: Notes full-screen below
                 VStack(alignment: .leading, spacing: 6) {
-                    JournalView(currentDate: currentDate, embedded: true, layoutType: .expanded)
+                    JournalView(currentDate: $currentDate, embedded: true, layoutType: .expanded)
                         .frame(maxWidth: .infinity, minHeight: 600)
                 }
                 .padding(.horizontal, 8)
@@ -2583,7 +2583,7 @@ struct CalendarView: View {
             // Bottom section - Journal
             VStack(alignment: .leading, spacing: 6) {
               
-                JournalView(currentDate: currentDate, embedded: true, layoutType: .compact)
+                JournalView(currentDate: $currentDate, embedded: true, layoutType: .compact)
             }
             .id(currentDate)
             .frame(maxHeight: .infinity)

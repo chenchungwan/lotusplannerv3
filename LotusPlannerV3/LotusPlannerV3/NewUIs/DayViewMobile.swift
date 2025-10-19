@@ -174,7 +174,7 @@ struct DayViewMobile: View {
                
                     HStack {
                         Spacer()
-                        JournalView(currentDate: navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                        JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
                             .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
                         Spacer()
                     }

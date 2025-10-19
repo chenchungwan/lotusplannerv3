@@ -70,7 +70,9 @@ struct ContentView: View {
             }
 
         case .journal:
-                JournalView(currentDate: Date())
+                JournalView(currentDate: .constant(Date()))
+            case .journalDayViews:
+                JournalDayViews()
             case .weeklyView:
                 WeeklyView()
             case .gWeekView:
