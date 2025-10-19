@@ -709,14 +709,24 @@ struct NewListSheet: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                // Account Picker (if both accounts are linked)
+            Form {
+                // Basic Information Section (moved to top)
+                Section("Basic Information") {
+                    TextField("Add list name", text: $listName)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .focused($isTextFieldFocused)
+                        .submitLabel(.done)
+                        .onSubmit {
+                            if !listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                               (selectedAccount != nil || accountKind != nil) {
+                                onCreate()
+                            }
+                        }
+                }
+                
+                // Account Section (moved below, matching event popup style)
                 if showAccountPicker {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Account")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
+                    Section("Account") {
                         HStack(spacing: 12) {
                             if hasPersonal {
                                 Button(action: {
@@ -728,7 +738,6 @@ struct NewListSheet: View {
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .frame(maxWidth: .infinity)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(selectedAccount == .personal ? personalColor.opacity(0.2) : Color(.systemGray6))
@@ -752,7 +761,6 @@ struct NewListSheet: View {
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .frame(maxWidth: .infinity)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
                                             .fill(selectedAccount == .professional ? professionalColor.opacity(0.2) : Color(.systemGray6))
@@ -767,30 +775,8 @@ struct NewListSheet: View {
                             }
                         }
                     }
-                    .padding(.horizontal)
                 }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("List Name")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    
-                    TextField("Enter list name", text: $listName)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isTextFieldFocused)
-                        .submitLabel(.done)
-                        .onSubmit {
-                            if !listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                               (selectedAccount != nil || accountKind != nil) {
-                                onCreate()
-                            }
-                        }
-                }
-                .padding(.horizontal)
-                
-                Spacer()
             }
-            .padding(.top)
             .navigationTitle("New Task List")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

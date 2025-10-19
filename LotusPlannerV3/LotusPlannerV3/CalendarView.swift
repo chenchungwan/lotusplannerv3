@@ -5036,7 +5036,7 @@ struct AddItemView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(selectedTab == 0 ? (isEditingEvent ? "Save" : "Create Task") : (isEditingEvent ? "Save" : "Create Event")) {
+                    Button(isEditingEvent ? "Save" : "Create") {
                         if isEditingEvent {
                             // Always update the existing event when in edit mode, regardless of tab
                             updateEvent()
