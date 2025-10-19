@@ -4825,7 +4825,7 @@ struct AddItemView: View {
                         if selectedTab == 0 {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Task Title")
-                                TextField("Enter title", text: $itemTitle, axis: .vertical)
+                                TextField("Add task title", text: $itemTitle, axis: .vertical)
                                     .lineLimit(1...3)
                             }
                         } else {
@@ -4838,7 +4838,7 @@ struct AddItemView: View {
                         if selectedTab == 0 {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Notes")
-                                TextField("Add notes (optional)", text: $itemNotes, axis: .vertical)
+                                TextField("Add description (optional)", text: $itemNotes, axis: .vertical)
                                     .lineLimit(2...4)
                             }
                         } else {
@@ -4901,58 +4901,58 @@ struct AddItemView: View {
                                 .buttonStyle(PlainButtonStyle())
                             }
                         }
-                    }
-
-                    if selectedTab == 0 {
-                        // Task-specific fields
-                        if selectedAccountKind != nil {
-                            Section("Task List") {
-                                VStack(spacing: 8) {
-                                    // Create New List Option
-                                    HStack {
-                                        Button(action: {
-                                            isCreatingNewList.toggle()
-                                            if isCreatingNewList {
-                                                selectedTaskListId = ""
-                                            }
-                                        }) {
-                                            HStack {
-                                                Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundColor(isCreatingNewList ? accentColor : .secondary)
-                                                Text("Create new list")
-                                            }
+                        
+                        // Task List (only for tasks)
+                        if selectedTab == 0 && selectedAccountKind != nil {
+                            VStack(spacing: 8) {
+                                // Create New List Option
+                                HStack {
+                                    Button(action: {
+                                        isCreatingNewList.toggle()
+                                        if isCreatingNewList {
+                                            selectedTaskListId = ""
                                         }
-                                        .buttonStyle(PlainButtonStyle())
-                                        Spacer()
+                                    }) {
+                                        HStack {
+                                            Image(systemName: isCreatingNewList ? "checkmark.circle.fill" : "circle")
+                                                .foregroundColor(isCreatingNewList ? accentColor : .secondary)
+                                            Text("Create new list")
+                                        }
                                     }
+                                    .buttonStyle(PlainButtonStyle())
+                                    Spacer()
+                                }
 
-                                    if isCreatingNewList {
-                                        TextField("New list name", text: $newTaskListName)
-                                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                                            .padding(.leading, 28)
-                                    }
+                                if isCreatingNewList {
+                                    TextField("New list name", text: $newTaskListName)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        .padding(.leading, 28)
+                                }
 
-                                    // Existing Lists
-                                    if !isCreatingNewList && !availableTaskLists.isEmpty {
-                                        ForEach(availableTaskLists) { taskList in
-                                            HStack {
-                                                Button(action: {
-                                                    selectedTaskListId = taskList.id
-                                                }) {
-                                                    HStack {
-                                                        Image(systemName: selectedTaskListId == taskList.id ? "checkmark.circle.fill" : "circle")
-                                                            .foregroundColor(selectedTaskListId == taskList.id ? accentColor : .secondary)
-                                                        Text(taskList.title)
-                                                    }
+                                // Existing Lists
+                                if !isCreatingNewList && !availableTaskLists.isEmpty {
+                                    ForEach(availableTaskLists) { taskList in
+                                        HStack {
+                                            Button(action: {
+                                                selectedTaskListId = taskList.id
+                                            }) {
+                                                HStack {
+                                                    Image(systemName: selectedTaskListId == taskList.id ? "checkmark.circle.fill" : "circle")
+                                                        .foregroundColor(selectedTaskListId == taskList.id ? accentColor : .secondary)
+                                                    Text(taskList.title)
                                                 }
-                                                .buttonStyle(PlainButtonStyle())
-                                                Spacer()
                                             }
+                                            .buttonStyle(PlainButtonStyle())
+                                            Spacer()
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    if selectedTab == 0 {
+                        // Task-specific Due Date section
 
                         Section("Due Date") {
                             HStack {
@@ -5026,7 +5026,7 @@ struct AddItemView: View {
                     }
                 }
             }
-            .navigationTitle(selectedTab == 0 ? "New Task" : (isEditingEvent ? "Edit Event" : "New Event"))
+            .navigationTitle(selectedTab == 0 ? "New Task" : (isEditingEvent ? "Event Details" : "New Event"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

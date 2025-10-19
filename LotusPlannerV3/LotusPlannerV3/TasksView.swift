@@ -2263,21 +2263,18 @@ struct TaskDetailsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // Title only (no section header, no label)
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Task title", text: $editedTitle, axis: .vertical)
-                        .font(.title3)
+                // Basic Information Section
+                Section("Basic Information") {
+                    TextField("Add task title", text: $editedTitle, axis: .vertical)
                         .lineLimit(1...3)
+                    
+                    TextField("Add description (optional)", text: $editedNotes, axis: .vertical)
+                        .lineLimit(2...4)
                 }
                 
-                // Notes (no label)
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Add description", text: $editedNotes, axis: .vertical)
-                        .lineLimit(1...6)
-                }
-                
-                // Account & Task List (no section title/subtitle)
-                VStack(alignment: .leading, spacing: 12) {
+                // Account Section
+                Section("Account") {
+                    VStack(alignment: .leading, spacing: 12) {
                         // Two rows: Personal and Professional, each with its own current list on the same line
                         ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
                             if GoogleAuthManager.shared.isLinked(kind: kind) {
@@ -2341,9 +2338,11 @@ struct TaskDetailsView: View {
                             }
                         }
                     }
+                }
                 
-                // Due Date section
-                if let dueDate = editedDueDate {
+                // Due Date Section
+                Section("Due Date") {
+                    if let dueDate = editedDueDate {
                     // Show date with calendar icon and trash can
                     HStack {
                         Image(systemName: "calendar")
@@ -2383,19 +2382,10 @@ struct TaskDetailsView: View {
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
+                    }
                 }
                 
                 // Removed Task Status section per request
-                
-                if !isNew {
-                    Section {
-                        Button("Delete Task") {
-                            showingDeleteAlert = true
-                        }
-                        .foregroundColor(.red)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                }
             }
             .navigationTitle(isNew ? "New Task" : "Task Details")
             .navigationBarTitleDisplayMode(.inline)
@@ -2413,6 +2403,19 @@ struct TaskDetailsView: View {
                     }
                     .disabled(!canSave || (isNew ? false : !hasChanges) || isSaving)
                     .fontWeight(.semibold)
+                }
+            }
+            // Add Delete section at bottom for editing task
+            .safeAreaInset(edge: .bottom) {
+                if !isNew {
+                    Button(role: .destructive) {
+                        showingDeleteAlert = true
+                    } label: {
+                        Text("Delete Task")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding()
                 }
             }
         }
