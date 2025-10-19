@@ -368,32 +368,12 @@ struct JournalView: View {
     }
     
     /// Directory where per-day photo PNGs are stored.
-    /// Uses iCloud if available, falls back to local
+    /// Uses the same directory as JournalManager for consistency
     private func photosDirectory() -> URL {
-        // Try iCloud first
-        if let iCloudRoot = FileManager.default.url(forUbiquityContainerIdentifier: nil)?
-            .appendingPathComponent("Documents")
-            .appendingPathComponent("journal_photos") {
-            try? FileManager.default.createDirectory(at: iCloudRoot, withIntermediateDirectories: true)
-            return iCloudRoot
-        }
-        
-        // Fallback to local
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let dir = docs.appendingPathComponent("journal_photos", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
-        return dir
+        return JournalManager.shared.photosDirectoryURL
     }
     private func metadataURL(for date: Date) -> URL {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        // Use UTC so filenames are consistent across devices/timezones
-        formatter.timeZone = TimeZone.current // Use local timezone to match drawings
-        formatter.dateFormat = "yyyy-MM-dd"
-        let name = formatter.string(from: date) + "_photos.json"
-        return photosDirectory().appendingPathComponent(name)
+        return JournalManager.shared.metadataURL(for: date)
     }
     
     private func savePhotos(for date: Date? = nil) {

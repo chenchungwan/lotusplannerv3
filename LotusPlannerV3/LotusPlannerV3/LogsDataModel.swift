@@ -107,7 +107,7 @@ struct WaterLogEntry: Identifiable, Codable, Hashable {
     let userId: String
     let createdAt: Date
     
-    init(date: Date, cupsFilled: [Bool] = Array(repeating: false, count: 8), userId: String) {
+    init(date: Date, cupsFilled: [Bool] = Array(repeating: false, count: 4), userId: String) {
         self.id = UUID().uuidString
         self.date = date
         self.cupsFilled = cupsFilled

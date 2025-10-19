@@ -125,7 +125,7 @@ class JournalManager: NSObject, NSFilePresenter {
     }
 
     // MARK: - Journal Photos paths (shared)
-    private var photosDirectoryURL: URL {
+    var photosDirectoryURL: URL {
         let dir = docsURL.appendingPathComponent("journal_photos", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

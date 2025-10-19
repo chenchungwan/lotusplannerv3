@@ -84,9 +84,9 @@ extension DateFormatter {
 
 // MARK: - Standardized Date Display Styles
 struct DateDisplayStyle {
-    static let titleFont: Font = .title2
+    static let titleFont: Font = .title3
     static let subtitleFont: Font = .caption
-    static let bodyFont: Font = .body
+    static let bodyFont: Font = .title3
     
     static let primaryColor: Color = .primary
     static let secondaryColor: Color = .secondary

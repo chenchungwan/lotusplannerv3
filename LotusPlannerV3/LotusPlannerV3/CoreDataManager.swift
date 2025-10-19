@@ -217,9 +217,10 @@ class CoreDataManager: ObservableObject {
                       let createdAt = log.createdAt else { return nil }
                 
                 // Decode cups array from JSON
-                var cupsFilled: [Bool] = Array(repeating: false, count: 8)
+                var cupsFilled: [Bool] = Array(repeating: false, count: 4)
                 if let cupsData = log.cupsFilled,
                    let decoded = try? JSONDecoder().decode([Bool].self, from: cupsData) {
+                    // Use the saved cup count as-is
                     cupsFilled = decoded
                 }
                 

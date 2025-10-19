@@ -29,6 +29,8 @@ struct WeeklyView: View {
     @State private var showingAddEvent = false
     @State private var showingNewTask = false
     @State private var scrollToCurrentDayTrigger = false
+    @State private var scrollToCurrentDayHorizontalTrigger = false
+    @State private var scrollToCurrentDayRowTrigger = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -147,6 +149,8 @@ struct WeeklyView: View {
             selectedDate = newValue
             // Scroll to current day when date changes
             scrollToCurrentDayTrigger.toggle()
+            scrollToCurrentDayHorizontalTrigger.toggle()
+            scrollToCurrentDayRowTrigger.toggle()
             
             Task {
                 // Clear caches and load fresh data
@@ -186,6 +190,13 @@ struct WeeklyView: View {
                 }
             }
         }
+        .onAppear {
+            // Trigger initial scroll to current day with a slight delay
+            // to ensure views are fully rendered
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                scrollToCurrentDay()
+            }
+        }
     }
     
     
@@ -207,36 +218,43 @@ struct WeeklyView: View {
         let dayColumnWidth = fixedWidth / 7
         
         return GeometryReader { geometry in
-            ScrollView(.horizontal, showsIndicators: true) {
-                VStack(spacing: 0) {
-                    // Fixed header (stays at top when scrolling vertically)
-                    weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: 50)
-                        .frame(width: fixedWidth)
-                        .background(Color(.systemGray6))
-                    
-                    // Divider below date header
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(height: 1)
-                    
-                    // Scrollable content (scrolls vertically)
-                    ScrollView(.vertical, showsIndicators: true) {
-                        ScrollViewReader { proxy in
-                            weekTasksContent(dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
-                                .onAppear {
-                                    scrollToCurrentDayWithProxy(proxy)
-                                }
-                                .onChange(of: scrollToCurrentDayTrigger) { _ in
-                                    scrollToCurrentDayWithProxy(proxy)
-                                }
-                                .padding([.horizontal, .bottom], 8)
+            ScrollViewReader { horizontalProxy in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        // Fixed header (stays at top when scrolling vertically)
+                        weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: 50)
+                            .frame(width: fixedWidth)
+                            .background(Color(.systemGray6))
+                        
+                        // Divider below date header
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 1)
+                        
+                        // Scrollable content (scrolls vertically)
+                        ScrollView(.vertical, showsIndicators: true) {
+                            ScrollViewReader { verticalProxy in
+                                weekTasksContent(dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
+                                    .onAppear {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
+                                        }
+                                    }
+                                    .onChange(of: scrollToCurrentDayTrigger) { _ in
+                                        scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
+                                    }
+                                    .onChange(of: scrollToCurrentDayHorizontalTrigger) { _ in
+                                        scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
+                                    }
+                                    .padding([.horizontal, .bottom], 8)
+                            }
                         }
+                        .frame(maxHeight: .infinity)
                     }
-                    .frame(maxHeight: .infinity)
+                    .frame(width: fixedWidth)
                 }
-                .frame(width: fixedWidth)
+                .background(Color(.systemBackground))
             }
-            .background(Color(.systemBackground))
         }
     }
     }
@@ -555,30 +573,14 @@ extension WeeklyView {
     
     // MARK: - Row-Based Week View with Sticky Column
     private var weekRowBasedViewWithStickyColumn: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 0) {
-                // Fixed/Sticky date column
-                VStack(spacing: 0) {
-                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                        weekDayColumnSticky(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
-                        
-                        if index < weekDates.count - 1 {
-                            Rectangle()
-                                .fill(Color(.systemGray5))
-                                .frame(height: 1)
-                        }
-                    }
-                }
-                .frame(width: 100)
-                .background(Color(.systemGray6))
-                
-                Divider()
-                
-                // Scrollable content (without date column)
-                ScrollView(.horizontal, showsIndicators: true) {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 0) {
+                    // Fixed/Sticky date column
                     VStack(spacing: 0) {
                         ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekDayRowContent(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
+                            weekDayColumnSticky(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
+                                .id("day_row_\(index)")
                             
                             if index < weekDates.count - 1 {
                                 Rectangle()
@@ -587,8 +589,35 @@ extension WeeklyView {
                             }
                         }
                     }
-                    .background(Color(.systemBackground))
-                    .padding(.all, 8)
+                    .frame(width: 100)
+                    .background(Color(.systemGray6))
+                    
+                    Divider()
+                    
+                    // Scrollable content (without date column)
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                weekDayRowContent(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
+                                
+                                if index < weekDates.count - 1 {
+                                    Rectangle()
+                                        .fill(Color(.systemGray5))
+                                        .frame(height: 1)
+                                }
+                            }
+                        }
+                        .background(Color(.systemBackground))
+                        .padding(.all, 8)
+                    }
+                }
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollToCurrentDayRowWithProxy(proxy)
+                    }
+                }
+                .onChange(of: scrollToCurrentDayRowTrigger) { _ in
+                    scrollToCurrentDayRowWithProxy(proxy)
                 }
             }
         }
@@ -766,7 +795,10 @@ extension WeeklyView {
             if appPrefs.showWaterLogs {
                 VStack(alignment: .leading, spacing: 4) {
                     let waterLogsForDate = getWaterLogsForDate(date)
-                    if !waterLogsForDate.isEmpty {
+                    let totalCups = waterLogsForDate.reduce(0) { total, entry in
+                        total + entry.cupsFilled.filter { $0 }.count
+                    }
+                    if totalCups > 0 {
                         waterLogSummary(entries: waterLogsForDate)
                     }
                     Spacer(minLength: 0)
@@ -795,10 +827,12 @@ extension WeeklyView {
             }
             
             // Custom Logs column
-            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
+            if appPrefs.showCustomLogs {
                 VStack(alignment: .leading, spacing: 4) {
                     let enabledItems = customLogManager.items.filter { $0.isEnabled }
-                    customLogSummary(items: enabledItems, date: date)
+                    if !enabledItems.isEmpty {
+                        customLogSummary(items: enabledItems, date: date)
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
@@ -964,7 +998,10 @@ extension WeeklyView {
             if appPrefs.showWaterLogs {
                 VStack(alignment: .leading, spacing: 4) {
                     let waterLogsForDate = getWaterLogsForDate(date)
-                    if !waterLogsForDate.isEmpty {
+                    let totalCups = waterLogsForDate.reduce(0) { total, entry in
+                        total + entry.cupsFilled.filter { $0 }.count
+                    }
+                    if totalCups > 0 {
                         waterLogSummary(entries: waterLogsForDate)
                     }
                     Spacer(minLength: 0)
@@ -987,10 +1024,12 @@ extension WeeklyView {
             }
             
             // Custom Logs column
-            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
+            if appPrefs.showCustomLogs {
                 VStack(alignment: .leading, spacing: 4) {
                     let enabledItems = customLogManager.items.filter { $0.isEnabled }
-                    customLogSummary(items: enabledItems, date: date)
+                    if !enabledItems.isEmpty {
+                        customLogSummary(items: enabledItems, date: date)
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
@@ -1227,6 +1266,7 @@ extension WeeklyView {
                 .background(Color(.systemGray6).opacity(0.5))
                 .cornerRadius(6)
             }
+            
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
@@ -1241,14 +1281,15 @@ extension WeeklyView {
         }
         
         return VStack(alignment: .leading, spacing: 4) {
-            if !enabledItems.isEmpty && completedCount > 0 {
+            if !enabledItems.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.body)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(completedCount > 0 ? .accentColor : .secondary)
                     Text("\(completedCount)/\(enabledItems.count)")
                         .font(.body)
                         .fontWeight(.medium)
+                        .foregroundColor(completedCount > 0 ? .primary : .secondary)
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 6)
@@ -1259,9 +1300,14 @@ extension WeeklyView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(enabledItems) { item in
                         HStack(spacing: 4) {
-                            Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
-                                .font(.caption)
-                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                            Button(action: {
+                                customLogManager.toggleEntry(for: item.id, date: date)
+                            }) {
+                                Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption)
+                                    .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                            }
+                            .buttonStyle(.plain)
                             
                             Text(item.title)
                                 .font(.body)
@@ -1452,10 +1498,11 @@ extension WeeklyView {
             HStack(spacing: 4) {
                 Image(systemName: "drop.fill")
                     .font(.body)
-                    .foregroundColor(.blue)
+                    .foregroundColor(totalCups > 0 ? .blue : .secondary)
                 Text("\(totalCups) cups")
                     .font(.body)
                     .fontWeight(.medium)
+                    .foregroundColor(totalCups > 0 ? .primary : .secondary)
             }
         }
         .padding(.vertical, 4)
@@ -1484,9 +1531,14 @@ extension WeeklyView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(items) { item in
                         HStack(spacing: 4) {
-                            Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
-                                .font(.caption)
-                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                            Button(action: {
+                                customLogManager.toggleEntry(for: item.id, date: date)
+                            }) {
+                                Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption)
+                                    .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
+                            }
+                            .buttonStyle(.plain)
                             
                             Text(item.title)
                                 .font(.body)
@@ -1675,34 +1727,104 @@ extension WeeklyView {
     // All calendar-related timeline functions removed since we only show tasks now
     
     // MARK: - Scrolling Functions
-    private func scrollToCurrentDay() {
-        // Find the current day in the week using the same calendar as weekDates
-        let today = Date()
+    
+    private var isCurrentWeek: Bool {
         let calendar = Calendar.mondayFirst
-        
-        // Find which day of the week today is (0 = Monday, 6 = Sunday)
-        let todayWeekday = calendar.component(.weekday, from: today)
-        let mondayWeekday = 2 // Monday is weekday 2 in Calendar.current
-        let dayIndex = (todayWeekday - mondayWeekday + 7) % 7
-        
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: Date()) else { return false }
+        let weekStart = weekInterval.start
+        let weekEnd = weekInterval.end
+        let result = selectedDate >= weekStart && selectedDate < weekEnd
+        print("📅 isCurrentWeek check: selectedDate=\(selectedDate), weekStart=\(weekStart), weekEnd=\(weekEnd), result=\(result)")
+        return result
+    }
+    
+    private func scrollToCurrentDay() {
         // Trigger scroll by toggling the state
+        print("🔄 scrollToCurrentDay() called, toggling scroll triggers...")
         scrollToCurrentDayTrigger.toggle()
+        scrollToCurrentDayHorizontalTrigger.toggle()
+        scrollToCurrentDayRowTrigger.toggle()
     }
     
     private func scrollToCurrentDayWithProxy(_ proxy: ScrollViewProxy) {
-        // Find the current day in the week using the same calendar as weekDates
-        let today = Date()
+        // If it's the current week, scroll to today's position
+        // If it's not the current week, scroll to Monday (index 0)
         let calendar = Calendar.mondayFirst
+        let dayIndex: Int
         
-        // Find which day of the week today is (0 = Monday, 6 = Sunday)
-        let todayWeekday = calendar.component(.weekday, from: today)
-        let mondayWeekday = 2 // Monday is weekday 2 in Calendar.current
-        let dayIndex = (todayWeekday - mondayWeekday + 7) % 7
+        if isCurrentWeek {
+            // Find which day of the week today is (0 = Monday, 6 = Sunday)
+            let today = Date()
+            let todayWeekday = calendar.component(.weekday, from: today)
+            let mondayWeekday = 2 // Monday is weekday 2 in Calendar.current
+            dayIndex = (todayWeekday - mondayWeekday + 7) % 7
+        } else {
+            // Default to Monday (index 0) for non-current weeks
+            dayIndex = 0
+        }
         
         // Scroll to the current day column
         withAnimation(.easeInOut(duration: 0.5)) {
             proxy.scrollTo("day_\(dayIndex)", anchor: .center)
         }
+    }
+    
+    private func scrollToCurrentDayHorizontalWithProxy(_ proxy: ScrollViewProxy) {
+        // If it's the current week, scroll to today's position
+        // If it's not the current week, scroll to Monday (index 0)
+        let calendar = Calendar.mondayFirst
+        let dayIndex: Int
+        
+        if isCurrentWeek {
+            // Find which day of the week today is by matching against weekDates
+            // weekDates[0] = Monday, weekDates[1] = Tuesday, ..., weekDates[6] = Sunday
+            let today = Date()
+            if let index = weekDates.firstIndex(where: { calendar.isDate($0, inSameDayAs: today) }) {
+                dayIndex = index
+                print("📍 [Column View] Scrolling to current day: index \(dayIndex)")
+            } else {
+                // Fallback to Monday if today not found
+                dayIndex = 0
+                print("📍 [Column View] Today not found in weekDates, defaulting to Monday")
+            }
+        } else {
+            // Default to Monday (index 0) for non-current weeks
+            dayIndex = 0
+            print("📍 [Column View] Scrolling to Monday (not current week)")
+        }
+        
+        // Scroll to the current day column horizontally
+        print("📍 [Column View] Attempting to scroll to ID: day_\(dayIndex)")
+        proxy.scrollTo("day_\(dayIndex)", anchor: .leading)
+    }
+    
+    private func scrollToCurrentDayRowWithProxy(_ proxy: ScrollViewProxy) {
+        // If it's the current week, scroll to today's position
+        // If it's not the current week, scroll to Monday (index 0)
+        let calendar = Calendar.mondayFirst
+        let dayIndex: Int
+        
+        if isCurrentWeek {
+            // Find which day of the week today is by matching against weekDates
+            // weekDates[0] = Monday, weekDates[1] = Tuesday, ..., weekDates[6] = Sunday
+            let today = Date()
+            if let index = weekDates.firstIndex(where: { calendar.isDate($0, inSameDayAs: today) }) {
+                dayIndex = index
+                print("📍 [Row View] Scrolling to current day: index \(dayIndex)")
+            } else {
+                // Fallback to Monday if today not found
+                dayIndex = 0
+                print("📍 [Row View] Today not found in weekDates, defaulting to Monday")
+            }
+        } else {
+            // Default to Monday (index 0) for non-current weeks
+            dayIndex = 0
+            print("📍 [Row View] Scrolling to Monday (not current week)")
+        }
+        
+        // Scroll to the current day row vertically
+        print("📍 [Row View] Attempting to scroll to ID: day_row_\(dayIndex)")
+        proxy.scrollTo("day_row_\(dayIndex)", anchor: .top)
     }
 
 }

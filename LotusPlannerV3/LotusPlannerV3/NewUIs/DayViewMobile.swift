@@ -47,6 +47,7 @@ struct DayViewMobile: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Personal Tasks")
                         .font(.headline)
+                        .foregroundColor(appPrefs.personalColor)
                         .padding(.horizontal, 12)
                     
                     let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
@@ -116,6 +117,7 @@ struct DayViewMobile: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Professional Tasks")
                         .font(.headline)
+                        .foregroundColor(appPrefs.professionalColor)
                         .padding(.horizontal, 12)
                     
                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)

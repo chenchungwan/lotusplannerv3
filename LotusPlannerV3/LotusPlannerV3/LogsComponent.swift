@@ -377,10 +377,6 @@ extension LogsComponent {
                 }
             }
             .padding(.vertical, 4)
-            
-            Text("\(entry.filledCount) cups filled")
-                .font(.caption2)
-                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(12)
