@@ -4757,7 +4757,7 @@ struct AddItemView: View {
     
     private var canCreateEvent: Bool {
         !itemTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        (isEditingEvent || selectedAccountKind != nil) && (isAllDay || eventEnd > eventStart)
+        (isEditingEvent || selectedAccountKind != nil) && (isAllDay || eventEnd >= eventStart)
     }
     
     private var accentColor: Color {
@@ -4993,6 +4993,17 @@ struct AddItemView: View {
                             DatePicker("End", selection: $eventEnd, in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                                 .environment(\.calendar, Calendar.mondayFirst)
                         }
+                    }
+                }
+                .onChange(of: eventStart) { oldValue, newValue in
+                    // When start date/time changes, preserve the duration by adjusting end date
+                    let duration = oldValue.distance(to: eventEnd)
+                    if duration > 0 {
+                        // Preserve the original duration
+                        eventEnd = newValue.addingTimeInterval(duration)
+                    } else {
+                        // If there was no duration or negative duration, set a default 30 min
+                        eventEnd = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue.addingTimeInterval(1800)
                     }
                 }
                 .onChange(of: isAllDay) { oldValue, newValue in
