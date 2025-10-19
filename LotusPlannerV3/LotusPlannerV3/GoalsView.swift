@@ -114,6 +114,10 @@ struct GoalsView: View {
             showingCreateCategory = true
         }
         .onAppear {
+            // Set default interval to week for goals view
+            if navigationManager.currentInterval == .day {
+                navigationManager.currentInterval = .week
+            }
             // Only refresh if data is stale
             if goalsManager.categories.isEmpty {
                 goalsManager.refreshData()
@@ -486,7 +490,7 @@ struct CreateGoalView: View {
         NavigationStack {
             Form {
                 Section("Goal Details") {
-                    TextField("Goal title", text: $title)
+                    TextField("Add goal description", text: $title)
                 }
                 
                 Section("Category") {
@@ -502,18 +506,18 @@ struct CreateGoalView: View {
                 }
                 
                 Section("Due Date") {
-                    // Timeframe Selection with Radio Buttons
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Timeframe")
-                            .font(.headline)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach([GoalTimeframe.year, GoalTimeframe.month, GoalTimeframe.week], id: \.self) { timeframe in
-                                HStack {
+                    HStack(alignment: .top, spacing: 8) {
+                        // First Column: Timeframe Selection with Radio Buttons
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Timeframe")
+                                .font(.headline)
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach([GoalTimeframe.year, GoalTimeframe.month, GoalTimeframe.week], id: \.self) { timeframe in
                                     Button(action: {
                                         selectedTimeframe = timeframe
                                     }) {
-                                        HStack {
+                                        HStack(spacing: 8) {
                                             Image(systemName: selectedTimeframe == timeframe ? "largecircle.fill.circle" : "circle")
                                                 .foregroundColor(selectedTimeframe == timeframe ? .accentColor : .secondary)
                                                 .font(.title2)
@@ -524,31 +528,28 @@ struct CreateGoalView: View {
                                         }
                                     }
                                     .buttonStyle(.plain)
-                                    
-                                    Spacer()
                                 }
                             }
                         }
-                    }
-                    
-                    // Date Picker based on selected timeframe
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Target \(selectedTimeframe.displayName.lowercased())")
-                            .font(.headline)
                         
-                        switch selectedTimeframe {
-                        case .year:
-                            YearPickerView(selectedDate: $selectedDate)
-                        case .month:
-                            MonthPickerView(selectedDate: $selectedDate)
-                        case .week:
-                            WeekPickerView(selectedDate: $selectedDate)
+                        Divider()
+                        
+                        // Second Column: Date Picker based on selected timeframe
+                        VStack(alignment: .leading, spacing: 8) {
+                            switch selectedTimeframe {
+                            case .year:
+                                YearPickerView(selectedDate: $selectedDate)
+                            case .month:
+                                MonthPickerView(selectedDate: $selectedDate)
+                            case .week:
+                                WeekPickerView(selectedDate: $selectedDate)
+                            }
+                            
+                            Text("Due: \(calculateDueDate().formatted(date: .abbreviated, time: .omitted))")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
                         }
                     }
-                    
-                    Text("Due: \(calculateDueDate().formatted(date: .abbreviated, time: .omitted))")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
                 }
                 
                 if editingGoal != nil {
@@ -578,7 +579,7 @@ struct CreateGoalView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    Button(editingGoal != nil ? "Save" : "Create") {
                         saveGoal()
                     }
                     .disabled(title.isEmpty || selectedCategoryId == nil)
@@ -755,9 +756,9 @@ struct YearPickerView: View {
     
     var body: some View {
         VStack {
-            Text("Select Year")
+            Text("Year")
                 .font(.headline)
-                .padding()
+                .padding(.bottom, 4)
             
                 Picker("Year", selection: Binding(
                     get: { Calendar.current.component(.year, from: selectedDate) },
@@ -771,6 +772,7 @@ struct YearPickerView: View {
                 )) {
                     ForEach(years, id: \.self) { year in
                         Text(String(year))
+                            .font(.title3)
                             .tag(year)
                     }
                 }
@@ -793,11 +795,11 @@ struct MonthPickerView: View {
     }
     
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 12) {
             VStack {
                 Text("Year")
                     .font(.headline)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                 
                 Picker("Year", selection: Binding(
                     get: { Calendar.current.component(.year, from: selectedDate) },
@@ -813,6 +815,7 @@ struct MonthPickerView: View {
                 )) {
                     ForEach(years, id: \.self) { year in
                         Text(String(year))
+                            .font(.title3)
                             .tag(year)
                     }
                 }
@@ -822,7 +825,7 @@ struct MonthPickerView: View {
             VStack {
                 Text("Month")
                     .font(.headline)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                 
                 Picker("Month", selection: Binding(
                     get: { Calendar.current.component(.month, from: selectedDate) },
@@ -838,13 +841,14 @@ struct MonthPickerView: View {
                 )) {
                     ForEach(1...12, id: \.self) { month in
                         Text(months[month - 1])
+                            .font(.title3)
                             .tag(month)
                     }
                 }
                 .pickerStyle(.wheel)
             }
         }
-        .padding()
+        .padding(.vertical, 4)
     }
 }
 
@@ -888,15 +892,16 @@ struct WeekPickerView: View {
     }
     
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 12) {
             VStack {
                 Text("Year")
                     .font(.headline)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                 
                 Picker("Year", selection: $selectedYear) {
                     ForEach(years, id: \.self) { year in
                         Text(String(year))
+                            .font(.title3)
                             .tag(year)
                     }
                 }
@@ -909,12 +914,13 @@ struct WeekPickerView: View {
             VStack {
                 Text("Week")
                     .font(.headline)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                 
                 Picker("Week", selection: $selectedWeek) {
                     ForEach(weeks, id: \.weekNumber) { week in
                         let weekText = "WK\(week.weekNumber): \(formatWeekRange(week.startDate, week.endDate))"
                         Text(weekText)
+                            .font(.body)
                             .tag(week.weekNumber)
                     }
                 }
@@ -924,7 +930,7 @@ struct WeekPickerView: View {
                 }
             }
         }
-        .padding()
+        .padding(.vertical, 4)
     }
     
     private func updateSelectedDate() {

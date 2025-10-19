@@ -150,8 +150,8 @@ class NavigationManager: ObservableObject {
         
         // Set appropriate time interval based on current view
         if currentInterval == .day {
-            // If coming from day view, switch to year view (show all goals)
-            currentInterval = .year
+            // If coming from day view, switch to week view (show current week's goals)
+            currentInterval = .week
         }
         // Otherwise keep the current interval (week, month, year)
     }

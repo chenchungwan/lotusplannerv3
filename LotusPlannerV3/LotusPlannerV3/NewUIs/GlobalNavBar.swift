@@ -436,12 +436,17 @@ struct GlobalNavBar: View {
                             
                             // Hide all icons to the right of > when in journalDayViews
                             if navigationManager.currentView != .journalDayViews {
-                                Menu {
-                                    if navigationManager.currentView == .goals {
-                                        Button("Goal") {
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
-                                        }
-                                    } else {
+                                if navigationManager.currentView == .goals {
+                                    // In Goals view: direct button to create goal
+                                    Button {
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                    } label: {
+                                        Image(systemName: "plus")
+                                            .font(.title2)
+                                    }
+                                } else {
+                                    // In other views: menu with multiple options
+                                    Menu {
                                         Button("Event") {
                                             showingAddEvent = true
                                         }
@@ -451,10 +456,10 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
+                                    } label: {
+                                        Image(systemName: "plus")
+                                            .font(.title2)
                                     }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(.title2)
                                 }
                             }
                         }
@@ -585,12 +590,17 @@ struct GlobalNavBar: View {
                             
                             // Hide all icons to the right of > when in journalDayViews
                             if navigationManager.currentView != .journalDayViews {
-                                Menu {
-                                    if navigationManager.currentView == .goals {
-                                        Button("Goal") {
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
-                                        }
-                                    } else {
+                                if navigationManager.currentView == .goals {
+                                    // In Goals view: direct button to create goal
+                                    Button {
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                    } label: {
+                                        Image(systemName: "plus")
+                                            .font(.title2)
+                                    }
+                                } else {
+                                    // In other views: menu with multiple options
+                                    Menu {
                                         Button("Event") {
                                             showingAddEvent = true
                                         }
@@ -600,10 +610,10 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
+                                    } label: {
+                                        Image(systemName: "plus")
+                                            .font(.title2)
                                     }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(.title2)
                                 }
                             }
                         }
