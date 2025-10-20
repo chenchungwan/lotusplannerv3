@@ -300,7 +300,7 @@ struct GlobalNavBar: View {
                                 .font(.title)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
-                                .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
+                                .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
                         }
                         .disabled(navigationManager.currentView == .lists || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day))
                         .padding(.trailing, 15)
