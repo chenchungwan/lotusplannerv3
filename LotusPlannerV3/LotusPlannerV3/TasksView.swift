@@ -58,6 +58,7 @@ struct GoogleTask: Identifiable, Codable, Equatable {
 
 struct GoogleTasksResponse: Codable {
     let items: [GoogleTask]?
+    let nextPageToken: String?
 }
 
 struct GoogleTaskListsResponse: Codable {
@@ -251,32 +252,65 @@ class TasksViewModel: ObservableObject {
             throw TasksError.notAuthenticated
         }
         
-        let url = URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(taskListId)/tasks?showCompleted=true&showHidden=true")!
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        // Fetch all pages of tasks
+        var allTasks: [GoogleTask] = []
+        var pageToken: String? = nil
+        var pageCount = 0
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        repeat {
+            pageCount += 1
+            
+            // Build URL with optional pageToken
+            var urlString = "https://tasks.googleapis.com/tasks/v1/lists/\(taskListId)/tasks?showCompleted=true&showHidden=true&maxResults=100"
+            if let pageToken = pageToken {
+                urlString += "&pageToken=\(pageToken)"
+            }
+            
+            guard let url = URL(string: urlString) else {
+                throw TasksError.invalidResponse
+            }
+            
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw TasksError.invalidResponse
+            }
+            
+            if httpResponse.statusCode != 200 {
+                throw TasksError.apiError(httpResponse.statusCode)
+            }
+            
+            let decoder = JSONDecoder()
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+            decoder.dateDecodingStrategy = .formatted(dateFormatter)
+            
+            let tasksResponse = try decoder.decode(GoogleTasksResponse.self, from: data)
+            
+            // Add tasks from this page
+            if let items = tasksResponse.items {
+                allTasks.append(contentsOf: items)
+            }
+            
+            // Check if there are more pages
+            pageToken = tasksResponse.nextPageToken
+            
+            // Safety check to prevent infinite loops (max 50 pages = 5000 tasks)
+            if pageCount > 50 {
+                print("⚠️ WARNING: Reached maximum page limit (50 pages) for task list \(taskListId)")
+                break
+            }
+        } while pageToken != nil
         
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TasksError.invalidResponse
-        }
+        print("✅ Fetched \(allTasks.count) tasks across \(pageCount) page(s) for list \(taskListId)")
         
-        if httpResponse.statusCode != 200 {
-            throw TasksError.apiError(httpResponse.statusCode)
-        }
+        // Cache the complete results
+        cacheTasks(allTasks, for: cacheKey)
         
-        let decoder = JSONDecoder()
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-        decoder.dateDecodingStrategy = .formatted(dateFormatter)
-        
-        let tasksResponse = try decoder.decode(GoogleTasksResponse.self, from: data)
-        let tasks = tasksResponse.items ?? []
-        
-        // Cache the results
-        cacheTasks(tasks, for: cacheKey)
-        
-        return tasks
+        return allTasks
     }
     
     private func getAccessTokenThrows(for kind: GoogleAuthManager.AccountKind) async throws -> String? {
