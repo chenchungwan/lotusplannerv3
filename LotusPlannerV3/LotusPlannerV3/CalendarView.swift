@@ -4760,6 +4760,15 @@ struct AddItemView: View {
         (isEditingEvent || selectedAccountKind != nil) && (isAllDay || eventEnd >= eventStart)
     }
     
+    private var hasEventChanges: Bool {
+        guard let ev = existingEvent else { return false }
+        return itemTitle != ev.summary ||
+               itemNotes != (ev.description ?? "") ||
+               eventStart != (ev.startTime ?? Date()) ||
+               eventEnd != (ev.endTime ?? Date()) ||
+               isAllDay != ev.isAllDay
+    }
+    
     private var accentColor: Color {
         guard let accountKind = selectedAccountKind else { return .accentColor }
         return accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
@@ -5048,8 +5057,10 @@ struct AddItemView: View {
                             }
                         }
                     }
-                    .disabled(isEditingEvent ? !canCreateEvent : (selectedTab == 0 ? !canCreateTask : !canCreateEvent))
-                    .foregroundColor(accentColor)
+                    .disabled(isEditingEvent ? (!canCreateEvent || !hasEventChanges) : (selectedTab == 0 ? !canCreateTask : !canCreateEvent))
+                    .fontWeight(.semibold)
+                    .foregroundColor((isEditingEvent ? (canCreateEvent && hasEventChanges) : (selectedTab == 0 ? canCreateTask : canCreateEvent)) ? accentColor : .secondary)
+                    .opacity((isEditingEvent ? (canCreateEvent && hasEventChanges) : (selectedTab == 0 ? canCreateTask : canCreateEvent)) ? 1.0 : 0.5)
                 }
                 
                 // Removed delete button from top toolbar

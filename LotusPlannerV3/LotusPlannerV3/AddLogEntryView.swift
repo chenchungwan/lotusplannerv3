@@ -82,11 +82,13 @@ struct AddLogEntryView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Add") {
+                    Button("Create") {
                         viewModel.addCurrentLogEntry()
                     }
                     .disabled(!viewModel.canAddCurrentLogType)
-                    .foregroundColor(viewModel.accentColor)
+                    .fontWeight(.semibold)
+                    .foregroundColor(viewModel.canAddCurrentLogType ? viewModel.accentColor : .secondary)
+                    .opacity(viewModel.canAddCurrentLogType ? 1.0 : 0.5)
                 }
             }
         }

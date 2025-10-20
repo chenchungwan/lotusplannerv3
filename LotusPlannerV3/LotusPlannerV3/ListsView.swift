@@ -8,6 +8,10 @@ struct ListsView: View {
     @State private var selectedListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     
+    // UserDefaults keys for persistence
+    private let lastSelectedListIdKey = "lastSelectedTaskListId"
+    private let lastSelectedAccountKindKey = "lastSelectedTaskListAccountKind"
+    
     var body: some View {
         VStack(spacing: 0) {
             // Navigation Bar
@@ -45,7 +49,10 @@ struct ListsView: View {
                             selectedListId: $selectedListId,
                             selectedAccountKind: $selectedAccountKind,
                             hasPersonal: auth.isLinked(kind: .personal),
-                            hasProfessional: auth.isLinked(kind: .professional)
+                            hasProfessional: auth.isLinked(kind: .professional),
+                            onSelectionChanged: { listId, accountKind in
+                                saveLastSelection(listId: listId, accountKind: accountKind)
+                            }
                         )
                         .frame(width: geometry.size.width * 0.35)
                         
@@ -60,6 +67,7 @@ struct ListsView: View {
                             onListDeleted: {
                                 selectedListId = nil
                                 selectedAccountKind = nil
+                                clearLastSelection()
                             }
                         )
                         .frame(width: geometry.size.width * 0.65)
@@ -78,8 +86,36 @@ struct ListsView: View {
             await tasksVM.loadTasks()
             await MainActor.run {
                 isLoading = false
+                // Restore last selection after tasks are loaded
+                restoreLastSelection()
             }
         }
+    }
+    
+    private func restoreLastSelection() {
+        // Restore last selected list from UserDefaults
+        guard let savedListId = UserDefaults.standard.string(forKey: lastSelectedListIdKey),
+              let savedAccountKindRaw = UserDefaults.standard.string(forKey: lastSelectedAccountKindKey),
+              let savedAccountKind = GoogleAuthManager.AccountKind(rawValue: savedAccountKindRaw) else {
+            return
+        }
+        
+        // Verify the list still exists in the loaded data
+        let lists = savedAccountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        if lists.contains(where: { $0.id == savedListId }) {
+            selectedListId = savedListId
+            selectedAccountKind = savedAccountKind
+        }
+    }
+    
+    private func saveLastSelection(listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        UserDefaults.standard.set(listId, forKey: lastSelectedListIdKey)
+        UserDefaults.standard.set(accountKind.rawValue, forKey: lastSelectedAccountKindKey)
+    }
+    
+    private func clearLastSelection() {
+        UserDefaults.standard.removeObject(forKey: lastSelectedListIdKey)
+        UserDefaults.standard.removeObject(forKey: lastSelectedAccountKindKey)
     }
 }
 
@@ -93,6 +129,7 @@ struct AllTaskListsColumn: View {
     @Binding var selectedAccountKind: GoogleAuthManager.AccountKind?
     let hasPersonal: Bool
     let hasProfessional: Bool
+    let onSelectionChanged: (String, GoogleAuthManager.AccountKind) -> Void
     
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     
@@ -146,6 +183,7 @@ struct AllTaskListsColumn: View {
                                     onTap: {
                                         selectedListId = taskList.id
                                         selectedAccountKind = .personal
+                                        onSelectionChanged(taskList.id, .personal)
                                     }
                                 )
                                 Divider()
@@ -189,6 +227,7 @@ struct AllTaskListsColumn: View {
                                     onTap: {
                                         selectedListId = taskList.id
                                         selectedAccountKind = .professional
+                                        onSelectionChanged(taskList.id, .professional)
                                     }
                                 )
                                 Divider()
@@ -503,6 +542,7 @@ struct TasksDetailColumn: View {
                let accountKind = selectedAccountKind {
                 RenameListSheet(
                     listName: listTitle,
+                    accountKind: accountKind,
                     accentColor: accentColor,
                     newName: $renameText,
                     onRename: {
@@ -707,6 +747,11 @@ struct NewListSheet: View {
         return .accentColor
     }
     
+    private var canCreate: Bool {
+        !listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        (!showAccountPicker || selectedAccount != nil)
+    }
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -789,10 +834,10 @@ struct NewListSheet: View {
                     Button("Create") {
                         onCreate()
                     }
-                    .disabled(listName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || 
-                             (showAccountPicker && selectedAccount == nil))
+                    .disabled(!canCreate)
                     .fontWeight(.semibold)
-                    .foregroundColor(accentColor)
+                    .foregroundColor(canCreate ? accentColor : .secondary)
+                    .opacity(canCreate ? 1.0 : 0.5)
                 }
             }
             .onAppear {
@@ -810,32 +855,45 @@ struct NewListSheet: View {
 struct RenameListSheet: View {
     @Environment(\.dismiss) private var dismiss
     let listName: String
+    let accountKind: GoogleAuthManager.AccountKind
     let accentColor: Color
     @Binding var newName: String
     let onRename: () -> Void
     @FocusState private var isTextFieldFocused: Bool
     
+    private var hasChanges: Bool {
+        let trimmedNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmedNewName.isEmpty && trimmedNewName != listName
+    }
+    
+    private var canSave: Bool {
+        !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasChanges
+    }
+    
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("List Name")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                    
+            Form {
+                Section("Account") {
+                    HStack {
+                        Image(systemName: accountKind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
+                            .foregroundColor(accentColor)
+                        Text(accountKind == .personal ? "Personal" : "Professional")
+                            .foregroundColor(accentColor)
+                            .fontWeight(.medium)
+                    }
+                }
+                
+                Section("List Name") {
                     TextField("Enter new name", text: $newName)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.plain)
                         .focused($isTextFieldFocused)
                         .submitLabel(.done)
                         .onSubmit {
-                            if !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            if canSave {
                                 onRename()
                             }
                         }
                 }
-                .padding()
-                
-                Spacer()
             }
             .navigationTitle("Rename List")
             .navigationBarTitleDisplayMode(.inline)
@@ -849,9 +907,10 @@ struct RenameListSheet: View {
                     Button("Save") {
                         onRename()
                     }
-                    .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSave)
                     .fontWeight(.semibold)
-                    .foregroundColor(accentColor)
+                    .foregroundColor(canSave ? accentColor : .secondary)
+                    .opacity(canSave ? 1.0 : 0.5)
                 }
             }
             .onAppear {

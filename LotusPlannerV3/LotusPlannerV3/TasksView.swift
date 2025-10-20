@@ -2437,6 +2437,8 @@ struct TaskDetailsView: View {
                     }
                     .disabled(!canSave || (isNew ? false : !hasChanges) || isSaving)
                     .fontWeight(.semibold)
+                    .foregroundColor((canSave && (isNew || hasChanges) && !isSaving) ? currentAccentColor : .secondary)
+                    .opacity((canSave && (isNew || hasChanges) && !isSaving) ? 1.0 : 0.5)
                 }
             }
             // Add Delete section at bottom for editing task

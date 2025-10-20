@@ -3,15 +3,11 @@ import SwiftUI
 struct EditLogEntryView: View {
     @ObservedObject var viewModel: LogsViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingDeleteAlert = false
     
     var body: some View {
         NavigationStack {
             Form {
-                Section("Log Type") {
-                    Text(viewModel.selectedLogType.displayName)
-                        .foregroundColor(.secondary)
-                }
-                
                 // Form fields based on log type
                 switch viewModel.selectedLogType {
                 case .weight:
@@ -34,14 +30,57 @@ struct EditLogEntryView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Update") {
+                    Button("Save") {
                         viewModel.updateCurrentLogEntry()
                         dismiss()
                     }
-                    .disabled(!viewModel.canAddCurrentLogType)
-                    .foregroundColor(viewModel.accentColor)
+                    .disabled(!viewModel.canSaveEdit)
+                    .fontWeight(.semibold)
+                    .foregroundColor(viewModel.canSaveEdit ? viewModel.accentColor : .secondary)
+                    .opacity(viewModel.canSaveEdit ? 1.0 : 0.5)
                 }
             }
+            // Add Delete section at bottom for editing log entry
+            .safeAreaInset(edge: .bottom) {
+                Button(role: .destructive) {
+                    showingDeleteAlert = true
+                } label: {
+                    Text("Delete \(viewModel.selectedLogType.displayName)")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding()
+            }
+        }
+        .alert("Delete \(viewModel.selectedLogType.displayName)", isPresented: $showingDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteCurrentEntry()
+                dismiss()
+            }
+        } message: {
+            Text("Are you sure you want to delete this \(viewModel.selectedLogType.displayName.lowercased()) entry? This action cannot be undone.")
+        }
+    }
+    
+    private func deleteCurrentEntry() {
+        guard let editingEntry = viewModel.editingEntry else { return }
+        
+        switch editingEntry.type {
+        case .weight:
+            if let entry = viewModel.weightEntries.first(where: { $0.id == editingEntry.id }) {
+                viewModel.deleteWeightEntry(entry)
+            }
+        case .workout:
+            if let entry = viewModel.workoutEntries.first(where: { $0.id == editingEntry.id }) {
+                viewModel.deleteWorkoutEntry(entry)
+            }
+        case .food:
+            if let entry = viewModel.foodEntries.first(where: { $0.id == editingEntry.id }) {
+                viewModel.deleteFoodEntry(entry)
+            }
+        case .water:
+            break // Water is handled differently
         }
     }
     

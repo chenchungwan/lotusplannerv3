@@ -262,14 +262,6 @@ extension LogsComponent {
                 .layoutPriority(1)
             
             Spacer(minLength: 8)
-            
-            Button(action: {
-                viewModel.deleteWeightEntry(entry)
-            }) {
-                Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -290,14 +282,6 @@ extension LogsComponent {
                 .layoutPriority(1)
             
             Spacer(minLength: 8)
-            
-            Button(action: {
-                viewModel.deleteWorkoutEntry(entry)
-            }) {
-                Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -318,14 +302,6 @@ extension LogsComponent {
                 .layoutPriority(1)
             
             Spacer(minLength: 8)
-            
-            Button(action: {
-                viewModel.deleteFoodEntry(entry)
-            }) {
-                Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

@@ -36,6 +36,15 @@ class LogsViewModel: ObservableObject {
     @Published var foodName = ""
     @Published var foodDate = Date()
     
+    // Original values for change detection in edit mode
+    private var originalWeightValue = ""
+    private var originalWeightUnit: WeightUnit = .pounds
+    private var originalWeightDate = Date()
+    private var originalWorkoutName = ""
+    private var originalWorkoutDate = Date()
+    private var originalFoodName = ""
+    private var originalFoodDate = Date()
+    
     // Local data storage
     @Published var weightEntries: [WeightLogEntry] = []
     @Published var workoutEntries: [WorkoutLogEntry] = []
@@ -243,6 +252,29 @@ class LogsViewModel: ObservableObject {
         }
     }
     
+    var hasEditChanges: Bool {
+        guard editingEntry != nil else { return false }
+        
+        switch selectedLogType {
+        case .weight:
+            return weightValue != originalWeightValue ||
+                   selectedWeightUnit != originalWeightUnit ||
+                   weightDate != originalWeightDate
+        case .workout:
+            return workoutName != originalWorkoutName ||
+                   workoutDate != originalWorkoutDate
+        case .food:
+            return foodName != originalFoodName ||
+                   foodDate != originalFoodDate
+        case .water:
+            return false // Water is handled differently
+        }
+    }
+    
+    var canSaveEdit: Bool {
+        canAddCurrentLogType && hasEditChanges
+    }
+    
     func addCurrentLogEntry() {
         switch selectedLogType {
         case .weight: addWeightEntry()
@@ -268,6 +300,10 @@ class LogsViewModel: ObservableObject {
         weightValue = String(entry.weight)
         selectedWeightUnit = entry.unit
         weightDate = entry.timestamp
+        // Store original values for change detection
+        originalWeightValue = String(entry.weight)
+        originalWeightUnit = entry.unit
+        originalWeightDate = entry.timestamp
         showingEditLogSheet = true
     }
     
@@ -276,6 +312,9 @@ class LogsViewModel: ObservableObject {
         selectedLogType = .workout
         workoutName = entry.name
         workoutDate = entry.date
+        // Store original values for change detection
+        originalWorkoutName = entry.name
+        originalWorkoutDate = entry.date
         showingEditLogSheet = true
     }
     
@@ -284,6 +323,9 @@ class LogsViewModel: ObservableObject {
         selectedLogType = .food
         foodName = entry.name
         foodDate = entry.date
+        // Store original values for change detection
+        originalFoodName = entry.name
+        originalFoodDate = entry.date
         showingEditLogSheet = true
     }
     
