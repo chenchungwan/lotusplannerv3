@@ -6,7 +6,7 @@ struct GoalsView: View {
     @StateObject private var navigationManager = NavigationManager.shared
     @State private var showingCreateGoal = false
     @State private var showingCreateCategory = false
-    @State private var editingGoal: GoalData?
+    @State private var goalToEdit: GoalData?
     
     // Computed properties for better performance
     private var sortedCategories: [GoalCategoryData] {
@@ -75,8 +75,7 @@ struct GoalsView: View {
                                         goalsManager.toggleGoalCompletion(goal.id)
                                     },
                                     onGoalEdit: { goal in
-                                        editingGoal = goal
-                                        showingCreateGoal = true
+                                        goalToEdit = goal
                                     },
                                     onGoalDelete: { goal in
                                         goalsManager.deleteGoal(goal.id)
@@ -87,34 +86,46 @@ struct GoalsView: View {
                                     onCategoryDelete: { category in
                                         goalsManager.deleteCategory(category.id)
                                     },
-                                    showTags: navigationManager.currentInterval == .day
+                                    showTags: navigationManager.currentInterval == .day,
+                                    currentInterval: navigationManager.currentInterval,
+                                    currentDate: navigationManager.currentDate
                                 )
                                 .frame(height: geometry.size.height / 3 - 16)
                             }
                             
-                            // Add Category Card
-                            AddCategoryCard(
-                                onAddCategory: { categoryName in
-                                    goalsManager.addCategory(title: categoryName)
-                                }
-                            )
-                            .frame(height: geometry.size.height / 3 - 16)
+                            // Add Category Card (only show if under max limit)
+                            if goalsManager.canAddCategory {
+                                AddCategoryCard(
+                                    onAddCategory: { categoryName in
+                                        goalsManager.addCategory(title: categoryName)
+                                    }
+                                )
+                                .frame(height: geometry.size.height / 3 - 16)
+                            }
                         }
                         .padding(16)
                     }
                 }
             }
         }
+        .sheet(item: $goalToEdit) { goal in
+            CreateGoalView(editingGoal: goal) {
+                goalToEdit = nil
+            }
+        }
         .sheet(isPresented: $showingCreateGoal) {
-            CreateGoalView(editingGoal: editingGoal) {
-                editingGoal = nil
+            CreateGoalView(
+                editingGoal: nil,
+                defaultTimeframe: navigationManager.currentInterval,
+                defaultDate: navigationManager.currentDate
+            ) {
+                showingCreateGoal = false
             }
         }
         .sheet(isPresented: $showingCreateCategory) {
             CreateCategoryView()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowAddGoal"))) { _ in
-            editingGoal = nil
             showingCreateGoal = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowAddCategory"))) { _ in
@@ -207,10 +218,14 @@ struct GoalCategoryCard: View {
     let onCategoryEdit: (GoalCategoryData) -> Void
     let onCategoryDelete: (GoalCategoryData) -> Void
     let showTags: Bool
+    let currentInterval: TimelineInterval
+    let currentDate: Date
     
+    @ObservedObject private var goalsManager = GoalsManager.shared
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
-    @State private var showingDeleteAlert = false
+    @State private var hasCopiedForPeriod = false
+    @State private var showingCopyAlert = false
     
     // Computed properties for better performance
     private var completedGoalsCount: Int {
@@ -219,6 +234,76 @@ struct GoalCategoryCard: View {
     
     private var totalGoalsCount: Int {
         goals.count
+    }
+    
+    // Key for tracking if goals have been copied for this category + period
+    private var copiedKey: String {
+        let calendar = Calendar.mondayFirst
+        let periodString: String
+        
+        switch currentInterval {
+        case .week:
+            if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: currentDate) {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-ww"
+                periodString = formatter.string(from: weekInterval.start)
+            } else {
+                periodString = ""
+            }
+        case .month:
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM"
+            periodString = formatter.string(from: currentDate)
+        case .year:
+            let year = calendar.component(.year, from: currentDate)
+            periodString = "\(year)"
+        case .day:
+            periodString = ""
+        }
+        
+        return "goalsCopied_\(category.id.uuidString)_\(periodString)"
+    }
+    
+    // Check if we should show the repeat icon
+    private var shouldShowRepeatIcon: Bool {
+        // Only show in week, month, year views (not day view which is "All Goals")
+        guard currentInterval != .day else { return false }
+        
+        // Only show if viewing the CURRENT period (not past or future)
+        let calendar = Calendar.mondayFirst
+        let now = Date()
+        
+        let isCurrentPeriod: Bool
+        switch currentInterval {
+        case .week:
+            if let currentWeekInterval = calendar.dateInterval(of: .weekOfYear, for: now),
+               let viewingWeekInterval = calendar.dateInterval(of: .weekOfYear, for: currentDate) {
+                isCurrentPeriod = currentWeekInterval.start == viewingWeekInterval.start
+            } else {
+                isCurrentPeriod = false
+            }
+        case .month:
+            let currentMonth = calendar.component(.month, from: now)
+            let currentYear = calendar.component(.year, from: now)
+            let viewingMonth = calendar.component(.month, from: currentDate)
+            let viewingYear = calendar.component(.year, from: currentDate)
+            isCurrentPeriod = (currentMonth == viewingMonth && currentYear == viewingYear)
+        case .year:
+            let currentYear = calendar.component(.year, from: now)
+            let viewingYear = calendar.component(.year, from: currentDate)
+            isCurrentPeriod = (currentYear == viewingYear)
+        case .day:
+            isCurrentPeriod = false
+        }
+        
+        guard isCurrentPeriod else { return false }
+        
+        // Check if already copied
+        if hasCopiedForPeriod {
+            return false
+        }
+        
+        return true
     }
     
     var body: some View {
@@ -253,15 +338,17 @@ struct GoalCategoryCard: View {
                     .foregroundColor(.blue)
                 }
                 
-                // Delete category button
-                Button(action: {
-                    showingDeleteAlert = true
-                }) {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundColor(.red)
+                // Repeat icon to copy goals from previous period
+                if shouldShowRepeatIcon {
+                    Button(action: {
+                        showingCopyAlert = true
+                    }) {
+                        Image(systemName: "repeat")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
@@ -296,13 +383,17 @@ struct GoalCategoryCard: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-        .alert("Delete Category", isPresented: $showingDeleteAlert) {
+        .onAppear {
+            // Check if goals have already been copied for this period
+            hasCopiedForPeriod = UserDefaults.standard.bool(forKey: copiedKey)
+        }
+        .alert("Copy Goals from Previous Period?", isPresented: $showingCopyAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                onCategoryDelete(category)
+            Button("Copy", role: .none) {
+                copyGoalsFromPreviousPeriod()
             }
         } message: {
-            Text("Are you sure you want to delete '\(category.title)'? All goals in this category will be deleted.")
+            Text("This will add all goals from the previous \(currentInterval.rawValue.lowercased()) to the current one. Your existing goals will be kept. Are you sure?")
         }
     }
     
@@ -320,6 +411,96 @@ struct GoalCategoryCard: View {
             onCategoryEdit(updatedCategory)
         }
         isEditingTitle = false
+    }
+    
+    private func copyGoalsFromPreviousPeriod() {
+        let calendar = Calendar.mondayFirst
+        
+        // Calculate previous period based on current interval
+        let previousPeriodStart: Date
+        let previousPeriodEnd: Date
+        
+        switch currentInterval {
+        case .week:
+            // Get previous week
+            guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: currentDate),
+                  let prevWeekStart = calendar.date(byAdding: .weekOfYear, value: -1, to: weekInterval.start),
+                  let prevWeekInterval = calendar.dateInterval(of: .weekOfYear, for: prevWeekStart) else {
+                return
+            }
+            previousPeriodStart = prevWeekInterval.start
+            previousPeriodEnd = prevWeekInterval.end
+            
+        case .month:
+            // Get previous month
+            guard let monthInterval = calendar.dateInterval(of: .month, for: currentDate),
+                  let prevMonthStart = calendar.date(byAdding: .month, value: -1, to: monthInterval.start),
+                  let prevMonthInterval = calendar.dateInterval(of: .month, for: prevMonthStart) else {
+                return
+            }
+            previousPeriodStart = prevMonthInterval.start
+            previousPeriodEnd = prevMonthInterval.end
+            
+        case .year:
+            // Get previous year
+            guard let yearInterval = calendar.dateInterval(of: .year, for: currentDate),
+                  let prevYearStart = calendar.date(byAdding: .year, value: -1, to: yearInterval.start),
+                  let prevYearInterval = calendar.dateInterval(of: .year, for: prevYearStart) else {
+                return
+            }
+            previousPeriodStart = prevYearInterval.start
+            previousPeriodEnd = prevYearInterval.end
+            
+        case .day:
+            return // Should not happen due to shouldShowRepeatIcon check
+        }
+        
+        // Get all goals from previous period for this category
+        let previousPeriodGoals = goalsManager.goals.filter { goal in
+            goal.categoryId == category.id &&
+            goal.dueDate >= previousPeriodStart &&
+            goal.dueDate < previousPeriodEnd
+        }
+        
+        // Calculate the new due date (shift by one period forward)
+        let periodShift: DateComponents
+        switch currentInterval {
+        case .week:
+            periodShift = DateComponents(weekOfYear: 1)
+        case .month:
+            periodShift = DateComponents(month: 1)
+        case .year:
+            periodShift = DateComponents(year: 1)
+        case .day:
+            return
+        }
+        
+        // Copy each goal to the current period
+        for oldGoal in previousPeriodGoals {
+            guard let newDueDate = calendar.date(byAdding: periodShift, to: oldGoal.dueDate) else {
+                continue
+            }
+            
+            // Create new goal with same properties but new due date and not completed
+            let newGoal = GoalData(
+                id: UUID(),
+                title: oldGoal.title,
+                description: oldGoal.description,
+                successMetric: oldGoal.successMetric,
+                categoryId: oldGoal.categoryId,
+                targetTimeframe: oldGoal.targetTimeframe,
+                dueDate: newDueDate,
+                isCompleted: false,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            
+            goalsManager.addGoal(newGoal)
+        }
+        
+        // Mark as copied for this period
+        hasCopiedForPeriod = true
+        UserDefaults.standard.set(true, forKey: copiedKey)
     }
 }
 
@@ -486,6 +667,8 @@ struct CreateGoalView: View {
     
     let editingGoal: GoalData?
     let onDismiss: () -> Void
+    let defaultTimeframe: TimelineInterval?
+    let defaultDate: Date?
     
     @State private var title = ""
     @State private var selectedCategoryId: UUID?
@@ -499,9 +682,11 @@ struct CreateGoalView: View {
     private let originalTimeframe: GoalTimeframe
     private let originalDueDate: Date
     
-    init(editingGoal: GoalData? = nil, onDismiss: @escaping () -> Void = {}) {
+    init(editingGoal: GoalData? = nil, defaultTimeframe: TimelineInterval? = nil, defaultDate: Date? = nil, onDismiss: @escaping () -> Void = {}) {
         self.editingGoal = editingGoal
         self.onDismiss = onDismiss
+        self.defaultTimeframe = defaultTimeframe
+        self.defaultDate = defaultDate
         
         // Store original values
         self.originalTitle = editingGoal?.title ?? ""
@@ -692,8 +877,48 @@ struct CreateGoalView: View {
         } else {
             // Set defaults for new goals
             selectedCategoryId = goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition }).first?.id
-            selectedTimeframe = .year
-            selectedDate = Date()
+            
+            // Use defaultTimeframe and defaultDate if provided
+            if let defaultInterval = defaultTimeframe, let date = defaultDate {
+                let calendar = Calendar.mondayFirst
+                
+                // Map TimelineInterval to GoalTimeframe and calculate end date
+                switch defaultInterval {
+                case .day:
+                    // If "All Goals" view, default to weekly with current week
+                    selectedTimeframe = .week
+                    if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: weekInterval.end) ?? date
+                    } else {
+                        selectedDate = date
+                    }
+                case .week:
+                    selectedTimeframe = .week
+                    if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: weekInterval.end) ?? date
+                    } else {
+                        selectedDate = date
+                    }
+                case .month:
+                    selectedTimeframe = .month
+                    if let monthInterval = calendar.dateInterval(of: .month, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: monthInterval.end) ?? date
+                    } else {
+                        selectedDate = date
+                    }
+                case .year:
+                    selectedTimeframe = .year
+                    if let yearInterval = calendar.dateInterval(of: .year, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: yearInterval.end) ?? date
+                    } else {
+                        selectedDate = date
+                    }
+                }
+            } else {
+                // Fallback to old defaults
+                selectedTimeframe = .year
+                selectedDate = Date()
+            }
         }
     }
     

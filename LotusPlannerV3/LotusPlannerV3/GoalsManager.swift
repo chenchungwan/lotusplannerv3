@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 class GoalsManager: ObservableObject {
     static let shared = GoalsManager()
+    static let maxCategories = 6
     
     @Published var categories: [GoalCategoryData] = []
     @Published var goals: [GoalData] = []
@@ -106,7 +107,17 @@ class GoalsManager: ObservableObject {
     }
     
     // MARK: - Category Management
+    var canAddCategory: Bool {
+        return categories.count < GoalsManager.maxCategories
+    }
+    
     func addCategory(title: String, displayPosition: Int? = nil) {
+        // Check if we've reached the maximum number of categories
+        guard canAddCategory else {
+            print("Cannot add category: Maximum of \(GoalsManager.maxCategories) categories reached")
+            return
+        }
+        
         let position = displayPosition ?? getNextAvailablePosition()
         let newCategory = GoalCategoryData(
             title: title,

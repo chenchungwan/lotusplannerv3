@@ -32,6 +32,26 @@ struct AllGoalsTableContent: View {
         return currentWeekInterval.start == timeframeWeekStart
     }
     
+    // Helper to check if timeframe is in the past
+    private func isInPast(_ timeframe: TimeframeGroup) -> Bool {
+        let now = Date()
+        return timeframe.endDate < now
+    }
+    
+    // Get all goals for a timeframe (across all categories)
+    private func getAllGoals(in timeframe: TimeframeGroup) -> [GoalData] {
+        return goalsManager.goals.filter { goal in
+            TimeframeGroup(from: goal) == timeframe
+        }
+    }
+    
+    // Get completion stats for a timeframe
+    private func getCompletionStats(for timeframe: TimeframeGroup) -> (completed: Int, total: Int) {
+        let goals = getAllGoals(in: timeframe)
+        let completed = goals.filter { $0.isCompleted }.count
+        return (completed, goals.count)
+    }
+    
     // Computed property to get all categories
     private var categories: [GoalCategoryData] {
         goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition })
@@ -91,6 +111,64 @@ struct AllGoalsTableContent: View {
                     Rectangle()
                         .fill(Color(.systemGray3))
                         .frame(height: 1)
+                    
+                    // Summary row (completion stats for past timeframes)
+                    HStack(alignment: .top, spacing: 0) {
+                        // Label cell
+                        VStack(spacing: 0) {
+                            Text("Summary")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .padding(.all, 8)
+                        }
+                        .frame(width: categoryColumnWidth, alignment: .topLeading)
+                        .background(Color(.systemGray6))
+                        .overlay(
+                            Rectangle()
+                                .fill(Color(.systemGray4))
+                                .frame(width: 0.5),
+                            alignment: .trailing
+                        )
+                        
+                        // Stats for each timeframe
+                        ForEach(timeframes) { timeframe in
+                            let isPast = isInPast(timeframe)
+                            let isCurrent = isCurrentWeek(timeframe)
+                            let stats = isPast ? getCompletionStats(for: timeframe) : nil
+                            
+                            VStack(spacing: 4) {
+                                if isPast, let stats = stats, stats.total > 0 {
+                                    Text("\(stats.completed) / \(stats.total)")
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    
+                                    Text("Goals Accomplished")
+                                        .font(.body)
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                } else {
+                                    Text("—")
+                                        .font(.body)
+                                        .foregroundColor(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                }
+                            }
+                            .padding(.all, 8)
+                            .frame(width: columnWidth, alignment: .topLeading)
+                            .background(isCurrent ? Color.blue.opacity(0.05) : Color(.systemBackground))
+                            .overlay(
+                                Rectangle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(width: 0.5),
+                                alignment: .trailing
+                            )
+                        }
+                    }
+                    
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 0.5)
                     
                     // Category rows
                     ForEach(categories) { category in

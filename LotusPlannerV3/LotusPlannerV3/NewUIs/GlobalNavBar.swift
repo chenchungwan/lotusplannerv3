@@ -437,9 +437,20 @@ struct GlobalNavBar: View {
                             // Hide all icons to the right of > when in journalDayViews
                             if navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
-                                    // In Goals view: direct button to create goal
-                                    Button {
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                    // In Goals view: menu with all options
+                                    Menu {
+                                        Button("Event") {
+                                            showingAddEvent = true
+                                        }
+                                        Button("Task") {
+                                            showingAddTask = true
+                                        }
+                                        Button("List") {
+                                            showingAddList = true
+                                        }
+                                        Button("Goal") {
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                        }
                                     } label: {
                                         Image(systemName: "plus")
                                             .font(.title2)
@@ -591,9 +602,20 @@ struct GlobalNavBar: View {
                             // Hide all icons to the right of > when in journalDayViews
                             if navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
-                                    // In Goals view: direct button to create goal
-                                    Button {
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                    // In Goals view: menu with all options
+                                    Menu {
+                                        Button("Event") {
+                                            showingAddEvent = true
+                                        }
+                                        Button("Task") {
+                                            showingAddTask = true
+                                        }
+                                        Button("List") {
+                                            showingAddList = true
+                                        }
+                                        Button("Goal") {
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                        }
                                     } label: {
                                         Image(systemName: "plus")
                                             .font(.title2)
