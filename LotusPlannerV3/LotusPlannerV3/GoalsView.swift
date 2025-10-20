@@ -51,8 +51,8 @@ struct GoalsView: View {
             // Navigation Bar
             GlobalNavBar()
             
-            // Main Content - Toggle between grid view and table view
-            if navigationManager.showingAllGoalsTable {
+            // Main Content - Show all goals table when in day interval, grid view otherwise
+            if navigationManager.currentInterval == .day {
                 // All Goals Table View
                 AllGoalsTableContent()
             } else {
@@ -86,7 +86,8 @@ struct GoalsView: View {
                                     },
                                     onCategoryDelete: { category in
                                         goalsManager.deleteCategory(category.id)
-                                    }
+                                    },
+                                    showTags: navigationManager.currentInterval == .day
                                 )
                                 .frame(height: geometry.size.height / 3 - 16)
                             }
@@ -205,6 +206,7 @@ struct GoalCategoryCard: View {
     let onGoalDelete: (GoalData) -> Void
     let onCategoryEdit: (GoalCategoryData) -> Void
     let onCategoryDelete: (GoalCategoryData) -> Void
+    let showTags: Bool
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -274,7 +276,8 @@ struct GoalCategoryCard: View {
                             goal: goal,
                             onTap: { onGoalTap(goal) },
                             onEdit: { onGoalEdit(goal) },
-                            onDelete: { onGoalDelete(goal) }
+                            onDelete: { onGoalDelete(goal) },
+                            showTags: showTags
                         )
                     }
                     
@@ -326,6 +329,7 @@ struct GoalRow: View {
     let onTap: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let showTags: Bool
     
     // Computed properties for better performance
     private var isOverdue: Bool {
@@ -365,24 +369,26 @@ struct GoalRow: View {
                     .foregroundColor(goal.isCompleted ? .secondary : .primary)
                     .lineLimit(2)
                 
-                HStack {
-                    Text(goal.targetTimeframe.displayName)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.2))
-                        .foregroundColor(.blue)
-                        .cornerRadius(4)
-                    
-                    Text(formatDueDate(goal.dueDate))
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(isOverdue ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
-                        .foregroundColor(isOverdue ? .red : .green)
-                        .cornerRadius(4)
-                    
-                    Spacer()
+                if showTags {
+                    HStack {
+                        Text(goal.targetTimeframe.displayName)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                        
+                        Text(formatDueDate(goal.dueDate))
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(isOverdue ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
+                            .foregroundColor(isOverdue ? .red : .green)
+                            .cornerRadius(4)
+                        
+                        Spacer()
+                    }
                 }
             }
             .onTapGesture {
@@ -487,9 +493,36 @@ struct CreateGoalView: View {
     @State private var selectedDate = Date()
     @State private var showingDeleteAlert = false
     
+    // Track original values for change detection
+    private let originalTitle: String
+    private let originalCategoryId: UUID?
+    private let originalTimeframe: GoalTimeframe
+    private let originalDueDate: Date
+    
     init(editingGoal: GoalData? = nil, onDismiss: @escaping () -> Void = {}) {
         self.editingGoal = editingGoal
         self.onDismiss = onDismiss
+        
+        // Store original values
+        self.originalTitle = editingGoal?.title ?? ""
+        self.originalCategoryId = editingGoal?.categoryId
+        self.originalTimeframe = editingGoal?.targetTimeframe ?? .year
+        self.originalDueDate = editingGoal?.dueDate ?? Date()
+    }
+    
+    // Check if any changes have been made
+    private var hasChanges: Bool {
+        guard editingGoal != nil else { return false }
+        
+        return title != originalTitle ||
+               selectedCategoryId != originalCategoryId ||
+               selectedTimeframe != originalTimeframe ||
+               !Calendar.current.isDate(calculateDueDate(), inSameDayAs: originalDueDate)
+    }
+    
+    // Validate that required fields are filled
+    private var canSave: Bool {
+        return !title.isEmpty && selectedCategoryId != nil
     }
     
     var body: some View {
@@ -588,7 +621,10 @@ struct CreateGoalView: View {
                     Button(editingGoal != nil ? "Save" : "Create") {
                         saveGoal()
                     }
-                    .disabled(title.isEmpty || selectedCategoryId == nil)
+                    .disabled(!canSave || (editingGoal != nil ? !hasChanges : false))
+                    .fontWeight(.semibold)
+                    .foregroundColor((canSave && (editingGoal == nil || hasChanges)) ? .accentColor : .secondary)
+                    .opacity((canSave && (editingGoal == nil || hasChanges)) ? 1.0 : 0.5)
                 }
             }
             .alert("Delete Goal", isPresented: $showingDeleteAlert) {

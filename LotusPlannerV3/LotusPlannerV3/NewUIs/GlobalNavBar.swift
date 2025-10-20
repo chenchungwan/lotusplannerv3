@@ -280,8 +280,8 @@ struct GlobalNavBar: View {
                         .buttonStyle(.borderless)
                         .padding(.trailing, 10)
                         
-                        // Hide navigation arrows only in Lists view
-                        if navigationManager.currentView != .lists {
+                        // Hide navigation arrows in Lists view and in Goals All Goals view
+                        if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                             Button { step(-1) } label: {
                                 Image(systemName: "chevron.left")
                                     .font(.title2)
@@ -290,8 +290,8 @@ struct GlobalNavBar: View {
                         }
                         
                         Button {
-                            // Only open date picker if not in Lists view
-                            if navigationManager.currentView != .lists {
+                            // Only open date picker if not in Lists view or Goals All Goals view
+                            if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                                 selectedDateForPicker = navigationManager.currentDate
                                 showingDatePicker = true
                             }
@@ -302,11 +302,11 @@ struct GlobalNavBar: View {
                                 .minimumScaleFactor(0.7)
                                 .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
                         }
-                        .disabled(navigationManager.currentView == .lists)
+                        .disabled(navigationManager.currentView == .lists || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day))
                         .padding(.trailing, 15)
                         
-                        // Hide navigation arrows only in Lists view
-                        if navigationManager.currentView != .lists {
+                        // Hide navigation arrows in Lists view and in Goals All Goals view
+                        if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                             Button { step(1) } label: {
                                 Image(systemName: "chevron.right")
                                     .font(.title2)
@@ -363,13 +363,13 @@ struct GlobalNavBar: View {
                             // Hide ellipsis.circle in calendar views, lists view, and journal day views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
-                                    // In Goals view: button to toggle all goals table view
+                                    // In Goals view: button to show all goals
                                     Button {
-                                        navigationManager.showingAllGoalsTable.toggle()
+                                        navigationManager.updateInterval(.day, date: Date())
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(.title2)
-                                            .foregroundColor(navigationManager.showingAllGoalsTable ? .accentColor : .secondary)
+                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
                                     }
                                 } else {
                                     // In Tasks view: full menu
@@ -517,13 +517,13 @@ struct GlobalNavBar: View {
                             // Hide ellipsis.circle in calendar views, lists view, and journal day views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
-                                    // In Goals view: button to toggle all goals table view
+                                    // In Goals view: button to show all goals
                                     Button {
-                                        navigationManager.showingAllGoalsTable.toggle()
+                                        navigationManager.updateInterval(.day, date: Date())
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(.title2)
-                                            .foregroundColor(navigationManager.showingAllGoalsTable ? .accentColor : .secondary)
+                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
                                     }
                                 } else {
                                     // In Tasks view: full menu
