@@ -51,50 +51,56 @@ struct GoalsView: View {
             // Navigation Bar
             GlobalNavBar()
             
-            // Main Content
-            GeometryReader { geometry in
-                ScrollView {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 16),
-                            GridItem(.flexible(), spacing: 16)
-                        ],
-                        spacing: 16
-                    ) {
-                        ForEach(sortedCategories) { category in
-                            GoalCategoryCard(
-                                category: category,
-                                goals: getFilteredGoalsForCategory(category.id),
-                                onGoalTap: { goal in
-                                    // Handle goal tap - could show details or toggle completion
-                                    goalsManager.toggleGoalCompletion(goal.id)
-                                },
-                                onGoalEdit: { goal in
-                                    editingGoal = goal
-                                    showingCreateGoal = true
-                                },
-                                onGoalDelete: { goal in
-                                    goalsManager.deleteGoal(goal.id)
-                                },
-                                onCategoryEdit: { category in
-                                    // Handle category edit
-                                },
-                                onCategoryDelete: { category in
-                                    goalsManager.deleteCategory(category.id)
+            // Main Content - Toggle between grid view and table view
+            if navigationManager.showingAllGoalsTable {
+                // All Goals Table View
+                AllGoalsTableContent()
+            } else {
+                // Normal Grid View
+                GeometryReader { geometry in
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 16),
+                                GridItem(.flexible(), spacing: 16)
+                            ],
+                            spacing: 16
+                        ) {
+                            ForEach(sortedCategories) { category in
+                                GoalCategoryCard(
+                                    category: category,
+                                    goals: getFilteredGoalsForCategory(category.id),
+                                    onGoalTap: { goal in
+                                        // Handle goal tap - could show details or toggle completion
+                                        goalsManager.toggleGoalCompletion(goal.id)
+                                    },
+                                    onGoalEdit: { goal in
+                                        editingGoal = goal
+                                        showingCreateGoal = true
+                                    },
+                                    onGoalDelete: { goal in
+                                        goalsManager.deleteGoal(goal.id)
+                                    },
+                                    onCategoryEdit: { category in
+                                        // Handle category edit
+                                    },
+                                    onCategoryDelete: { category in
+                                        goalsManager.deleteCategory(category.id)
+                                    }
+                                )
+                                .frame(height: geometry.size.height / 3 - 16)
+                            }
+                            
+                            // Add Category Card
+                            AddCategoryCard(
+                                onAddCategory: { categoryName in
+                                    goalsManager.addCategory(title: categoryName)
                                 }
                             )
                             .frame(height: geometry.size.height / 3 - 16)
                         }
-                        
-                        // Add Category Card
-                        AddCategoryCard(
-                            onAddCategory: { categoryName in
-                                goalsManager.addCategory(title: categoryName)
-                            }
-                        )
-                        .frame(height: geometry.size.height / 3 - 16)
+                        .padding(16)
                     }
-                    .padding(16)
                 }
             }
         }

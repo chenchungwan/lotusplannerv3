@@ -363,13 +363,13 @@ struct GlobalNavBar: View {
                             // Hide ellipsis.circle in calendar views, lists view, and journal day views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
-                                    // In Goals view: simple button to show all goals
+                                    // In Goals view: button to toggle all goals table view
                                     Button {
-                                        navigationManager.updateInterval(.day, date: Date())
+                                        navigationManager.showingAllGoalsTable.toggle()
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(.title2)
-                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
+                                            .foregroundColor(navigationManager.showingAllGoalsTable ? .accentColor : .secondary)
                                     }
                                 } else {
                                     // In Tasks view: full menu
@@ -517,13 +517,13 @@ struct GlobalNavBar: View {
                             // Hide ellipsis.circle in calendar views, lists view, and journal day views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 if navigationManager.currentView == .goals {
-                                    // In Goals view: simple button to show all goals
+                                    // In Goals view: button to toggle all goals table view
                                     Button {
-                                        navigationManager.updateInterval(.day, date: Date())
+                                        navigationManager.showingAllGoalsTable.toggle()
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(.title2)
-                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
+                                            .foregroundColor(navigationManager.showingAllGoalsTable ? .accentColor : .secondary)
                                     }
                                 } else {
                                     // In Tasks view: full menu

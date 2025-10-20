@@ -110,6 +110,7 @@ class NavigationManager: ObservableObject {
     @Published var currentDate: Date = Date()
     @Published var showingSettings = false
     @Published var showingAllTasks = false
+    @Published var showingAllGoalsTable = false
     
     private init() {}
     
