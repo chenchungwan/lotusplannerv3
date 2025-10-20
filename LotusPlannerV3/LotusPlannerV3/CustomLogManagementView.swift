@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CustomLogManagementView: View {
-    @StateObject private var customLogManager = CustomLogManager.shared
+    @ObservedObject private var customLogManager = CustomLogManager.shared
     @State private var showingAddItem = false
     @State private var newItemTitle = ""
     @State private var editingItem: CustomLogItemData?
@@ -128,7 +128,7 @@ struct AddCustomLogItemView: View {
                     TextField("Item title", text: $title)
                 }
             }
-            .navigationTitle("Add Custom Logs Item")
+            .navigationTitle("New Custom Log Item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -138,11 +138,14 @@ struct AddCustomLogItemView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    Button("Create") {
                         onSave(title)
                         dismiss()
                     }
                     .disabled(title.isEmpty)
+                    .fontWeight(.semibold)
+                    .foregroundColor(!title.isEmpty ? .accentColor : .secondary)
+                    .opacity(!title.isEmpty ? 1.0 : 0.5)
                 }
             }
         }

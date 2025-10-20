@@ -588,7 +588,7 @@ class AppPreferences: ObservableObject {
 
 struct SettingsView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
-    @StateObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var iCloudManagerInstance = iCloudManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -1344,7 +1344,7 @@ struct ColorPickerRow: View {
 
 // MARK: - Custom Logs Items Inline View
 struct CustomLogItemsInlineView: View {
-    @StateObject private var customLogManager = CustomLogManager.shared
+    @ObservedObject private var customLogManager = CustomLogManager.shared
     @State private var showingAddItem = false
     @State private var newItemTitle = ""
     @State private var editingItem: CustomLogItemData?
@@ -1712,7 +1712,7 @@ struct AddGoalCategorySheet: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle("Add Goal Category")
+            .navigationTitle("New Goal Category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1722,11 +1722,14 @@ struct AddGoalCategorySheet: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Add") {
+                    Button("Create") {
                         onSave(title)
                         dismiss()
                     }
                     .disabled(title.isEmpty)
+                    .fontWeight(.semibold)
+                    .foregroundColor(!title.isEmpty ? .accentColor : .secondary)
+                    .opacity(!title.isEmpty ? 1.0 : 0.5)
                 }
             }
         }

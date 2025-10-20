@@ -11,7 +11,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
-    @StateObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
 
     var body: some View {
         NavigationStack {

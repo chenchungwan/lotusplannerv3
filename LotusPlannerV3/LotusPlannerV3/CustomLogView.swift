@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct CustomLogView: View {
-    @StateObject private var customLogManager = CustomLogManager.shared
-    @StateObject private var appPrefs = AppPreferences.shared
-    @StateObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var customLogManager = CustomLogManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
     
     private var enabledItems: [CustomLogItemData] {
         customLogManager.items.filter { $0.isEnabled }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AllGoalsTableContent: View {
-    @StateObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var goalsManager = GoalsManager.shared
     
     // Computed property to get all timeframes with oldest first (leftmost)
     private var timeframes: [TimeframeGroup] {

@@ -9,7 +9,7 @@ import UIKit
 struct JournalView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var drawingManager = JournalDrawingManagerNew.shared
+    @ObservedObject private var drawingManager = JournalDrawingManagerNew.shared
     @Binding var currentDate: Date
     @State private var canvasView = PKCanvasView()
     // Track previous date to save when date changes

@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct GoalsView: View {
-    @StateObject private var goalsManager = GoalsManager.shared
-    @StateObject private var appPrefs = AppPreferences.shared
-    @StateObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var showingCreateGoal = false
     @State private var showingCreateCategory = false
     @State private var goalToEdit: GoalData?
@@ -663,7 +663,7 @@ struct AddCategoryCard: View {
 // MARK: - Create Goal View
 struct CreateGoalView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var goalsManager = GoalsManager.shared
     
     let editingGoal: GoalData?
     let onDismiss: () -> Void
@@ -965,7 +965,7 @@ struct CreateGoalView: View {
 // MARK: - Create Category View
 struct CreateCategoryView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var goalsManager = GoalsManager.shared
     
     @State private var title = ""
     @State private var selectedPosition = 0
