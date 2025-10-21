@@ -454,7 +454,7 @@ private struct TaskComponentRow: View {
                     return ("Today", .white, accentColor)
                 } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
                           calendar.isDate(dueDay, inSameDayAs: tomorrow) {
-                    return ("Tomorrow", .white, .orange)
+                    return ("Tomorrow", .white, .cyan)
                 } else if dueDay < today {
                     return ("Overdue", .white, .red)
                 } else {
