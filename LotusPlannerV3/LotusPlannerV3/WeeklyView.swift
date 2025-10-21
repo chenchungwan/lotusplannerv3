@@ -24,7 +24,7 @@ struct WeeklyView: View {
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
     
-    // MARK: - Expand/Collapse State
+    // MARK: - Expand/Collapse State (for vertical/column view only)
     @State private var eventsExpanded = true
     @State private var personalTasksExpanded = true
     @State private var professionalTasksExpanded = true
@@ -66,6 +66,21 @@ struct WeeklyView: View {
     private func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
         // Total width for all 7 days
         return dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
+    }
+    
+    // MARK: - Horizontal View Adaptive Properties
+    private func dateColumnWidth() -> CGFloat {
+        return isCompact ? 80 : 100
+    }
+    
+    private func contentColumnWidth() -> CGFloat {
+        // Adaptive width for content columns in horizontal view
+        return isCompact ? 200 : 228.6
+    }
+    
+    private func logColumnWidth() -> CGFloat {
+        // Fixed width for log columns - same as content columns
+        return contentColumnWidth()
     }
     
     var body: some View {
@@ -711,6 +726,21 @@ extension WeeklyView {
                 HStack(alignment: .top, spacing: 0) {
                     // Fixed/Sticky date column
                     VStack(spacing: 0) {
+                        // Column headers row
+                        VStack(alignment: .center, spacing: 4) {
+                            Text("Date")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(height: 44)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.systemGray6).opacity(0.5))
+                        
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(height: 1)
+                        
                         ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                             weekDayColumnSticky(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
                                 .id("day_row_\(index)")
@@ -722,26 +752,150 @@ extension WeeklyView {
                             }
                         }
                     }
-                    .frame(width: 100)
+                    .frame(width: dateColumnWidth())
                     .background(Color(.systemGray6))
                     
                     Divider()
                     
                     // Scrollable content (without date column)
                     ScrollView(.horizontal, showsIndicators: true) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                weekDayRowContent(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
+                        HStack(alignment: .top, spacing: 0) {
+                            // Events Column
+                            VStack(spacing: 0) {
+                                // Events column header
+                                VStack(alignment: .center, spacing: 4) {
+                                    Text("Events")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.primary)
+                                }
+                                .frame(height: 44)
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemGray6).opacity(0.5))
                                 
-                                if index < weekDates.count - 1 {
-                                    Rectangle()
-                                        .fill(Color(.systemGray5))
-                                        .frame(height: 1)
+                                Rectangle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(height: 1)
+                                
+                                // Events column content
+                                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                    weekDayRowEventsColumn(date: date)
+                                    
+                                    if index < weekDates.count - 1 {
+                                        Rectangle()
+                                            .fill(Color(.systemGray5))
+                                            .frame(height: 1)
+                                    }
                                 }
                             }
+                            .frame(width: contentColumnWidth())
+                            .background(Color(.systemBackground))
+                            
+                            Divider()
+                            
+                            // Personal Tasks Column
+                            if authManager.isLinked(kind: .personal) {
+                                VStack(spacing: 0) {
+                                    // Personal Tasks column header
+                                    VStack(alignment: .center, spacing: 4) {
+                                        Text("Personal")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(height: 44)
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color(.systemGray6).opacity(0.5))
+                                    
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(height: 1)
+                                    
+                                    // Personal Tasks column content
+                                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                        weekDayRowPersonalTasksColumn(date: date)
+                                        
+                                        if index < weekDates.count - 1 {
+                                            Rectangle()
+                                                .fill(Color(.systemGray5))
+                                                .frame(height: 1)
+                                        }
+                                    }
+                                }
+                                .frame(width: contentColumnWidth())
+                                .background(Color(.systemBackground))
+                                
+                                Divider()
+                            }
+                            
+                            // Professional Tasks Column
+                            if authManager.isLinked(kind: .professional) {
+                                VStack(spacing: 0) {
+                                    // Professional Tasks column header
+                                    VStack(alignment: .center, spacing: 4) {
+                                        Text("Professional")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(height: 44)
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color(.systemGray6).opacity(0.5))
+                                    
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(height: 1)
+                                    
+                                    // Professional Tasks column content
+                                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                        weekDayRowProfessionalTasksColumn(date: date)
+                                        
+                                        if index < weekDates.count - 1 {
+                                            Rectangle()
+                                                .fill(Color(.systemGray5))
+                                                .frame(height: 1)
+                                        }
+                                    }
+                                }
+                                .frame(width: contentColumnWidth())
+                                .background(Color(.systemBackground))
+                                
+                                Divider()
+                            }
+                            
+                            // Logs Columns (no width restrictions - natural sizing)
+                            if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showWaterLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                VStack(spacing: 0) {
+                                    // Logs column header
+                                    VStack(alignment: .center, spacing: 4) {
+                                        Text("Logs")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                    }
+                                    .frame(height: 44)
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color(.systemGray6).opacity(0.5))
+                                    
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(height: 1)
+                                    
+                                    // Logs column content
+                                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                        weekDayRowLogsColumn(date: date)
+                                        
+                                        if index < weekDates.count - 1 {
+                                            Rectangle()
+                                                .fill(Color(.systemGray5))
+                                                .frame(height: 1)
+                                        }
+                                    }
+                                }
+                                .background(Color(.systemBackground))
+                            }
                         }
-                        .background(Color(.systemBackground))
-                        .padding(.all, 8)
+                        .padding(.horizontal, 12)
                     }
                 }
                 .onAppear {
@@ -763,12 +917,12 @@ extension WeeklyView {
         }) {
             VStack(alignment: .center, spacing: 2) {
                 Text(dayOfWeekAbbrev(from: date))
-                    .font(DateDisplayStyle.bodyFont)
+                    .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
                 
                 Text(formatDateShort(from: date))
-                    .font(DateDisplayStyle.titleFont)
+                    .font(.caption)
                     .fontWeight(.bold)
                     .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
             }
@@ -790,6 +944,186 @@ extension WeeklyView {
         let formatter = DateFormatter()
         formatter.dateFormat = "M/d/yy"
         return formatter.string(from: date)
+    }
+    
+    // MARK: - Individual Column Views for Horizontal Layout
+    private func weekDayRowEventsColumn(date: Date) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 4) {
+                let eventsForDate = getEventsForDate(date)
+                ForEach(eventsForDate, id: \.id) { event in
+                    rowEventCard(event: event)
+                }
+            }
+            .padding(.all, 8)
+        }
+        .frame(minHeight: 80, alignment: .topLeading)
+    }
+    
+    private func weekDayRowPersonalTasksColumn(date: Date) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 4) {
+                let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+                if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                    TasksComponent(
+                        taskLists: tasksViewModel.personalTaskLists,
+                        tasksDict: personalTasksForDate,
+                        accentColor: appPrefs.personalColor,
+                        accountType: .personal,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        },
+                        onListRename: { listId, newName in
+                            Task {
+                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            }
+                        },
+                        onOrderChanged: { newOrder in
+                            Task {
+                                await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                            }
+                        },
+                        hideDueDateTag: true,
+                        showEmptyState: false,
+                        isSingleDayView: true
+                    )
+                }
+            }
+            .padding(.all, 8)
+        }
+        .frame(minHeight: 80, alignment: .topLeading)
+    }
+    
+    private func weekDayRowProfessionalTasksColumn(date: Date) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 4) {
+                let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+                if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                    TasksComponent(
+                        taskLists: tasksViewModel.professionalTaskLists,
+                        tasksDict: professionalTasksForDate,
+                        accentColor: appPrefs.professionalColor,
+                        accountType: .professional,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
+                        },
+                        onListRename: { listId, newName in
+                            Task {
+                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            }
+                        },
+                        onOrderChanged: { newOrder in
+                            Task {
+                                await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                            }
+                        },
+                        hideDueDateTag: true,
+                        showEmptyState: false,
+                        isSingleDayView: true
+                    )
+                }
+            }
+            .padding(.all, 8)
+        }
+        .frame(minHeight: 80, alignment: .topLeading)
+    }
+    
+    private func weekDayRowLogsColumn(date: Date) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Weight Logs
+            if appPrefs.showWeightLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let weightLogsForDate = getWeightLogsForDate(date)
+                        ForEach(weightLogsForDate, id: \.id) { entry in
+                            weightLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Workout Logs
+            if appPrefs.showWorkoutLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let workoutLogsForDate = getWorkoutLogsForDate(date)
+                        ForEach(workoutLogsForDate, id: \.id) { entry in
+                            workoutLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Water Logs
+            if appPrefs.showWaterLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let waterLogsForDate = getWaterLogsForDate(date)
+                        let totalCups = waterLogsForDate.reduce(0) { total, entry in
+                            total + entry.cupsFilled.filter { $0 }.count
+                        }
+                        if totalCups > 0 {
+                            waterLogSummary(entries: waterLogsForDate)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Food Logs
+            if appPrefs.showFoodLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let foodLogsForDate = getFoodLogsForDate(date)
+                        ForEach(foodLogsForDate, id: \.id) { entry in
+                            foodLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+                
+                Divider()
+            }
+            
+            // Custom Logs
+            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                        customLogSummary(items: enabledItems, date: date)
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+            }
+        }
     }
     
     private func weekDayRowContent(date: Date, isToday: Bool) -> some View {
