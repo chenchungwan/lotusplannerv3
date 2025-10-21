@@ -13,12 +13,22 @@ struct WeeklyView: View {
     @ObservedObject private var logsViewModel = LogsViewModel.shared
     @ObservedObject private var customLogManager = CustomLogManager.shared
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
     @State private var selectedDate = Date()
     @State private var viewMode: WeeklyViewMode = .week
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    
+    // MARK: - Expand/Collapse State
+    @State private var eventsExpanded = true
+    @State private var personalTasksExpanded = true
+    @State private var professionalTasksExpanded = true
+    @State private var logsExpanded = true
     struct WeeklyTaskSelection: Identifiable {
         let id = UUID()
         let task: GoogleTask
@@ -31,6 +41,32 @@ struct WeeklyView: View {
     @State private var scrollToCurrentDayTrigger = false
     @State private var scrollToCurrentDayHorizontalTrigger = false
     @State private var scrollToCurrentDayRowTrigger = false
+    
+    // MARK: - Adaptive Layout Properties
+    private var isCompact: Bool {
+        horizontalSizeClass == .compact
+    }
+    
+    private func visibleDaysCount(for geometry: GeometryProxy) -> Int {
+        if isCompact {
+            // iPhone: Show 2 days at a time
+            return 2
+        } else {
+            // iPad: Show 3 days in portrait, 5 in landscape
+            // Detect landscape by checking if width > height
+            let isLandscape = geometry.size.width > geometry.size.height
+            return isLandscape ? 5 : 3
+        }
+    }
+    
+    private func dayColumnWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
+        return availableWidth / CGFloat(visibleDays)
+    }
+    
+    private func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
+        // Total width for all 7 days
+        return dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -214,16 +250,18 @@ struct WeeklyView: View {
     
     // MARK: - Column-Based View with Sticky Header
     private var weekColumnBasedViewWithStickyHeader: some View {
-        let fixedWidth: CGFloat = 1600
-        let dayColumnWidth = fixedWidth / 7
-        
         return GeometryReader { geometry in
+            let availableWidth = geometry.size.width
+            let visibleDays = visibleDaysCount(for: geometry)
+            let columnWidth = dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+            let contentWidth = totalContentWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+            
             ScrollViewReader { horizontalProxy in
                 ScrollView(.horizontal, showsIndicators: true) {
                     VStack(spacing: 0) {
                         // Fixed header (stays at top when scrolling vertically)
-                        weekTasksDateHeader(dayColumnWidth: dayColumnWidth, timeColumnWidth: 50)
-                            .frame(width: fixedWidth)
+                        weekTasksDateHeader(dayColumnWidth: columnWidth, timeColumnWidth: 50)
+                            .frame(width: contentWidth)
                             .background(Color(.systemGray6))
                         
                         // Divider below date header
@@ -234,7 +272,7 @@ struct WeeklyView: View {
                         // Scrollable content (scrolls vertically)
                         ScrollView(.vertical, showsIndicators: true) {
                             ScrollViewReader { verticalProxy in
-                                weekTasksContent(dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
+                                weekTasksContent(dayColumnWidth: columnWidth, fixedWidth: contentWidth)
                                     .onAppear {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                             scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
@@ -251,7 +289,8 @@ struct WeeklyView: View {
                         }
                         .frame(maxHeight: .infinity)
                     }
-                    .frame(width: fixedWidth)
+                    .frame(width: contentWidth)
+                    .padding(.horizontal, 12)
                 }
                 .background(Color(.systemBackground))
             }
@@ -279,27 +318,52 @@ extension WeeklyView {
         }
 
         return VStack(spacing: 0) {
-            // Events Row (always shown)
-            VStack(alignment: .leading, spacing: 4) {
-                // Fixed-width 7-day event columns
-                HStack(alignment: .top, spacing: 0) {
-                    // 7-day event columns with fixed width
-                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                        weekEventColumn(date: date)
-                            .frame(width: dayColumnWidth, alignment: .top) // Fixed width matching timeline
-                            .background(Color(.systemBackground))
-                            .overlay(
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 0.5),
-                                alignment: .trailing
-                            )
-                            .id("event_day_\(index)")
+            // Events Row (with expand/collapse header)
+            VStack(alignment: .leading, spacing: 0) {
+                // Events Header with expand/collapse button
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        eventsExpanded.toggle()
                     }
+                }) {
+                    HStack {
+                        Image(systemName: eventsExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Events")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color(.systemGray6).opacity(0.5))
                 }
-                .frame(width: fixedWidth) // Total fixed width
+                .buttonStyle(.plain)
+                
+                // Events content (collapsible)
+                if eventsExpanded {
+                    // Fixed-width 7-day event columns
+                    HStack(alignment: .top, spacing: 0) {
+                        // 7-day event columns with fixed width
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                            weekEventColumn(date: date)
+                                .frame(width: dayColumnWidth, alignment: .top) // Fixed width matching timeline
+                                .background(Color(.systemBackground))
+                                .overlay(
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 0.5),
+                                    alignment: .trailing
+                                )
+                                .id("event_day_\(index)")
+                        }
+                    }
+                    .frame(width: fixedWidth) // Total fixed width
+                    .padding(.all, 8)
+                }
             }
-            .padding(.all, 8)
             .background(Color(.systemGray6).opacity(0.15))
             
             // Divider after events row (before personal tasks)
@@ -309,27 +373,51 @@ extension WeeklyView {
 
             // Personal Tasks Row
             if authManager.isLinked(kind: .personal) && personalHasAny {
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    // Fixed-width 7-day task columns
-                    HStack(spacing: 0) {
-                        // 7-day task columns with fixed width
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekTaskColumnPersonal(date: date)
-                                .frame(width: dayColumnWidth) // Fixed width matching timeline
-                                .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("day_\(index)")
+                VStack(alignment: .leading, spacing: 0) {
+                    // Personal Tasks Header with expand/collapse button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            personalTasksExpanded.toggle()
                         }
+                    }) {
+                        HStack {
+                            Image(systemName: personalTasksExpanded ? "chevron.down" : "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Personal Tasks")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray6).opacity(0.5))
                     }
-                    .frame(width: fixedWidth) // Total fixed width
+                    .buttonStyle(.plain)
+                    
+                    // Personal Tasks content (collapsible)
+                    if personalTasksExpanded {
+                        // Fixed-width 7-day task columns
+                        HStack(spacing: 0) {
+                            // 7-day task columns with fixed width
+                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                weekTaskColumnPersonal(date: date)
+                                    .frame(width: dayColumnWidth) // Fixed width matching timeline
+                                    .background(Color(.systemBackground))
+                                    .overlay(
+                                        Rectangle()
+                                            .fill(Color(.systemGray4))
+                                            .frame(width: 0.5),
+                                        alignment: .trailing
+                                    )
+                                    .id("day_\(index)")
+                            }
+                        }
+                        .frame(width: fixedWidth) // Total fixed width
+                        .padding(.all, 8)
+                    }
                 }
-                .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
             }
             
@@ -342,188 +430,233 @@ extension WeeklyView {
             
             // Professional Tasks Row
             if authManager.isLinked(kind: .professional) && professionalHasAny {
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    // Fixed-width 7-day task columns
-                    HStack(spacing: 0) {
-                        // 7-day task columns with fixed width
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekTaskColumnProfessional(date: date)
-                                .frame(width: dayColumnWidth) // Fixed width matching timeline
-                                .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("day_\(index)")
+                VStack(alignment: .leading, spacing: 0) {
+                    // Professional Tasks Header with expand/collapse button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            professionalTasksExpanded.toggle()
                         }
+                    }) {
+                        HStack {
+                            Image(systemName: professionalTasksExpanded ? "chevron.down" : "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Professional Tasks")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray6).opacity(0.5))
                     }
-                    .frame(width: fixedWidth) // Total fixed width
+                    .buttonStyle(.plain)
+                    
+                    // Professional Tasks content (collapsible)
+                    if professionalTasksExpanded {
+                        // Fixed-width 7-day task columns
+                        HStack(spacing: 0) {
+                            // 7-day task columns with fixed width
+                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                weekTaskColumnProfessional(date: date)
+                                    .frame(width: dayColumnWidth) // Fixed width matching timeline
+                                    .background(Color(.systemBackground))
+                                    .overlay(
+                                        Rectangle()
+                                            .fill(Color(.systemGray4))
+                                            .frame(width: 0.5),
+                                        alignment: .trailing
+                                    )
+                                    .id("day_\(index)")
+                            }
+                        }
+                        .frame(width: fixedWidth) // Total fixed width
+                        .padding(.all, 8)
+                    }
                 }
-                .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.3))
             }
             
-            // Divider after tasks row (before weight logs)
-            if appPrefs.showWeightLogs {
+            // Logs Section (all log types under one collapsible header)
+            if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showWaterLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                // Divider before logs section
                 Rectangle()
                     .fill(Color(.systemGray3))
                     .frame(height: 2)
-            }
-            
-            // Weight Logs Row
-            if appPrefs.showWeightLogs {
-                VStack(alignment: .leading, spacing: 4) {
+                
+                VStack(alignment: .leading, spacing: 0) {
+                    // Logs Header with expand/collapse button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            logsExpanded.toggle()
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: logsExpanded ? "chevron.down" : "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Logs")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray6).opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
                     
-                    // Fixed-width 7-day weight log columns
-                    HStack(spacing: 0) {
-                        // 7-day weight log columns with fixed width
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekWeightLogColumn(date: date)
-                                .frame(width: dayColumnWidth) // Fixed width matching timeline
-                                .background(Color(.systemBackground))
-                                .overlay(
+                    // Logs content (collapsible)
+                    if logsExpanded {
+                        VStack(spacing: 0) {
+                            // Weight Logs Row
+                            if appPrefs.showWeightLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day weight log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekWeightLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("weight_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                                
+                                if appPrefs.showWorkoutLogs || appPrefs.showWaterLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
                                     Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("weight_day_\(index)")
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+                            
+                            // Workout Logs Row
+                            if appPrefs.showWorkoutLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day workout log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekWorkoutLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("workout_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                                
+                                if appPrefs.showWaterLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+                            
+                            // Water Logs Row
+                            if appPrefs.showWaterLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day water log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekWaterLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("water_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                                
+                                if appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+                            
+                            // Food Logs Row
+                            if appPrefs.showFoodLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day food log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekFoodLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("food_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                                
+                                if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+                            
+                            // Custom Logs Row
+                            if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day custom log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekCustomLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("custom_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                            }
                         }
                     }
-                    .frame(width: fixedWidth) // Total fixed width
                 }
-                .padding(.all, 8)
-                .background(Color(.systemGray6).opacity(0.15))
-            }
-            
-            // Divider after weight logs (before workout logs)
-            if appPrefs.showWorkoutLogs {
-                Rectangle()
-                    .fill(Color(.systemGray3))
-                    .frame(height: 2)
-            }
-            
-            // Workout Logs Row
-            if appPrefs.showWorkoutLogs {
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    // Fixed-width 7-day workout log columns
-                    HStack(spacing: 0) {
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekWorkoutLogColumn(date: date)
-                                .frame(width: dayColumnWidth)
-                                .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("workout_day_\(index)")
-                        }
-                    }
-                    .frame(width: fixedWidth)
-                }
-                .padding(.all, 8)
-                .background(Color(.systemGray6).opacity(0.15))
-            }
-            
-            // Divider after workout logs (before water logs)
-            if appPrefs.showWaterLogs {
-                Rectangle()
-                    .fill(Color(.systemGray3))
-                    .frame(height: 2)
-            }
-            
-            // Water Logs Row
-            if appPrefs.showWaterLogs {
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    // Fixed-width 7-day water log columns
-                    HStack(spacing: 0) {
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekWaterLogColumn(date: date)
-                                .frame(width: dayColumnWidth)
-                                .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("water_day_\(index)")
-                        }
-                    }
-                    .frame(width: fixedWidth)
-                }
-                .padding(.all, 8)
-                .background(Color(.systemGray6).opacity(0.15))
-            }
-            
-            // Divider after water logs (before food logs)
-            if appPrefs.showFoodLogs {
-                Rectangle()
-                    .fill(Color(.systemGray3))
-                    .frame(height: 2)
-            }
-            
-            // Food Logs Row
-            if appPrefs.showFoodLogs {
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    // Fixed-width 7-day food log columns
-                    HStack(spacing: 0) {
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekFoodLogColumn(date: date)
-                                .frame(width: dayColumnWidth)
-                                .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("food_day_\(index)")
-                        }
-                    }
-                    .frame(width: fixedWidth)
-                }
-                .padding(.all, 8)
-                .background(Color(.systemGray6).opacity(0.15))
-            }
-            
-            // Divider after water logs row (before custom logs)
-            if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
-                Rectangle()
-                    .fill(Color(.systemGray3))
-                    .frame(height: 2)
-            }
-            
-            // Custom Logs Row
-            if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    // Fixed-width 7-day custom log columns
-                    HStack(spacing: 0) {
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            weekCustomLogColumn(date: date)
-                                .frame(width: dayColumnWidth)
-                                .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                                .id("custom_day_\(index)")
-                        }
-                    }
-                    .frame(width: fixedWidth)
-                }
-                .padding(.all, 8)
                 .background(Color(.systemGray6).opacity(0.15))
             }
             
