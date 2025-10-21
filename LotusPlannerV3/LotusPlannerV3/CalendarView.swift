@@ -4766,7 +4766,8 @@ struct AddItemView: View {
                itemNotes != (ev.description ?? "") ||
                eventStart != (ev.startTime ?? Date()) ||
                eventEnd != (ev.endTime ?? Date()) ||
-               isAllDay != ev.isAllDay
+               isAllDay != ev.isAllDay ||
+               selectedAccountKind != existingEventAccountKind
     }
     
     private var accentColor: Color {
@@ -5018,20 +5019,39 @@ struct AddItemView: View {
                 .onChange(of: isAllDay) { oldValue, newValue in
                     let cal = Calendar.current
                     if newValue {
+                        // Converting to all-day: use start of day
                         let startDate = cal.startOfDay(for: eventStart)
                         eventStart = startDate
                         eventEnd = cal.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24*3600)
                     } else {
-                        let base = eventStart > Date.distantPast ? eventStart : Date()
-                        let minute = cal.component(.minute, from: base)
-                        let rounded = cal.nextDate(
-                            after: base,
-                            matching: DateComponents(minute: minute < 30 ? 30 : 0),
-                            matchingPolicy: .nextTime,
-                            direction: .forward
-                        ) ?? base
-                        eventStart = rounded
-                        eventEnd = cal.date(byAdding: .minute, value: 30, to: rounded) ?? rounded.addingTimeInterval(1800)
+                        // Converting to timed event: provide sensible default times
+                        let eventDate = cal.startOfDay(for: eventStart)
+                        let isToday = cal.isDateInToday(eventDate)
+                        let isFuture = eventDate > cal.startOfDay(for: Date())
+                        
+                        if isToday {
+                            // For today, use current time rounded to next 30-min mark
+                            let now = Date()
+                            let minute = cal.component(.minute, from: now)
+                            let rounded = cal.nextDate(
+                                after: now,
+                                matching: DateComponents(minute: minute < 30 ? 30 : 0),
+                                matchingPolicy: .nextTime,
+                                direction: .forward
+                            ) ?? now
+                            eventStart = rounded
+                            eventEnd = cal.date(byAdding: .minute, value: 30, to: rounded) ?? rounded.addingTimeInterval(1800)
+                        } else {
+                            // For past or future dates, use 9:00 AM as default
+                            if let defaultStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: eventDate) {
+                                eventStart = defaultStart
+                                eventEnd = cal.date(byAdding: .minute, value: 30, to: defaultStart) ?? defaultStart.addingTimeInterval(1800)
+                            } else {
+                                // Fallback if date creation fails
+                                eventStart = eventDate.addingTimeInterval(9 * 3600) // 9 AM
+                                eventEnd = eventStart.addingTimeInterval(1800) // 30 minutes later
+                            }
+                        }
                     }
                 }
             }
@@ -5337,20 +5357,30 @@ struct AddItemView: View {
         isoFormatter.formatOptions = [.withInternetDateTime]
         isoFormatter.timeZone = TimeZone.current
 
-        var startDict: [String: String] = [:]
-        var endDict: [String: String] = [:]
+        var startDict: [String: Any] = [:]
+        var endDict: [String: Any] = [:]
         if isAllDay {
+            // Converting to all-day event
             let startDate = Calendar.current.startOfDay(for: eventStart)
             let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             startDict["date"] = dateFormatter.string(from: startDate)
             endDict["date"] = dateFormatter.string(from: endDate)
+            // Explicitly remove dateTime and timeZone fields
+            startDict["dateTime"] = NSNull()
+            startDict["timeZone"] = NSNull()
+            endDict["dateTime"] = NSNull()
+            endDict["timeZone"] = NSNull()
         } else {
+            // Converting to timed event
             startDict["dateTime"] = isoFormatter.string(from: eventStart)
             endDict["dateTime"] = isoFormatter.string(from: eventEnd)
             startDict["timeZone"] = TimeZone.current.identifier
             endDict["timeZone"] = TimeZone.current.identifier
+            // Explicitly remove date field
+            startDict["date"] = NSNull()
+            endDict["date"] = NSNull()
         }
 
         var body: [String: Any] = [
