@@ -5,6 +5,10 @@ struct CalendarYearlyView: View {
     @State private var currentYear: Int
     @State private var selectedDate: Date
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
     init() {
         let today = Date()
         self._currentYear = State(initialValue: Calendar.current.component(.year, from: today))
@@ -38,43 +42,118 @@ struct CalendarYearlyView: View {
         }
     }
     
+    // MARK: - Adaptive Layout Configuration
+    private var adaptiveColumns: Int {
+        switch (horizontalSizeClass, verticalSizeClass) {
+        case (.compact, .regular):  // iPhone portrait
+            return 1
+        case (.compact, .compact):  // iPhone landscape
+            return 2
+        default:  // iPad
+            return 3
+        }
+    }
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 16
+    }
+    
+    private var adaptiveGridSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 16
+    }
+    
+    private var adaptiveColumnSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 6 : 12
+    }
+    
+    private func adaptiveMinCardHeight(availableHeight: CGFloat, rows: Int) -> CGFloat {
+        // Calculate minimum height needed for all content:
+        // Single column (iPhone portrait):
+        //   - Month title: ~35pt (title font)
+        //   - Week headers: ~28pt (body font)
+        //   - 6 week rows: 192pt (6 × 32pt cells)
+        //   - Spacing: ~20pt (5 × 4pt)
+        //   - Padding: ~16pt (2 × 8pt)
+        //   - Total: ~291pt minimum
+        // Multi-column:
+        //   - Month title: ~25-35pt
+        //   - Week headers: ~20-28pt
+        //   - 6 week rows: 144-168pt (6 × 24-28pt)
+        //   - Spacing: ~10-20pt
+        //   - Padding: ~8-16pt
+        //   - Total: ~207-267pt minimum
+        
+        switch (horizontalSizeClass, verticalSizeClass) {
+        case (.compact, .regular):  // iPhone portrait - 1 column, 12 rows (larger fonts)
+            return max((availableHeight - (adaptiveGridSpacing * CGFloat(rows - 1))) / CGFloat(rows), 290)
+        case (.compact, .compact):  // iPhone landscape - 2 columns, 6 rows
+            return max((availableHeight - (adaptiveGridSpacing * CGFloat(rows - 1))) / CGFloat(rows), 200)
+        default:  // iPad - 3 columns, 4 rows
+            return max((availableHeight - (adaptiveGridSpacing * CGFloat(rows - 1))) / CGFloat(rows), 260)
+        }
+    }
     
     private func monthsGrid(geometry: GeometryProxy) -> some View {
-        let padding: CGFloat = 16
-        let gridSpacing: CGFloat = 16
-        let columnSpacing: CGFloat = 12
-        let availableHeight = max(geometry.size.height, 400) // Ensure minimum height
-        let rows = 4 // 12 months ÷ 3 columns = 4 rows
-        let monthCardHeight = max((availableHeight - (gridSpacing * CGFloat(rows - 1))) / CGFloat(rows), 80) // Minimum card height
+        let columns = adaptiveColumns
+        let availableHeight = max(geometry.size.height, 400)
+        let rows = 12 / columns  // Calculate rows based on columns
+        let monthCardHeight = adaptiveMinCardHeight(availableHeight: availableHeight, rows: rows)
         
-        return ScrollView(.vertical, showsIndicators: true) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: columnSpacing), count: 3), spacing: gridSpacing) {
-                ForEach(1...12, id: \.self) { month in
-                    YearlyMonthCardView(
-                        month: month,
-                        year: currentYear,
-                        currentDate: selectedDate,
-                        onDayTap: { date in
-                            selectedDate = date
-                            navigationManager.switchToCalendar()
-                            navigationManager.updateInterval(.day, date: date)
-                        },
-                        onMonthTap: {
-                            let monthDate = Calendar.mondayFirst.date(from: DateComponents(year: currentYear, month: month, day: 1))!
-                            selectedDate = monthDate
-                            navigationManager.switchToCalendar()
-                            navigationManager.updateInterval(.month, date: monthDate)
-                        },
-                        onWeekTap: { date in
-                            selectedDate = date
-                            navigationManager.switchToCalendar()
-                            navigationManager.updateInterval(.week, date: date)
-                        }
-                    )
-                    .frame(height: monthCardHeight)
+        return ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: adaptiveColumnSpacing), count: columns), spacing: adaptiveGridSpacing) {
+                    ForEach(1...12, id: \.self) { month in
+                        YearlyMonthCardView(
+                            month: month,
+                            year: currentYear,
+                            currentDate: selectedDate,
+                            horizontalSizeClass: horizontalSizeClass,
+                            verticalSizeClass: verticalSizeClass,
+                            onDayTap: { date in
+                                selectedDate = date
+                                navigationManager.switchToCalendar()
+                                navigationManager.updateInterval(.day, date: date)
+                            },
+                            onMonthTap: {
+                                let monthDate = Calendar.mondayFirst.date(from: DateComponents(year: currentYear, month: month, day: 1))!
+                                selectedDate = monthDate
+                                navigationManager.switchToCalendar()
+                                navigationManager.updateInterval(.month, date: monthDate)
+                            },
+                            onWeekTap: { date in
+                                selectedDate = date
+                                navigationManager.switchToCalendar()
+                                navigationManager.updateInterval(.week, date: date)
+                            }
+                        )
+                        .frame(height: monthCardHeight)
+                        .id(month)  // Add identifier for scrolling
+                    }
+                }
+                .padding(adaptivePadding)
+            }
+            .onAppear {
+                // Scroll to current month on appear
+                scrollToCurrentMonth(proxy: proxy)
+            }
+            .onChange(of: currentYear) { oldValue, newValue in
+                // Scroll to current month when year changes
+                scrollToCurrentMonth(proxy: proxy)
+            }
+        }
+    }
+    
+    private func scrollToCurrentMonth(proxy: ScrollViewProxy) {
+        let currentMonth = Calendar.current.component(.month, from: navigationManager.currentDate)
+        let currentYearFromDate = Calendar.current.component(.year, from: navigationManager.currentDate)
+        
+        // Only scroll if we're viewing the current year
+        if currentYearFromDate == currentYear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(currentMonth, anchor: .center)
                 }
             }
-            .padding(padding)
         }
     }
     
@@ -95,12 +174,95 @@ struct YearlyMonthCardView: View {
     let month: Int
     let year: Int
     let currentDate: Date
+    let horizontalSizeClass: UserInterfaceSizeClass?
+    let verticalSizeClass: UserInterfaceSizeClass?
     let onDayTap: (Date) -> Void
     let onMonthTap: () -> Void
     let onWeekTap: (Date) -> Void
     
+    // MARK: - Adaptive Configuration
+    private var isCompactDevice: Bool {
+        horizontalSizeClass == .compact
+    }
+    
+    private var isSingleColumn: Bool {
+        horizontalSizeClass == .compact && verticalSizeClass == .regular
+    }
+    
+    private var monthNameFont: Font {
+        if isSingleColumn {
+            return .title  // Larger for single column
+        } else if isCompactDevice {
+            return .headline
+        } else {
+            return .title2
+        }
+    }
+    
+    private var dayFont: Font {
+        if isSingleColumn {
+            return .body  // Larger for single column
+        } else if isCompactDevice {
+            return .caption2
+        } else {
+            return .caption
+        }
+    }
+    
+    private var shouldShowWeekNumbers: Bool {
+        // Hide week numbers on very small screens to save space
+        !isCompactDevice || verticalSizeClass == .compact
+    }
+    
+    private var adaptiveSpacing: CGFloat {
+        if isSingleColumn {
+            return 4  // More spacing for single column
+        } else if isCompactDevice {
+            return 2
+        } else {
+            return 4
+        }
+    }
+    
+    private var adaptivePadding: CGFloat {
+        if isSingleColumn {
+            return 8  // More padding for single column
+        } else if isCompactDevice {
+            return 4
+        } else {
+            return 8
+        }
+    }
+    
+    private var dayCellHeight: CGFloat {
+        if isSingleColumn {
+            return 32  // Taller cells for larger text
+        } else if isCompactDevice {
+            return 24
+        } else {
+            return 28
+        }
+    }
+    
+    private var weekNumberWidth: CGFloat {
+        if isSingleColumn {
+            return 24  // Wider for larger text
+        } else if isCompactDevice {
+            return 16
+        } else {
+            return 20
+        }
+    }
+    
     private var monthName: String {
-        Calendar.mondayFirst.monthSymbols[month - 1]
+        // Use full month names in single column, short names in multi-column compact
+        if isSingleColumn {
+            return Calendar.mondayFirst.monthSymbols[month - 1]  // Full name
+        } else if isCompactDevice {
+            return Calendar.mondayFirst.shortMonthSymbols[month - 1]  // Short name
+        } else {
+            return Calendar.mondayFirst.monthSymbols[month - 1]  // Full name
+        }
     }
     
     private var isCurrentMonth: Bool {
@@ -127,31 +289,33 @@ struct YearlyMonthCardView: View {
     }
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: adaptiveSpacing) {
             // Month title
             Text(monthName)
-                .font(.title2)
+                .font(monthNameFont)
                 .fontWeight(.semibold)
                 .foregroundColor(isCurrentMonth ? .white : .primary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, isSingleColumn ? 8 : (isCompactDevice ? 4 : 6))
                 .background(isCurrentMonth ? Color.blue : Color.clear)
-                .cornerRadius(6)
+                .cornerRadius(isSingleColumn ? 8 : (isCompactDevice ? 4 : 6))
                 .contentShape(Rectangle())
                 .onTapGesture { onMonthTap() }
             
             // Week headers
-            HStack(spacing: 2) {
-                // Week number column header
-                Text("W")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary)
-                    .frame(width: 20)
+            HStack(spacing: adaptiveSpacing) {
+                // Week number column header (conditional)
+                if shouldShowWeekNumbers {
+                    Text("W")
+                        .font(dayFont)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                        .frame(width: weekNumberWidth)
+                }
                 
                 ForEach(["M", "T", "W", "T", "F", "S", "S"], id: \.self) { day in
                     Text(day)
-                        .font(.caption)
+                        .font(dayFont)
                         .fontWeight(.medium)
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
@@ -159,33 +323,35 @@ struct YearlyMonthCardView: View {
             }
             
             // Calendar grid
-            VStack(spacing: 2) {
+            VStack(spacing: adaptiveSpacing) {
                 ForEach(0..<6, id: \.self) { week in
                     weekRow(week: week)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(8)
+        .frame(maxWidth: .infinity)
+        .padding(adaptivePadding)
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .cornerRadius(isCompactDevice ? 8 : 12)
         .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
     }
     
     private func weekRow(week: Int) -> some View {
-        HStack(spacing: 2) {
-            // Week number
-            Text(getWeekNumber(for: week))
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-                .frame(width: 20, height: 20)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if let weekStart = getWeekStartDate(for: week) {
-                        onWeekTap(weekStart)
+        HStack(spacing: adaptiveSpacing) {
+            // Week number (conditional)
+            if shouldShowWeekNumbers {
+                Text(getWeekNumber(for: week))
+                    .font(dayFont)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                    .frame(width: weekNumberWidth, height: dayCellHeight)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if let weekStart = getWeekStartDate(for: week) {
+                            onWeekTap(weekStart)
+                        }
                     }
-                }
+            }
             
             // Days
             ForEach(0..<7, id: \.self) { dayOfWeek in
@@ -202,10 +368,10 @@ struct YearlyMonthCardView: View {
         return Group {
             if isValidDay {
                 Text("\(dayNumber)")
-                    .font(.caption)
+                    .font(dayFont)
                     .fontWeight(.medium)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 20)
+                    .frame(height: dayCellHeight)
                     .background(isToday ? Color.red : Color.clear)
                     .foregroundColor(isToday ? .white : .primary)
                     .clipShape(Circle())
@@ -219,7 +385,7 @@ struct YearlyMonthCardView: View {
             } else {
                 Color.clear
                     .frame(maxWidth: .infinity)
-                    .frame(height: 20)
+                    .frame(height: dayCellHeight)
             }
         }
     }
