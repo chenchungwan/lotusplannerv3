@@ -8,6 +8,9 @@ struct DayViewMobile: View {
     @ObservedObject private var auth: GoogleAuthManager
     private let onEventTap: ((GoogleCalendarEvent) -> Void)?
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
@@ -23,15 +26,24 @@ struct DayViewMobile: View {
         self.onEventTap = onEventTap
     }
     
+    // MARK: - Adaptive Layout Properties
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 12
+    }
+    
+    private var adaptiveSectionSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 16
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: adaptiveSectionSpacing) {
                     // Events list (always list in Mobile layout)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Events")
                             .font(.headline)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, adaptivePadding)
                         EventsListComponent(
                             events: filteredEventsForDay(navigationManager.currentDate),
                             personalEvents: calendarVM.personalEvents,
@@ -48,7 +60,7 @@ struct DayViewMobile: View {
                     Text("Personal Tasks")
                         .font(.headline)
                         .foregroundColor(appPrefs.personalColor)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, adaptivePadding)
                     
                     let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
                     let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
@@ -118,7 +130,7 @@ struct DayViewMobile: View {
                     Text("Professional Tasks")
                         .font(.headline)
                         .foregroundColor(appPrefs.professionalColor)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, adaptivePadding)
                     
                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
                     let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
@@ -173,17 +185,14 @@ struct DayViewMobile: View {
                 
                 // Journal
                 VStack(alignment: .leading, spacing: 6) {
-               
-                    HStack {
-                        Spacer()
-                        JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                            .frame(width: geometry.size.width * 0.95, height: geometry.size.height * 0.95)
-                        Spacer()
-                    }
+                    JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 300, idealHeight: 500, maxHeight: 600)
+                        .padding(.horizontal, adaptivePadding)
                 }
             }
-         
-        
+            .padding(.horizontal, adaptivePadding)
+            .padding(.vertical, adaptivePadding)
             }
         }
         // Task details sheet
