@@ -593,6 +593,10 @@ struct SettingsView: View {
     @ObservedObject private var iCloudManagerInstance = iCloudManager.shared
     @Environment(\.dismiss) private var dismiss
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
     // State for show/hide account toggles (placeholder for future implementation)
     @State private var showPersonalAccount = true
     @State private var showProfessionalAccount = true
@@ -603,6 +607,11 @@ struct SettingsView: View {
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
+    
+    // Check if device forces stacked layout (iPhone portrait)
+    private var shouldUseStackedLayout: Bool {
+        horizontalSizeClass == .compact && verticalSizeClass == .regular
+    }
     
 
 
@@ -744,46 +753,48 @@ struct SettingsView: View {
                     }
                 }
 
-                // Tasks View Preference
-                Section("Tasks View Preferences") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: !appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(!appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Vertical stacks")
-                                    .font(.body)
-                                    .fontWeight(!appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                // Tasks View Preference (hide on iPhone portrait where stacked layout is forced)
+                if !shouldUseStackedLayout {
+                    Section("Tasks View Preferences") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: !appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(!appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    
+                                    Text("Vertical stacks")
+                                        .font(.body)
+                                        .fontWeight(!appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                                }
                             }
+                            
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateTasksLayoutHorizontal(false)
                         }
                         
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateTasksLayoutHorizontal(false)
-                    }
-                    
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Horizontal stacks")
-                                    .font(.body)
-                                    .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    
+                                    Text("Horizontal stacks")
+                                        .font(.body)
+                                        .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                                }
                             }
+                            
+                            Spacer()
                         }
-                        
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateTasksLayoutHorizontal(true)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateTasksLayoutHorizontal(true)
+                        }
                     }
                 }
                 

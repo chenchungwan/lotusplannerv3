@@ -1120,6 +1120,11 @@ struct TasksView: View {
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
     // Use an item-bound sheet selection to avoid first-click blank sheet
     struct TasksViewTaskSelection: Identifiable {
         let id = UUID()
@@ -1140,6 +1145,20 @@ struct TasksView: View {
     // Navigation date picker state
     @State private var showingNavigationDatePicker = false
     @State private var selectedDateForNavigation = Date()
+    
+    // MARK: - Adaptive Layout Properties
+    private var shouldUseStackedLayout: Bool {
+        // Use stacked (vertical) layout on iPhone portrait for better space utilization
+        horizontalSizeClass == .compact && verticalSizeClass == .regular
+    }
+    
+    private var adaptiveSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 16
+    }
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 16
+    }
     
     private var isCurrentToolbarPeriod: Bool {
         let cal = Calendar.mondayFirst
@@ -1272,13 +1291,101 @@ struct TasksView: View {
         }
     }
     
+    // MARK: - Stacked Layout for Mobile Portrait
+    private func stackedTasksView(geometry: GeometryProxy) -> some View {
+        ScrollView {
+            VStack(spacing: adaptiveSpacing) {
+                // Personal Tasks Section
+                if authManager.isLinked(kind: .personal) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Personal")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(appPrefs.personalColor)
+                            .padding(.horizontal, adaptivePadding)
+                        
+                        TasksComponent(
+                            taskLists: viewModel.personalTaskLists,
+                            tasksDict: filteredPersonalTasks,
+                            accentColor: appPrefs.personalColor,
+                            accountType: .personal,
+                            onTaskToggle: { task, listId in
+                                Task {
+                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                }
+                            },
+                            onTaskDetails: { task, listId in
+                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                                }
+                            },
+                            horizontalCards: false,
+                            isSingleDayView: selectedFilter == .day
+                        )
+                    }
+                }
+                
+                // Professional Tasks Section
+                if authManager.isLinked(kind: .professional) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Professional")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(appPrefs.professionalColor)
+                            .padding(.horizontal, adaptivePadding)
+                        
+                        TasksComponent(
+                            taskLists: viewModel.professionalTaskLists,
+                            tasksDict: filteredProfessionalTasks,
+                            accentColor: appPrefs.professionalColor,
+                            accountType: .professional,
+                            onTaskToggle: { task, listId in
+                                Task {
+                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                }
+                            },
+                            onTaskDetails: { task, listId in
+                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                            },
+                            onListRename: { listId, newName in
+                                Task {
+                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                }
+                            },
+                            onOrderChanged: { newOrder in
+                                Task {
+                                    await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                                }
+                            },
+                            horizontalCards: false,
+                            isSingleDayView: selectedFilter == .day
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, adaptivePadding)
+            .padding(.vertical, adaptivePadding)
+        }
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
                 Group {
-                    if appPrefs.tasksLayoutHorizontal {
-                        // Vertical stack when horizontal cards
-                        VStack(spacing: 16) {
+                    if shouldUseStackedLayout {
+                        // Mobile portrait: Full-width stacked layout
+                        stackedTasksView(geometry: geometry)
+                    } else if appPrefs.tasksLayoutHorizontal {
+                        // Horizontal cards layout
+                        VStack(spacing: adaptiveSpacing) {
                             // Personal Tasks
                             if authManager.isLinked(kind: .personal) {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -1352,9 +1459,9 @@ struct TasksView: View {
                             }
                         }
                         .padding(.horizontal, 0)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, adaptivePadding)
                     } else {
-                        // Side by side when vertical cards
+                        // Split view for larger screens
                         HStack(spacing: 0) {
                             // Personal Tasks Column
                             if authManager.isLinked(kind: .personal) {
@@ -1387,8 +1494,8 @@ struct TasksView: View {
                                 .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
                             }
                             
-                            // Vertical divider (only show if both accounts are linked)
-                            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) {
+                            // Vertical divider (only show if both accounts are linked and not on mobile)
+                            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && !shouldUseStackedLayout {
                                 tasksViewDivider
                             }
                             
@@ -1424,7 +1531,7 @@ struct TasksView: View {
                             }
                         }
                         .padding(.horizontal, 0)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, adaptivePadding)
                     }
                 }
                 
