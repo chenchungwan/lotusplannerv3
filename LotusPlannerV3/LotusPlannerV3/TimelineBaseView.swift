@@ -33,6 +33,16 @@ struct TimelineBaseView: View {
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
     
+    // MARK: - Event Layout Model
+    struct EventLayout {
+        let event: GoogleCalendarEvent
+        let startOffset: CGFloat
+        let height: CGFloat
+        let width: CGFloat
+        let xOffset: CGFloat
+        let isPersonal: Bool
+    }
+    
     init(
         date: Date,
         events: [GoogleCalendarEvent],
@@ -107,28 +117,35 @@ struct TimelineBaseView: View {
     
     // MARK: - Timeline Section
     private var timelineSection: some View {
-        HStack(spacing: 0) {
-            // Time column
-            timeColumn
-                .frame(width: config.timeColumnWidth)
-                .background(Color(.systemGray6))
-            
-            // Events area
-            ZStack(alignment: .topLeading) {
-                // Background grid
-                timelineGrid
+        let totalHeight = CGFloat(config.endHour - config.startHour) * config.hourHeight + 20
+        
+        return GeometryReader { geometry in
+            HStack(spacing: 0) {
+                // Time column
+                timeColumn
+                    .frame(width: config.timeColumnWidth)
+                    .background(Color(.systemGray6))
                 
-                // Events
-                ForEach(events.filter { !$0.isAllDay }) { event in
-                    timelineEventView(event)
-                }
-                
-                // Current time indicator
-                if config.showCurrentTime && Calendar.current.isDate(date, inSameDayAs: Date()) {
-                    currentTimeIndicator
+                // Events area
+                ZStack(alignment: .topLeading) {
+                    // Background grid
+                    timelineGrid
+                    
+                    // Events with layout calculation
+                    let timedEvents = events.filter { !$0.isAllDay }
+                    let eventLayouts = calculateEventLayouts(events: timedEvents, width: geometry.size.width - config.timeColumnWidth)
+                    ForEach(eventLayouts, id: \.event.id) { layout in
+                        timelineEventView(layout: layout)
+                    }
+                    
+                    // Current time indicator
+                    if config.showCurrentTime && Calendar.current.isDate(date, inSameDayAs: Date()) {
+                        currentTimeIndicator
+                    }
                 }
             }
         }
+        .frame(height: totalHeight)
     }
     
     // MARK: - Component Views
@@ -210,37 +227,18 @@ struct TimelineBaseView: View {
         }
     }
     
-    private func timelineEventView(_ event: GoogleCalendarEvent) -> some View {
-        guard let startTime = event.startTime,
-              let endTime = event.endTime else { return AnyView(EmptyView()) }
-        
-        let calendar = Calendar.current
-        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
-        
-        guard let startHour = startComponents.hour,
-              let startMinute = startComponents.minute,
-              let endHour = endComponents.hour,
-              let endMinute = endComponents.minute else { return AnyView(EmptyView()) }
-        
-        let isPersonal = personalEvents.contains { $0.id == event.id }
-        let color = isPersonal ? personalColor : professionalColor
-        
-        let topOffset = CGFloat(startHour - config.startHour) * config.hourHeight +
-                       CGFloat(startMinute) * (config.hourHeight / 60.0)
-        
-        let duration = endTime.timeIntervalSince(startTime)
-        let height = max(20.0, CGFloat(duration / 3600.0) * config.hourHeight)
+    private func timelineEventView(layout: EventLayout) -> some View {
+        let color = layout.isPersonal ? personalColor : professionalColor
         
         return AnyView(
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.summary)
+                Text(layout.event.summary)
                     .font(.body)
                     .fontWeight(.medium)
                     .foregroundColor(.white)
                     .lineLimit(2)
                 
-                if height > 40 {
+                if layout.height > 40, let startTime = layout.event.startTime {
                     Text(formatEventTime(startTime))
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.8))
@@ -249,13 +247,12 @@ struct TimelineBaseView: View {
                 Spacer(minLength: 0)
             }
             .padding(6)
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
+            .frame(width: layout.width, height: layout.height)
             .background(color)
             .cornerRadius(4)
-            .offset(y: topOffset)
+            .offset(x: layout.xOffset, y: layout.startOffset)
             .onTapGesture {
-                onEventTap?(event)
+                onEventTap?(layout.event)
             }
         )
     }
@@ -311,6 +308,84 @@ struct TimelineBaseView: View {
     private func stopTimer() {
         currentTimeTimer?.invalidate()
         currentTimeTimer = nil
+    }
+    
+    // MARK: - Event Layout Calculation
+    private func calculateEventLayouts(events: [GoogleCalendarEvent], width: CGFloat) -> [EventLayout] {
+        var layouts: [EventLayout] = []
+        let calendar = Calendar.current
+        
+        // Group overlapping events
+        let sortedEvents = events.sorted { event1, event2 in
+            guard let start1 = event1.startTime, let start2 = event2.startTime else {
+                return false
+            }
+            return start1 < start2
+        }
+        
+        var eventGroups: [[GoogleCalendarEvent]] = []
+        
+        for event in sortedEvents {
+            guard let eventStart = event.startTime, let eventEnd = event.endTime else { continue }
+            
+            // Find which group this event belongs to (if any)
+            var addedToGroup = false
+            for groupIndex in 0..<eventGroups.count {
+                let group = eventGroups[groupIndex]
+                let overlapsWithGroup = group.contains { existingEvent in
+                    guard let existingStart = existingEvent.startTime,
+                          let existingEnd = existingEvent.endTime else { return false }
+                    return eventStart < existingEnd && eventEnd > existingStart
+                }
+                
+                if overlapsWithGroup {
+                    eventGroups[groupIndex].append(event)
+                    addedToGroup = true
+                    break
+                }
+            }
+            
+            if !addedToGroup {
+                eventGroups.append([event])
+            }
+        }
+        
+        // Calculate layouts for each group
+        for group in eventGroups {
+            let numColumns = group.count
+            let columnWidth = width / CGFloat(numColumns)
+            
+            for (index, event) in group.enumerated() {
+                guard let startTime = event.startTime,
+                      let endTime = event.endTime else { continue }
+                
+                let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                
+                let startHour = startComponents.hour ?? 0
+                let startMinute = startComponents.minute ?? 0
+                
+                let startOffset = CGFloat(startHour - config.startHour) * config.hourHeight + 
+                                 CGFloat(startMinute) * (config.hourHeight / 60.0)
+                
+                let duration = endTime.timeIntervalSince(startTime)
+                let height = max(20, CGFloat(duration / 3600.0) * config.hourHeight)
+                
+                let isPersonal = personalEvents.contains { $0.id == event.id }
+                
+                let layout = EventLayout(
+                    event: event,
+                    startOffset: startOffset,
+                    height: height,
+                    width: columnWidth - 4, // Leave small gap
+                    xOffset: CGFloat(index) * columnWidth + 2,
+                    isPersonal: isPersonal
+                )
+                
+                layouts.append(layout)
+            }
+        }
+        
+        return layouts
     }
 }
 
