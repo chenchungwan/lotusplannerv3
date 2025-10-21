@@ -2183,7 +2183,7 @@ struct CalendarView: View {
     @ViewBuilder
     private var loadingOverlay: some View {
         if calendarViewModel.isLoading {
-            ProgressView("Loading calendar events...")
+            ProgressView()
                 .padding()
                 .background(Color(.systemBackground).opacity(0.9))
                 .cornerRadius(8)

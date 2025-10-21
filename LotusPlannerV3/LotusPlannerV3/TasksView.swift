@@ -1592,7 +1592,7 @@ struct TasksView: View {
             
             // Loading overlay
             if viewModel.isLoading {
-                ProgressView("Loading tasks...")
+                ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black.opacity(0.1))
             }

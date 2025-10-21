@@ -34,7 +34,7 @@ struct ListsView: View {
             // Main Content
             GeometryReader { geometry in
                 if isLoading {
-                    ProgressView("Loading Task Lists...")
+                    ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
                     // No accounts linked

@@ -3,6 +3,10 @@ import SwiftUI
 struct AllGoalsTableContent: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
     // Computed property to get all timeframes with oldest first (leftmost)
     private var timeframes: [TimeframeGroup] {
         let allGoals = goalsManager.goals
@@ -57,11 +61,67 @@ struct AllGoalsTableContent: View {
         goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition })
     }
     
+    // MARK: - Adaptive Layout Properties
+    private var isCompact: Bool {
+        horizontalSizeClass == .compact
+    }
+    
+    // Adaptive column width based on device
+    private func adaptiveColumnWidth(for availableWidth: CGFloat) -> CGFloat {
+        if isCompact {
+            // iPhone: narrower columns (120-150pt)
+            return max(120, min(150, availableWidth / 2.5))
+        } else {
+            // iPad: wider columns (180-250pt)
+            return max(180, min(250, availableWidth / 5))
+        }
+    }
+    
+    // Adaptive category column width
+    private var adaptiveCategoryColumnWidth: CGFloat {
+        isCompact ? 100 : 150
+    }
+    
+    // Adaptive row height
+    private func adaptiveRowHeight(for availableHeight: CGFloat) -> CGFloat {
+        if isCompact {
+            // iPhone: shorter rows (140-180pt)
+            return max(140, min(180, availableHeight / 4))
+        } else {
+            // iPad: taller rows (180-220pt)
+            return max(180, min(220, availableHeight / 6))
+        }
+    }
+    
+    // Adaptive header height
+    private var adaptiveHeaderHeight: CGFloat {
+        isCompact ? 50 : 60
+    }
+    
+    // Adaptive font size
+    private var adaptiveFont: Font {
+        isCompact ? .caption : .body
+    }
+    
+    private var adaptiveTitleFont: Font {
+        isCompact ? .caption : .body
+    }
+    
+    // Adaptive padding
+    private var adaptivePadding: CGFloat {
+        isCompact ? 6 : 8
+    }
+    
+    // Adaptive spacing
+    private var adaptiveSpacing: CGFloat {
+        isCompact ? 3 : 4
+    }
+    
     var body: some View {
         GeometryReader { geometry in
-            let columnWidth: CGFloat = max(200, geometry.size.width / 5)
-            let rowHeight: CGFloat = max(200, geometry.size.height / 6)
-            let categoryColumnWidth: CGFloat = 150
+            let columnWidth: CGFloat = adaptiveColumnWidth(for: geometry.size.width)
+            let rowHeight: CGFloat = adaptiveRowHeight(for: geometry.size.height)
+            let categoryColumnWidth: CGFloat = adaptiveCategoryColumnWidth
             
             ScrollView([.horizontal, .vertical], showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -70,12 +130,12 @@ struct AllGoalsTableContent: View {
                         // Category header cell
                         VStack(spacing: 0) {
                             Text("Category")
-                                .font(.body)
+                                .font(adaptiveTitleFont)
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 8)
+                                .padding(.horizontal, adaptivePadding)
                         }
-                        .frame(width: categoryColumnWidth, height: 60, alignment: .leading)
+                        .frame(width: categoryColumnWidth, height: adaptiveHeaderHeight, alignment: .leading)
                         .background(Color(.systemGray6))
                         .overlay(
                             Rectangle()
@@ -89,15 +149,16 @@ struct AllGoalsTableContent: View {
                             let isCurrent = isCurrentWeek(timeframe)
                             VStack(spacing: 0) {
                                 Text(timeframe.displayName)
-                                    .font(.body)
+                                    .font(adaptiveTitleFont)
                                     .fontWeight(.semibold)
                                     .foregroundColor(isCurrent ? .white : .primary)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 8)
+                                    .padding(.horizontal, adaptivePadding)
                                     .frame(maxWidth: .infinity)
+                                    .minimumScaleFactor(0.8)
                             }
-                            .frame(width: columnWidth, height: 60, alignment: .center)
+                            .frame(width: columnWidth, height: adaptiveHeaderHeight, alignment: .center)
                             .background(isCurrent ? Color.blue : Color(.systemGray6))
                             .overlay(
                                 Rectangle()
@@ -117,10 +178,10 @@ struct AllGoalsTableContent: View {
                         // Label cell
                         VStack(spacing: 0) {
                             Text("Summary")
-                                .font(.body)
+                                .font(adaptiveTitleFont)
                                 .fontWeight(.medium)
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                                .padding(.all, 8)
+                                .padding(.all, adaptivePadding)
                         }
                         .frame(width: categoryColumnWidth, alignment: .topLeading)
                         .background(Color(.systemGray6))
@@ -137,24 +198,26 @@ struct AllGoalsTableContent: View {
                             let isCurrent = isCurrentWeek(timeframe)
                             let stats = isPast ? getCompletionStats(for: timeframe) : nil
                             
-                            VStack(spacing: 4) {
+                            VStack(spacing: adaptiveSpacing) {
                                 if isPast, let stats = stats, stats.total > 0 {
                                     Text("\(stats.completed) / \(stats.total)")
-                                        .font(.body)
+                                        .font(adaptiveFont)
                                         .fontWeight(.medium)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
                                     
                                     Text("Goals Accomplished")
-                                        .font(.body)
+                                        .font(adaptiveFont)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
+                                        .lineLimit(2)
+                                        .minimumScaleFactor(0.8)
                                 } else {
                                     Text("—")
-                                        .font(.body)
+                                        .font(adaptiveFont)
                                         .foregroundColor(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .topLeading)
                                 }
                             }
-                            .padding(.all, 8)
+                            .padding(.all, adaptivePadding)
                             .frame(width: columnWidth, alignment: .topLeading)
                             .background(isCurrent ? Color.blue.opacity(0.05) : Color(.systemBackground))
                             .overlay(
@@ -176,10 +239,10 @@ struct AllGoalsTableContent: View {
                             // Category name cell
                             VStack(spacing: 0) {
                                 Text(category.title)
-                                    .font(.body)
+                                    .font(adaptiveTitleFont)
                                     .fontWeight(.medium)
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    .padding(.all, 8)
+                                    .padding(.all, adaptivePadding)
                             }
                             .frame(width: categoryColumnWidth, height: rowHeight, alignment: .topLeading)
                             .background(Color(.systemGray6))
@@ -195,8 +258,13 @@ struct AllGoalsTableContent: View {
                                 let goalsForCell = getGoals(for: category.id, in: timeframe)
                                 let isCurrent = isCurrentWeek(timeframe)
                                 VStack(spacing: 0) {
-                                    GoalsCellView(goals: goalsForCell)
-                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    GoalsCellView(
+                                        goals: goalsForCell,
+                                        adaptiveFont: adaptiveFont,
+                                        adaptivePadding: adaptivePadding,
+                                        adaptiveSpacing: adaptiveSpacing
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
                                 }
                                 .frame(width: columnWidth, height: rowHeight, alignment: .topLeading)
                                 .background(isCurrent ? Color.blue.opacity(0.05) : Color(.systemBackground))
@@ -230,33 +298,39 @@ struct AllGoalsTableContent: View {
 // MARK: - Goals Cell View
 struct GoalsCellView: View {
     let goals: [GoalData]
+    let adaptiveFont: Font
+    let adaptivePadding: CGFloat
+    let adaptiveSpacing: CGFloat
     
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: adaptiveSpacing) {
                 if goals.isEmpty {
                     Text("—")
                         .foregroundColor(.secondary)
-                        .font(.body)
+                        .font(adaptiveFont)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ForEach(goals) { goal in
-                        HStack(spacing: 8) {
+                        HStack(spacing: adaptiveSpacing + 2) {
                             Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(.body)
+                                .font(adaptiveFont)
                                 .foregroundColor(goal.isCompleted ? .green : .secondary)
+                                .frame(minWidth: 20, minHeight: 20)
                             
                             Text(goal.title)
-                                .font(.body)
+                                .font(adaptiveFont)
                                 .fontWeight(.medium)
                                 .strikethrough(goal.isCompleted)
                                 .foregroundColor(goal.isCompleted ? .secondary : .primary)
-                                .lineLimit(2)
+                                .lineLimit(3)
+                                .minimumScaleFactor(0.9)
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
-            .padding(8)
+            .padding(adaptivePadding)
         }
     }
 }

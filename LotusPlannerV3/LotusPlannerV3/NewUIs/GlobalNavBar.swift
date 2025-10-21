@@ -6,6 +6,7 @@ struct GlobalNavBar: View {
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
     @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var logsVM = LogsViewModel.shared
     
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -23,6 +24,7 @@ struct GlobalNavBar: View {
     @State private var newListAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingAddGoal = false
     @State private var showingAddCategory = false
+    @State private var showingAddLog = false
     
     // Date picker state
     @State private var selectedDateForPicker = Date()
@@ -477,6 +479,9 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
+                                        Button("Log") {
+                                            showingAddLog = true
+                                        }
                                         Button("Goal") {
                                             NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                         }
@@ -496,6 +501,9 @@ struct GlobalNavBar: View {
                                         }
                                         Button("List") {
                                             showingAddList = true
+                                        }
+                                        Button("Log") {
+                                            showingAddLog = true
                                         }
                                     } label: {
                                         Image(systemName: "plus")
@@ -654,6 +662,9 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
+                                        Button("Log") {
+                                            showingAddLog = true
+                                        }
                                         Button("Goal") {
                                             NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                         }
@@ -673,6 +684,9 @@ struct GlobalNavBar: View {
                                         }
                                         Button("List") {
                                             showingAddList = true
+                                        }
+                                        Button("Log") {
+                                            showingAddLog = true
                                         }
                                     } label: {
                                         Image(systemName: "plus")
@@ -788,6 +802,9 @@ struct GlobalNavBar: View {
                 newListName = ""
                 newListAccountKind = nil
             }
+        }
+        .sheet(isPresented: $showingAddLog) {
+            AddLogEntryView(viewModel: logsVM)
         }
     }
     

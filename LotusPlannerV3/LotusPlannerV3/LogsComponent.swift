@@ -22,23 +22,6 @@ struct LogsComponent: View {
                         .foregroundColor(.primary)
                     
                     Spacer()
-                    
-                    // Refresh button - reload data from Core Data
-                    Button(action: {
-                        viewModel.reloadData()
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Button(action: {
-                        viewModel.showingAddLogSheet = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(viewModel.accentColor)
-                    }
                 }
                 
                 // All log sections in a scrollable view
