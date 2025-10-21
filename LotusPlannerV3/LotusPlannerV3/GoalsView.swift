@@ -8,9 +8,56 @@ struct GoalsView: View {
     @State private var showingCreateCategory = false
     @State private var goalToEdit: GoalData?
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
     // Computed properties for better performance
     private var sortedCategories: [GoalCategoryData] {
         goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition })
+    }
+    
+    // Adaptive column count based on device
+    private var adaptiveColumns: [GridItem] {
+        let columnCount: Int
+        let spacing: CGFloat = adaptiveGridSpacing
+        
+        if horizontalSizeClass == .compact && verticalSizeClass == .regular {
+            // iPhone portrait: 1 column
+            columnCount = 1
+        } else if horizontalSizeClass == .compact && verticalSizeClass == .compact {
+            // iPhone landscape: 2 columns
+            columnCount = 2
+        } else {
+            // iPad: 2-3 columns depending on width
+            columnCount = 2
+        }
+        
+        return Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
+    }
+    
+    private var adaptiveGridSpacing: CGFloat {
+        if horizontalSizeClass == .compact && verticalSizeClass == .regular {
+            return 12 // iPhone portrait: tighter spacing
+        } else if horizontalSizeClass == .compact {
+            return 12 // iPhone landscape: tighter spacing
+        } else {
+            return 16 // iPad: standard spacing
+        }
+    }
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 16
+    }
+    
+    private var adaptiveMinCardHeight: CGFloat {
+        if horizontalSizeClass == .compact && verticalSizeClass == .regular {
+            return 200 // iPhone portrait: taller cards for readability
+        } else if horizontalSizeClass == .compact {
+            return 150 // iPhone landscape: shorter cards
+        } else {
+            return 180 // iPad: medium height
+        }
     }
     
     private var filteredGoals: [GoalData] {
@@ -56,55 +103,50 @@ struct GoalsView: View {
                 // All Goals Table View
                 AllGoalsTableContent()
             } else {
-                // Normal Grid View
-                GeometryReader { geometry in
-                    ScrollView {
-                        LazyVGrid(
-                            columns: [
-                                GridItem(.flexible(), spacing: 16),
-                                GridItem(.flexible(), spacing: 16)
-                            ],
-                            spacing: 16
-                        ) {
-                            ForEach(sortedCategories) { category in
-                                GoalCategoryCard(
-                                    category: category,
-                                    goals: getFilteredGoalsForCategory(category.id),
-                                    onGoalTap: { goal in
-                                        // Handle goal tap - could show details or toggle completion
-                                        goalsManager.toggleGoalCompletion(goal.id)
-                                    },
-                                    onGoalEdit: { goal in
-                                        goalToEdit = goal
-                                    },
-                                    onGoalDelete: { goal in
-                                        goalsManager.deleteGoal(goal.id)
-                                    },
-                                    onCategoryEdit: { category in
-                                        // Handle category edit
-                                    },
-                                    onCategoryDelete: { category in
-                                        goalsManager.deleteCategory(category.id)
-                                    },
-                                    showTags: navigationManager.currentInterval == .day,
-                                    currentInterval: navigationManager.currentInterval,
-                                    currentDate: navigationManager.currentDate
-                                )
-                                .frame(height: geometry.size.height / 3 - 16)
-                            }
-                            
-                            // Add Category Card (only show if under max limit)
-                            if goalsManager.canAddCategory {
-                                AddCategoryCard(
-                                    onAddCategory: { categoryName in
-                                        goalsManager.addCategory(title: categoryName)
-                                    }
-                                )
-                                .frame(height: geometry.size.height / 3 - 16)
-                            }
+                // Normal Grid View with adaptive columns
+                ScrollView {
+                    LazyVGrid(
+                        columns: adaptiveColumns,
+                        spacing: adaptiveGridSpacing
+                    ) {
+                        ForEach(sortedCategories) { category in
+                            GoalCategoryCard(
+                                category: category,
+                                goals: getFilteredGoalsForCategory(category.id),
+                                onGoalTap: { goal in
+                                    // Handle goal tap - could show details or toggle completion
+                                    goalsManager.toggleGoalCompletion(goal.id)
+                                },
+                                onGoalEdit: { goal in
+                                    goalToEdit = goal
+                                },
+                                onGoalDelete: { goal in
+                                    goalsManager.deleteGoal(goal.id)
+                                },
+                                onCategoryEdit: { category in
+                                    // Handle category edit
+                                },
+                                onCategoryDelete: { category in
+                                    goalsManager.deleteCategory(category.id)
+                                },
+                                showTags: navigationManager.currentInterval == .day,
+                                currentInterval: navigationManager.currentInterval,
+                                currentDate: navigationManager.currentDate
+                            )
+                            .frame(minHeight: adaptiveMinCardHeight)
                         }
-                        .padding(16)
+                        
+                        // Add Category Card (only show if under max limit)
+                        if goalsManager.canAddCategory {
+                            AddCategoryCard(
+                                onAddCategory: { categoryName in
+                                    goalsManager.addCategory(title: categoryName)
+                                }
+                            )
+                            .frame(minHeight: adaptiveMinCardHeight)
+                        }
                     }
+                    .padding(adaptivePadding)
                 }
             }
         }
@@ -226,6 +268,16 @@ struct GoalCategoryCard: View {
     @State private var editedTitle = ""
     @State private var hasCopiedForPeriod = false
     @State private var showingCopyAlert = false
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 10 : 12
+    }
+    
+    private var adaptiveSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 6 : 8
+    }
     
     // Computed properties for better performance
     private var completedGoalsCount: Int {
@@ -307,7 +359,7 @@ struct GoalCategoryCard: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: adaptiveSpacing) {
             // Header with title
             HStack {
                 if isEditingTitle {
@@ -344,20 +396,20 @@ struct GoalCategoryCard: View {
                         showingCopyAlert = true
                     }) {
                         Image(systemName: "repeat")
-                            .font(.caption)
+                            .font(.body) // Larger for better tap target
                             .foregroundColor(.accentColor)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
+            .padding(.horizontal, adaptivePadding)
+            .padding(.top, adaptivePadding)
             
             Divider()
             
             // Goals list
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: adaptiveSpacing) {
                     ForEach(goals) { goal in
                         GoalRow(
                             goal: goal,
@@ -377,6 +429,7 @@ struct GoalCategoryCard: View {
                             .padding(.vertical, 20)
                     }
                 }
+                .padding(.horizontal, adaptivePadding / 2)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -511,6 +564,15 @@ struct GoalRow: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     let showTags: Bool
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 10 : 8
+    }
+    
+    private var adaptiveVerticalPadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 4
+    }
     
     // Computed properties for better performance
     private var isOverdue: Bool {
@@ -532,18 +594,18 @@ struct GoalRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 8) {
-            // Checkbox
+        HStack(spacing: 10) {
+            // Checkbox (larger tap target)
             Button(action: onTap) {
                 Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.body)
+                    .font(.title3) // Slightly larger for better tap target
                     .foregroundColor(goal.isCompleted ? .green : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
             .contentShape(Rectangle())
             
             // Goal content
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(goal.title)
                     .font(.body)
                     .strikethrough(goal.isCompleted)
@@ -551,7 +613,7 @@ struct GoalRow: View {
                     .lineLimit(2)
                 
                 if showTags {
-                    HStack {
+                    HStack(spacing: 4) {
                         Text(goal.targetTimeframe.displayName)
                             .font(.caption2)
                             .padding(.horizontal, 6)
@@ -572,14 +634,15 @@ struct GoalRow: View {
                     }
                 }
             }
+            .contentShape(Rectangle())
             .onTapGesture {
                 onEdit()
             }
             
             Spacer()
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, adaptivePadding)
+        .padding(.vertical, adaptiveVerticalPadding)
     }
 }
 

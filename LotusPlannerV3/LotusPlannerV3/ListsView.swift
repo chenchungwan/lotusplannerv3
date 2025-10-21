@@ -7,10 +7,24 @@ struct ListsView: View {
     @State private var isLoading = false
     @State private var selectedListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    @State private var showingDetailView = false // For drawer-style navigation on mobile
+    
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
     
     // UserDefaults keys for persistence
     private let lastSelectedListIdKey = "lastSelectedTaskListId"
     private let lastSelectedAccountKindKey = "lastSelectedTaskListAccountKind"
+    
+    // Check if device forces stacked layout (iPhone portrait)
+    private var shouldUseStackedLayout: Bool {
+        horizontalSizeClass == .compact && verticalSizeClass == .regular
+    }
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 12
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -38,45 +52,135 @@ struct ListsView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // Master-Detail Layout
-                    HStack(spacing: 0) {
-                        // Left Column: All Task Lists
-                        AllTaskListsColumn(
-                            personalLists: tasksVM.personalTaskLists,
-                            professionalLists: tasksVM.professionalTaskLists,
-                            personalColor: appPrefs.personalColor,
-                            professionalColor: appPrefs.professionalColor,
-                            selectedListId: $selectedListId,
-                            selectedAccountKind: $selectedAccountKind,
-                            hasPersonal: auth.isLinked(kind: .personal),
-                            hasProfessional: auth.isLinked(kind: .professional),
-                            onSelectionChanged: { listId, accountKind in
-                                saveLastSelection(listId: listId, accountKind: accountKind)
-                            }
-                        )
-                        .frame(width: geometry.size.width * 0.35)
-                        
-                        Divider()
-                        
-                        // Right Column: Selected List's Tasks
-                        TasksDetailColumn(
-                            selectedListId: selectedListId,
-                            selectedAccountKind: selectedAccountKind,
-                            tasksVM: tasksVM,
-                            appPrefs: appPrefs,
-                            onListDeleted: {
-                                selectedListId = nil
-                                selectedAccountKind = nil
-                                clearLastSelection()
-                            }
-                        )
-                        .frame(width: geometry.size.width * 0.65)
+                    // Adaptive Layout: Stacked on iPhone portrait, split otherwise
+                    if shouldUseStackedLayout {
+                        stackedListsView(geometry: geometry)
+                    } else {
+                        splitListsView(geometry: geometry)
                     }
                 }
             }
         }
         .onAppear {
             loadTaskLists()
+        }
+        .onChange(of: shouldUseStackedLayout) { newValue in
+            // Reset drawer state when switching between stacked and split layouts
+            if !newValue {
+                showingDetailView = false
+            }
+        }
+    }
+    
+    // MARK: - Stacked Layout (iPhone Portrait) - Drawer Style
+    @ViewBuilder
+    private func stackedListsView(geometry: GeometryProxy) -> some View {
+        ZStack {
+            // List selector (always present but hidden when detail is shown)
+            AllTaskListsColumn(
+                personalLists: tasksVM.personalTaskLists,
+                professionalLists: tasksVM.professionalTaskLists,
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor,
+                selectedListId: $selectedListId,
+                selectedAccountKind: $selectedAccountKind,
+                hasPersonal: auth.isLinked(kind: .personal),
+                hasProfessional: auth.isLinked(kind: .professional),
+                onSelectionChanged: { listId, accountKind in
+                    saveLastSelection(listId: listId, accountKind: accountKind)
+                    // Show detail view with animation
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showingDetailView = true
+                    }
+                }
+            )
+            .opacity(showingDetailView ? 0 : 1)
+            
+            // Detail view (slides in from right when a list is selected)
+            if showingDetailView {
+                VStack(spacing: 0) {
+                    // Back button bar
+                    HStack {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showingDetailView = false
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                Text("Lists")
+                                    .font(.body)
+                            }
+                            .foregroundColor(.accentColor)
+                        }
+                        .padding(adaptivePadding)
+                        
+                        Spacer()
+                    }
+                    .background(Color(.systemBackground))
+                    
+                    Divider()
+                    
+                    // Detail content
+                    TasksDetailColumn(
+                        selectedListId: selectedListId,
+                        selectedAccountKind: selectedAccountKind,
+                        tasksVM: tasksVM,
+                        appPrefs: appPrefs,
+                        onListDeleted: {
+                            selectedListId = nil
+                            selectedAccountKind = nil
+                            clearLastSelection()
+                            // Go back to list selector when list is deleted
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showingDetailView = false
+                            }
+                        }
+                    )
+                }
+                .background(Color(.systemBackground))
+                .transition(.move(edge: .trailing))
+            }
+        }
+    }
+    
+    // MARK: - Split Layout (iPad and iPhone Landscape)
+    @ViewBuilder
+    private func splitListsView(geometry: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            // Left Column: All Task Lists
+            AllTaskListsColumn(
+                personalLists: tasksVM.personalTaskLists,
+                professionalLists: tasksVM.professionalTaskLists,
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor,
+                selectedListId: $selectedListId,
+                selectedAccountKind: $selectedAccountKind,
+                hasPersonal: auth.isLinked(kind: .personal),
+                hasProfessional: auth.isLinked(kind: .professional),
+                onSelectionChanged: { listId, accountKind in
+                    saveLastSelection(listId: listId, accountKind: accountKind)
+                }
+            )
+            .frame(width: geometry.size.width * 0.35)
+            
+            Divider()
+            
+            // Right Column: Selected List's Tasks
+            TasksDetailColumn(
+                selectedListId: selectedListId,
+                selectedAccountKind: selectedAccountKind,
+                tasksVM: tasksVM,
+                appPrefs: appPrefs,
+                onListDeleted: {
+                    selectedListId = nil
+                    selectedAccountKind = nil
+                    clearLastSelection()
+                }
+            )
+            .frame(width: geometry.size.width * 0.65)
         }
     }
     
@@ -105,6 +209,11 @@ struct ListsView: View {
         if lists.contains(where: { $0.id == savedListId }) {
             selectedListId = savedListId
             selectedAccountKind = savedAccountKind
+            
+            // Show detail view if on iPhone portrait
+            if shouldUseStackedLayout {
+                showingDetailView = true
+            }
         }
     }
     
@@ -132,6 +241,7 @@ struct AllTaskListsColumn: View {
     let onSelectionChanged: (String, GoogleAuthManager.AccountKind) -> Void
     
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     // State for creating new list
     @State private var showingNewListSheet = false
@@ -141,6 +251,10 @@ struct AllTaskListsColumn: View {
     // State for collapsing/expanding sections
     @State private var isPersonalExpanded = true
     @State private var isProfessionalExpanded = true
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 12
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -166,7 +280,7 @@ struct AllTaskListsColumn: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, adaptivePadding)
                             .padding(.vertical, 8)
                             .background(personalColor.opacity(0.1))
                         }
@@ -210,7 +324,7 @@ struct AllTaskListsColumn: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, adaptivePadding)
                             .padding(.vertical, 8)
                             .background(professionalColor.opacity(0.1))
                         }
@@ -289,6 +403,7 @@ struct TasksDetailColumn: View {
     @ObservedObject var tasksVM: TasksViewModel
     @ObservedObject var appPrefs: AppPreferences
     @State private var selectedTask: GoogleTask?
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     // State for renaming list
     @State private var showingRenameSheet = false
@@ -302,6 +417,10 @@ struct TasksDetailColumn: View {
     
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 8 : 12
+    }
     
     var tasks: [GoogleTask] {
         guard let listId = selectedListId, let accountKind = selectedAccountKind else {
@@ -413,7 +532,7 @@ struct TasksDetailColumn: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding()
+                .padding(adaptivePadding)
                 .background(accentColor.opacity(0.1))
                 
                 Divider()
@@ -443,7 +562,7 @@ struct TasksDetailColumn: View {
                             HStack(spacing: 12) {
                                 // Plus icon
                                 Image(systemName: "plus.circle")
-                                    .font(.title3)
+                                    .font(.title2)
                                     .foregroundColor(accentColor)
                                 
                                 // Placeholder text
@@ -453,7 +572,7 @@ struct TasksDetailColumn: View {
                                 
                                 Spacer()
                             }
-                            .padding()
+                            .padding(adaptivePadding)
                             .background(Color(.systemBackground))
                         }
                         .buttonStyle(.plain)
@@ -629,13 +748,22 @@ struct SimpleTaskRow: View {
     let accentColor: Color
     let onToggle: () -> Void
     let onTap: () -> Void
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 16
+    }
+    
+    private var adaptiveSpacing: CGFloat {
+        horizontalSizeClass == .compact ? 10 : 12
+    }
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: adaptiveSpacing) {
             // Checkbox - tappable to toggle completion
             Button(action: onToggle) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(.title2) // Slightly larger for better tap target
                     .foregroundColor(task.isCompleted ? accentColor : .secondary)
             }
             .buttonStyle(.plain)
@@ -671,7 +799,7 @@ struct SimpleTaskRow: View {
             
             Spacer()
         }
-        .padding()
+        .padding(adaptivePadding)
         .background(Color(.systemBackground))
     }
     
@@ -690,13 +818,18 @@ struct TaskListRow: View {
     var taskCount: Int = 0
     var isSelected: Bool = false
     var onTap: () -> Void = {}
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
+    private var adaptivePadding: CGFloat {
+        horizontalSizeClass == .compact ? 12 : 16
+    }
     
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
                 // List title
                 Text(taskList.title)
-                    .font(.subheadline)
+                    .font(.body) // Slightly larger for better readability
                     .fontWeight(isSelected ? .semibold : .medium)
                     .foregroundColor(isSelected ? accentColor : .primary)
                 
@@ -714,7 +847,7 @@ struct TaskListRow: View {
                         .foregroundColor(accentColor)
                 }
             }
-            .padding()
+            .padding(adaptivePadding)
             .background(isSelected ? accentColor.opacity(0.15) : Color(.systemBackground))
             .contentShape(Rectangle())
         }
