@@ -266,7 +266,6 @@ struct GoalCategoryCard: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
-    @State private var hasCopiedForPeriod = false
     @State private var showingCopyAlert = false
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -288,74 +287,11 @@ struct GoalCategoryCard: View {
         goals.count
     }
     
-    // Key for tracking if goals have been copied for this category + period
-    private var copiedKey: String {
-        let calendar = Calendar.mondayFirst
-        let periodString: String
-        
-        switch currentInterval {
-        case .week:
-            if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: currentDate) {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-ww"
-                periodString = formatter.string(from: weekInterval.start)
-            } else {
-                periodString = ""
-            }
-        case .month:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM"
-            periodString = formatter.string(from: currentDate)
-        case .year:
-            let year = calendar.component(.year, from: currentDate)
-            periodString = "\(year)"
-        case .day:
-            periodString = ""
-        }
-        
-        return "goalsCopied_\(category.id.uuidString)_\(periodString)"
-    }
-    
     // Check if we should show the repeat icon
     private var shouldShowRepeatIcon: Bool {
         // Only show in week, month, year views (not day view which is "All Goals")
-        guard currentInterval != .day else { return false }
-        
-        // Only show if viewing the CURRENT period (not past or future)
-        let calendar = Calendar.mondayFirst
-        let now = Date()
-        
-        let isCurrentPeriod: Bool
-        switch currentInterval {
-        case .week:
-            if let currentWeekInterval = calendar.dateInterval(of: .weekOfYear, for: now),
-               let viewingWeekInterval = calendar.dateInterval(of: .weekOfYear, for: currentDate) {
-                isCurrentPeriod = currentWeekInterval.start == viewingWeekInterval.start
-            } else {
-                isCurrentPeriod = false
-            }
-        case .month:
-            let currentMonth = calendar.component(.month, from: now)
-            let currentYear = calendar.component(.year, from: now)
-            let viewingMonth = calendar.component(.month, from: currentDate)
-            let viewingYear = calendar.component(.year, from: currentDate)
-            isCurrentPeriod = (currentMonth == viewingMonth && currentYear == viewingYear)
-        case .year:
-            let currentYear = calendar.component(.year, from: now)
-            let viewingYear = calendar.component(.year, from: currentDate)
-            isCurrentPeriod = (currentYear == viewingYear)
-        case .day:
-            isCurrentPeriod = false
-        }
-        
-        guard isCurrentPeriod else { return false }
-        
-        // Check if already copied
-        if hasCopiedForPeriod {
-            return false
-        }
-        
-        return true
+        // Always show the icon to allow repeated copying from previous period
+        return currentInterval != .day
     }
     
     var body: some View {
@@ -436,17 +372,13 @@ struct GoalCategoryCard: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-        .onAppear {
-            // Check if goals have already been copied for this period
-            hasCopiedForPeriod = UserDefaults.standard.bool(forKey: copiedKey)
-        }
         .alert("Copy Goals from Previous Period?", isPresented: $showingCopyAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Copy", role: .none) {
                 copyGoalsFromPreviousPeriod()
             }
         } message: {
-            Text("This will add all goals from the previous \(currentInterval.rawValue.lowercased()) to the current one. Your existing goals will be kept. Are you sure?")
+            Text("This will add all goals from the previous \(currentInterval.rawValue.lowercased()) to this period. Your existing goals will be kept. Are you sure?")
         }
     }
     
@@ -550,10 +482,6 @@ struct GoalCategoryCard: View {
             
             goalsManager.addGoal(newGoal)
         }
-        
-        // Mark as copied for this period
-        hasCopiedForPeriod = true
-        UserDefaults.standard.set(true, forKey: copiedKey)
     }
 }
 

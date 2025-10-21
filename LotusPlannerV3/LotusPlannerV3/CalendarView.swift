@@ -257,6 +257,16 @@ class CalendarViewModel: ObservableObject {
     private var cacheTimestamps: [String: Date] = [:]
     private let cacheTimeout: TimeInterval = 1800 // 30 minutes - longer cache for better performance
     
+    // MARK: - Cache Size Management
+    private var cacheAccessOrder: [String: Date] = [:] // Track last access time for LRU eviction
+    private let maxCacheEntries = 6 // Max number of month entries (e.g., 3 months * 2 accounts)
+    private var estimatedCacheSize: Int = 0 // Rough estimate in bytes
+    
+    // MARK: - Smart Prefetching
+    private var lastNavigatedDate: Date?
+    private var navigationDirection: Int = 0 // -1 for backward, 0 for neutral, 1 for forward
+    private var prefetchTask: Task<Void, Never>?
+    
     // MARK: - Persistent Cache Keys
     private let diskCacheKeyPrefix = "CalendarCache_"
     private let diskCacheTimestampPrefix = "CacheTimestamp_"
@@ -276,6 +286,7 @@ class CalendarViewModel: ObservableObject {
         cachedEvents.removeAll()
         cachedCalendars.removeAll()
         cacheTimestamps.removeAll()
+        cacheAccessOrder.removeAll()
         personalEvents = []
         professionalEvents = []
         personalCalendars = []
@@ -298,6 +309,8 @@ class CalendarViewModel: ObservableObject {
         cachedCalendars.removeValue(forKey: professionalKey)
         cacheTimestamps.removeValue(forKey: personalKey)
         cacheTimestamps.removeValue(forKey: professionalKey)
+        cacheAccessOrder.removeValue(forKey: personalKey)
+        cacheAccessOrder.removeValue(forKey: professionalKey)
     }
     
     private func monthCacheKey(for date: Date, accountKind: GoogleAuthManager.AccountKind) -> String {
@@ -315,6 +328,8 @@ class CalendarViewModel: ObservableObject {
     private func getCachedEvents(for key: String) -> [GoogleCalendarEvent]? {
         // First check memory cache
         if isCacheValid(for: key), let memoryCache = cachedEvents[key] {
+            // Update access time for LRU tracking
+            cacheAccessOrder[key] = Date()
             return memoryCache
         }
         
@@ -323,23 +338,50 @@ class CalendarViewModel: ObservableObject {
             // Restore to memory cache for faster access
             cachedEvents[key] = diskCache
             cacheTimestamps[key] = Date()
+            cacheAccessOrder[key] = Date()
+            
+            // Check if we need to evict old entries after adding this one
+            evictOldCacheEntriesIfNeeded()
+            
             return diskCache
         }
         
         // Clean up invalid cache
         cachedEvents.removeValue(forKey: key)
         cacheTimestamps.removeValue(forKey: key)
+        cacheAccessOrder.removeValue(forKey: key)
         clearDiskCache(for: key)
         return nil
     }
     
     private func cacheEvents(_ events: [GoogleCalendarEvent], for key: String) {
-        // FUNCTIONALITY PRESERVED: Same memory caching behavior
         cachedEvents[key] = events
         cacheTimestamps[key] = Date()
+        cacheAccessOrder[key] = Date()
+        
+        // Check if we need to evict old entries
+        evictOldCacheEntriesIfNeeded()
         
         // PERFORMANCE ENHANCEMENT: Also save to disk for persistence
         saveEventsToDisk(events, for: key)
+    }
+    
+    // MARK: - Cache Eviction (LRU Policy)
+    private func evictOldCacheEntriesIfNeeded() {
+        guard cachedEvents.count > maxCacheEntries else { return }
+        
+        // Sort cache keys by last access time (oldest first)
+        let sortedKeys = cacheAccessOrder.sorted { $0.value < $1.value }.map { $0.key }
+        
+        // Evict oldest entries until we're under the limit
+        let keysToEvict = sortedKeys.prefix(cachedEvents.count - maxCacheEntries)
+        for key in keysToEvict {
+            cachedEvents.removeValue(forKey: key)
+            cachedCalendars.removeValue(forKey: key)
+            cacheTimestamps.removeValue(forKey: key)
+            cacheAccessOrder.removeValue(forKey: key)
+            // Note: We keep disk cache intact for potential future restoration
+        }
     }
     
     private func getCachedCalendars(for key: String) -> [GoogleCalendar]? {
@@ -414,7 +456,47 @@ class CalendarViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    // MARK: - Smart Prefetching
+    private func smartPrefetch(around date: Date) async {
+        let calendar = Calendar.mondayFirst
         
+        // Prioritize prefetching based on navigation direction
+        if navigationDirection > 0 {
+            // User is moving forward - prioritize future months
+            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
+                await preloadMonthIntoCache(containing: nextMonth)
+                
+                // Also prefetch the month after that with lower priority
+                if let nextNextMonth = calendar.date(byAdding: .month, value: 2, to: date) {
+                    await preloadMonthIntoCache(containing: nextNextMonth)
+                }
+            }
+            
+            // Then prefetch previous month
+            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
+                await preloadMonthIntoCache(containing: prevMonth)
+            }
+        } else if navigationDirection < 0 {
+            // User is moving backward - prioritize past months
+            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
+                await preloadMonthIntoCache(containing: prevMonth)
+                
+                // Also prefetch the month before that
+                if let prevPrevMonth = calendar.date(byAdding: .month, value: -2, to: date) {
+                    await preloadMonthIntoCache(containing: prevPrevMonth)
+                }
+            }
+            
+            // Then prefetch next month
+            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
+                await preloadMonthIntoCache(containing: nextMonth)
+            }
+        } else {
+            // Neutral - prefetch both adjacent months equally
+            await preloadAdjacentMonths(around: date)
+        }
     }
 
     // Preload a month's calendars/events into cache without updating published state
@@ -599,6 +681,16 @@ class CalendarViewModel: ObservableObject {
             return
         }
         
+        // Track navigation direction for smart prefetching
+        if let lastDate = lastNavigatedDate {
+            if monthStart > lastDate {
+                navigationDirection = 1 // Moving forward
+            } else if monthStart < lastDate {
+                navigationDirection = -1 // Moving backward
+            }
+        }
+        lastNavigatedDate = monthStart
+        
         // Check cache first - if we have valid cached data, use it immediately
         if authManager.isLinked(kind: .personal) {
             let personalKey = monthCacheKey(for: date, accountKind: .personal)
@@ -689,6 +781,12 @@ class CalendarViewModel: ObservableObject {
         
         // Schedule error check after loading completes
         scheduleErrorCheck()
+        
+        // PROGRESSIVE LOADING: Smart prefetch based on navigation direction
+        prefetchTask?.cancel() // Cancel any ongoing prefetch
+        prefetchTask = Task.detached(priority: .low) {
+            await self.smartPrefetch(around: date)
+        }
     }
     
     private func loadCalendarDataForAccountThrowing(_ kind: GoogleAuthManager.AccountKind, date: Date) async throws {

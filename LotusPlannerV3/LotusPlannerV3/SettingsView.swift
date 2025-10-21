@@ -436,8 +436,9 @@ class AppPreferences: ObservableObject {
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
         let screenWidth = UIScreen.main.bounds.width
         
-        // If screen width is less than 700px, force mobile layout
-        if screenWidth < 700 {
+        // If screen width is less than iPad mini (768pt), force mobile layout
+        // iPad mini portrait width is 768pt, so anything smaller (iPhone, etc.) uses mobile view
+        if screenWidth < 768 {
             self.dayViewLayout = .mobile
         } else if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
             // If no layout has been explicitly chosen (key doesn't exist), use Classic
