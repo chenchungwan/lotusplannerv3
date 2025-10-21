@@ -201,25 +201,53 @@ struct TimeframeColumnView: View {
         VStack(alignment: .leading, spacing: adaptiveSpacing) {
             if isExpanded {
                 // Expanded view - full width with all content
-                // Date range header with collapse button
+                // Date range header with collapse button and summary
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isExpanded.toggle()
                     }
                 }) {
-                    HStack {
-                        Text(timeframe.displayName)
-                            .font(isCompact ? .headline : .title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(isCurrent ? .white : .primary)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
+                    VStack(alignment: .leading, spacing: 4) {
+                        // First line: Date range name and chevron
+                        HStack {
+                            Text(timeframe.displayName)
+                                .font(isCompact ? .subheadline : .body)
+                                .fontWeight(.bold)
+                                .foregroundColor(isCurrent ? .white : .primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.left")
+                                .font(isCompact ? .caption : .body)
+                                .foregroundColor(isCurrent ? .white : .primary)
+                        }
                         
-                        Spacer()
-                        
-                        Image(systemName: "chevron.left")
-                            .font(isCompact ? .body : .title3)
-                            .foregroundColor(isCurrent ? .white : .primary)
+                        // Second line: Summary
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(isCurrent ? .white.opacity(0.9) : .green)
+                                .font(isCompact ? .caption : .subheadline)
+                            
+                            Text("\(completionStats.completed)")
+                                .font(isCompact ? .caption : .subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(isCurrent ? .white : .primary)
+                            
+                            Text("/")
+                                .font(isCompact ? .caption : .subheadline)
+                                .foregroundColor(isCurrent ? .white.opacity(0.7) : .secondary)
+                            
+                            Image(systemName: "circle")
+                                .foregroundColor(isCurrent ? .white.opacity(0.7) : .secondary)
+                                .font(isCompact ? .caption : .subheadline)
+                            
+                            Text("\(completionStats.total)")
+                                .font(isCompact ? .caption : .subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(isCurrent ? .white : .primary)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(adaptivePadding)
@@ -228,52 +256,29 @@ struct TimeframeColumnView: View {
                 }
                 .buttonStyle(.plain)
                 
-                // Summary card - show for all timeframes
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(isCompact ? .body : .title3)
-                    
-                    Text("\(completionStats.completed)")
-                        .font(isCompact ? .body : .title3)
-                        .fontWeight(.medium)
-                    
-                    Text("/")
-                        .font(isCompact ? .body : .title3)
-                        .foregroundColor(.secondary)
-                    
-                    Image(systemName: "circle")
-                        .foregroundColor(.secondary)
-                        .font(isCompact ? .body : .title3)
-                    
-                    Text("\(completionStats.total)")
-                        .font(isCompact ? .body : .title3)
-                        .fontWeight(.medium)
+                // Category cards - scrollable area that takes remaining height
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: adaptiveSpacing) {
+                        ForEach(categories) { category in
+                            let goalsForCategory = getGoals(for: category.id, in: timeframe)
+                            
+                            GoalCategoryCard(
+                                category: category,
+                                goals: goalsForCategory,
+                                onGoalTap: onGoalTap,
+                                onGoalEdit: onGoalEdit,
+                                onGoalDelete: onGoalDelete,
+                                onCategoryEdit: onCategoryEdit,
+                                onCategoryDelete: onCategoryDelete,
+                                showTags: false,
+                                currentInterval: navigationManager.currentInterval,
+                                currentDate: navigationManager.currentDate
+                            )
+                            .frame(height: calculateCardHeight())
+                        }
+                    }
                 }
-                .padding(adaptivePadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-                
-                // Category cards - fixed height for uniformity
-                ForEach(categories) { category in
-                    let goalsForCategory = getGoals(for: category.id, in: timeframe)
-                    
-                    GoalCategoryCard(
-                        category: category,
-                        goals: goalsForCategory,
-                        onGoalTap: onGoalTap,
-                        onGoalEdit: onGoalEdit,
-                        onGoalDelete: onGoalDelete,
-                        onCategoryEdit: onCategoryEdit,
-                        onCategoryDelete: onCategoryDelete,
-                        showTags: false,
-                        currentInterval: navigationManager.currentInterval,
-                        currentDate: navigationManager.currentDate
-                    )
-                    .frame(height: calculateCardHeight())
-                }
+                .frame(maxHeight: .infinity)
             } else {
                 // Collapsed view - narrow column with vertical text
                 Button(action: {
@@ -306,7 +311,7 @@ struct TimeframeColumnView: View {
         .frame(width: isExpanded ? columnWidth : 50)
     }
     
-    // Calculate fixed card height based on 3 goal lines - optimized to fit 6 cards on screen
+    // Calculate fixed card height based on 3 goal lines - expanded by 50%
     private func calculateCardHeight() -> CGFloat {
         // Compact header height (category title, progress, etc)
         let headerHeight: CGFloat = isCompact ? 45 : 50
@@ -320,7 +325,8 @@ struct TimeframeColumnView: View {
         // Minimal bottom padding
         let bottomPadding: CGFloat = 8
         
-        return headerHeight + goalsAreaHeight + bottomPadding
+        let baseHeight = headerHeight + goalsAreaHeight + bottomPadding
+        return baseHeight * 1.8  // Expanded by 80% total (50% + 20%)
     }
     
     private func getGoals(for categoryId: UUID, in timeframe: TimeframeGroup) -> [GoalData] {
