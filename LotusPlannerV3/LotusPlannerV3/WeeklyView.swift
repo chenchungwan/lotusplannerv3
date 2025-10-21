@@ -949,7 +949,7 @@ extension WeeklyView {
     // MARK: - Individual Column Views for Horizontal Layout
     private func weekDayRowEventsColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 4) {
+            LazyVStack(alignment: .leading, spacing: 4) {
                 let eventsForDate = getEventsForDate(date)
                 ForEach(eventsForDate, id: \.id) { event in
                     rowEventCard(event: event)
@@ -962,7 +962,7 @@ extension WeeklyView {
     
     private func weekDayRowPersonalTasksColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 4) {
+            LazyVStack(alignment: .leading, spacing: 4) {
                 let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
                 if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                     TasksComponent(
@@ -1001,7 +1001,7 @@ extension WeeklyView {
     
     private func weekDayRowProfessionalTasksColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 4) {
+            LazyVStack(alignment: .leading, spacing: 4) {
                 let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
                 if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                     TasksComponent(
@@ -1114,7 +1114,7 @@ extension WeeklyView {
             // Custom Logs
             if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
                         let enabledItems = customLogManager.items.filter { $0.isEnabled }
                         customLogSummary(items: enabledItems, date: date)
                     }
@@ -1129,7 +1129,7 @@ extension WeeklyView {
     private func weekDayRowContent(date: Date, isToday: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // Events column
-            VStack(alignment: .leading, spacing: 4) {
+            LazyVStack(alignment: .leading, spacing: 4) {
                 let eventsForDate = getEventsForDate(date)
                 ForEach(eventsForDate, id: \.id) { event in
                     rowEventCard(event: event)
@@ -1144,7 +1144,7 @@ extension WeeklyView {
             
             // Personal Tasks column
             if authManager.isLinked(kind: .personal) {
-                VStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
                     if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                         TasksComponent(
@@ -1186,7 +1186,7 @@ extension WeeklyView {
             
             // Professional Tasks column
             if authManager.isLinked(kind: .professional) {
-                VStack(alignment: .leading, spacing: 4) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
                     if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                         TasksComponent(

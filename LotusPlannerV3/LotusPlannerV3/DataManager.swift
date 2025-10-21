@@ -15,6 +15,10 @@ class DataManager: ObservableObject {
     // Global loading state
     @Published var isInitializing = true
     
+    // MARK: - Request Debouncing
+    private var debounceTimers: [String: Task<Void, Never>] = [:]
+    private let debounceInterval: TimeInterval = 0.5 // 500ms
+    
     private init() {
         // Initialize shared data on startup
         Task {
@@ -64,7 +68,26 @@ class DataManager: ObservableObject {
     }
     
     func preloadAdjacentMonths(around date: Date) async {
-        await calendarViewModel.preloadAdjacentMonths(around: date)
+        await debounce(key: "preloadAdjacentMonths") {
+            await self.calendarViewModel.preloadAdjacentMonths(around: date)
+        }
+    }
+    
+    // MARK: - Debounce Helper
+    private func debounce(key: String, interval: TimeInterval? = nil, action: @escaping () async -> Void) async {
+        // Cancel any existing task for this key
+        debounceTimers[key]?.cancel()
+        
+        // Create a new debounced task
+        let task = Task {
+            try? await Task.sleep(nanoseconds: UInt64((interval ?? debounceInterval) * 1_000_000_000))
+            if !Task.isCancelled {
+                await action()
+            }
+        }
+        
+        debounceTimers[key] = task
+        await task.value
     }
     
     // MARK: - Background Refresh
@@ -76,21 +99,23 @@ class DataManager: ObservableObject {
             return
         }
         
-        
-        // Refresh current month data in background (non-blocking)
-        Task.detached(priority: .background) {
-            await self.calendarViewModel.preloadMonthIntoCache(containing: Date())
-            
-            // Preload adjacent months for smoother navigation
-            let calendar = Calendar.mondayFirst
-            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: Date()) {
-                await self.calendarViewModel.preloadMonthIntoCache(containing: prevMonth)
-            }
-            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: Date()) {
-                await self.calendarViewModel.preloadMonthIntoCache(containing: nextMonth)
-            }
-            
-            await MainActor.run {
+        // Apply debouncing to prevent rapid repeated refresh calls
+        await debounce(key: "refreshCalendarData", interval: 1.0) {
+            // Refresh current month data in background (non-blocking)
+            Task.detached(priority: .background) {
+                await self.calendarViewModel.preloadMonthIntoCache(containing: Date())
+                
+                // Preload adjacent months for smoother navigation
+                let calendar = Calendar.mondayFirst
+                if let prevMonth = calendar.date(byAdding: .month, value: -1, to: Date()) {
+                    await self.calendarViewModel.preloadMonthIntoCache(containing: prevMonth)
+                }
+                if let nextMonth = calendar.date(byAdding: .month, value: 1, to: Date()) {
+                    await self.calendarViewModel.preloadMonthIntoCache(containing: nextMonth)
+                }
+                
+                await MainActor.run {
+                }
             }
         }
     }

@@ -82,6 +82,16 @@ class TasksViewModel: ObservableObject {
     private var cacheTimestamps: [String: Date] = [:]
     private let cacheTimeout: TimeInterval = 1800 // 30 minutes
     
+    // MARK: - Filtered Task Caching
+    private struct FilterCacheKey: Hashable {
+        let accountKind: String  // "personal" or "professional"
+        let filter: String       // String representation of filter
+        let subfilter: String    // String representation of subfilter
+        let referenceDate: String // Date string for filter context
+        let hideCompleted: Bool   // hideCompletedTasks preference
+    }
+    private var filteredTasksCache: [FilterCacheKey: [String: [GoogleTask]]] = [:]
+    
     func loadTasks(forceClear: Bool = false) async {
         isLoading = true
         errorMessage = ""
@@ -197,6 +207,16 @@ class TasksViewModel: ObservableObject {
             cachedTasks.removeValue(forKey: key)
             cacheTimestamps.removeValue(forKey: key)
         }
+        
+        // Also clear filtered task caches for this account
+        let filteredKeysToRemove = filteredTasksCache.keys.filter { $0.accountKind == kind.rawValue }
+        for key in filteredKeysToRemove {
+            filteredTasksCache.removeValue(forKey: key)
+        }
+    }
+    
+    private func clearAllFilteredCaches() {
+        filteredTasksCache.removeAll()
     }
     
     
@@ -1142,6 +1162,11 @@ struct TasksView: View {
     @State private var showingAddEvent = false
     @State private var allSubfilter: AllTaskSubfilter = .all
     
+    // MARK: - Filtered Tasks Caching
+    @State private var cachedFilteredPersonalTasks: [String: [GoogleTask]] = [:]
+    @State private var cachedFilteredProfessionalTasks: [String: [GoogleTask]] = [:]
+    @State private var lastFilterState: String = "" // Tracks filter+date+prefs state
+    
     // Navigation date picker state
     @State private var showingNavigationDatePicker = false
     @State private var selectedDateForNavigation = Date()
@@ -1182,11 +1207,40 @@ struct TasksView: View {
     
     // MARK: - Local Filtering (No API calls)
     private var filteredPersonalTasks: [String: [GoogleTask]] {
-        return filterTasks(viewModel.personalTasks)
+        return getCachedFilteredTasks(for: viewModel.personalTasks, accountKind: .personal)
     }
     
     private var filteredProfessionalTasks: [String: [GoogleTask]] {
-        return filterTasks(viewModel.professionalTasks)
+        return getCachedFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional)
+    }
+    
+    private func getCachedFilteredTasks(for tasksDict: [String: [GoogleTask]], accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
+        // Generate cache key from current filter state
+        let currentFilterState = "\(selectedFilter.rawValue)-\(allSubfilter.rawValue)-\(referenceDate.timeIntervalSince1970)-\(appPrefs.hideCompletedTasks)"
+        
+        // Check if we can use cached results
+        let cacheIsValid = lastFilterState == currentFilterState
+        let cachedResults = accountKind == .personal ? cachedFilteredPersonalTasks : cachedFilteredProfessionalTasks
+        
+        // Return cached results if valid and non-empty, or if input is empty
+        if cacheIsValid && !cachedResults.isEmpty {
+            return cachedResults
+        }
+        
+        // Otherwise, compute filtered tasks
+        let filtered = filterTasks(tasksDict)
+        
+        // Update cache
+        DispatchQueue.main.async {
+            self.lastFilterState = currentFilterState
+            if accountKind == .personal {
+                self.cachedFilteredPersonalTasks = filtered
+            } else {
+                self.cachedFilteredProfessionalTasks = filtered
+            }
+        }
+        
+        return filtered
     }
     
     private func filterTasks(_ tasksDict: [String: [GoogleTask]]) -> [String: [GoogleTask]] {

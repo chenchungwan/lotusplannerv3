@@ -258,7 +258,7 @@ struct TimeframeColumnView: View {
                 
                 // Category cards - scrollable area that takes remaining height
                 ScrollView(.vertical, showsIndicators: true) {
-                    VStack(spacing: adaptiveSpacing) {
+                    LazyVStack(spacing: adaptiveSpacing) {
                         ForEach(categories) { category in
                             let goalsForCategory = getGoals(for: category.id, in: timeframe)
                             
