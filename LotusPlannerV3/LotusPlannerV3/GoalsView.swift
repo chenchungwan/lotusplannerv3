@@ -371,7 +371,7 @@ struct GoalCategoryCard: View {
                             saveCategoryTitle()
                         }
                 } else {
-                    Text(category.title)
+                    Text("\(category.title) (\(totalGoalsCount))")
                         .font(.headline)
                         .fontWeight(.bold)
                         .lineLimit(1)

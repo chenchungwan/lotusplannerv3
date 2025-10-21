@@ -2,10 +2,20 @@ import SwiftUI
 
 struct AllGoalsTableContent: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
     
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
+    
+    // State for sheet presentations
+    @State private var selectedGoal: GoalData?
+    @State private var showingGoalDetail = false
+    @State private var showingEditGoal = false
+    @State private var goalToEdit: GoalData?
+    @State private var categoryToEdit: GoalCategoryData?
+    @State private var showingEditCategory = false
     
     // Computed property to get all timeframes with oldest first (leftmost)
     private var timeframes: [TimeframeGroup] {
@@ -18,42 +28,7 @@ struct AllGoalsTableContent: View {
         }
         
         // Sort in ascending order (oldest first/leftmost, newest last/rightmost)
-        // Example: 2025 → 2026, Week 1 → Week 2
         return timeframeSet.sorted(by: { $0 < $1 })
-    }
-    
-    // Helper to check if timeframe is current week
-    private func isCurrentWeek(_ timeframe: TimeframeGroup) -> Bool {
-        guard timeframe.type == .week else { return false }
-        let calendar = Calendar.mondayFirst
-        let now = Date()
-        
-        guard let currentWeekInterval = calendar.dateInterval(of: .weekOfYear, for: now),
-              let timeframeWeekStart = timeframe.weekStartDate else {
-            return false
-        }
-        
-        return currentWeekInterval.start == timeframeWeekStart
-    }
-    
-    // Helper to check if timeframe is in the past
-    private func isInPast(_ timeframe: TimeframeGroup) -> Bool {
-        let now = Date()
-        return timeframe.endDate < now
-    }
-    
-    // Get all goals for a timeframe (across all categories)
-    private func getAllGoals(in timeframe: TimeframeGroup) -> [GoalData] {
-        return goalsManager.goals.filter { goal in
-            TimeframeGroup(from: goal) == timeframe
-        }
-    }
-    
-    // Get completion stats for a timeframe
-    private func getCompletionStats(for timeframe: TimeframeGroup) -> (completed: Int, total: Int) {
-        let goals = getAllGoals(in: timeframe)
-        let completed = goals.filter { $0.isCompleted }.count
-        return (completed, goals.count)
     }
     
     // Computed property to get all categories
@@ -66,223 +41,112 @@ struct AllGoalsTableContent: View {
         horizontalSizeClass == .compact
     }
     
-    // Adaptive column width based on device
-    private func adaptiveColumnWidth(for availableWidth: CGFloat) -> CGFloat {
+    private var isLandscape: Bool {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            return false
+        }
+        return window.bounds.width > window.bounds.height
+    }
+    
+    // Number of visible columns based on device
+    private var visibleColumns: Int {
         if isCompact {
-            // iPhone: narrower columns (120-150pt)
-            return max(120, min(150, availableWidth / 2.5))
+            // iPhone or smaller
+            return 2
         } else {
-            // iPad: wider columns (180-250pt)
-            return max(180, min(250, availableWidth / 5))
+            // iPad
+            return isLandscape ? 5 : 3
         }
     }
     
-    // Adaptive category column width
-    private var adaptiveCategoryColumnWidth: CGFloat {
-        isCompact ? 100 : 150
-    }
-    
-    // Adaptive row height
-    private func adaptiveRowHeight(for availableHeight: CGFloat) -> CGFloat {
-        if isCompact {
-            // iPhone: shorter rows (140-180pt)
-            return max(140, min(180, availableHeight / 4))
-        } else {
-            // iPad: taller rows (180-220pt)
-            return max(180, min(220, availableHeight / 6))
-        }
-    }
-    
-    // Adaptive header height
-    private var adaptiveHeaderHeight: CGFloat {
-        isCompact ? 50 : 60
-    }
-    
-    // Adaptive font size
-    private var adaptiveFont: Font {
-        isCompact ? .caption : .body
-    }
-    
-    private var adaptiveTitleFont: Font {
-        isCompact ? .caption : .body
+    // Column width based on visible columns
+    private func columnWidth(for availableWidth: CGFloat) -> CGFloat {
+        let spacing: CGFloat = 16
+        let totalSpacing = spacing * CGFloat(visibleColumns + 1)
+        return (availableWidth - totalSpacing) / CGFloat(visibleColumns)
     }
     
     // Adaptive padding
     private var adaptivePadding: CGFloat {
-        isCompact ? 6 : 8
+        isCompact ? 12 : 16
     }
     
     // Adaptive spacing
     private var adaptiveSpacing: CGFloat {
-        isCompact ? 3 : 4
+        isCompact ? 8 : 12
     }
     
     var body: some View {
         GeometryReader { geometry in
-            let columnWidth: CGFloat = adaptiveColumnWidth(for: geometry.size.width)
-            let rowHeight: CGFloat = adaptiveRowHeight(for: geometry.size.height)
-            let categoryColumnWidth: CGFloat = adaptiveCategoryColumnWidth
+            let colWidth = columnWidth(for: geometry.size.width)
             
-            ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header row with timeframes
-                    HStack(spacing: 0) {
-                        // Category header cell
-                        VStack(spacing: 0) {
-                            Text("Category")
-                                .font(adaptiveTitleFont)
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, adaptivePadding)
-                        }
-                        .frame(width: categoryColumnWidth, height: adaptiveHeaderHeight, alignment: .leading)
-                        .background(Color(.systemGray6))
-                        .overlay(
-                            Rectangle()
-                                .fill(Color(.systemGray4))
-                                .frame(width: 0.5),
-                            alignment: .trailing
-                        )
-                        
-                        // Timeframe headers
-                        ForEach(timeframes) { timeframe in
-                            let isCurrent = isCurrentWeek(timeframe)
-                            VStack(spacing: 0) {
-                                Text(timeframe.displayName)
-                                    .font(adaptiveTitleFont)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(isCurrent ? .white : .primary)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, adaptivePadding)
-                                    .frame(maxWidth: .infinity)
-                                    .minimumScaleFactor(0.8)
-                            }
-                            .frame(width: columnWidth, height: adaptiveHeaderHeight, alignment: .center)
-                            .background(isCurrent ? Color.blue : Color(.systemGray6))
-                            .overlay(
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 0.5),
-                                alignment: .trailing
-                            )
-                        }
-                    }
-                    
-                    Rectangle()
-                        .fill(Color(.systemGray3))
-                        .frame(height: 1)
-                    
-                    // Summary row (completion stats for past timeframes)
-                    HStack(alignment: .top, spacing: 0) {
-                        // Label cell
-                        VStack(spacing: 0) {
-                            Text("Summary")
-                                .font(adaptiveTitleFont)
-                                .fontWeight(.medium)
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
-                                .padding(.all, adaptivePadding)
-                        }
-                        .frame(width: categoryColumnWidth, alignment: .topLeading)
-                        .background(Color(.systemGray6))
-                        .overlay(
-                            Rectangle()
-                                .fill(Color(.systemGray4))
-                                .frame(width: 0.5),
-                            alignment: .trailing
-                        )
-                        
-                        // Stats for each timeframe
-                        ForEach(timeframes) { timeframe in
-                            let isPast = isInPast(timeframe)
-                            let isCurrent = isCurrentWeek(timeframe)
-                            let stats = isPast ? getCompletionStats(for: timeframe) : nil
-                            
-                            VStack(spacing: adaptiveSpacing) {
-                                if isPast, let stats = stats, stats.total > 0 {
-                                    Text("\(stats.completed) / \(stats.total)")
-                                        .font(adaptiveFont)
-                                        .fontWeight(.medium)
-                                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    
-                                    Text("Goals Accomplished")
-                                        .font(adaptiveFont)
-                                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                                        .lineLimit(2)
-                                        .minimumScaleFactor(0.8)
-                                } else {
-                                    Text("—")
-                                        .font(adaptiveFont)
-                                        .foregroundColor(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                                }
-                            }
-                            .padding(.all, adaptivePadding)
-                            .frame(width: columnWidth, alignment: .topLeading)
-                            .background(isCurrent ? Color.blue.opacity(0.05) : Color(.systemBackground))
-                            .overlay(
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 0.5),
-                                alignment: .trailing
-                            )
-                        }
-                    }
-                    
-                    Rectangle()
-                        .fill(Color(.systemGray4))
-                        .frame(height: 0.5)
-                    
-                    // Category rows
-                    ForEach(categories) { category in
-                        HStack(alignment: .top, spacing: 0) {
-                            // Category name cell
-                            VStack(spacing: 0) {
-                                Text(category.title)
-                                    .font(adaptiveTitleFont)
-                                    .fontWeight(.medium)
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                                    .padding(.all, adaptivePadding)
-                            }
-                            .frame(width: categoryColumnWidth, height: rowHeight, alignment: .topLeading)
-                            .background(Color(.systemGray6))
-                            .overlay(
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 0.5),
-                                alignment: .trailing
-                            )
-                            
-                            // Goals for each timeframe
-                            ForEach(timeframes) { timeframe in
-                                let goalsForCell = getGoals(for: category.id, in: timeframe)
-                                let isCurrent = isCurrentWeek(timeframe)
-                                VStack(spacing: 0) {
-                                    GoalsCellView(
-                                        goals: goalsForCell,
-                                        adaptiveFont: adaptiveFont,
-                                        adaptivePadding: adaptivePadding,
-                                        adaptiveSpacing: adaptiveSpacing
-                                    )
-                                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                                }
-                                .frame(width: columnWidth, height: rowHeight, alignment: .topLeading)
-                                .background(isCurrent ? Color.blue.opacity(0.05) : Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
-                            }
-                        }
-                        .frame(minHeight: rowHeight)
-                        
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .frame(height: 0.5)
-                    }
+            if timeframes.isEmpty {
+                // Empty state
+                VStack(spacing: 20) {
+                    Spacer()
+                    Image(systemName: "target")
+                        .font(.system(size: 60))
+                        .foregroundColor(.secondary)
+                    Text("No Goals Yet")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Create your first goal to get started")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                    Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ForEach(timeframes) { timeframe in
+                            TimeframeColumnView(
+                                timeframe: timeframe,
+                                categories: categories,
+                                columnWidth: colWidth,
+                                adaptivePadding: adaptivePadding,
+                                adaptiveSpacing: adaptiveSpacing,
+                                isCompact: isCompact,
+                                onGoalTap: { goal in
+                                    selectedGoal = goal
+                                    showingGoalDetail = true
+                                },
+                                onGoalEdit: { goal in
+                                    goalToEdit = goal
+                                    showingEditGoal = true
+                                },
+                                onGoalDelete: { goal in
+                                    goalsManager.deleteGoal(goal.id)
+                                },
+                                onCategoryEdit: { category in
+                                    categoryToEdit = category
+                                    showingEditCategory = true
+                                },
+                                onCategoryDelete: { category in
+                                    goalsManager.deleteCategory(category.id)
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 20)
+                }
+            }
+        }
+        .sheet(isPresented: $showingGoalDetail) {
+            if let goal = selectedGoal {
+                GoalDetailSheet(goal: goal)
+            }
+        }
+        .sheet(isPresented: $showingEditGoal) {
+            if let goal = goalToEdit {
+                EditGoalView(goal: goal)
+            }
+        }
+        .sheet(isPresented: $showingEditCategory) {
+            if let category = categoryToEdit {
+                EditCategoryView(category: category)
             }
         }
     }
@@ -295,42 +159,315 @@ struct AllGoalsTableContent: View {
     }
 }
 
-// MARK: - Goals Cell View
-struct GoalsCellView: View {
-    let goals: [GoalData]
-    let adaptiveFont: Font
+// MARK: - Timeframe Column View
+struct TimeframeColumnView: View {
+    let timeframe: TimeframeGroup
+    let categories: [GoalCategoryData]
+    let columnWidth: CGFloat
     let adaptivePadding: CGFloat
     let adaptiveSpacing: CGFloat
+    let isCompact: Bool
+    let onGoalTap: (GoalData) -> Void
+    let onGoalEdit: (GoalData) -> Void
+    let onGoalDelete: (GoalData) -> Void
+    let onCategoryEdit: (GoalCategoryData) -> Void
+    let onCategoryDelete: (GoalCategoryData) -> Void
+    
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var navigationManager = NavigationManager.shared
+    @State private var isExpanded: Bool = true
+    
+    private var isCurrent: Bool {
+        timeframe.type == .week && isCurrentWeek(timeframe)
+    }
+    
+    private var isPast: Bool {
+        let now = Date()
+        return timeframe.endDate < now
+    }
+    
+    private var allGoalsInTimeframe: [GoalData] {
+        goalsManager.goals.filter { goal in
+            TimeframeGroup(from: goal) == timeframe
+        }
+    }
+    
+    private var completionStats: (completed: Int, total: Int) {
+        let completed = allGoalsInTimeframe.filter { $0.isCompleted }.count
+        return (completed, allGoalsInTimeframe.count)
+    }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: adaptiveSpacing) {
-                if goals.isEmpty {
-                    Text("—")
+        VStack(alignment: .leading, spacing: adaptiveSpacing) {
+            if isExpanded {
+                // Expanded view - full width with all content
+                // Date range header with collapse button
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                }) {
+                    HStack {
+                        Text(timeframe.displayName)
+                            .font(isCompact ? .headline : .title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(isCurrent ? .white : .primary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.left")
+                            .font(isCompact ? .body : .title3)
+                            .foregroundColor(isCurrent ? .white : .primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(adaptivePadding)
+                    .background(isCurrent ? Color.blue : Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                
+                // Summary card - show for all timeframes
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(isCompact ? .body : .title3)
+                    
+                    Text("\(completionStats.completed)")
+                        .font(isCompact ? .body : .title3)
+                        .fontWeight(.medium)
+                    
+                    Text("/")
+                        .font(isCompact ? .body : .title3)
                         .foregroundColor(.secondary)
-                        .font(adaptiveFont)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ForEach(goals) { goal in
-                        HStack(spacing: adaptiveSpacing + 2) {
-                            Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .font(adaptiveFont)
-                                .foregroundColor(goal.isCompleted ? .green : .secondary)
-                                .frame(minWidth: 20, minHeight: 20)
-                            
-                            Text(goal.title)
-                                .font(adaptiveFont)
-                                .fontWeight(.medium)
-                                .strikethrough(goal.isCompleted)
-                                .foregroundColor(goal.isCompleted ? .secondary : .primary)
-                                .lineLimit(3)
-                                .minimumScaleFactor(0.9)
-                        }
-                        .padding(.vertical, 2)
+                    
+                    Image(systemName: "circle")
+                        .foregroundColor(.secondary)
+                        .font(isCompact ? .body : .title3)
+                    
+                    Text("\(completionStats.total)")
+                        .font(isCompact ? .body : .title3)
+                        .fontWeight(.medium)
+                }
+                .padding(adaptivePadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                
+                // Category cards - fixed height for uniformity
+                ForEach(categories) { category in
+                    let goalsForCategory = getGoals(for: category.id, in: timeframe)
+                    
+                    GoalCategoryCard(
+                        category: category,
+                        goals: goalsForCategory,
+                        onGoalTap: onGoalTap,
+                        onGoalEdit: onGoalEdit,
+                        onGoalDelete: onGoalDelete,
+                        onCategoryEdit: onCategoryEdit,
+                        onCategoryDelete: onCategoryDelete,
+                        showTags: false,
+                        currentInterval: navigationManager.currentInterval,
+                        currentDate: navigationManager.currentDate
+                    )
+                    .frame(height: calculateCardHeight())
+                }
+            } else {
+                // Collapsed view - narrow column with vertical text
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                }) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.body)
+                            .foregroundColor(isCurrent ? .white : .primary)
+                        
+                        Text(timeframe.displayName)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(isCurrent ? .white : .primary)
+                            .rotationEffect(.degrees(-90))
+                            .fixedSize()
+                            .frame(width: 20)
+                    }
+                    .padding(.vertical, adaptivePadding)
+                    .padding(.horizontal, 8)
+                    .frame(maxHeight: .infinity)
+                    .background(isCurrent ? Color.blue : Color(.systemGray6))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: isExpanded ? columnWidth : 50)
+    }
+    
+    // Calculate fixed card height based on 3 goal lines - optimized to fit 6 cards on screen
+    private func calculateCardHeight() -> CGFloat {
+        // Compact header height (category title, progress, etc)
+        let headerHeight: CGFloat = isCompact ? 45 : 50
+        
+        // Space for 3 goal lines (checkbox + text) - very compact
+        // Each goal row is ~26-28pt (icon + text + minimal padding)
+        let goalRowHeight: CGFloat = isCompact ? 24 : 26
+        let numberOfRows: CGFloat = 3
+        let goalsAreaHeight = goalRowHeight * numberOfRows
+        
+        // Minimal bottom padding
+        let bottomPadding: CGFloat = 8
+        
+        return headerHeight + goalsAreaHeight + bottomPadding
+    }
+    
+    private func getGoals(for categoryId: UUID, in timeframe: TimeframeGroup) -> [GoalData] {
+        let categoryGoals = goalsManager.getGoalsForCategory(categoryId)
+        return categoryGoals.filter { goal in
+            TimeframeGroup(from: goal) == timeframe
+        }
+    }
+    
+    private func isCurrentWeek(_ timeframe: TimeframeGroup) -> Bool {
+        guard timeframe.type == .week else { return false }
+        let calendar = Calendar.mondayFirst
+        let now = Date()
+        
+        guard let currentWeekInterval = calendar.dateInterval(of: .weekOfYear, for: now),
+              let timeframeWeekStart = timeframe.weekStartDate else {
+            return false
+        }
+        
+        return currentWeekInterval.start == timeframeWeekStart
+    }
+}
+
+// MARK: - Goal Detail Sheet
+struct GoalDetailSheet: View {
+    let goal: GoalData
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(goal.title)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                if !goal.description.isEmpty {
+                    Text(goal.description)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Goal Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }
-            .padding(adaptivePadding)
+        }
+    }
+}
+
+// MARK: - Edit Goal View
+struct EditGoalView: View {
+    let goal: GoalData
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    
+    @State private var title: String
+    @State private var description: String
+    
+    init(goal: GoalData) {
+        self.goal = goal
+        _title = State(initialValue: goal.title)
+        _description = State(initialValue: goal.description)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Goal Title") {
+                    TextField("Title", text: $title)
+                }
+                
+                Section("Description") {
+                    TextEditor(text: $description)
+                        .frame(minHeight: 100)
+                }
+            }
+            .navigationTitle("Edit Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        var updatedGoal = goal
+                        updatedGoal.title = title
+                        updatedGoal.description = description
+                        goalsManager.updateGoal(updatedGoal)
+                        dismiss()
+                    }
+                    .disabled(title.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Edit Category View
+struct EditCategoryView: View {
+    let category: GoalCategoryData
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    
+    @State private var title: String
+    
+    init(category: GoalCategoryData) {
+        self.category = category
+        _title = State(initialValue: category.title)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Category Name") {
+                    TextField("Name", text: $title)
+                }
+            }
+            .navigationTitle("Edit Category")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        var updatedCategory = category
+                        updatedCategory.title = title
+                        goalsManager.updateCategory(updatedCategory)
+                        dismiss()
+                    }
+                    .disabled(title.isEmpty)
+                }
+            }
         }
     }
 }
@@ -427,8 +564,6 @@ struct TimeframeGroup: Identifiable, Hashable, Comparable {
     // Comparable conformance (sort by end date)
     static func < (lhs: TimeframeGroup, rhs: TimeframeGroup) -> Bool {
         // Sort by end date: earlier end dates come first
-        // This means Week 1 comes before Week 2, January before February, 2025 before 2026
-        // And within the same period, Year 2025 comes last (after all months and weeks in 2025)
         return lhs.endDate < rhs.endDate
     }
 }
@@ -446,4 +581,3 @@ extension GoalTimeframe {
 #Preview {
     AllGoalsTableContent()
 }
-
