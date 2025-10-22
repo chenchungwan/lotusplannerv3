@@ -190,9 +190,15 @@ struct DayViewMobile: View {
                 // Journal
                 VStack(alignment: .leading, spacing: 6) {
                     JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 300, idealHeight: 500, maxHeight: 600)
-                        .padding(.horizontal, adaptivePadding)
+                        .id(navigationManager.currentDate)
+                        .frame(width: horizontalSizeClass == .compact ? .infinity : geometry.size.width * 0.95)
+                        .frame(
+                            minHeight: horizontalSizeClass == .compact ? 300 : geometry.size.height * 0.95,
+                            idealHeight: horizontalSizeClass == .compact ? 500 : geometry.size.height * 0.95,
+                            maxHeight: horizontalSizeClass == .compact ? 600 : geometry.size.height * 0.95,
+                            alignment: .top
+                        )
+                        .padding(horizontalSizeClass == .compact ? adaptivePadding : 12)
                 }
             }
             .padding(.horizontal, max(adaptivePadding, 0))
