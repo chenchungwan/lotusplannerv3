@@ -40,6 +40,10 @@ struct CalendarYearlyView: View {
             // Update currentYear when navigationManager's date changes
             currentYear = Calendar.current.component(.year, from: newValue)
         }
+        .onChange(of: navigationManager.currentView) { oldValue, newValue in
+            // If we're no longer in yearly calendar view, the parent will handle the view switch
+            // This is just to ensure the view updates properly
+        }
     }
     
     // MARK: - Adaptive Layout Configuration

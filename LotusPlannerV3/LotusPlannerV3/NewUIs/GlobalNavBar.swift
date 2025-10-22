@@ -168,6 +168,21 @@ struct GlobalNavBar: View {
             // In Tasks view: filter to the interval
             navigationManager.showingAllTasks = false
             navigationManager.updateInterval(interval, date: Date())
+        } else if navigationManager.currentView == .yearlyCalendar {
+            // In Yearly Calendar view: switch to the new interval
+            navigationManager.showingAllTasks = false
+            if interval == .year {
+                navigationManager.updateInterval(interval, date: Date())
+                // Already in yearly view, just update interval
+            } else {
+                // Update interval first, then force view change
+                navigationManager.updateInterval(interval, date: Date())
+                print("🔄 GlobalNavBar: Switching from yearly to \(interval) view")
+                
+                // Use the existing switchToCalendar() function which should work properly
+                navigationManager.switchToCalendar()
+                print("🔄 GlobalNavBar: Current view is now \(navigationManager.currentView)")
+            }
         } else {
             // In Calendar view: go to the interval
             navigationManager.showingAllTasks = false
@@ -352,16 +367,7 @@ struct GlobalNavBar: View {
                                 // Only show d.circle in non-Goals views
                                 if navigationManager.currentView != .goals {
                                     Button {
-                                        if navigationManager.showTasksView {
-                                            // In Tasks view: filter to current day
-                                            navigationManager.showingAllTasks = false
-                                            navigationManager.updateInterval(.day, date: Date())
-                                        } else {
-                                            // In Calendar view: go to current day
-                                            navigationManager.showingAllTasks = false
-                                            navigationManager.switchToCalendar()
-                                            navigationManager.updateInterval(.day, date: Date())
-                                        }
+                                        handleTimeIntervalChange(.day)
                                     } label: {
                                         Image(systemName: "d.circle")
                                             .font(adaptiveIconSize)
@@ -532,16 +538,7 @@ struct GlobalNavBar: View {
                                 // Only show d.circle in non-Goals views
                                 if navigationManager.currentView != .goals {
                                     Button {
-                                        if navigationManager.showTasksView {
-                                            // In Tasks view: filter to current day
-                                            navigationManager.showingAllTasks = false
-                                            navigationManager.updateInterval(.day, date: Date())
-                                        } else {
-                                            // In Calendar view: go to current day
-                                            navigationManager.showingAllTasks = false
-                                            navigationManager.switchToCalendar()
-                                            navigationManager.updateInterval(.day, date: Date())
-                                        }
+                                        handleTimeIntervalChange(.day)
                                     } label: {
                                         Image(systemName: "d.circle")
                                             .font(adaptiveIconSize)
