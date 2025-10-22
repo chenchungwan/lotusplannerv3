@@ -1243,6 +1243,11 @@ struct TasksView: View {
         return filtered
     }
     
+    // Direct filtering function that bypasses caching - like day views
+    private func getDirectFilteredTasks(for tasksDict: [String: [GoogleTask]], accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
+        return filterTasks(tasksDict)
+    }
+    
     private func filterTasks(_ tasksDict: [String: [GoogleTask]]) -> [String: [GoogleTask]] {
         return tasksDict.mapValues { tasks in
             filterTasksList(tasks)
@@ -1360,7 +1365,7 @@ struct TasksView: View {
                         
                         TasksComponent(
                             taskLists: viewModel.personalTaskLists,
-                            tasksDict: filteredPersonalTasks,
+                            tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
                             accentColor: appPrefs.personalColor,
                             accountType: .personal,
                             onTaskToggle: { task, listId in
@@ -1398,7 +1403,7 @@ struct TasksView: View {
                         
                         TasksComponent(
                             taskLists: viewModel.professionalTaskLists,
-                            tasksDict: filteredProfessionalTasks,
+                            tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
                             accentColor: appPrefs.professionalColor,
                             accountType: .professional,
                             onTaskToggle: { task, listId in
@@ -1449,7 +1454,7 @@ struct TasksView: View {
                                         .padding(.horizontal, 12)
                                     TasksComponent(
                                         taskLists: viewModel.personalTaskLists,
-                                        tasksDict: filteredPersonalTasks,
+                                        tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
                                         accentColor: appPrefs.personalColor,
                                         accountType: .personal,
                                         onTaskToggle: { task, listId in
@@ -1485,7 +1490,7 @@ struct TasksView: View {
                                         .padding(.horizontal, 12)
                                     TasksComponent(
                                         taskLists: viewModel.professionalTaskLists,
-                                        tasksDict: filteredProfessionalTasks,
+                                        tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
                                         accentColor: appPrefs.professionalColor,
                                         accountType: .professional,
                                         onTaskToggle: { task, listId in
@@ -1521,7 +1526,7 @@ struct TasksView: View {
                             if authManager.isLinked(kind: .personal) {
                                 TasksComponent(
                                     taskLists: viewModel.personalTaskLists,
-                                    tasksDict: filteredPersonalTasks,
+                                    tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
                                     accentColor: appPrefs.personalColor,
                                     accountType: .personal,
                                     onTaskToggle: { task, listId in
@@ -1557,7 +1562,7 @@ struct TasksView: View {
                             if authManager.isLinked(kind: .professional) {
                                 TasksComponent(
                                     taskLists: viewModel.professionalTaskLists,
-                                    tasksDict: filteredProfessionalTasks,
+                                    tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
                                     accentColor: appPrefs.professionalColor,
                                     accountType: .professional,
                                     onTaskToggle: { task, listId in
