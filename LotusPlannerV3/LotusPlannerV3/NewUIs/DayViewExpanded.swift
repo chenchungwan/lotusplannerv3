@@ -260,8 +260,8 @@ struct DayViewExpanded: View {
                         }
                     }
                     .frame(height: geometry.size.height)
-                    .ignoresSafeArea(edges: .top)
-                    .padding(12)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
                 }
                 .frame(width: geometry.size.width)
                 

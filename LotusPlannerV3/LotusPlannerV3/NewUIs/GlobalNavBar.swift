@@ -34,16 +34,28 @@ struct GlobalNavBar: View {
         horizontalSizeClass == .compact
     }
     
+    private var isPortrait: Bool {
+        verticalSizeClass == .regular
+    }
+    
+    private var shouldShowTwoRows: Bool {
+        isCompact && isPortrait
+    }
+    
     private var adaptivePadding: CGFloat {
         isCompact ? 8 : 12
     }
     
     private var adaptiveButtonSpacing: CGFloat {
-        isCompact ? 8 : 12
+        isCompact ? 8 : 10
     }
     
     private var adaptiveIconSize: Font {
-        isCompact ? .title3 : .title2
+        isCompact ? .body : .title2
+    }
+    
+    private var adaptiveButtonSize: CGFloat {
+        isCompact ? 36 : 44
     }
     
     private var dateLabel: String {
@@ -62,18 +74,13 @@ struct GlobalNavBar: View {
                     return "Goals"
                 }
                 let start = weekInterval.start
-                let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
-                
-                // Get week number
-                let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
                 
                 // Format dates as M/d/yy
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = "M/d/yy"
                 let startString = dateFormatter.string(from: start)
-                let endString = dateFormatter.string(from: end)
                 
-                return "Week\(weekNumber): \(startString) - \(endString)"
+                return "Week of \(startString)"
             case .month:
                 let formatter = DateFormatter()
                 formatter.dateFormat = "MMMM yyyy"
@@ -108,18 +115,13 @@ struct GlobalNavBar: View {
                 return ""
             }
             let start = weekInterval.start
-            let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
-            
-            // Get week number
-            let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
             
             // Format dates as M/d/yy
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "M/d/yy"
             let startString = dateFormatter.string(from: start)
-            let endString = dateFormatter.string(from: end)
             
-            return "Week\(weekNumber): \(startString) - \(endString)"
+            return "Week of \(startString)"
         case .day:
             let date = navigationManager.currentDate
             
@@ -173,8 +175,9 @@ struct GlobalNavBar: View {
                 navigationManager.updateInterval(interval, date: Date())
                 navigationManager.switchToYearlyCalendar()
             } else {
-                navigationManager.switchToCalendar()
+                // Update interval BEFORE switching view so switchToCalendar() sees the new interval
                 navigationManager.updateInterval(interval, date: Date())
+                navigationManager.switchToCalendar()
             }
         }
     }
@@ -245,10 +248,15 @@ struct GlobalNavBar: View {
     }
     
     var body: some View {
+        GeometryReader { geometry in
+            let safeAreaLeading = geometry.safeAreaInsets.leading
+            let safeAreaTrailing = geometry.safeAreaInsets.trailing
+            let horizontalSafeInset = max(safeAreaLeading, safeAreaTrailing, 0)
+            
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 // First row: Main navigation
-                HStack(spacing: adaptiveButtonSpacing) {
+                HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
                     Menu {
                             Button(action: {
                                 navigationManager.switchToCalendar()
@@ -296,7 +304,7 @@ struct GlobalNavBar: View {
                         } label: {
                             Image(systemName: "line.3.horizontal")
                                 .font(adaptiveIconSize)
-                                .frame(minWidth: 44, minHeight: 44) // Apple HIG minimum tap target
+                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.borderless)
@@ -306,7 +314,7 @@ struct GlobalNavBar: View {
                             Button { step(-1) } label: {
                                 Image(systemName: "chevron.left")
                                     .font(adaptiveIconSize)
-                                    .frame(minWidth: 44, minHeight: 44)
+                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                         }
                         
@@ -318,7 +326,7 @@ struct GlobalNavBar: View {
                             }
                         } label: {
                             Text(dateLabel)
-                                .font(isCompact ? .title3 : .title2)
+                                .font(isCompact ? .headline : .title2)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                                 .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
@@ -330,15 +338,16 @@ struct GlobalNavBar: View {
                             Button { step(1) } label: {
                                 Image(systemName: "chevron.right")
                                     .font(adaptiveIconSize)
-                                    .frame(minWidth: 44, minHeight: 44)
+                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                         }
                         
                         Spacer()
                         
-                        // On larger screens: show interval buttons in first row
-                        if !isCompact {
-                            // Hide navigation buttons in Lists view and Journal Day Views
+                        // Only show interval buttons in first row if NOT using two-row layout
+                        if !shouldShowTwoRows {
+                        // Show interval buttons in single row on all devices
+                        // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 // Only show d.circle in non-Goals views
                                 if navigationManager.currentView != .goals {
@@ -356,7 +365,7 @@ struct GlobalNavBar: View {
                                     } label: {
                                         Image(systemName: "d.circle")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                     }
                                 }
@@ -365,7 +374,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "w.circle")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                 }
                                 Button {
@@ -373,7 +382,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "m.circle")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
                                 }
                                 Button {
@@ -381,11 +390,14 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "y.circle")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
                                 }
                             }
+                            }
                             
+                            // Only show action buttons in first row if NOT using two-row layout
+                            if !shouldShowTwoRows {
                             
                             // Hide ellipsis.circle in calendar views, lists view, and journal day views
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
@@ -396,7 +408,7 @@ struct GlobalNavBar: View {
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
                                     }
                                 } else {
@@ -432,7 +444,7 @@ struct GlobalNavBar: View {
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                     }
                                 }
@@ -451,7 +463,7 @@ struct GlobalNavBar: View {
                             } label: {
                                 Image(systemName: "arrow.clockwise")
                                     .font(adaptiveIconSize)
-                                    .frame(minWidth: 44, minHeight: 44)
+                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                             
                             // Hide completed tasks toggle (in Tasks, Calendar, and Lists views)
@@ -461,7 +473,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 }
                             }
                             
@@ -479,16 +491,13 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
-                                        Button("Log") {
-                                            showingAddLog = true
-                                        }
                                         Button("Goal") {
                                             NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                         }
                                     } label: {
                                         Image(systemName: "plus")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                     }
                                 } else {
                                     // In other views: menu with multiple options
@@ -502,24 +511,22 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
-                                        Button("Log") {
-                                            showingAddLog = true
-                                        }
                                     } label: {
                                         Image(systemName: "plus")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                     }
                                 }
                             }
-                        }
+                            }
                     }
-                    .padding(.horizontal, adaptivePadding)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, max(adaptivePadding + horizontalSafeInset, 4))
+                    .padding(.top, 8)
+                    .padding(.bottom, shouldShowTwoRows ? 2 : 8)
                     
-                    // Second row on compact devices: Interval and action buttons
-                    if isCompact {
-                        HStack(spacing: adaptiveButtonSpacing) {
+                    // Second row on compact portrait devices: Interval and action buttons
+                    if shouldShowTwoRows {
+                        HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
                             // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 // Only show d.circle in non-Goals views
@@ -538,7 +545,7 @@ struct GlobalNavBar: View {
                                     } label: {
                                         Image(systemName: "d.circle")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                     }
                                 }
@@ -547,7 +554,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "w.circle")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                 }
                                 Button {
@@ -555,7 +562,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "m.circle")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
                                 }
                                 Button {
@@ -563,7 +570,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: "y.circle")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
                                 }
                             }
@@ -579,7 +586,7 @@ struct GlobalNavBar: View {
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
                                     }
                                 } else {
@@ -615,7 +622,7 @@ struct GlobalNavBar: View {
                                     } label: {
                                         Image(systemName: "ellipsis.circle")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                     }
                                 }
@@ -634,7 +641,7 @@ struct GlobalNavBar: View {
                             } label: {
                                 Image(systemName: "arrow.clockwise")
                                     .font(adaptiveIconSize)
-                                    .frame(minWidth: 44, minHeight: 44)
+                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                             
                             // Hide completed tasks toggle (in Tasks, Calendar, and Lists views)
@@ -644,7 +651,7 @@ struct GlobalNavBar: View {
                                 } label: {
                                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                         .font(adaptiveIconSize)
-                                        .frame(minWidth: 44, minHeight: 44)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 }
                             }
                             
@@ -662,16 +669,13 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
-                                        Button("Log") {
-                                            showingAddLog = true
-                                        }
                                         Button("Goal") {
                                             NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                         }
                                     } label: {
                                         Image(systemName: "plus")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                     }
                                 } else {
                                     // In other views: menu with multiple options
@@ -685,23 +689,23 @@ struct GlobalNavBar: View {
                                         Button("List") {
                                             showingAddList = true
                                         }
-                                        Button("Log") {
-                                            showingAddLog = true
-                                        }
                                     } label: {
                                         Image(systemName: "plus")
                                             .font(adaptiveIconSize)
-                                            .frame(minWidth: 44, minHeight: 44)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                     }
                                 }
                             }
                         }
-                        .padding(.horizontal, adaptivePadding)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, max(adaptivePadding + horizontalSafeInset, 4))
+                        .padding(.top, 2)
+                        .padding(.bottom, 8)
                     }
                 }
-                .frame(height: isCompact ? 100 : 50)
+                .frame(height: shouldShowTwoRows ? 100 : 50)
             }
+        }
+        .frame(height: shouldShowTwoRows ? 100 : 50)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }

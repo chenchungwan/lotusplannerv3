@@ -238,34 +238,38 @@ struct JournalView: View {
             // Observe photo picker selection
         
             // Clean white background
-            Color.white
-                .ignoresSafeArea()
+            Group {
+                Color.white
+            }
+            .ignoresSafeArea(embedded ? [] : .all)
 
             // PencilKit canvas overlay
-            PencilKitView(
-                canvasView: $canvasView,
-                showsToolPicker: showToolPicker,
-                onDrawingChanged: {
-                    Task { @MainActor in
-                        await drawingManager.handleDrawingChange(date: currentDate, drawing: canvasView.drawing)
+            Group {
+                PencilKitView(
+                    canvasView: $canvasView,
+                    showsToolPicker: showToolPicker,
+                    onDrawingChanged: {
+                        Task { @MainActor in
+                            await drawingManager.handleDrawingChange(date: currentDate, drawing: canvasView.drawing)
+                        }
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        .padding(1)
+                )
+                .overlay(alignment: .topTrailing) {
+                    if drawingManager.isSaving {
+                        ProgressView()
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                            .padding()
                     }
                 }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    .padding(1)
-            )
-            .overlay(alignment: .topTrailing) {
-                if drawingManager.isSaving {
-                    ProgressView()
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(8)
-                        .padding()
-                }
             }
-                .ignoresSafeArea()
+            .ignoresSafeArea(embedded ? [] : .all)
             // Movable photos overlay
             ForEach(photos.indices, id: \.self) { idx in
                 DraggablePhotoView(

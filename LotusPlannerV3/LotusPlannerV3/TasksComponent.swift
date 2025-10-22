@@ -139,26 +139,45 @@ extension TasksComponent {
 
     @ViewBuilder
     private var verticalCardsView: some View {
-        VStack(spacing: 3) {
-            ScrollView {
-                VStack(spacing: 3) {
-                    ForEach(localTaskLists, id: \.id) { list in
-                        card(for: list, enableScroll: false, maxHeight: nil)
-                    }
-                    if showEmptyState && noVisibleTasks {
-                        Text("No tasks")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
+        if isSingleDayView {
+            // In single day view, no ScrollView - flexible height
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(localTaskLists, id: \.id) { list in
+                    card(for: list, enableScroll: false, maxHeight: nil)
+                }
+                if showEmptyState && noVisibleTasks {
+                    Text("No tasks")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        } else {
+            // In other views, use ScrollView with background styling
+            VStack(alignment: .leading, spacing: 3) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(localTaskLists, id: \.id) { list in
+                            card(for: list, enableScroll: false, maxHeight: nil)
+                        }
+                        if showEmptyState && noVisibleTasks {
+                            Text("No tasks")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        }
                     }
                 }
             }
+            .padding(3)
+            .background(Color(.tertiarySystemBackground))
+            .cornerRadius(12)
         }
-        .padding(3)
-        .background(Color(.tertiarySystemBackground))
-        .cornerRadius(12)
     }
 
     private var noVisibleTasks: Bool {

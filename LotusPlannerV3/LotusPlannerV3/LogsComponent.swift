@@ -14,7 +14,7 @@ struct LogsComponent: View {
     var body: some View {
         if appPrefs.showAnyLogs {
             VStack(alignment: .leading, spacing: 16) {
-                // Header
+                // Header with + button
                 HStack {
                     Text("Logs")
                         .font(.headline)
@@ -22,47 +22,59 @@ struct LogsComponent: View {
                         .foregroundColor(.primary)
                     
                     Spacer()
+                    
+                    Button(action: {
+                        viewModel.showingAddLogSheet = true
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(viewModel.accentColor)
+                    }
+                    .buttonStyle(.plain)
                 }
                 
-                // All log sections in a scrollable view
-                ScrollView {
+                // All log sections (scrollable only in horizontal mode)
+                Group {
                     if horizontal {
-                        VStack(alignment: .leading, spacing: 16) {
-                            // First row: Weight and Workout
-                            HStack(alignment: .top, spacing: 16) {
-                                if appPrefs.showWeightLogs {
-                                    weightSection
-                                }
-                                
-                                if appPrefs.showWorkoutLogs {
-                                    workoutSection
-                                }
-                                
-                                Spacer()
-                            }
-                            
-                            // Second row: Water and Food
-                            HStack(alignment: .top, spacing: 16) {
-                                if appPrefs.showWaterLogs {
-                                    waterSection
-                                }
-                                
-                                if appPrefs.showFoodLogs {
-                                    foodSection
-                                }
-                                
-                                Spacer()
-                            }
-                            
-                            // Third row: Custom Logs (same width as other logs)
-                            if appPrefs.showCustomLogs {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                // First row: Weight and Workout
                                 HStack(alignment: .top, spacing: 16) {
-                                    customLogSectionHorizontal
+                                    if appPrefs.showWeightLogs {
+                                        weightSection
+                                    }
+                                    
+                                    if appPrefs.showWorkoutLogs {
+                                        workoutSection
+                                    }
+                                    
                                     Spacer()
+                                }
+                                
+                                // Second row: Water and Food
+                                HStack(alignment: .top, spacing: 16) {
+                                    if appPrefs.showWaterLogs {
+                                        waterSection
+                                    }
+                                    
+                                    if appPrefs.showFoodLogs {
+                                        foodSection
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                
+                                // Third row: Custom Logs (same width as other logs)
+                                if appPrefs.showCustomLogs {
+                                    HStack(alignment: .top, spacing: 16) {
+                                        customLogSectionHorizontal
+                                        Spacer()
+                                    }
                                 }
                             }
                         }
                     } else {
+                        // Vertical layout - no ScrollView, let parent handle scrolling
                         VStack(spacing: 16) {
                             // Weight Section
                             if appPrefs.showWeightLogs {

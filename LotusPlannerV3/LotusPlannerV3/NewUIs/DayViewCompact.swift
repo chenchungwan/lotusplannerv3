@@ -159,7 +159,7 @@ struct DayViewCompact: View {
                     }
                     }
                 }
-                .frame(height: clampedTasks)
+                .frame(height: clampedTasks, alignment: .top)
 
                 // Draggable divider between Tasks and Timeline/Logs + Journal
                 Rectangle()
@@ -292,8 +292,8 @@ struct DayViewCompact: View {
                 }
                 .frame(height: bottomH)
             }
-            .ignoresSafeArea(edges: .top)
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
         // Task details sheet
         .sheet(isPresented: Binding(

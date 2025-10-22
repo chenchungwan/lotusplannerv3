@@ -84,6 +84,7 @@ struct AddLogEntryView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Create") {
                         viewModel.addCurrentLogEntry()
+                        dismiss()
                     }
                     .disabled(!viewModel.canAddCurrentLogType)
                     .fontWeight(.semibold)

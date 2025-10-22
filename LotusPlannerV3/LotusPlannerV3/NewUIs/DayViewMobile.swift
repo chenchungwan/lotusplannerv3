@@ -32,7 +32,7 @@ struct DayViewMobile: View {
     }
     
     private var adaptiveSectionSpacing: CGFloat {
-        horizontalSizeClass == .compact ? 12 : 16
+        horizontalSizeClass == .compact ? 4 : 16
     }
     
     var body: some View {
@@ -92,6 +92,7 @@ struct DayViewMobile: View {
                             horizontalCards: false,
                             isSingleDayView: true
                         )
+                        .frame(maxWidth: .infinity, alignment: .top)
                     } else if !hasAnyLinkedAccount {
                         // No accounts linked - show link account UI
                         Button(action: { NavigationManager.shared.showSettings() }) {
@@ -121,9 +122,10 @@ struct DayViewMobile: View {
                             .foregroundColor(.secondary)
                             .italic()
                             .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
+                            .padding(.vertical, 8)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .top)
                 
                 // Professional tasks
                 VStack(alignment: .leading, spacing: 6) {
@@ -162,6 +164,7 @@ struct DayViewMobile: View {
                             horizontalCards: false,
                             isSingleDayView: true
                         )
+                        .frame(maxWidth: .infinity, alignment: .top)
                     } else if !hasAnyLinkedAccount {
                         // No accounts linked - show link account UI (only show once)
                         EmptyView() // This will be handled by the personal tasks section
@@ -172,9 +175,10 @@ struct DayViewMobile: View {
                             .foregroundColor(.secondary)
                             .italic()
                             .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
+                            .padding(.vertical, 8)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .top)
                 
                 // Logs (only if any logs are enabled)
                 if appPrefs.showAnyLogs {
@@ -191,8 +195,9 @@ struct DayViewMobile: View {
                         .padding(.horizontal, adaptivePadding)
                 }
             }
-            .padding(.horizontal, adaptivePadding)
+            .padding(.horizontal, max(adaptivePadding, 0))
             .padding(.vertical, adaptivePadding)
+            .safeAreaPadding(.horizontal, 8)
             }
         }
         // Task details sheet
