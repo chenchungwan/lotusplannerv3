@@ -483,45 +483,68 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            // Hide all icons to the right of > when in journalDayViews
-                            if navigationManager.currentView != .journalDayViews {
-                                if navigationManager.currentView == .goals {
-                                    // In Goals view: menu with all options
-                                    Menu {
-                                        Button("Event") {
-                                            showingAddEvent = true
-                                        }
-                                        Button("Task") {
-                                            showingAddTask = true
-                                        }
-                                        Button("List") {
-                                            showingAddList = true
-                                        }
-                                        Button("Goal") {
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
-                                        }
-                                    } label: {
-                                        Image(systemName: "plus")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                            // + menu based on current view
+                            if navigationManager.currentView == .journalDayViews {
+                                // In Journal Day Views: menu with Event and Task only
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
                                     }
-                                } else {
-                                    // In other views: menu with multiple options
-                                    Menu {
-                                        Button("Event") {
-                                            showingAddEvent = true
-                                        }
-                                        Button("Task") {
-                                            showingAddTask = true
-                                        }
-                                        Button("List") {
-                                            showingAddList = true
-                                        }
-                                    } label: {
-                                        Image(systemName: "plus")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                    Button("Task") {
+                                        showingAddTask = true
                                     }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else if navigationManager.currentView == .goals {
+                                // In Goals view: menu with Event, Task, and Goal
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                    Button("Goal") {
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else if navigationManager.currentView == .lists {
+                                // In Lists view: menu with Event, Task, and List
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                    Button("List") {
+                                        showingAddList = true
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else {
+                                // In other views: menu with Event and Task only
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 }
                             }
                             }
@@ -652,45 +675,68 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            // Hide all icons to the right of > when in journalDayViews
-                            if navigationManager.currentView != .journalDayViews {
-                                if navigationManager.currentView == .goals {
-                                    // In Goals view: menu with all options
-                                    Menu {
-                                        Button("Event") {
-                                            showingAddEvent = true
-                                        }
-                                        Button("Task") {
-                                            showingAddTask = true
-                                        }
-                                        Button("List") {
-                                            showingAddList = true
-                                        }
-                                        Button("Goal") {
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
-                                        }
-                                    } label: {
-                                        Image(systemName: "plus")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                            // + menu based on current view
+                            if navigationManager.currentView == .journalDayViews {
+                                // In Journal Day Views: menu with Event and Task only
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
                                     }
-                                } else {
-                                    // In other views: menu with multiple options
-                                    Menu {
-                                        Button("Event") {
-                                            showingAddEvent = true
-                                        }
-                                        Button("Task") {
-                                            showingAddTask = true
-                                        }
-                                        Button("List") {
-                                            showingAddList = true
-                                        }
-                                    } label: {
-                                        Image(systemName: "plus")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                    Button("Task") {
+                                        showingAddTask = true
                                     }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else if navigationManager.currentView == .goals {
+                                // In Goals view: menu with Event, Task, and Goal
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                    Button("Goal") {
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else if navigationManager.currentView == .lists {
+                                // In Lists view: menu with Event, Task, and List
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                    Button("List") {
+                                        showingAddList = true
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else {
+                                // In other views: menu with Event and Task only
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 }
                             }
                         }
