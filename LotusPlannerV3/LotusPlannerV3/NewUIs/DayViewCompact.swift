@@ -186,7 +186,8 @@ struct DayViewCompact: View {
 
                 // 2) HStack: VStack(Timeline, Logs) | Journal
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Events section
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Events")
                                 .font(.headline)
@@ -216,13 +217,12 @@ struct DayViewCompact: View {
                                 }
                             }
                         }
-                        // Clamp top (Timeline/Events list) height within left column
                         .frame(maxWidth: .infinity,
-                               maxHeight: appPrefs.showAnyLogs ? max(200, min(leftTopHeight, bottomH - dividerH - 160)) : .infinity,
+                               maxHeight: appPrefs.showAnyLogs ? max(200, min(leftTopHeight, bottomH - dividerH - 160)) : bottomH,
                                alignment: .top)
 
                         if appPrefs.showAnyLogs {
-                            // Draggable divider between Timeline and Logs inside left column
+                            // Draggable divider between Events and Logs
                             Rectangle()
                                 .fill(isLeftInnerDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
                                 .frame(height: 8)
@@ -235,7 +235,6 @@ struct DayViewCompact: View {
                                     DragGesture()
                                         .onChanged { value in
                                             isLeftInnerDividerDragging = true
-                                            // dynamic bounds based on current bottomH
                                             let minTop: CGFloat = 200
                                             let minBottomLeft: CGFloat = 160
                                             let maxTop = bottomH - dividerH - minBottomLeft
@@ -248,17 +247,20 @@ struct DayViewCompact: View {
                                         }
                                 )
 
-                            // Logs vertically: weight, workout, water, food
-                            VStack(alignment: .leading, spacing: 6) {
-
-                                
-                                LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                            // Logs section - scrollable
+                            ScrollView(.vertical, showsIndicators: true) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                                }
                             }
-                            .frame(height: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))))
+                            .frame(maxWidth: .infinity, 
+                                   maxHeight: max(160, bottomH - dividerH - max(200, min(leftTopHeight, bottomH - dividerH - 160))),
+                                   alignment: .top)
+                            .clipped()
                         }
                     }
                     // Clamp left column width based on available width
-                    .frame(width: max(180, min(leftColumnWidth, max(220, geo.size.width - 240))), alignment: .top)
+                    .frame(width: max(180, min(leftColumnWidth, max(220, geo.size.width - 240))), height: bottomH, alignment: .top)
 
                     // Draggable vertical divider between left column and journal
                     Rectangle()
