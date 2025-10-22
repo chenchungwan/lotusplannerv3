@@ -2674,6 +2674,9 @@ struct CalendarView: View {
             }
             .frame(height: rightSectionTopHeight, alignment: .top)
             .padding(.all, 8)
+            .background(Color(.systemBackground))
+            .clipped()
+            .zIndex(0) // Ensure Tasks section is below Journal section when overlapping
             
             // Draggable divider
             rightSectionDivider
@@ -2686,6 +2689,9 @@ struct CalendarView: View {
             .id(currentDate)
             .frame(maxHeight: .infinity)
             .padding(.all, 8)
+            .background(Color(.systemBackground))
+            .clipped()
+            .zIndex(1) // Ensure Journal section overrides Tasks section when overlapping
         }
     }
     
@@ -2700,6 +2706,9 @@ struct CalendarView: View {
                 .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                 .padding(.trailing, 8)
                 .frame(maxHeight: appPrefs.showAnyLogs ? nil : .infinity)
+                .background(Color(.systemBackground))
+                .clipped()
+                .zIndex(0) // Ensure Events section is below Logs section when overlapping
 
             // Logs section and divider (only if any logs are enabled)
             if appPrefs.showAnyLogs {
@@ -2708,6 +2717,9 @@ struct CalendarView: View {
                 LogsComponent(currentDate: currentDate, horizontal: false)
                     .frame(maxHeight: .infinity)
                     .padding(.all, 8)
+                    .background(Color(.systemBackground))
+                    .clipped()
+                    .zIndex(1) // Ensure Logs section overrides Events section when overlapping
             }
         }
         .frame(height: geometry.size.height, alignment: .top)
