@@ -257,11 +257,17 @@ struct DayViewExpanded: View {
                                 maxHeight: .infinity,
                                 alignment: .top
                             )
+                            .background(Color(.systemBackground))
+                            .clipped()
+                            .zIndex(0) // Ensure Tasks section is below Events section when overlapping
                         }
                     }
                     .frame(height: geometry.size.height)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
+                    .background(Color(.systemBackground))
+                    .clipped()
+                    .zIndex(1) // Ensure left column (Events + Tasks + Logs) overrides other content when overlapping
                 }
                 .frame(width: geometry.size.width)
                 

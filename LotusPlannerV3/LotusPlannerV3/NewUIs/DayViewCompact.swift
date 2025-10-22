@@ -160,6 +160,9 @@ struct DayViewCompact: View {
                     }
                 }
                 .frame(height: clampedTasks, alignment: .top)
+                .background(Color(.systemBackground))
+                .clipped()
+                .zIndex(0) // Ensure Tasks section is below Events section when overlapping
 
                 // Draggable divider between Tasks and Timeline/Logs + Journal
                 Rectangle()
@@ -293,6 +296,9 @@ struct DayViewCompact: View {
                     .padding(.bottom, 8)
                 }
                 .frame(height: bottomH)
+                .background(Color(.systemBackground))
+                .clipped()
+                .zIndex(1) // Ensure bottom section (Events + Logs + Journal) overrides top section (Tasks) when overlapping
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
