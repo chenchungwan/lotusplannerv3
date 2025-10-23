@@ -32,7 +32,7 @@ struct DayViewMobile: View {
     }
     
     private var adaptiveSectionSpacing: CGFloat {
-        horizontalSizeClass == .compact ? 4 : 16
+        2 // Minimize spacing between components for all devices
     }
     
     var body: some View {
@@ -40,7 +40,7 @@ struct DayViewMobile: View {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: adaptiveSectionSpacing) {
                     // Events list (always list in Mobile layout)
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Events")
                             .font(.headline)
                             .padding(.horizontal, adaptivePadding)
@@ -56,7 +56,7 @@ struct DayViewMobile: View {
                     }
                 
                 // Personal tasks
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Personal Tasks")
                         .font(.headline)
                         .foregroundColor(appPrefs.personalColor)
@@ -128,7 +128,7 @@ struct DayViewMobile: View {
                 .frame(maxWidth: .infinity, alignment: .top)
                 
                 // Professional tasks
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Professional Tasks")
                         .font(.headline)
                         .foregroundColor(appPrefs.professionalColor)
@@ -182,13 +182,13 @@ struct DayViewMobile: View {
                 
                 // Logs (only if any logs are enabled)
                 if appPrefs.showAnyLogs {
-                    VStack(alignment: .leading, spacing: 6) {
-                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                    VStack(alignment: .leading, spacing: 2) {
+                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false, allowInternalScrolling: false)
                     }
                 }
                 
                 // Journal
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
                     JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
                         .id(navigationManager.currentDate)
                         .frame(width: horizontalSizeClass == .compact ? .infinity : geometry.size.width * 0.95)

@@ -5,10 +5,12 @@ struct LogsComponent: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     let currentDate: Date
     let horizontal: Bool
+    let allowInternalScrolling: Bool
     
-    init(currentDate: Date = Date(), horizontal: Bool = false) {
+    init(currentDate: Date = Date(), horizontal: Bool = false, allowInternalScrolling: Bool = true) {
         self.currentDate = currentDate
         self.horizontal = horizontal
+        self.allowInternalScrolling = allowInternalScrolling
     }
     
     var body: some View {
@@ -74,8 +76,8 @@ struct LogsComponent: View {
                             }
                         }
                     } else {
-                        // Vertical layout - no ScrollView, let parent handle scrolling
-                        VStack(spacing: 16) {
+                        // Vertical layout - conditionally scrollable based on allowInternalScrolling
+                        let content = VStack(spacing: 16) {
                             // Weight Section
                             if appPrefs.showWeightLogs {
                                 weightSection
@@ -100,6 +102,14 @@ struct LogsComponent: View {
                             if appPrefs.showCustomLogs {
                                 customLogSection
                             }
+                        }
+                        
+                        if allowInternalScrolling {
+                            ScrollView(.vertical, showsIndicators: true) {
+                                content
+                            }
+                        } else {
+                            content
                         }
                     }
                 }

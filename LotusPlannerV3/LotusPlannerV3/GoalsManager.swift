@@ -228,6 +228,7 @@ class GoalsManager: ObservableObject {
     
     func getGoalsForCategory(_ categoryId: UUID) -> [GoalData] {
         return goals.filter { $0.categoryId == categoryId }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
     
     func getCategoryById(_ categoryId: UUID) -> GoalCategoryData? {

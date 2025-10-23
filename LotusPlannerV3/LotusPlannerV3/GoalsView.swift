@@ -7,6 +7,8 @@ struct GoalsView: View {
     @State private var showingCreateGoal = false
     @State private var showingCreateCategory = false
     @State private var goalToEdit: GoalData?
+    @State private var selectedGoal: GoalData?
+    @State private var showingGoalDetail = false
     
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -114,8 +116,8 @@ struct GoalsView: View {
                                 category: category,
                                 goals: getFilteredGoalsForCategory(category.id),
                                 onGoalTap: { goal in
-                                    // Handle goal tap - could show details or toggle completion
-                                    goalsManager.toggleGoalCompletion(goal.id)
+                                    selectedGoal = goal
+                                    showingGoalDetail = true
                                 },
                                 onGoalEdit: { goal in
                                     goalToEdit = goal
@@ -148,6 +150,11 @@ struct GoalsView: View {
                     }
                     .padding(adaptivePadding)
                 }
+            }
+        }
+        .sheet(isPresented: $showingGoalDetail) {
+            if let goal = selectedGoal {
+                GoalDetailSheet(goal: goal)
             }
         }
         .sheet(item: $goalToEdit) { goal in
@@ -267,6 +274,7 @@ struct GoalCategoryCard: View {
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
     @State private var showingCopyAlert = false
+    @State private var showingNoGoalsAlert = false
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
@@ -378,7 +386,12 @@ struct GoalCategoryCard: View {
                 copyGoalsFromPreviousPeriod()
             }
         } message: {
-            Text("This will add all goals from the previous \(currentInterval.rawValue.lowercased()) to this period. Your existing goals will be kept. Are you sure?")
+            Text("This will copy all \(currentInterval.rawValue.lowercased()) goals from the previous \(currentInterval.rawValue.lowercased()) to this period. Your existing goals will be kept. Are you sure?")
+        }
+        .alert("No Goals to Copy", isPresented: $showingNoGoalsAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("There are no \(currentInterval.rawValue.lowercased()) goals in the previous period to copy.")
         }
     }
     
@@ -440,11 +453,19 @@ struct GoalCategoryCard: View {
             return // Should not happen due to shouldShowRepeatIcon check
         }
         
-        // Get all goals from previous period for this category
+        // Get all goals from previous period for this category with matching timeframe type
         let previousPeriodGoals = goalsManager.goals.filter { goal in
             goal.categoryId == category.id &&
+            goal.targetTimeframe == convertToGoalTimeframe(currentInterval) &&
             goal.dueDate >= previousPeriodStart &&
             goal.dueDate < previousPeriodEnd
+        }
+        
+        // Check if there are any goals to copy
+        if previousPeriodGoals.isEmpty {
+            // Show alert that no goals were found
+            showingNoGoalsAlert = true
+            return
         }
         
         // Calculate the new due date (shift by one period forward)
@@ -481,6 +502,22 @@ struct GoalCategoryCard: View {
             )
             
             goalsManager.addGoal(newGoal)
+        }
+        
+        // Post notification to refresh All Goals view
+        NotificationCenter.default.post(name: Notification.Name("RefreshAllGoalsView"), object: nil)
+    }
+    
+    private func convertToGoalTimeframe(_ interval: TimelineInterval) -> GoalTimeframe {
+        switch interval {
+        case .week:
+            return .week
+        case .month:
+            return .month
+        case .year:
+            return .year
+        case .day:
+            return .week // Fallback, shouldn't happen
         }
     }
 }
@@ -1203,6 +1240,135 @@ struct WeekPickerView: View {
         let startString = formatter.string(from: startDate)
         let endString = formatter.string(from: endDate)
         return "\(startString) - \(endString)"
+    }
+}
+
+// MARK: - Goal Detail Sheet
+struct GoalDetailSheet: View {
+    let goal: GoalData
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    
+    private var category: GoalCategoryData? {
+        goalsManager.getCategoryById(goal.categoryId)
+    }
+    
+    private var dueDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Title
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Title")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text(goal.title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    
+                    // Description
+                    if !goal.description.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Description")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text(goal.description)
+                                .font(.body)
+                        }
+                    }
+                    
+                    // Success Metric
+                    if !goal.successMetric.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Success Metric")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text(goal.successMetric)
+                                .font(.body)
+                        }
+                    }
+                    
+                    // Category
+                    if let category = category {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Category")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text(category.title)
+                                .font(.body)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color(.systemGray5))
+                                .cornerRadius(8)
+                        }
+                    }
+                    
+                    // Timeframe
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Timeframe")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text(goal.targetTimeframe.displayName)
+                            .font(.body)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(.systemGray5))
+                            .cornerRadius(8)
+                    }
+                    
+                    // Due Date
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Due Date")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text(dueDateFormatter.string(from: goal.dueDate))
+                            .font(.body)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(goal.isCompleted ? Color.green.opacity(0.2) : Color.blue.opacity(0.2))
+                            .cornerRadius(8)
+                    }
+                    
+                    // Status
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Status")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        HStack {
+                            Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(goal.isCompleted ? .green : .secondary)
+                            Text(goal.isCompleted ? "Completed" : "In Progress")
+                                .font(.body)
+                                .fontWeight(goal.isCompleted ? .semibold : .regular)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(goal.isCompleted ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    Spacer(minLength: 20)
+                }
+                .padding()
+            }
+            .navigationTitle("Goal Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

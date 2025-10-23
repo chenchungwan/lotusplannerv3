@@ -10,12 +10,11 @@ struct AllGoalsTableContent: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
     // State for sheet presentations
-    @State private var selectedGoal: GoalData?
-    @State private var showingGoalDetail = false
     @State private var showingEditGoal = false
     @State private var goalToEdit: GoalData?
     @State private var categoryToEdit: GoalCategoryData?
     @State private var showingEditCategory = false
+    @State private var refreshTrigger = UUID()
     
     // Computed property to get all timeframes with oldest first (leftmost)
     private var timeframes: [TimeframeGroup] {
@@ -109,8 +108,8 @@ struct AllGoalsTableContent: View {
                                 adaptiveSpacing: adaptiveSpacing,
                                 isCompact: isCompact,
                                 onGoalTap: { goal in
-                                    selectedGoal = goal
-                                    showingGoalDetail = true
+                                    goalToEdit = goal
+                                    showingEditGoal = true
                                 },
                                 onGoalEdit: { goal in
                                     goalToEdit = goal
@@ -132,22 +131,25 @@ struct AllGoalsTableContent: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 20)
                 }
-            }
-        }
-        .sheet(isPresented: $showingGoalDetail) {
-            if let goal = selectedGoal {
-                GoalDetailSheet(goal: goal)
+                .id(refreshTrigger) // Force refresh when trigger changes
             }
         }
         .sheet(isPresented: $showingEditGoal) {
             if let goal = goalToEdit {
-                EditGoalView(goal: goal)
+                CreateGoalView(editingGoal: goal) {
+                    goalToEdit = nil
+                    showingEditGoal = false
+                }
             }
         }
         .sheet(isPresented: $showingEditCategory) {
             if let category = categoryToEdit {
                 EditCategoryView(category: category)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshAllGoalsView"))) { _ in
+            // Force refresh by updating the refresh trigger
+            refreshTrigger = UUID()
         }
     }
     
@@ -156,7 +158,9 @@ struct AllGoalsTableContent: View {
         return categoryGoals.filter { goal in
             TimeframeGroup(from: goal) == timeframe
         }
+        .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
+    
 }
 
 // MARK: - Timeframe Column View
@@ -176,6 +180,24 @@ struct TimeframeColumnView: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var isExpanded: Bool = true
+    
+    init(timeframe: TimeframeGroup, categories: [GoalCategoryData], columnWidth: CGFloat, adaptivePadding: CGFloat, adaptiveSpacing: CGFloat, isCompact: Bool, onGoalTap: @escaping (GoalData) -> Void, onGoalEdit: @escaping (GoalData) -> Void, onGoalDelete: @escaping (GoalData) -> Void, onCategoryEdit: @escaping (GoalCategoryData) -> Void, onCategoryDelete: @escaping (GoalCategoryData) -> Void) {
+        self.timeframe = timeframe
+        self.categories = categories
+        self.columnWidth = columnWidth
+        self.adaptivePadding = adaptivePadding
+        self.adaptiveSpacing = adaptiveSpacing
+        self.isCompact = isCompact
+        self.onGoalTap = onGoalTap
+        self.onGoalEdit = onGoalEdit
+        self.onGoalDelete = onGoalDelete
+        self.onCategoryEdit = onCategoryEdit
+        self.onCategoryDelete = onCategoryDelete
+        
+        // Auto-collapse past columns
+        let now = Date()
+        self._isExpanded = State(initialValue: timeframe.endDate >= now)
+    }
     
     private var isCurrent: Bool {
         timeframe.type == .week && isCurrentWeek(timeframe)
@@ -260,19 +282,17 @@ struct TimeframeColumnView: View {
                 ScrollView(.vertical, showsIndicators: true) {
                     LazyVStack(spacing: adaptiveSpacing) {
                         ForEach(categories) { category in
-                            let goalsForCategory = getGoals(for: category.id, in: timeframe)
-                            
                             GoalCategoryCard(
                                 category: category,
-                                goals: goalsForCategory,
+                                goals: getGoals(for: category.id, in: timeframe),
                                 onGoalTap: onGoalTap,
                                 onGoalEdit: onGoalEdit,
                                 onGoalDelete: onGoalDelete,
                                 onCategoryEdit: onCategoryEdit,
                                 onCategoryDelete: onCategoryDelete,
                                 showTags: false,
-                                currentInterval: navigationManager.currentInterval,
-                                currentDate: navigationManager.currentDate
+                                currentInterval: convertToTimelineInterval(timeframe.type),
+                                currentDate: timeframe.startDate
                             )
                             .frame(height: calculateCardHeight())
                         }
@@ -289,20 +309,27 @@ struct TimeframeColumnView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "chevron.right")
                             .font(.body)
-                            .foregroundColor(isCurrent ? .white : .primary)
+                            .foregroundColor(isCurrent ? .white : (isPast ? .secondary : .primary))
                         
                         Text(timeframe.displayName)
                             .font(.caption)
                             .fontWeight(.bold)
-                            .foregroundColor(isCurrent ? .white : .primary)
+                            .foregroundColor(isCurrent ? .white : (isPast ? .secondary : .primary))
                             .rotationEffect(.degrees(-90))
                             .fixedSize()
                             .frame(width: 20)
+                        
+                        // Show past indicator
+                        if isPast {
+                            Image(systemName: "clock")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .padding(.vertical, adaptivePadding)
                     .padding(.horizontal, 8)
                     .frame(maxHeight: .infinity)
-                    .background(isCurrent ? Color.blue : Color(.systemGray6))
+                    .background(isCurrent ? Color.blue : (isPast ? Color(.systemGray5) : Color(.systemGray6)))
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -334,6 +361,7 @@ struct TimeframeColumnView: View {
         return categoryGoals.filter { goal in
             TimeframeGroup(from: goal) == timeframe
         }
+        .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
     
     private func isCurrentWeek(_ timeframe: TimeframeGroup) -> Bool {
@@ -348,38 +376,15 @@ struct TimeframeColumnView: View {
         
         return currentWeekInterval.start == timeframeWeekStart
     }
-}
-
-// MARK: - Goal Detail Sheet
-struct GoalDetailSheet: View {
-    let goal: GoalData
-    @Environment(\.dismiss) var dismiss
     
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(goal.title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                if !goal.description.isEmpty {
-                    Text(goal.description)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Goal Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
+    private func convertToTimelineInterval(_ goalTimeframe: GoalTimeframe) -> TimelineInterval {
+        switch goalTimeframe {
+        case .week:
+            return .week
+        case .month:
+            return .month
+        case .year:
+            return .year
         }
     }
 }
@@ -487,6 +492,20 @@ struct TimeframeGroup: Identifiable, Hashable, Comparable {
     let weekOfYear: Int? // For week timeframe
     let weekStartDate: Date? // For week timeframe display
     let endDate: Date // End date of the timeframe for sorting
+    
+    var startDate: Date {
+        switch type {
+        case .year:
+            return Calendar.mondayFirst.date(from: DateComponents(year: year, month: 1, day: 1)) ?? Date()
+        case .month:
+            if let month = month {
+                return Calendar.mondayFirst.date(from: DateComponents(year: year, month: month, day: 1)) ?? Date()
+            }
+            return Date()
+        case .week:
+            return weekStartDate ?? Date()
+        }
+    }
     
     var displayName: String {
         switch type {

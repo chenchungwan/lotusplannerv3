@@ -181,8 +181,11 @@ extension TasksComponent {
     }
 
     private var noVisibleTasks: Bool {
-        tasksDict.allSatisfy { entry in
-            return entry.value.isEmpty
+        // Check if all task lists have no visible tasks (after filtering)
+        localTaskLists.allSatisfy { taskList in
+            let tasks = tasksDict[taskList.id] ?? []
+            let filteredTasks = filteredTasksForList(taskList)
+            return filteredTasks.isEmpty
         }
     }
 }

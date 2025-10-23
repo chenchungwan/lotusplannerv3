@@ -2099,7 +2099,7 @@ extension WeeklyView {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                         }
                     },
-                    hideDueDateTag: false,
+                    hideDueDateTag: true,
                     showEmptyState: false,
                     isSingleDayView: true
                 )
@@ -2139,7 +2139,7 @@ extension WeeklyView {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                         }
                     },
-                    hideDueDateTag: false,
+                    hideDueDateTag: true,
                     showEmptyState: false,
                     isSingleDayView: true
                 )

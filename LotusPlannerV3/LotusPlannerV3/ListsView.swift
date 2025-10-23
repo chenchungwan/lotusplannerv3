@@ -782,14 +782,16 @@ struct SimpleTaskRow: View {
                         .lineLimit(2)
                 }
                 
-                if let dueDate = task.dueDate {
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
-                        Text(formatDate(dueDate))
-                            .font(.caption)
-                    }
-                    .foregroundColor(.secondary)
+                if let dueDateTag = dueDateTag(for: task) {
+                    Text(dueDateTag.text)
+                        .font(.caption)
+                        .foregroundColor(dueDateTag.textColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(dueDateTag.backgroundColor)
+                        )
                 }
             }
             .contentShape(Rectangle())
@@ -808,6 +810,38 @@ struct SimpleTaskRow: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter.string(from: date)
+    }
+    
+    private func dueDateTag(for task: GoogleTask) -> (text: String, textColor: Color, backgroundColor: Color)? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        if task.isCompleted {
+            // Show completion date for completed tasks (same colors as future due tasks)
+            guard let completionDate = task.completionDate else { return nil }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d/yy"
+            return (formatter.string(from: completionDate), .primary, Color(.systemGray5))
+        } else {
+            // Show due date for incomplete tasks
+            guard let dueDate = task.dueDate else { return nil }
+            let dueDay = calendar.startOfDay(for: dueDate)
+            
+            // Show all due dates in Lists view
+            if calendar.isDate(dueDay, inSameDayAs: today) {
+                return ("Today", .white, accentColor)
+            } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+                      calendar.isDate(dueDay, inSameDayAs: tomorrow) {
+                return ("Tomorrow", .white, .cyan)
+            } else if dueDay < today {
+                return ("Overdue", .white, .red)
+            } else {
+                // Future date
+                let formatter = DateFormatter()
+                formatter.dateFormat = "M/d/yy"
+                return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
+            }
+        }
     }
 }
 
