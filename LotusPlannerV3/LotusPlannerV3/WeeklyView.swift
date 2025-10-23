@@ -917,12 +917,12 @@ extension WeeklyView {
         }) {
             VStack(alignment: .center, spacing: 2) {
                 Text(dayOfWeekAbbrev(from: date))
-                    .font(.caption)
+                    .font(.system(size: 14, weight: .semibold))
                     .fontWeight(.semibold)
                     .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
                 
                 Text(formatDateShort(from: date))
-                    .font(.caption)
+                    .font(.system(size: 16, weight: .bold))
                     .fontWeight(.bold)
                     .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
             }
@@ -1316,12 +1316,12 @@ extension WeeklyView {
             }) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(DateFormatter.standardDayOfWeek.string(from: date).uppercased())
-                        .font(DateDisplayStyle.bodyFont)
+                        .font(.system(size: 16, weight: .semibold))
                         .fontWeight(.semibold)
                         .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
                     
                     Text(DateFormatter.standardDate.string(from: date))
-                        .font(DateDisplayStyle.titleFont)
+                        .font(.system(size: 20, weight: .bold))
                         .fontWeight(.bold)
                         .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
                 }
@@ -2049,13 +2049,13 @@ extension WeeklyView {
         return VStack(spacing: 4) {
             // Standardized day of week format: MON, TUE, etc.
             Text(DateFormatter.standardDayOfWeek.string(from: date).uppercased())
-                .font(DateDisplayStyle.bodyFont)
+                .font(.system(size: 16, weight: .semibold))
                 .fontWeight(.semibold)
                 .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
             
             // Standardized date format: m/d/yy
             Text(DateFormatter.standardDate.string(from: date))
-                .font(DateDisplayStyle.titleFont)
+                .font(.system(size: 20, weight: .bold))
                 .fontWeight(.bold)
                 .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.primaryColor)
         }
