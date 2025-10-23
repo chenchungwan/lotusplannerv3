@@ -114,7 +114,7 @@ struct LogsComponent: View {
                     .padding()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding()
             .background(Color(.tertiarySystemBackground))
             .cornerRadius(12)
