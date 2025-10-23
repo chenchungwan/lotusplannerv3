@@ -52,10 +52,13 @@ struct JournalView: View {
     private func loadDrawing() {
         // Load asynchronously to support iCloud evict/download
         Task { @MainActor in
+            print("🔄 JournalView: Loading drawing for journal page date: \(currentDate)")
             if let drawing = await JournalStorageNew.shared.load(for: currentDate) {
                 canvasView.drawing = drawing
+                print("🔄 JournalView: Loaded existing drawing for date: \(currentDate)")
             } else {
                 canvasView.drawing = PKDrawing()
+                print("🔄 JournalView: No existing drawing found for date: \(currentDate)")
             }
         }
     }
@@ -91,7 +94,11 @@ struct JournalView: View {
                         Task { @MainActor in
                             // Save old content
                             await drawingManager.willSwitchDate()
+                            print("🔄 JournalView: About to save \(photos.count) photos for old date: \(oldValue)")
                             savePhotos(for: oldValue)
+                            
+                            // Clear photos array before loading new content
+                            photos.removeAll()
                             
                             // Load new content
                             loadDrawing()
@@ -124,6 +131,9 @@ struct JournalView: View {
                                 // Save old content
                                 await drawingManager.willSwitchDate()
                                 savePhotos(for: oldValue)
+                                
+                                // Clear photos array before loading new content
+                                photos.removeAll()
                                 
                                 // Load new content
                                 loadDrawing()
@@ -250,6 +260,7 @@ struct JournalView: View {
                     showsToolPicker: showToolPicker,
                     onDrawingChanged: {
                         Task { @MainActor in
+                            print("🔄 JournalView: Drawing changed, saving to journal page date: \(currentDate)")
                             await drawingManager.handleDrawingChange(date: currentDate, drawing: canvasView.drawing)
                         }
                     }
@@ -298,6 +309,7 @@ struct JournalView: View {
             }
         }
         .onChange(of: pickerItems) { _ in
+            print("🔄 JournalView: Photo picker items changed, loading selected photos for date: \(currentDate)")
             loadSelectedPhotos()
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -383,6 +395,9 @@ struct JournalView: View {
     private func savePhotos(for date: Date? = nil) {
         do {
             let targetDate = date ?? currentDate
+            print("🔄 JournalView: Saving \(photos.count) photos for journal page date: \(targetDate)")
+            print("🔄 JournalView: Current system date: \(Date())")
+            print("🔄 JournalView: NavigationManager.currentDate: \(NavigationManager.shared.currentDate)")
             
             // Always write a metadata file (can be empty) so existence checks are consistent
             // across sessions. Remove per-photo images only when clearing all.
@@ -400,6 +415,8 @@ struct JournalView: View {
                 let id = photo.id.uuidString
                 let fileName = id + ".png"
                 let fileURL = photoDir.appendingPathComponent(fileName)
+                
+                print("🔄 JournalView: Saving photo with ID: \(id) to date: \(targetDate)")
                 
                 if let data = photo.image.pngData() {
                     try data.write(to: fileURL, options: .atomic)
@@ -432,14 +449,17 @@ struct JournalView: View {
             let jsonData = try JSONEncoder().encode(metas)
             let url = metadataURL(for: targetDate)
             try jsonData.write(to: url, options: [.atomic])
+            print("🔄 JournalView: Saved metadata to: \(url.path)")
         } catch {
             // Silently fail - photos will be retried on next save
         }
     }
     private func loadPhotos(for date: Date? = nil) {
         let targetDate = date ?? currentDate
+        print("🔄 JournalView: Loading photos for date: \(targetDate)")
         photos.removeAll()
         let url = metadataURL(for: targetDate)
+        print("🔄 JournalView: Metadata URL: \(url.path)")
         
         // For iCloud files, check download status
         let fm = FileManager.default
@@ -451,8 +471,10 @@ struct JournalView: View {
         }
         
         guard let data = try? Data(contentsOf: url), let metas = try? JSONDecoder().decode([PhotoMeta].self, from: data) else { 
+            print("🔄 JournalView: No metadata found or failed to decode for date: \(targetDate)")
             return 
         }
+        print("🔄 JournalView: Found \(metas.count) photo metadata entries")
         for meta in metas {
             let fileURL = photosDirectory().appendingPathComponent(meta.fileName)
             
@@ -495,10 +517,14 @@ struct JournalView: View {
             }
             let photo = JournalPhoto(id: UUID(uuidString: meta.id) ?? UUID(), image: uiImg, position: CGPoint(x: posX, y: posY), size: CGSize(width: sizeW, height: sizeH), rotation: Angle(radians: meta.rotation))
             photos.append(photo)
+            print("🔄 JournalView: Loaded photo with ID: \(meta.id)")
         }
     }
     private func loadSelectedPhotos() {
         guard !pickerItems.isEmpty else { return }
+        let targetDate = currentDate
+        print("🔄 JournalView: Loading \(pickerItems.count) selected photos for journal page date: \(targetDate)")
+        print("🔄 JournalView: NavigationManager.currentDate: \(NavigationManager.shared.currentDate)")
         for item in pickerItems {
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self), let uiImg = UIImage(data: data) {
@@ -506,11 +532,12 @@ struct JournalView: View {
                     let size = CGSize(width: 120, height: 120)
                     let newPhoto = JournalPhoto(id: UUID(), image: uiImg, position: position, size: size, rotation: .zero)
                     photos.append(newPhoto)
+                    print("🔄 JournalView: Added new photo with ID: \(newPhoto.id) to journal page date: \(targetDate)")
                 }
             }
         }
         pickerItems.removeAll()
-        savePhotos()
+        savePhotos(for: targetDate) // Save to the journal page date, not current system date
     }
     
     
