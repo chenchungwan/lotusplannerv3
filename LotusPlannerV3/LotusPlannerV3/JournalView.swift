@@ -734,8 +734,10 @@ struct JournalView: View {
         print("🔄 JournalView: Photos directory: \(photosDirectory().path)")
         print("🔄 JournalView: Metadata URL: \(metadataURL(for: targetDate).path)")
         
-        // Log all files in iCloud photos directory
+        // Log all files in iCloud photos directory (only in debug mode)
+        #if DEBUG
         await logiCloudPhotoFiles()
+        #endif
         
         photos.removeAll()
         isLoadingPhotos = true
@@ -762,10 +764,11 @@ struct JournalView: View {
                 // Apply same robust iCloud handling as drawings
                 await ensureFileDownloadedWithRetry(url: url, maxRetries: 3)
                 
-                // Load metadata
-                let data = try Data(contentsOf: url)
+                // Load metadata with timeout protection
+                let data = try await withTimeout(seconds: 2) {
+                    try Data(contentsOf: url)
+                }
                 print("📸 Photo metadata file size: \(data.count) bytes")
-                print("📸 Photo metadata content: \(String(data: data, encoding: .utf8) ?? "Invalid UTF-8")")
                 
                 let metas = try JSONDecoder().decode([PhotoMeta].self, from: data)
                 
@@ -778,7 +781,9 @@ struct JournalView: View {
                     if FileManager.default.fileExists(atPath: localURL.path) {
                         print("📸 Found local metadata file, attempting to load...")
                         do {
-                            let localData = try Data(contentsOf: localURL)
+                            let localData = try await withTimeout(seconds: 1) {
+                                try Data(contentsOf: localURL)
+                            }
                             let localMetas = try JSONDecoder().decode([PhotoMeta].self, from: localData)
                             print("📸 Found \(localMetas.count) photos in local storage")
                             
@@ -786,13 +791,8 @@ struct JournalView: View {
                             try localData.write(to: url, options: .atomic)
                             print("📸 Copied local photos to iCloud")
                             
-                            // Use local photos
-                            var loadedPhotos: [JournalPhoto] = []
-                            for meta in localMetas {
-                                if let photo = await loadPhotoWithRetry(meta: meta, maxRetries: 2) {
-                                    loadedPhotos.append(photo)
-                                }
-                            }
+                            // Load photos in parallel for better performance
+                            let loadedPhotos = await loadPhotosInParallel(metas: localMetas)
                             photos = loadedPhotos
                             print("✅ Successfully loaded \(loadedPhotos.count) photos from local storage for \(date)")
                             return
@@ -802,15 +802,8 @@ struct JournalView: View {
                     }
                 }
                 
-                // Load each photo with robust handling
-                var loadedPhotos: [JournalPhoto] = []
-                for meta in metas {
-                    if let photo = await loadPhotoWithRetry(meta: meta, maxRetries: 2) {
-                        loadedPhotos.append(photo)
-                    }
-                }
-                
-                // Update photos array atomically
+                // Load photos in parallel for better performance
+                let loadedPhotos = await loadPhotosInParallel(metas: metas)
                 photos = loadedPhotos
                 print("✅ Successfully loaded \(loadedPhotos.count) photos for \(date)")
                 return
@@ -844,8 +837,10 @@ struct JournalView: View {
                 // Ensure photo file is downloaded if in iCloud
                 await ensureFileDownloaded(url: fileURL)
                 
-                // Load photo data
-                let data = try Data(contentsOf: fileURL)
+                // Load photo data with timeout protection
+                let data = try await withTimeout(seconds: 1.5) {
+                    try Data(contentsOf: fileURL)
+                }
                 guard let uiImg = UIImage(data: data) else {
                     print("⚠️ Failed to create UIImage from data for: \(meta.fileName)")
                     return nil
@@ -915,12 +910,11 @@ struct JournalView: View {
                 if isInCloud {
                     print("📸 Photo metadata is in iCloud, ensuring download...")
                     
-                    // Force evict stale cache and re-download fresh version
-                    try? FileManager.default.evictUbiquitousItem(at: url)
+                    // Start download without blocking
                     try? FileManager.default.startDownloadingUbiquitousItem(at: url)
                     
-                    // Wait for download with timeout
-                    let timeout: TimeInterval = 3.0
+                    // Wait for download with shorter timeout to prevent freezing
+                    let timeout: TimeInterval = 1.5
                     let startTime = Date()
                     
                     while Date().timeIntervalSince(startTime) < timeout {
@@ -934,7 +928,7 @@ struct JournalView: View {
                             }
                         }
                         
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds (faster polling)
                     }
                     
                     print("⚠️ Photo metadata download timeout, proceeding with available data")
@@ -947,13 +941,58 @@ struct JournalView: View {
                 print("❌ Photo metadata download attempt \(attempt)/\(maxRetries) failed: \(error.localizedDescription)")
                 
                 if attempt < maxRetries {
-                    let delay = UInt64(500_000_000) // 0.5 seconds
+                    let delay = UInt64(300_000_000) // 0.3 seconds (shorter delay)
                     try? await Task.sleep(nanoseconds: delay)
                 }
             }
         }
         
         print("❌ Failed to download photo metadata after \(maxRetries) attempts")
+    }
+    
+    /// Helper function to add timeout protection to async operations
+    private func withTimeout<T>(seconds: Double, operation: @escaping () throws -> T) async throws -> T {
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try operation()
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw TimeoutError()
+            }
+            
+            guard let result = try await group.next() else {
+                throw TimeoutError()
+            }
+            
+            group.cancelAll()
+            return result
+        }
+    }
+    
+    /// Load multiple photos in parallel for better performance
+    private func loadPhotosInParallel(metas: [PhotoMeta]) async -> [JournalPhoto] {
+        return await withTaskGroup(of: JournalPhoto?.self) { group in
+            for meta in metas {
+                group.addTask {
+                    await self.loadPhotoWithRetry(meta: meta, maxRetries: 2)
+                }
+            }
+            
+            var loadedPhotos: [JournalPhoto] = []
+            for await photo in group {
+                if let photo = photo {
+                    loadedPhotos.append(photo)
+                }
+            }
+            return loadedPhotos
+        }
+    }
+    
+    /// Timeout error for async operations
+    private struct TimeoutError: Error {
+        let message = "Operation timed out"
     }
     
     /// Log all files in iCloud photos directory
@@ -1000,7 +1039,7 @@ struct JournalView: View {
         print("📁 ========================================================")
     }
     
-    /// Ensure iCloud file is fully downloaded
+    /// Ensure iCloud file is fully downloaded (optimized to prevent freezing)
     private func ensureFileDownloaded(url: URL) async {
         // Check if file is in iCloud
         var isUbiquitous: AnyObject?
@@ -1014,9 +1053,9 @@ struct JournalView: View {
         // Start download if needed
         try? FileManager.default.startDownloadingUbiquitousItem(at: url)
         
-        // Wait for download to complete with timeout
-        let maxWaitTime: UInt64 = 3_000_000_000 // 3 seconds
-        let checkInterval: UInt64 = 100_000_000 // 0.1 seconds
+        // Wait for download to complete with shorter timeout to prevent freezing
+        let maxWaitTime: UInt64 = 1_500_000_000 // 1.5 seconds (reduced from 3)
+        let checkInterval: UInt64 = 50_000_000 // 0.05 seconds (faster polling)
         var totalWaitTime: UInt64 = 0
         
         while totalWaitTime < maxWaitTime {
