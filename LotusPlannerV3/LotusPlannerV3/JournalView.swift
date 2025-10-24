@@ -44,6 +44,8 @@ struct JournalView: View {
     @State private var showRetryDownload = false
     /// Prevents duplicate photo processing
     @State private var isProcessingPhotos = false
+    /// Shows unsaved changes warning
+    @State private var showUnsavedChangesAlert = false
 
     /// When `embedded` is `true` the view shows only the canvas/background
     /// content and omits its own `NavigationStack` + toolbars so it can be
@@ -179,6 +181,22 @@ struct JournalView: View {
         }
         
         isSavingOrLoading = false
+    }
+    
+    /// Check if there are unsaved changes
+    private func hasUnsavedChanges() -> Bool {
+        // Check if there are any photos or if the drawing has strokes
+        return !photos.isEmpty || !canvasView.drawing.strokes.isEmpty
+    }
+    
+    /// Refresh journal content from iCloud
+    private func refreshFromiCloud() async {
+        if hasUnsavedChanges() {
+            showUnsavedChangesAlert = true
+            return
+        }
+        
+        await loadFromiCloud()
     }
     
     /// Simple date switching - only loads new content, no automatic saving
@@ -325,6 +343,16 @@ struct JournalView: View {
         } message: {
             Text("Are you sure you want to erase all content from today's journal? This action cannot be undone.")
         }
+        .alert("Unsaved Changes", isPresented: $showUnsavedChangesAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Discard Changes", role: .destructive) {
+                Task { @MainActor in
+                    await loadFromiCloud()
+                }
+            }
+        } message: {
+            Text("You have unsaved changes. Refreshing will discard your current work. Do you want to continue?")
+        }
     }
 
     // MARK: - Top toolbar inline (all icons on same line as title)
@@ -372,6 +400,18 @@ struct JournalView: View {
                             return .primary
                         }
                     }())
+                }
+                .disabled(isSavingOrLoading)
+                
+                // Refresh button
+                Button(action: {
+                    Task { @MainActor in
+                        await refreshFromiCloud()
+                    }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.primary)
                 }
                 .disabled(isSavingOrLoading)
                 
