@@ -101,7 +101,7 @@ class JournalStorageNew {
     
     // MARK: - Load Drawing
     
-    /// Load a drawing from storage (async to support evict/download)
+    /// Load a drawing from storage with robust iCloud sync
     func load(for date: Date) async -> PKDrawing? {
         // Check cache first
         if let cached = getCached(date) {
@@ -117,28 +117,150 @@ class JournalStorageNew {
             return nil
         }
         
-        // Check if file is in iCloud and ensure download
-        var isUbiquitous: AnyObject?
-        try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-        let isInCloud = (isUbiquitous as? Bool) == true
-        
-        if isInCloud {
-            // Ensure file is downloaded if needed
-            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        // Robust iCloud sync with retry logic
+        return await loadWithRetry(url: url, date: date, maxRetries: 3)
+    }
+    
+    /// Load with retry logic and robust iCloud handling
+    private func loadWithRetry(url: URL, date: Date, maxRetries: Int) async -> PKDrawing? {
+        for attempt in 1...maxRetries {
+            do {
+                // Check if file is in iCloud
+                var isUbiquitous: AnyObject?
+                try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                let isInCloud = (isUbiquitous as? Bool) == true
+                
+                if isInCloud {
+                    // Ensure file is fully downloaded before reading
+                    await ensureFileDownloaded(url: url)
+                }
+                
+                // Try to load the data
+                let data = try Data(contentsOf: url)
+                let drawing = try PKDrawing(data: data)
+                
+                // Validate the drawing has content
+                if drawing.strokes.isEmpty {
+                    print("⚠️ Warning: Loaded empty drawing for \(formatDate(date))")
+                }
+                
+                // Cache it
+                setCache(drawing, for: date)
+                
+                print("✅ Successfully loaded drawing: \(formatDate(date)) (\(drawing.strokes.count) strokes)")
+                return drawing
+                
+            } catch {
+                print("❌ Attempt \(attempt)/\(maxRetries) failed for \(formatDate(date)): \(error.localizedDescription)")
+                
+                if attempt < maxRetries {
+                    // Exponential backoff: 1s, 2s, 4s
+                    let delay = UInt64(pow(2.0, Double(attempt - 1)) * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: delay)
+                    
+                    // Force refresh iCloud file on retry
+                    var isUbiquitous: AnyObject?
+                    try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                    if (isUbiquitous as? Bool) == true {
+                        try? FileManager.default.evictUbiquitousItem(at: url)
+                        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+                    }
+                }
+            }
         }
         
-        // Try to load
+        print("❌ Failed to load drawing after \(maxRetries) attempts for \(formatDate(date))")
+        return nil
+    }
+    
+    /// Ensure iCloud file is fully downloaded
+    private func ensureFileDownloaded(url: URL) async {
+        // Start download if needed
+        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        
+        // Wait for download to complete with timeout
+        let maxWaitTime: UInt64 = 5_000_000_000 // 5 seconds
+        let checkInterval: UInt64 = 100_000_000 // 0.1 seconds
+        var totalWaitTime: UInt64 = 0
+        
+        while totalWaitTime < maxWaitTime {
+            var downloadStatus: AnyObject?
+            try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
+            
+            if let status = downloadStatus as? URLUbiquitousItemDownloadingStatus {
+                if status == .current {
+                    print("✅ iCloud file fully downloaded")
+                    return
+                }
+            }
+            
+            try? await Task.sleep(nanoseconds: checkInterval)
+            totalWaitTime += checkInterval
+        }
+        
+        print("⚠️ iCloud download timeout, proceeding with available data")
+    }
+    
+    // MARK: - Debug Inspection
+    
+    /// Debug function to inspect iCloud Drive contents
+    func inspectiCloudContents() {
+        print("🔍 ==================== iCLOUD INSPECTION ====================")
+        
+        // Check iCloud availability
+        let iCloudAvailable = isICloudAvailable()
+        print("🔍 iCloud Available: \(iCloudAvailable)")
+        
+        if let iCloudURL = iCloudURL {
+            print("🔍 iCloud Container URL: \(iCloudURL.path)")
+            
+            // List all files in iCloud container
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(at: iCloudURL, includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey], options: [])
+                print("🔍 Found \(contents.count) items in iCloud container")
+                
+                for (index, url) in contents.enumerated() {
+                    let fileName = url.lastPathComponent
+                    let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+                    
+                    var isUbiquitous: AnyObject?
+                    try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                    let isInCloud = (isUbiquitous as? Bool) == true
+                    
+                    var downloadStatus: AnyObject?
+                    try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
+                    
+                    print("🔍 [\(index + 1)] \(fileName)")
+                    print("🔍     Size: \(fileSize) bytes")
+                    print("🔍     In iCloud: \(isInCloud)")
+                    print("🔍     Download Status: \(String(describing: downloadStatus))")
+                    print("🔍     Path: \(url.path)")
+                    print("🔍     ---")
+                }
+            } catch {
+                print("🔍 Error listing iCloud contents: \(error.localizedDescription)")
+            }
+        } else {
+            print("🔍 No iCloud container available")
+        }
+        
+        // Check local storage as fallback
+        let localURL = localURL
+        print("🔍 Local Storage URL: \(localURL.path)")
         do {
-            let data = try Data(contentsOf: url)
-            let drawing = try PKDrawing(data: data)
+            let contents = try FileManager.default.contentsOfDirectory(at: localURL, includingPropertiesForKeys: [.fileSizeKey], options: [])
+            print("🔍 Found \(contents.count) items in local storage")
             
-            // Cache it
-            setCache(drawing, for: date)
-            
-            return drawing
+            for (index, url) in contents.enumerated() {
+                let fileName = url.lastPathComponent
+                let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+                print("🔍 [\(index + 1)] \(fileName) (\(fileSize) bytes)")
+            }
         } catch {
-            return nil
+            print("🔍 Error listing local contents: \(error.localizedDescription)")
         }
+        
+        print("🔍 ========================================================")
     }
     
     // MARK: - Delete Drawing

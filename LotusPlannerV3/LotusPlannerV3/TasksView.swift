@@ -325,7 +325,6 @@ class TasksViewModel: ObservableObject {
             }
         } while pageToken != nil
         
-        print("✅ Fetched \(allTasks.count) tasks across \(pageCount) page(s) for list \(taskListId)")
         
         // Cache the complete results
         cacheTasks(allTasks, for: cacheKey)

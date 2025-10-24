@@ -1143,7 +1143,7 @@ get: { appPrefs.showFoodLogs },
             
             // Sync Progress (if syncing)
             if case .syncing = iCloudManagerInstance.syncStatus {
-                ProgressView(value: JournalSyncCoordinator.shared.progress)
+                ProgressView()
                     .progressViewStyle(LinearProgressViewStyle())
             }
             
@@ -1159,7 +1159,12 @@ get: { appPrefs.showFoodLogs },
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(JournalSyncCoordinator.shared.syncStatus == .syncing)
+            .disabled({
+                if case .syncing = iCloudManagerInstance.syncStatus {
+                    return true
+                }
+                return false
+            }())
             
             // Last Sync Time
             if let lastSync = iCloudManagerInstance.lastSyncDate {
@@ -1167,15 +1172,24 @@ get: { appPrefs.showFoodLogs },
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+            
+            // Debug iCloud Inspection Button
+            Button(action: {
+                JournalStorageNew.shared.inspectiCloudContents()
+            }) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                    Text("🔍 Inspect iCloud Contents")
+                }
+            }
+            .buttonStyle(.bordered)
+            .foregroundColor(.blue)
         }
     }
     
     private func performManualSync() async {
         // Force iCloud sync
         iCloudManagerInstance.forceCompleteSync()
-        
-        // Force journal sync
-        JournalSyncCoordinator.shared.forceSync()
         
         // Force goals sync
         await DataManager.shared.goalsManager.forceSync()
