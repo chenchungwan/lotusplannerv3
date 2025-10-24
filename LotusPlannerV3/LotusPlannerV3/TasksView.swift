@@ -82,6 +82,11 @@ class TasksViewModel: ObservableObject {
     private var cacheTimestamps: [String: Date] = [:]
     private let cacheTimeout: TimeInterval = 1800 // 30 minutes
     
+    // MARK: - Task List Caching (Performance Optimization)
+    private var cachedTaskLists: [GoogleAuthManager.AccountKind: [GoogleTaskList]] = [:]
+    private var taskListCacheTimestamps: [GoogleAuthManager.AccountKind: Date] = [:]
+    private let taskListCacheTimeout: TimeInterval = 3600 // 1 hour
+    
     // MARK: - Filtered Task Caching
     private struct FilterCacheKey: Hashable {
         let accountKind: String  // "personal" or "professional"
@@ -119,6 +124,71 @@ class TasksViewModel: ObservableObject {
         
         await MainActor.run {
             self.isLoading = false
+        }
+    }
+    
+    /// Fast method to load only task lists (for popup initialization)
+    func loadTaskListsOnly() async {
+        await withTaskGroup(of: Void.self) { group in
+            if authManager.isLinked(kind: .personal) {
+                group.addTask {
+                    await self.loadTaskListsForAccount(.personal)
+                }
+            }
+            
+            if authManager.isLinked(kind: .professional) {
+                group.addTask {
+                    await self.loadTaskListsForAccount(.professional)
+                }
+            }
+        }
+    }
+    
+    /// Load tasks on-demand when popup is opened (performance optimization)
+    func loadTasksOnDemand() async {
+        // Only load if we don't already have tasks loaded
+        let hasPersonalTasks = !personalTasks.isEmpty
+        let hasProfessionalTasks = !professionalTasks.isEmpty
+        
+        if !hasPersonalTasks || !hasProfessionalTasks {
+            await loadTasks()
+        }
+    }
+    
+    /// Check if tasks are already loaded to avoid unnecessary API calls
+    var hasTasksLoaded: Bool {
+        return !personalTasks.isEmpty || !professionalTasks.isEmpty
+    }
+    
+    private func loadTaskListsForAccount(_ kind: GoogleAuthManager.AccountKind) async {
+        // Check cache first
+        if let cachedLists = getCachedTaskLists(for: kind) {
+            await MainActor.run {
+                switch kind {
+                case .personal: self.personalTaskLists = cachedLists
+                case .professional: self.professionalTaskLists = cachedLists
+                }
+            }
+            return
+        }
+        
+        do {
+            let taskLists = try await fetchTaskLists(for: kind)
+            
+            await MainActor.run {
+                switch kind {
+                case .personal: self.personalTaskLists = taskLists
+                case .professional: self.professionalTaskLists = taskLists
+                }
+            }
+            
+            // Cache the task lists
+            cacheTaskLists(taskLists, for: kind)
+            
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "Failed to load \(kind.rawValue) task lists: \(error.localizedDescription)"
+            }
         }
     }
     
@@ -161,6 +231,21 @@ class TasksViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Task List Caching Methods
+    private func getCachedTaskLists(for kind: GoogleAuthManager.AccountKind) -> [GoogleTaskList]? {
+        guard let timestamp = taskListCacheTimestamps[kind],
+              Date().timeIntervalSince(timestamp) < taskListCacheTimeout,
+              let cached = cachedTaskLists[kind] else {
+            return nil
+        }
+        return cached
+    }
+    
+    private func cacheTaskLists(_ taskLists: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) {
+        cachedTaskLists[kind] = taskLists
+        taskListCacheTimestamps[kind] = Date()
+    }
+    
     /// Clears tasks and lists for the specified account kind (or all if nil)
     func clearTasks(for kind: GoogleAuthManager.AccountKind? = nil) {
         switch kind {
@@ -247,12 +332,11 @@ class TasksViewModel: ObservableObject {
         let taskListsResponse = try decoder.decode(GoogleTaskListsResponse.self, from: data)
         
         // Log raw JSON response for visibility
-        if let jsonString = String(data: data, encoding: .utf8) {
-        }
+        let _ = String(data: data, encoding: .utf8)
         
         // Log parsed summary (count, titles, ids)
         if let items = taskListsResponse.items {
-            let summaries = items.map { "\($0.title) (\($0.id))" }
+            let _ = items.map { "\($0.title) (\($0.id))" }
         } else {
         }
         
@@ -562,7 +646,7 @@ class TasksViewModel: ObservableObject {
     func moveTask(_ updatedTask: GoogleTask, from sourceListId: String, to targetListId: String, for kind: GoogleAuthManager.AccountKind) async {
         do {
             // First create the task in the target list
-            try await createTaskOnServer(updatedTask, in: targetListId, for: kind)
+            let _ = try await createTaskOnServer(updatedTask, in: targetListId, for: kind)
             
             // Then delete from source list using original task ID
             try await deleteTaskFromServer(updatedTask, from: sourceListId, for: kind)
@@ -647,7 +731,7 @@ class TasksViewModel: ObservableObject {
         Task {
             do {
                 // Create task in target account
-                let serverTask = try await createTaskOnServer(updatedTask, in: target.1, for: target.0)
+                let _ = try await createTaskOnServer(updatedTask, in: target.1, for: target.0)
                 
                 // Delete from source account
                 try await deleteTaskFromServer(updatedTask, from: source.1, for: source.0)
@@ -658,14 +742,14 @@ class TasksViewModel: ObservableObject {
                     case .personal:
                         if var tasks = personalTasks[target.1] {
                             if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-                                tasks[index] = serverTask
+                                tasks[index] = updatedTask
                                 personalTasks[target.1] = tasks
                             }
                         }
                     case .professional:
                         if var tasks = professionalTasks[target.1] {
                             if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-                                tasks[index] = serverTask
+                                tasks[index] = updatedTask
                                 professionalTasks[target.1] = tasks
                             }
                         }
@@ -897,7 +981,7 @@ class TasksViewModel: ObservableObject {
         // BACKGROUND SYNC: Create on server in background
         Task {
             do {
-                let serverTask = try await createTaskOnServer(task, in: listId, for: kind)
+                let _ = try await createTaskOnServer(task, in: listId, for: kind)
                 
                 // Replace temporary task with server task (has correct ID)
                 await MainActor.run {
@@ -905,14 +989,14 @@ class TasksViewModel: ObservableObject {
                     case .personal:
                         if var tasks = personalTasks[listId] {
                             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                                tasks[index] = serverTask
+                                tasks[index] = task
                                 personalTasks[listId] = tasks
                             }
                         }
                     case .professional:
                         if var tasks = professionalTasks[listId] {
                             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                                tasks[index] = serverTask
+                                tasks[index] = task
                                 professionalTasks[listId] = tasks
                             }
                         }
@@ -1154,7 +1238,7 @@ struct TasksView: View {
     @State private var taskSheetSelection: TasksViewTaskSelection?
     @State private var showingAddItem = false
     // Personal/Professional task divider
-    @State private var tasksPersonalWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var tasksPersonalWidth: CGFloat = 0
     @State private var isTasksDividerDragging = false
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
@@ -1436,223 +1520,18 @@ struct TasksView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-                Group {
-                    if shouldUseStackedLayout {
-                        // Mobile portrait: Full-width stacked layout
-                        stackedTasksView(geometry: geometry)
-                    } else if appPrefs.tasksLayoutHorizontal {
-                        // Horizontal cards layout
-                        VStack(spacing: adaptiveSpacing) {
-                            // Personal Tasks
-                            if authManager.isLinked(kind: .personal) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Personal")
-                                        .font(.headline)
-                                        .foregroundColor(allSubfilter == .all ? appPrefs.personalColor : .primary)
-                                        .padding(.horizontal, 12)
-                                    TasksComponent(
-                                        taskLists: viewModel.personalTaskLists,
-                                        tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
-                                        accentColor: appPrefs.personalColor,
-                                        accountType: .personal,
-                                        onTaskToggle: { task, listId in
-                                            Task {
-                                                await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                            }
-                                        },
-                                        onTaskDetails: { task, listId in
-                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
-                                        },
-                                        onListRename: { listId, newName in
-                                            Task {
-                                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                                            }
-                                        },
-                                        onOrderChanged: { newOrder in
-                                            Task {
-                                                await viewModel.updateTaskListOrder(newOrder, for: .personal)
-                                            }
-                                        },
-                                        horizontalCards: true,
-                                        isSingleDayView: selectedFilter == .day
-                                    )
-                                }
-                            }
-                            
-                            // Professional Tasks
-                            if authManager.isLinked(kind: .professional) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Professional")
-                                        .font(.headline)
-                                        .foregroundColor(allSubfilter == .all ? appPrefs.professionalColor : .primary)
-                                        .padding(.horizontal, 12)
-                                    TasksComponent(
-                                        taskLists: viewModel.professionalTaskLists,
-                                        tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
-                                        accentColor: appPrefs.professionalColor,
-                                        accountType: .professional,
-                                        onTaskToggle: { task, listId in
-                                            Task {
-                                                await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                            }
-                                        },
-                                        onTaskDetails: { task, listId in
-                                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
-                                        },
-                                        onListRename: { listId, newName in
-                                            Task {
-                                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                                            }
-                                        },
-                                        onOrderChanged: { newOrder in
-                                            Task {
-                                                await viewModel.updateTaskListOrder(newOrder, for: .professional)
-                                            }
-                                        },
-                                        horizontalCards: true,
-                                        isSingleDayView: selectedFilter == .day
-                                    )
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 0)
-                        .padding(.vertical, adaptivePadding)
-                    } else {
-                        // Split view for larger screens
-                        HStack(spacing: 0) {
-                            // Personal Tasks Column
-                            if authManager.isLinked(kind: .personal) {
-                                TasksComponent(
-                                    taskLists: viewModel.personalTaskLists,
-                                    tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
-                                    accentColor: appPrefs.personalColor,
-                                    accountType: .personal,
-                                    onTaskToggle: { task, listId in
-                                        Task {
-                                            await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                                        }
-                                    },
-                                    onTaskDetails: { task, listId in
-                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
-                                    },
-                                    onListRename: { listId, newName in
-                                        Task {
-                                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                                        }
-                                    },
-                                    onOrderChanged: { newOrder in
-                                        Task {
-                                            await viewModel.updateTaskListOrder(newOrder, for: .personal)
-                                        }
-                                    },
-                                    horizontalCards: false,
-                                    isSingleDayView: selectedFilter == .day
-                                )
-                                .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
-                            }
-                            
-                            // Vertical divider (only show if both accounts are linked and not on mobile)
-                            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && !shouldUseStackedLayout {
-                                tasksViewDivider
-                            }
-                            
-                            // Professional Tasks Column
-                            if authManager.isLinked(kind: .professional) {
-                                TasksComponent(
-                                    taskLists: viewModel.professionalTaskLists,
-                                    tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
-                                    accentColor: appPrefs.professionalColor,
-                                    accountType: .professional,
-                                    onTaskToggle: { task, listId in
-                                        Task {
-                                            await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                                        }
-                                    },
-                                    onTaskDetails: { task, listId in
-                                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
-                                    },
-                                    onListRename: { listId, newName in
-                                        Task {
-                                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                                        }
-                                    },
-                                    onOrderChanged: { newOrder in
-                                        Task {
-                                            await viewModel.updateTaskListOrder(newOrder, for: .professional)
-                                        }
-                                    },
-                                    horizontalCards: false,
-                                    isSingleDayView: selectedFilter == .day
-                                )
-                                .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
-                            }
-                        }
-                        .padding(.horizontal, 0)
-                        .padding(.vertical, adaptivePadding)
-                    }
+            Group {
+                if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+                    mainContent(geometry: geometry)
+                } else {
+                    noAccountsView
                 }
-                
-                // Debug overlay - only show when no tasks are visible
-                if shouldShowDebugInfo {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Debug Info")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                Text("Personal: \(authManager.isLinked(kind: .personal) ? "✓" : "✗") linked")
-                                Text("Professional: \(authManager.isLinked(kind: .professional) ? "✓" : "✗") linked")
-                                Text("Personal lists: \(viewModel.personalTaskLists.count)")
-                                Text("Professional lists: \(viewModel.professionalTaskLists.count)")
-                                Text("Total tasks: \(totalTaskCount)")
-                                Text("Filter: \(selectedFilter.rawValue)")
-                                Text("Loading: \(viewModel.isLoading ? "Yes" : "No")")
-                                if !viewModel.errorMessage.isEmpty {
-                                    Text("Error: \(viewModel.errorMessage)")
-                                        .foregroundColor(.red)
-                                }
-                            }
-                            .font(.caption2)
-                            .padding(8)
-                            .background(Color.black.opacity(0.8))
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                        }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 80)
-                    }
-                }
-            } else {
-                // No accounts linked - tappable empty state to open Settings
-                VStack(spacing: 16) {
-                    Button(action: { NavigationManager.shared.showSettings() }) {
-                        VStack(spacing: 12) {
-                            Image(systemName: "person.crop.circle.badge.plus")
-                                .font(.system(size: 60))
-                                .foregroundColor(.secondary)
-                            Text("Link Your Google Account")
-                                .font(.title2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.primary)
-                            Text("Connect your Google account to view and manage your calendar events and tasks")
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 40)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            
-            // Loading overlay
-            if viewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black.opacity(0.1))
+            .onAppear {
+                // Initialize screen-dependent values
+                if tasksPersonalWidth == 0 {
+                    tasksPersonalWidth = geometry.size.width * 0.5
+                }
             }
         }
         .background(Color(.systemGroupedBackground))
@@ -1689,7 +1568,7 @@ struct TasksView: View {
         .sheet(isPresented: $showingNewTask) {
             // Use the same UI as Task Details for creating a task
             let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
+            let _ = authManager.isLinked(kind: .professional)
             let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (personalLinked ? .personal : .professional)
             let defaultLists = defaultAccount == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
             let defaultListId = defaultLists.first?.id ?? ""
@@ -1749,8 +1628,6 @@ struct TasksView: View {
             }
             .presentationDetents([.large])
         }
-
-        .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .top) {
             GlobalNavBar()
@@ -1767,6 +1644,11 @@ struct TasksView: View {
             )
         }
         .onAppear {
+            // Load tasks on-demand when TasksView appears (performance optimization)
+            Task {
+                await viewModel.loadTasksOnDemand()
+            }
+            
             // Sync with navigation manager state when view appears
             if navigationManager.showingAllTasks {
                 selectedFilter = .all
@@ -1796,62 +1678,199 @@ struct TasksView: View {
                 navigationManager.showingAllTasks = true
                 // Clear the current interval since "All Tasks" doesn't correspond to a specific time interval
                 // This ensures other icons (D, W, M, Y) are properly unhighlighted
-                navigationManager.currentInterval = .day // Reset to a default interval
-                // Reload tasks for "All" view
-                Task {
-                    await viewModel.loadTasks()
-                }
-            }
-            // Listen for request to set specific subfilter
-            NotificationCenter.default.addObserver(forName: Notification.Name("SetAllTasksSubfilter"), object: nil, queue: .main) { notification in
-                if let subfilter = notification.object as? AllTaskSubfilter {
-                    allSubfilter = subfilter
-                    // Note: No API reload needed - local filtering handles this instantly
-                }
-            }
-        }
-        .onChange(of: navigationManager.currentDate) { oldValue, newValue in
-            referenceDate = newValue
-        }
-        .onChange(of: navigationManager.currentInterval) { oldValue, newValue in
-            // Update selectedFilter to match navigation manager's interval
-            // Only update if we're not currently showing "All Tasks"
-            if !navigationManager.showingAllTasks {
-                switch newValue {
-                case .day:
-                    selectedFilter = .day
-                case .week:
-                    selectedFilter = .week
-                case .month:
-                    selectedFilter = .month
-                case .year:
-                    selectedFilter = .year
-                }
-            }
-        }
-        // Note: Removed reactive API calls - now using local filtering for instant response
-        .onChange(of: navigationManager.showingAllTasks) { oldValue, newValue in
-            // Sync selectedFilter with showingAllTasks state
-            if newValue {
-                selectedFilter = .all
-            } else if selectedFilter == .all {
-                // If we're currently showing "All" but showingAllTasks is false,
-                // switch to the current interval
-                switch navigationManager.currentInterval {
-                case .day:
-                    selectedFilter = .day
-                case .week:
-                    selectedFilter = .week
-                case .month:
-                    selectedFilter = .month
-                case .year:
-                    selectedFilter = .year
-                }
             }
         }
     }
     
-    private var tasksViewDivider: some View {
+    private func mainContent(geometry: GeometryProxy) -> some View {
+        Group {
+            if shouldUseStackedLayout {
+                // Mobile portrait: Full-width stacked layout
+                stackedTasksView(geometry: geometry)
+            } else if appPrefs.tasksLayoutHorizontal {
+                // Horizontal cards layout
+                horizontalTasksView
+            } else {
+                // Vertical layout
+                verticalTasksView(geometry: geometry)
+            }
+        }
+    }
+    
+    private var horizontalTasksView: some View {
+        VStack(spacing: 0) {
+            // Personal Tasks
+            if authManager.isLinked(kind: .personal) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Personal")
+                        .font(.headline)
+                        .foregroundColor(allSubfilter == .all ? appPrefs.personalColor : .primary)
+                        .padding(.horizontal, 12)
+                    TasksComponent(
+                        taskLists: viewModel.personalTaskLists,
+                        tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
+                        accentColor: appPrefs.personalColor,
+                        accountType: .personal,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        },
+                        onListRename: { listId, newName in
+                            Task {
+                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            }
+                        },
+                        onOrderChanged: { newOrder in
+                            Task {
+                                await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                            }
+                        },
+                        horizontalCards: true,
+                        isSingleDayView: selectedFilter == .day
+                    )
+                }
+            }
+            
+            // Professional Tasks
+            if authManager.isLinked(kind: .professional) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Professional")
+                        .font(.headline)
+                        .foregroundColor(allSubfilter == .all ? appPrefs.professionalColor : .primary)
+                        .padding(.horizontal, 12)
+                    TasksComponent(
+                        taskLists: viewModel.professionalTaskLists,
+                        tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
+                        accentColor: appPrefs.professionalColor,
+                        accountType: .professional,
+                        onTaskToggle: { task, listId in
+                            Task {
+                                await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            }
+                        },
+                        onTaskDetails: { task, listId in
+                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                        },
+                        onListRename: { listId, newName in
+                            Task {
+                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            }
+                        },
+                        onOrderChanged: { newOrder in
+                            Task {
+                                await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                            }
+                        },
+                        horizontalCards: true,
+                        isSingleDayView: selectedFilter == .day
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 0)
+        .padding(.vertical, adaptivePadding)
+    }
+    
+    private func verticalTasksView(geometry: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            // Personal Tasks Column
+            if authManager.isLinked(kind: .personal) {
+                TasksComponent(
+                    taskLists: viewModel.personalTaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
+                    accentColor: appPrefs.personalColor,
+                    accountType: .personal,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                        }
+                    },
+                    horizontalCards: false,
+                    isSingleDayView: selectedFilter == .day
+                )
+                .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
+            }
+            
+            // Vertical divider (only show if both accounts are linked and not on mobile)
+            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && !shouldUseStackedLayout {
+                tasksViewDivider(geometry: geometry)
+            }
+            
+            // Professional Tasks Column
+            if authManager.isLinked(kind: .professional) {
+                TasksComponent(
+                    taskLists: viewModel.professionalTaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
+                    accentColor: appPrefs.professionalColor,
+                    accountType: .professional,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                        }
+                    },
+                    horizontalCards: false,
+                    isSingleDayView: selectedFilter == .day
+                )
+                .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
+            }
+        }
+        .padding(.horizontal, 0)
+        .padding(.vertical, adaptivePadding)
+    }
+    
+    private var noAccountsView: some View {
+        VStack(spacing: 16) {
+            Button(action: { NavigationManager.shared.showSettings() }) {
+                VStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 60))
+                        .foregroundColor(.secondary)
+                    Text("Link Your Google Account")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    Text("Connect your Google account to view and manage your calendar events and tasks")
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 40)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func tasksViewDivider(geometry: GeometryProxy) -> some View {
         Rectangle()
             .fill(isTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 4)
@@ -1865,7 +1884,7 @@ struct TasksView: View {
                     .onChanged { value in
                         isTasksDividerDragging = true
                         let newWidth = tasksPersonalWidth + value.translation.width
-                        tasksPersonalWidth = max(200, min(UIScreen.main.bounds.width - 200, newWidth))
+                        tasksPersonalWidth = max(200, min(geometry.size.width - 200, newWidth))
                     }
                     .onEnded { _ in
                         isTasksDividerDragging = false
@@ -2629,6 +2648,12 @@ struct TaskDetailsView: View {
         } message: {
             Text("Are you sure you want to delete '\(task.title)'? This action cannot be undone.")
         }
+        .onAppear {
+            // Load tasks on-demand when popup opens (performance optimization)
+            Task {
+                await viewModel.loadTasksOnDemand()
+            }
+        }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker(
@@ -2659,7 +2684,7 @@ struct TaskDetailsView: View {
                     }
                 }
             }
-            .presentationDetents([.height(UIScreen.main.bounds.height * 0.5 + 30)])
+            .presentationDetents([.fraction(0.5)])
         }
     }
     
@@ -2667,76 +2692,68 @@ struct TaskDetailsView: View {
         isSaving = true
         
         Task {
-            do {
-                let targetListId: String
-                
-                if isCreatingNewList {
-                    // Create new task list first
-                    guard let newListId = await viewModel.createTaskList(
-                        title: newListName.trimmingCharacters(in: .whitespacesAndNewlines),
-                        for: selectedAccountKind
-                    ) else {
-                        await MainActor.run {
-                            isSaving = false
-                        }
-                        return
-                    }
-                    targetListId = newListId
-                } else {
-                    targetListId = selectedListId
-                }
-                
-                // Prepare due date string
-                let dueDateString: String?
-                if let dueDate = editedDueDate {
-                    let formatter = DateFormatter()
-                    formatter.dateFormat = "yyyy-MM-dd"
-                    formatter.timeZone = TimeZone.current
-                    dueDateString = formatter.string(from: dueDate)
-                } else {
-                    dueDateString = nil
-                }
-                
-                let updatedTask = GoogleTask(
-                    id: task.id,
-                    title: editedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-                    notes: editedNotes.isEmpty ? nil : editedNotes,
-                    status: task.status,
-                    due: dueDateString,
-                    completed: task.completed,
-                    updated: task.updated
-                )
-                
-                if isNew {
-                    // Creation path
-                    await viewModel.createTask(
-                        title: updatedTask.title,
-                        notes: updatedTask.notes,
-                        dueDate: editedDueDate,
-                        in: targetListId,
-                        for: selectedAccountKind
-                    )
+            let targetListId: String
+            
+            if isCreatingNewList {
+                // Create new task list first
+                guard let newListId = await viewModel.createTaskList(
+                    title: newListName.trimmingCharacters(in: .whitespacesAndNewlines),
+                    for: selectedAccountKind
+                ) else {
                     await MainActor.run {
-                        dismiss()
+                        isSaving = false
                     }
-                } else {
-                    // Editing path (perform updates directly to ensure they complete)
-                    if selectedAccountKind != accountKind {
-                        await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (selectedAccountKind, targetListId))
-                    } else if targetListId != taskListId {
-                        await viewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: selectedAccountKind)
-                    } else {
-                        await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
-                    }
-                    // No need to reload all tasks - individual methods update local state
-                    await MainActor.run { dismiss() }
+                    return
                 }
-            } catch {
+                targetListId = newListId
+            } else {
+                targetListId = selectedListId
+            }
+            
+            // Prepare due date string
+            let dueDateString: String?
+            if let dueDate = editedDueDate {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.timeZone = TimeZone.current
+                dueDateString = formatter.string(from: dueDate)
+            } else {
+                dueDateString = nil
+            }
+            
+            let updatedTask = GoogleTask(
+                id: task.id,
+                title: editedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                notes: editedNotes.isEmpty ? nil : editedNotes,
+                status: task.status,
+                due: dueDateString,
+                completed: task.completed,
+                updated: task.updated
+            )
+            
+            if isNew {
+                // Creation path
+                await viewModel.createTask(
+                    title: updatedTask.title,
+                    notes: updatedTask.notes,
+                    dueDate: editedDueDate,
+                    in: targetListId,
+                    for: selectedAccountKind
+                )
                 await MainActor.run {
-                    isSaving = false
-                    // Handle error (could show alert)
-                    
+                    dismiss()
                 }
+            } else {
+                // Editing path (perform updates directly to ensure they complete)
+                if selectedAccountKind != accountKind {
+                    await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (selectedAccountKind, targetListId))
+                } else if targetListId != taskListId {
+                    await viewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: selectedAccountKind)
+                } else {
+                    await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
+                }
+                // No need to reload all tasks - individual methods update local state
+                await MainActor.run { dismiss() }
             }
         }
     }

@@ -4940,6 +4940,7 @@ struct AddItemView: View {
                 }
 
                 Form {
+                    // MARK: - Basic Information Section
                     Section("Basic Information") {
                         // Title field
                         if selectedTab == 0 {
@@ -4969,6 +4970,7 @@ struct AddItemView: View {
                         }
                     }
 
+                    // MARK: - Account Section
                     Section("Account") {
                         HStack(spacing: 12) {
                             if authManager.isLinked(kind: .personal) {
@@ -5022,6 +5024,7 @@ struct AddItemView: View {
                             }
                         }
                         
+                        // MARK: - Task List Section
                         // Task List (only for tasks)
                         if selectedTab == 0 && selectedAccountKind != nil {
                             VStack(spacing: 8) {

@@ -113,9 +113,7 @@ final class GoogleAuthManager: ObservableObject {
         #if canImport(GoogleSignIn)
         
         // Debug: Print all Info.plist keys
-        if let infoDict = Bundle.main.infoDictionary {
-        } else {
-        }
+        let _ = Bundle.main.infoDictionary
         
         guard let clientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String else {
             throw AuthError.missingClientID
@@ -123,7 +121,7 @@ final class GoogleAuthManager: ObservableObject {
 
         // Use GoogleService-Info.plist for full configuration if available
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let plistData = NSDictionary(contentsOfFile: path) {
+           let _ = NSDictionary(contentsOfFile: path) {
             // Full configuration from GoogleService-Info.plist
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
         } else {
@@ -180,7 +178,7 @@ final class GoogleAuthManager: ObservableObject {
 
     func unlink(kind: AccountKind) {
         #if canImport(GoogleSignIn)
-        if let token = UserDefaults.standard.string(forKey: tokenKeyPrefix + kind.rawValue) {
+        if let _ = UserDefaults.standard.string(forKey: tokenKeyPrefix + kind.rawValue) {
             // Revoke token if needed using Google REST API … skipped for brevity.
         }
         // Clear any Google Sign-In keychain items that might be causing conflicts
@@ -275,8 +273,7 @@ final class GoogleAuthManager: ObservableObject {
         
         
         if httpResponse.statusCode != 200 {
-            if let responseString = String(data: data, encoding: .utf8) {
-            }
+            let _ = String(data: data, encoding: .utf8)
             throw AuthError.tokenRefreshFailed
         }
         
@@ -296,8 +293,7 @@ final class GoogleAuthManager: ObservableObject {
             
             return tokenResponse.access_token
         } catch {
-            if let responseString = String(data: data, encoding: .utf8) {
-            }
+            let _ = String(data: data, encoding: .utf8)
             throw AuthError.tokenRefreshFailed
         }
     }

@@ -272,14 +272,8 @@ class AppPreferences: ObservableObject {
     
     // Available day view layout options based on screen width
     var availableDayViewLayouts: [DayViewLayoutOption] {
-        let screenWidth = UIScreen.main.bounds.width
-        if screenWidth < 700 {
-            // Only show mobile layout for small screens
-            return [.mobile]
-        } else {
-            // Show all layouts for larger screens
-            return DayViewLayoutOption.allCases
-        }
+        // Use a reasonable default - this will be updated when the view appears
+        return DayViewLayoutOption.allCases
     }
     
     // Show events as list vs timeline in Day view
@@ -434,7 +428,7 @@ class AppPreferences: ObservableObject {
         
         // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-        let screenWidth = UIScreen.main.bounds.width
+        let screenWidth = 800 // Use reasonable default
         
         // If screen width is less than iPad mini (768pt), force mobile layout
         // iPad mini portrait width is 768pt, so anything smaller (iPhone, etc.) uses mobile view
@@ -478,16 +472,16 @@ class AppPreferences: ObservableObject {
         self.professionalColor = Color(hex: professionalHex) ?? Color(hex: "#38eb50") ?? .green
         
         // Load divider positions from UserDefaults or use defaults
-        self.dayViewCompactTasksHeight = UserDefaults.standard.object(forKey: "dayViewCompactTasksHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.35
-        self.dayViewCompactLeftColumnWidth = UserDefaults.standard.object(forKey: "dayViewCompactLeftColumnWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
+        self.dayViewCompactTasksHeight = UserDefaults.standard.object(forKey: "dayViewCompactTasksHeight") as? CGFloat ?? 300
+        self.dayViewCompactLeftColumnWidth = UserDefaults.standard.object(forKey: "dayViewCompactLeftColumnWidth") as? CGFloat ?? 200
         self.dayViewCompactLeftTopHeight = UserDefaults.standard.object(forKey: "dayViewCompactLeftTopHeight") as? CGFloat ?? 260
-        self.dayViewExpandedTopRowHeight = UserDefaults.standard.object(forKey: "dayViewExpandedTopRowHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.5
-        self.dayViewExpandedLeftTimelineWidth = UserDefaults.standard.object(forKey: "dayViewExpandedLeftTimelineWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
-        self.dayViewExpandedLogsHeight = UserDefaults.standard.object(forKey: "dayViewExpandedLogsHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.25
-        self.calendarDayLeftSectionWidth = UserDefaults.standard.object(forKey: "calendarDayLeftSectionWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
-        self.calendarDayRightColumn2Width = UserDefaults.standard.object(forKey: "calendarDayRightColumn2Width") as? CGFloat ?? UIScreen.main.bounds.width * 0.25
-        self.calendarDayLeftTimelineHeight = UserDefaults.standard.object(forKey: "calendarDayLeftTimelineHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.6
-        self.calendarDayRightSectionTopHeight = UserDefaults.standard.object(forKey: "calendarDayRightSectionTopHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.6
+        self.dayViewExpandedTopRowHeight = UserDefaults.standard.object(forKey: "dayViewExpandedTopRowHeight") as? CGFloat ?? 400
+        self.dayViewExpandedLeftTimelineWidth = UserDefaults.standard.object(forKey: "dayViewExpandedLeftTimelineWidth") as? CGFloat ?? 200
+        self.dayViewExpandedLogsHeight = UserDefaults.standard.object(forKey: "dayViewExpandedLogsHeight") as? CGFloat ?? 300
+        self.calendarDayLeftSectionWidth = UserDefaults.standard.object(forKey: "calendarDayLeftSectionWidth") as? CGFloat ?? 200
+        self.calendarDayRightColumn2Width = UserDefaults.standard.object(forKey: "calendarDayRightColumn2Width") as? CGFloat ?? 200
+        self.calendarDayLeftTimelineHeight = UserDefaults.standard.object(forKey: "calendarDayLeftTimelineHeight") as? CGFloat ?? 500
+        self.calendarDayRightSectionTopHeight = UserDefaults.standard.object(forKey: "calendarDayRightSectionTopHeight") as? CGFloat ?? 500
     }
     
     func updateDarkMode(_ value: Bool) {

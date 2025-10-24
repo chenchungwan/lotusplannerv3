@@ -129,8 +129,8 @@ extension TasksComponent {
         ScrollView(.horizontal, showsIndicators: true) {
             HStack(alignment: .top, spacing: 3) {
                 ForEach(localTaskLists, id: \.id) { list in
-                    card(for: list, enableScroll: true, maxHeight: UIScreen.main.bounds.height * 0.35)
-                        .frame(width: UIScreen.main.bounds.width * 0.3, alignment: .top)
+                    card(for: list, enableScroll: true, maxHeight: 300) // Use reasonable default height
+                        .frame(width: 200, alignment: .top) // Use reasonable default width
                 }
             }
             .padding(.horizontal, 3)
@@ -183,7 +183,7 @@ extension TasksComponent {
     private var noVisibleTasks: Bool {
         // Check if all task lists have no visible tasks (after filtering)
         localTaskLists.allSatisfy { taskList in
-            let tasks = tasksDict[taskList.id] ?? []
+            let _ = tasksDict[taskList.id] ?? []
             let filteredTasks = filteredTasksForList(taskList)
             return filteredTasks.isEmpty
         }

@@ -784,7 +784,7 @@ struct GlobalNavBar: View {
                     }
                 )
             }
-            .presentationDetents([.height(UIScreen.main.bounds.height * 0.5 + 30)])
+            .presentationDetents([.fraction(0.5)])
         }
         .sheet(isPresented: $showingAddEvent) {
             NavigationStack {
@@ -860,7 +860,7 @@ struct GlobalNavBar: View {
         guard let accountKind = newListAccountKind else { return }
         
         Task {
-            await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            let _ = await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
             await MainActor.run {
                 showingAddList = false
                 newListName = ""

@@ -50,19 +50,32 @@ class DataManager: ObservableObject {
         }
     }
     
+    /// Preload task lists for faster popup initialization
+    func preloadTaskLists() async {
+        await tasksViewModel.loadTaskListsOnly()
+    }
+    
+    /// Load tasks on-demand when popup is opened (performance optimization)
+    func loadTasksOnDemand() async {
+        await tasksViewModel.loadTasksOnDemand()
+    }
+    
     private func initializeData() async {
         // Only load data if accounts are linked to avoid unnecessary error alerts
         let authManager = GoogleAuthManager.shared
+        
+        // Preload task lists for faster popup initialization
+        await preloadTaskLists()
         
         // Preload month cache only (do not mutate published arrays) if accounts are linked
         if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
             await calendarViewModel.preloadMonthIntoCache(containing: Date())
         }
         
-        // Load tasks data only if accounts are linked
-        if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
-            await tasksViewModel.loadTasks()
-        }
+        // PERFORMANCE OPTIMIZATION: Defer full task loading until actually needed
+        // This prevents the heavy loadTasks() operation from blocking app startup
+        // Tasks will be loaded on-demand when the user actually opens the tasks view
+        // or when the popup is opened for the first time
         
         isInitializing = false
     }

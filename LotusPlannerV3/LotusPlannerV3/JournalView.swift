@@ -85,7 +85,7 @@ struct JournalView: View {
         }
         
         isLoadingDrawings = true
-        print("🔄 JournalView: Loading drawing for journal page date: \(currentDate)")
+        logPerformance("Loading drawing for journal page date: \(currentDate)")
         
         // Ensure we're loading for the correct date
         let targetDate = currentDate
@@ -94,15 +94,15 @@ struct JournalView: View {
             if targetDate == currentDate {
                 canvasView.drawing = drawing
                 loadedDate = targetDate
-                print("🔄 JournalView: Loaded existing drawing for date: \(targetDate)")
+                logPerformance("Loaded existing drawing for date: \(targetDate)")
             } else {
-                print("⚠️ JournalView: Date changed during drawing load, ignoring stale data")
+                logWarning("Date changed during drawing load, ignoring stale data")
             }
         } else {
             if targetDate == currentDate {
                 canvasView.drawing = PKDrawing()
                 loadedDate = targetDate
-                print("🔄 JournalView: No existing drawing found for date: \(targetDate)")
+                logPerformance("No existing drawing found for date: \(targetDate)")
             }
         }
         isLoadingDrawings = false
@@ -111,26 +111,26 @@ struct JournalView: View {
     /// Explicit save to iCloud - saves both drawing and photos
     private func saveToiCloud() async {
         guard !isSavingOrLoading else {
-            print("⚠️ JournalView: Save blocked - operation in progress")
+            logWarning("Save blocked - operation in progress")
             return
         }
         
         isSavingOrLoading = true
         saveStatus = .saving
         
-        print("💾 JournalView: Starting explicit save to iCloud for \(currentDate)")
+        logPerformance("Starting explicit save to iCloud for \(currentDate)")
         
         do {
             // Save drawing
-            print("💾 JournalView: Saving drawing to iCloud")
+            logPerformance("Saving drawing to iCloud")
             try await JournalStorageNew.shared.save(canvasView.drawing, for: currentDate)
             
             // Save photos
-            print("💾 JournalView: Saving photos to iCloud")
+            logPerformance("Saving photos to iCloud")
             savePhotos(for: currentDate)
             
             saveStatus = .saved
-            print("✅ JournalView: Successfully saved to iCloud")
+            logInfo("Successfully saved to iCloud")
             
             // Clear save status after 2 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -141,7 +141,7 @@ struct JournalView: View {
             
         } catch {
             saveStatus = .error(error.localizedDescription)
-            print("❌ JournalView: Failed to save to iCloud: \(error.localizedDescription)")
+            logError("Failed to save to iCloud: \(error.localizedDescription)")
         }
         
         isSavingOrLoading = false
@@ -150,35 +150,29 @@ struct JournalView: View {
     /// Load from iCloud with retry mechanism
     private func loadFromiCloud() async {
         guard !isSavingOrLoading else {
-            print("⚠️ JournalView: Load blocked - operation in progress")
+            logWarning("Load blocked - operation in progress")
             return
         }
         
         isSavingOrLoading = true
         showRetryDownload = false
         
-        print("📥 JournalView: Loading from iCloud for \(currentDate)")
+        logPerformance("Loading from iCloud for \(currentDate)")
         
-        do {
-            // Load drawing
-            if let drawing = await JournalStorageNew.shared.load(for: currentDate) {
-                canvasView.drawing = drawing
-                print("📥 JournalView: Successfully loaded drawing from iCloud")
-            } else {
-                canvasView.drawing = PKDrawing()
-                print("📥 JournalView: No drawing found in iCloud")
-            }
-            
-            // Load photos
-            await loadPhotos(for: currentDate)
-            
-            loadedDate = currentDate
-            print("✅ JournalView: Successfully loaded from iCloud")
-            
-        } catch {
-            print("❌ JournalView: Failed to load from iCloud: \(error.localizedDescription)")
-            showRetryDownload = true
+        // Load drawing
+        if let drawing = await JournalStorageNew.shared.load(for: currentDate) {
+            canvasView.drawing = drawing
+            logInfo("Successfully loaded drawing from iCloud")
+        } else {
+            canvasView.drawing = PKDrawing()
+            logInfo("No drawing found in iCloud")
         }
+        
+        // Load photos
+        await loadPhotos(for: currentDate)
+        
+        loadedDate = currentDate
+        logInfo("Successfully loaded from iCloud")
         
         isSavingOrLoading = false
     }
@@ -202,13 +196,13 @@ struct JournalView: View {
     /// Simple date switching - only loads new content, no automatic saving
     private func switchToDate(_ newDate: Date) async {
         guard !isSavingOrLoading else {
-            print("⚠️ JournalView: Date switch blocked - save/load in progress")
+            logWarning("Date switch blocked - save/load in progress")
             return
         }
         
         isSavingOrLoading = true
         
-        print("🔄 JournalView: Switching to date \(newDate)")
+        logPerformance("Switching to date \(newDate)")
         
         // Clear UI state
         photos.removeAll()
@@ -243,14 +237,14 @@ struct JournalView: View {
                     .onDisappear {
                         // No automatic saving - user must explicitly save
                     }
-        .onChange(of: currentDate) { oldValue, newValue in
-            print("🔄 JournalView (embedded): Date changed from \(oldValue) to \(newValue)")
+        .onChange(of: currentDate) { newValue in
+            print("🔄 JournalView (embedded): Date changed to \(newValue)")
             Task { @MainActor in
                 await switchToDate(newValue)
             }
         }
-        .onChange(of: pickerItems) { oldValue, newValue in
-            print("📸 Photo picker selection changed: \(oldValue.count) -> \(newValue.count) items")
+        .onChange(of: pickerItems) { newValue in
+            print("📸 Photo picker selection changed to \(newValue.count) items")
             if !newValue.isEmpty {
                 print("📸 Photo picker has \(newValue.count) new items, calling loadSelectedPhotos()")
                 loadSelectedPhotos()
@@ -277,7 +271,7 @@ struct JournalView: View {
                                 await loadFromiCloud()
                             }
                         }
-                        .onChange(of: currentDate) { oldValue, newValue in
+                        .onChange(of: currentDate) { newValue in
                             Task { @MainActor in
                                 await switchToDate(newValue)
                             }
@@ -500,18 +494,20 @@ struct JournalView: View {
                 }
             }
             .ignoresSafeArea(embedded ? [] : .all)
-            // Movable photos overlay
-            ForEach(photos.indices, id: \.self) { idx in
-                DraggablePhotoView(
-                    photo: $photos[idx],
-                    onDelete: {
-                        photos.remove(at: idx)
-                    },
-                    onChanged: {
-                        // Persist edits so divider/layout changes don't undo user changes
-                        savePhotos()
-                    }
-                )
+            // Movable photos overlay - Lazy loading for performance
+            LazyVStack(spacing: 0) {
+                ForEach(photos.indices, id: \.self) { idx in
+                    DraggablePhotoView(
+                        photo: $photos[idx],
+                        onDelete: {
+                            photos.remove(at: idx)
+                        },
+                        onChanged: {
+                            // Persist edits so divider/layout changes don't undo user changes
+                            savePhotos()
+                        }
+                    )
+                }
             }
             
             // Retry download overlay
@@ -559,7 +555,7 @@ struct JournalView: View {
                     canvasSize = newSize
                 }
             }
-            .onChange(of: newSize) { _, size in
+            .onChange(of: newSize) { size in
                 // Update size and reflow when layout changes
                 canvasSize = size
                 Task { @MainActor in
@@ -569,7 +565,7 @@ struct JournalView: View {
                 }
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase) { newPhase in
             Task { @MainActor in
                 switch newPhase {
                 case .inactive, .background:
@@ -830,7 +826,7 @@ struct JournalView: View {
             do {
                 // Check if file exists
                 guard FileManager.default.fileExists(atPath: fileURL.path) else {
-                    print("⚠️ Photo file does not exist: \(meta.fileName)")
+                    logWarning("Photo file does not exist: \(meta.fileName)")
                     return nil
                 }
                 
@@ -842,13 +838,13 @@ struct JournalView: View {
                     try Data(contentsOf: fileURL)
                 }
                 guard let uiImg = UIImage(data: data) else {
-                    print("⚠️ Failed to create UIImage from data for: \(meta.fileName)")
+                    logWarning("Failed to create UIImage from data for: \(meta.fileName)")
                     return nil
                 }
                 
                 // Calculate position and size
-                let width = canvasSize.width > 0 ? canvasSize.width : UIScreen.main.bounds.width
-                let height = canvasSize.height > 0 ? canvasSize.height : UIScreen.main.bounds.height
+                let width = canvasSize.width > 0 ? canvasSize.width : 600 // Use reasonable default
+                let height = canvasSize.height > 0 ? canvasSize.height : 800 // Use reasonable default
                 let posX: CGFloat
                 let posY: CGFloat
                 let sizeW: CGFloat
@@ -873,6 +869,10 @@ struct JournalView: View {
                 let validPosX = posX.isFinite ? posX : 150.0
                 let validPosY = posY.isFinite ? posY : 150.0
                 
+                // Cache the loaded image for future use
+                let cacheKey = "\(meta.id)_\(meta.fileName)"
+                ImageCache.shared.cacheImage(uiImg, for: cacheKey)
+                
                 let photo = JournalPhoto(
                     id: UUID(uuidString: meta.id) ?? UUID(),
                     image: uiImg,
@@ -881,11 +881,11 @@ struct JournalView: View {
                     rotation: Angle(radians: meta.rotation)
                 )
                 
-                print("✅ Successfully loaded photo: \(meta.id)")
+                logPerformance("Successfully loaded and cached photo: \(meta.id)")
                 return photo
                 
             } catch {
-                print("❌ Photo load attempt \(attempt)/\(maxRetries) failed for \(meta.fileName): \(error.localizedDescription)")
+                logError("Photo load attempt \(attempt)/\(maxRetries) failed for \(meta.fileName): \(error.localizedDescription)")
                 
                 if attempt < maxRetries {
                     let delay = UInt64(500_000_000) // 0.5 seconds
@@ -894,57 +894,47 @@ struct JournalView: View {
             }
         }
         
-        print("❌ Failed to load photo after \(maxRetries) attempts: \(meta.fileName)")
+        logError("Failed to load photo after \(maxRetries) attempts: \(meta.fileName)")
         return nil
     }
     
     /// Ensure iCloud file is fully downloaded with robust retry logic
     private func ensureFileDownloadedWithRetry(url: URL, maxRetries: Int) async {
-        for attempt in 1...maxRetries {
-            do {
-                // Check if file is in iCloud
-                var isUbiquitous: AnyObject?
-                try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-                let isInCloud = (isUbiquitous as? Bool) == true
+        for _ in 1...maxRetries {
+            // Check if file is in iCloud
+            var isUbiquitous: AnyObject?
+            try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+            let isInCloud = (isUbiquitous as? Bool) == true
+            
+            if isInCloud {
+                print("📸 Photo metadata is in iCloud, ensuring download...")
                 
-                if isInCloud {
-                    print("📸 Photo metadata is in iCloud, ensuring download...")
+                // Start download without blocking
+                try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+                
+                // Wait for download with shorter timeout to prevent freezing
+                let timeout: TimeInterval = 1.5
+                let startTime = Date()
+                
+                while Date().timeIntervalSince(startTime) < timeout {
+                    var downloadStatus: AnyObject?
+                    try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
                     
-                    // Start download without blocking
-                    try? FileManager.default.startDownloadingUbiquitousItem(at: url)
-                    
-                    // Wait for download with shorter timeout to prevent freezing
-                    let timeout: TimeInterval = 1.5
-                    let startTime = Date()
-                    
-                    while Date().timeIntervalSince(startTime) < timeout {
-                        var downloadStatus: AnyObject?
-                        try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
-                        
-                        if let status = downloadStatus as? URLUbiquitousItemDownloadingStatus {
-                            if status == .current {
-                                print("📸 Photo metadata download completed")
-                                return
-                            }
+                    if let status = downloadStatus as? URLUbiquitousItemDownloadingStatus {
+                        if status == .current {
+                            print("📸 Photo metadata download completed")
+                            return
                         }
-                        
-                        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds (faster polling)
                     }
                     
-                    print("⚠️ Photo metadata download timeout, proceeding with available data")
-                } else {
-                    print("📸 Photo metadata is local, no download needed")
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds (faster polling)
                 }
-                return
                 
-            } catch {
-                print("❌ Photo metadata download attempt \(attempt)/\(maxRetries) failed: \(error.localizedDescription)")
-                
-                if attempt < maxRetries {
-                    let delay = UInt64(300_000_000) // 0.3 seconds (shorter delay)
-                    try? await Task.sleep(nanoseconds: delay)
-                }
+                print("⚠️ Photo metadata download timeout, proceeding with available data")
+            } else {
+                print("📸 Photo metadata is local, no download needed")
             }
+            return
         }
         
         print("❌ Failed to download photo metadata after \(maxRetries) attempts")
@@ -971,12 +961,12 @@ struct JournalView: View {
         }
     }
     
-    /// Load multiple photos in parallel for better performance
+    /// Load multiple photos in parallel for better performance with caching
     private func loadPhotosInParallel(metas: [PhotoMeta]) async -> [JournalPhoto] {
         return await withTaskGroup(of: JournalPhoto?.self) { group in
             for meta in metas {
                 group.addTask {
-                    await self.loadPhotoWithRetry(meta: meta, maxRetries: 2)
+                    await self.loadPhotoWithCaching(meta: meta)
                 }
             }
             
@@ -988,6 +978,38 @@ struct JournalView: View {
             }
             return loadedPhotos
         }
+    }
+    
+    /// Load photo with caching for better performance
+    private func loadPhotoWithCaching(meta: PhotoMeta) async -> JournalPhoto? {
+        let cacheKey = "\(meta.id)_\(meta.fileName)"
+        
+        // Check cache first
+        if let cachedImage = ImageCache.shared.image(for: cacheKey) {
+            logPerformance("Photo loaded from cache: \(meta.fileName)")
+            
+            // Validate dimensions to prevent "Invalid frame dimension" errors
+            let sizeW = meta.width
+            let sizeH = meta.height
+            let posX = meta.x
+            let posY = meta.y
+            
+            let validWidth = max(1.0, sizeW.isFinite ? sizeW : 120.0)
+            let validHeight = max(1.0, sizeH.isFinite ? sizeH : 120.0)
+            let validPosX = posX.isFinite ? posX : 150.0
+            let validPosY = posY.isFinite ? posY : 150.0
+            
+            return JournalPhoto(
+                id: UUID(uuidString: meta.id) ?? UUID(),
+                image: cachedImage,
+                position: CGPoint(x: validPosX, y: validPosY),
+                size: CGSize(width: validWidth, height: validHeight),
+                rotation: Angle(radians: meta.rotation)
+            )
+        }
+        
+        // Load from file and cache
+        return await loadPhotoWithRetry(meta: meta, maxRetries: 2)
     }
     
     /// Timeout error for async operations
@@ -1102,19 +1124,15 @@ struct JournalView: View {
             
             for (index, item) in pickerItems.enumerated() {
                 print("📸 loadSelectedPhotos: Processing picker item \(index + 1)/\(pickerItems.count)")
-                do {
-                    if let data = try? await item.loadTransferable(type: Data.self), let uiImg = UIImage(data: data) {
-                        let position = CGPoint(x: 150, y: 150)
-                        let size = CGSize(width: 120, height: 120)
-                        let newPhoto = JournalPhoto(id: UUID(), image: uiImg, position: position, size: size, rotation: .zero)
-                        
-                        loadedPhotos.append(newPhoto)
-                        print("📸 loadSelectedPhotos: Successfully loaded photo with ID: \(newPhoto.id)")
-                    } else {
-                        print("❌ loadSelectedPhotos: Failed to load transferable data or create UIImage for item \(index + 1)")
-                    }
-                } catch {
-                    print("❌ loadSelectedPhotos: Error loading transferable for item \(index + 1): \(error.localizedDescription)")
+                if let data = try? await item.loadTransferable(type: Data.self), let uiImg = UIImage(data: data) {
+                    let position = CGPoint(x: 150, y: 150)
+                    let size = CGSize(width: 120, height: 120)
+                    let newPhoto = JournalPhoto(id: UUID(), image: uiImg, position: position, size: size, rotation: .zero)
+                    
+                    loadedPhotos.append(newPhoto)
+                    print("📸 loadSelectedPhotos: Successfully loaded photo with ID: \(newPhoto.id)")
+                } else {
+                    print("❌ loadSelectedPhotos: Failed to load transferable data or create UIImage for item \(index + 1)")
                 }
             }
             
