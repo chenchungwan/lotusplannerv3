@@ -357,7 +357,9 @@ struct GoalCategoryCard: View {
                     ForEach(goals) { goal in
                         GoalRow(
                             goal: goal,
-                            onTap: { onGoalTap(goal) },
+                            onTap: { 
+                                goalsManager.toggleGoalCompletion(goal.id)
+                            },
                             onEdit: { onGoalEdit(goal) },
                             onDelete: { onGoalDelete(goal) },
                             showTags: showTags
