@@ -784,7 +784,7 @@ struct GlobalNavBar: View {
                     }
                 )
             }
-            .presentationDetents([.fraction(0.5)])
+            .presentationDetents([.large])
         }
         .sheet(isPresented: $showingAddEvent) {
             NavigationStack {
