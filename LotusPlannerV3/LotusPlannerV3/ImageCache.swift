@@ -1,18 +1,25 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+typealias PlatformImage = UIImage
+#elseif canImport(AppKit)
+import AppKit
+typealias PlatformImage = NSImage
+#endif
 
 /// High-performance image cache with memory management
 @MainActor
 class ImageCache: ObservableObject {
     static let shared = ImageCache()
     
-    private var cache: [String: UIImage] = [:]
+    private var cache: [String: PlatformImage] = [:]
     private var cacheTimestamps: [String: Date] = [:]
     private let maxCacheSize: Int = 50 // Maximum number of images in cache
     private let cacheTimeout: TimeInterval = 3600 // 1 hour
     
     private init() {
         // Setup memory warning observer
+        #if canImport(UIKit)
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
             object: nil,
@@ -20,6 +27,7 @@ class ImageCache: ObservableObject {
         ) { [weak self] _ in
             self?.clearCache()
         }
+        #endif
     }
     
     deinit {
@@ -27,7 +35,7 @@ class ImageCache: ObservableObject {
     }
     
     /// Get cached image or load from URL
-    func image(for url: String) -> UIImage? {
+    func image(for url: String) -> PlatformImage? {
         // Check if image is in cache and not expired
         if let cachedImage = cache[url],
            let timestamp = cacheTimestamps[url],
@@ -42,7 +50,7 @@ class ImageCache: ObservableObject {
     }
     
     /// Cache an image with automatic memory management
-    func cacheImage(_ image: UIImage, for url: String) {
+    func cacheImage(_ image: PlatformImage, for url: String) {
         // Remove oldest entries if cache is full
         if cache.count >= maxCacheSize {
             removeOldestEntries()

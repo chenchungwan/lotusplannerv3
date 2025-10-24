@@ -1,5 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Helper class to provide screen dimensions without using deprecated UIScreen.main
 @MainActor
@@ -12,6 +16,7 @@ class ScreenSizeHelper: ObservableObject {
         updateScreenSize()
         
         // Listen for screen size changes (device rotation, etc.)
+        #if canImport(UIKit)
         NotificationCenter.default.addObserver(
             forName: UIScreen.didConnectNotification,
             object: nil,
@@ -27,6 +32,7 @@ class ScreenSizeHelper: ObservableObject {
         ) { [weak self] _ in
             self?.updateScreenSize()
         }
+        #endif
     }
     
     deinit {
@@ -34,12 +40,20 @@ class ScreenSizeHelper: ObservableObject {
     }
     
     private func updateScreenSize() {
+        #if canImport(UIKit)
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             screenSize = windowScene.screen.bounds.size
         } else {
             // Fallback to main screen if window scene is not available
             screenSize = UIScreen.main.bounds.size
         }
+        #elseif canImport(AppKit)
+        if let screen = NSScreen.main {
+            screenSize = screen.frame.size
+        } else {
+            screenSize = CGSize(width: 1920, height: 1080) // Default fallback
+        }
+        #endif
     }
     
     var screenWidth: CGFloat {
