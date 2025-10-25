@@ -103,6 +103,8 @@ class JournalStorageNew {
     
     /// Load a drawing from storage with robust iCloud sync
     func load(for date: Date) async -> PKDrawing? {
+        let dateKey = formatDate(date)
+        
         // Check cache first
         if let cached = getCached(date) {
             return cached
@@ -140,18 +142,12 @@ class JournalStorageNew {
                 let drawing = try PKDrawing(data: data)
                 
                 // Validate the drawing has content
-                if drawing.strokes.isEmpty {
-                    print("⚠️ Warning: Loaded empty drawing for \(formatDate(date))")
-                }
-                
                 // Cache it
                 setCache(drawing, for: date)
                 
-                print("✅ Successfully loaded drawing: \(formatDate(date)) (\(drawing.strokes.count) strokes)")
                 return drawing
                 
             } catch {
-                print("❌ Attempt \(attempt)/\(maxRetries) failed for \(formatDate(date)): \(error.localizedDescription)")
                 
                 if attempt < maxRetries {
                     // Exponential backoff: 1s, 2s, 4s
@@ -169,7 +165,6 @@ class JournalStorageNew {
             }
         }
         
-        print("❌ Failed to load drawing after \(maxRetries) attempts for \(formatDate(date))")
         return nil
     }
     
@@ -189,7 +184,6 @@ class JournalStorageNew {
             
             if let status = downloadStatus as? URLUbiquitousItemDownloadingStatus {
                 if status == .current {
-                    print("✅ iCloud file fully downloaded")
                     return
                 }
             }
@@ -198,26 +192,19 @@ class JournalStorageNew {
             totalWaitTime += checkInterval
         }
         
-        print("⚠️ iCloud download timeout, proceeding with available data")
+        // Timeout reached, proceed with available data
     }
     
     // MARK: - Debug Inspection
     
     /// Debug function to inspect iCloud Drive contents
     func inspectiCloudContents() {
-        print("🔍 ==================== iCLOUD INSPECTION ====================")
-        
-        // Check iCloud availability
+        // Debug function - no output needed
         let iCloudAvailable = isICloudAvailable()
-        print("🔍 iCloud Available: \(iCloudAvailable)")
         
         if let iCloudURL = iCloudURL {
-            print("🔍 iCloud Container URL: \(iCloudURL.path)")
-            
-            // List all files in iCloud container
             do {
                 let contents = try FileManager.default.contentsOfDirectory(at: iCloudURL, includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey], options: [])
-                print("🔍 Found \(contents.count) items in iCloud container")
                 
                 for (index, url) in contents.enumerated() {
                     let fileName = url.lastPathComponent
@@ -229,38 +216,24 @@ class JournalStorageNew {
                     
                     var downloadStatus: AnyObject?
                     try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
-                    
-                    print("🔍 [\(index + 1)] \(fileName)")
-                    print("🔍     Size: \(fileSize) bytes")
-                    print("🔍     In iCloud: \(isInCloud)")
-                    print("🔍     Download Status: \(String(describing: downloadStatus))")
-                    print("🔍     Path: \(url.path)")
-                    print("🔍     ---")
                 }
             } catch {
-                print("🔍 Error listing iCloud contents: \(error.localizedDescription)")
+                // Error listing iCloud contents - silently fail
             }
-        } else {
-            print("🔍 No iCloud container available")
         }
         
         // Check local storage as fallback
         let localURL = localURL
-        print("🔍 Local Storage URL: \(localURL.path)")
         do {
             let contents = try FileManager.default.contentsOfDirectory(at: localURL, includingPropertiesForKeys: [.fileSizeKey], options: [])
-            print("🔍 Found \(contents.count) items in local storage")
             
             for (index, url) in contents.enumerated() {
                 let fileName = url.lastPathComponent
                 let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-                print("🔍 [\(index + 1)] \(fileName) (\(fileSize) bytes)")
             }
         } catch {
-            print("🔍 Error listing local contents: \(error.localizedDescription)")
+            // Error listing local contents - silently fail
         }
-        
-        print("🔍 ========================================================")
     }
     
     // MARK: - Delete Drawing

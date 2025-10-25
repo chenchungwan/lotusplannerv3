@@ -270,7 +270,7 @@ struct DayViewCompact: View {
                         .fill(isMiddleDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
                         .frame(width: 8)
                         .overlay(
-                            Image(systemName: "line.3.vertical")
+                            Image(systemName: "line.3.horizontal")
                                 .font(.caption)
                                 .foregroundColor(isMiddleDividerDragging ? .white : .gray)
                         )

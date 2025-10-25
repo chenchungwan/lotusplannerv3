@@ -91,7 +91,7 @@ struct DayViewExpanded: View {
                                     .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
                                     .frame(width: 8, height: geometry.size.height - 24)
                                 .overlay(
-                                    Image(systemName: "line.3.vertical")
+                                    Image(systemName: "line.3.horizontal")
                                         .font(.caption)
                                         .foregroundColor(isLeftDividerDragging ? .white : .gray)
                                 )

@@ -1896,7 +1896,7 @@ struct CalendarView: View {
             .fill(isWeekTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
             .overlay(
-                Image(systemName: "line.3.vertical")
+                Image(systemName: "line.3.horizontal")
                     .font(.caption)
                     .foregroundColor(isWeekTasksDividerDragging ? .white : .gray)
             )
@@ -2437,7 +2437,7 @@ struct CalendarView: View {
                     .fill(isVerticalTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
                     .frame(width: 8)
                     .overlay(
-                        Image(systemName: "line.3.vertical")
+                        Image(systemName: "line.3.horizontal")
                             .font(.caption)
                             .foregroundColor(isVerticalTopDividerDragging ? .white : .gray)
                     )
@@ -2501,7 +2501,7 @@ struct CalendarView: View {
                     .fill(isVerticalBottomDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
                     .frame(width: 8)
                     .overlay(
-                        Image(systemName: "line.3.vertical")
+                        Image(systemName: "line.3.horizontal")
                             .font(.caption)
                             .foregroundColor(isVerticalBottomDividerDragging ? .white : .gray)
                     )
@@ -2572,7 +2572,7 @@ struct CalendarView: View {
                         .fill(isLongVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
                         .frame(width: 8)
                         .overlay(
-                            Image(systemName: "line.3.vertical")
+                            Image(systemName: "line.3.horizontal")
                                 .font(.caption)
                                 .foregroundColor(isLongVerticalDividerDragging ? .white : .gray)
                         )
@@ -2868,7 +2868,7 @@ struct CalendarView: View {
             .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
             .overlay(
-                Image(systemName: "line.3.vertical")
+                Image(systemName: "line.3.horizontal")
                     .font(.caption)
                     .foregroundColor(isDayVerticalDividerDragging ? .white : .gray)
             )
@@ -2892,7 +2892,7 @@ struct CalendarView: View {
             .fill(isDayRightColumnDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
             .overlay(
-                Image(systemName: "line.3.vertical")
+                Image(systemName: "line.3.horizontal")
                     .font(.caption)
                     .foregroundColor(isDayRightColumnDividerDragging ? .white : .gray)
             )
