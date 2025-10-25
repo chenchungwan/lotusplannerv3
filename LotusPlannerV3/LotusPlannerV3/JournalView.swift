@@ -538,10 +538,16 @@ struct JournalView: View {
                             photos.remove(at: idx)
                         },
                         onChanged: {
-                            // Persist edits so divider/layout changes don't undo user changes
-                            savePhotos()
-                        }
+                            // Debounce saves to prevent position recalculation during dragging
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                savePhotos()
+                            }
+                        },
+                        canvasSize: canvasSize
                     )
+                    .onAppear {
+                        print("🖼️ DraggablePhotoView created with canvas size: \(canvasSize)")
+                    }
                 }
             }
             
@@ -593,11 +599,8 @@ struct JournalView: View {
             .onChange(of: newSize) { size in
                 // Update size and reflow when layout changes
                 canvasSize = size
-                Task { @MainActor in
-                    // Only reload photos if not in the middle of a save/load operation
-                    guard !isSavingOrLoading else { return }
-                    await loadPhotos()
-                }
+                // Don't reload photos on canvas size change to prevent position snapping
+                // Photos will maintain their current positions
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -865,6 +868,8 @@ struct JournalView: View {
                     rotation: Angle(radians: meta.rotation)
                 )
                 
+                print("🖼️ Photo loaded: position (\(validPosX), \(validPosY)), canvas size (\(width)x\(height))")
+                
                 return photo
                 
             } catch {
@@ -1120,6 +1125,7 @@ struct JournalView: View {
         @Binding var photo: JournalPhoto
         var onDelete: () -> Void
         var onChanged: () -> Void = {}
+        var canvasSize: CGSize = CGSize(width: 600, height: 800) // Default canvas size
 
         @State private var dragOffset: CGSize = .zero
         @State private var scale: CGFloat = 1.0
@@ -1148,8 +1154,8 @@ struct JournalView: View {
                 }
             }
             .position(
-                x: max(0, photo.position.x + dragOffset.width),
-                y: max(0, photo.position.y + dragOffset.height)
+                x: photo.position.x + dragOffset.width,
+                y: photo.position.y + dragOffset.height
             )
             .gesture(dragGesture.simultaneously(with: magnificationGesture).simultaneously(with: rotationGesture))
             .onTapGesture {
@@ -1169,8 +1175,20 @@ struct JournalView: View {
                     dragOffset = value.translation
                 }
                 .onEnded { value in
-                    photo.position.x += value.translation.width
-                    photo.position.y += value.translation.height
+                    let newX = photo.position.x + value.translation.width
+                    let newY = photo.position.y + value.translation.height
+                    
+                    // Allow photo to move freely - no bounds restrictions
+                    let finalX = newX
+                    let finalY = newY
+                    
+                    print("🖼️ Photo drag: from (\(photo.position.x), \(photo.position.y)) to (\(finalX), \(finalY))")
+                    print("🖼️ Free movement: newY=\(newY), finalY=\(finalY)")
+                    print("🖼️ Canvas size: \(canvasSize), Photo size: \(photo.size), Scale: \(scale)")
+                    
+                    photo.position.x = finalX
+                    photo.position.y = finalY
+                    
                     dragOffset = .zero
                     onChanged()
                 }
