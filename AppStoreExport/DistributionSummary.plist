@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LotusPlannerV3.ipa</key>
+	<array>
+		<dict>
+			<key>architectures</key>
+			<array>
+				<string>arm64</string>
+			</array>
+			<key>buildNumber</key>
+			<string>1</string>
+			<key>certificate</key>
+			<dict>
+				<key>SHA1</key>
+				<string>C9C20D8191C195247AE134F2BF7A4999F98E65EA</string>
+				<key>dateExpires</key>
+				<string>6/16/26</string>
+				<key>type</key>
+				<string>Apple Development</string>
+			</dict>
+			<key>entitlements</key>
+			<dict>
+				<key>application-identifier</key>
+				<string>M39PXKFX82.com.chenchungwan.LotusPlannerV3</string>
+				<key>com.apple.developer.icloud-container-environment</key>
+				<string>Development</string>
+				<key>com.apple.developer.icloud-container-identifiers</key>
+				<array>
+					<string>iCloud.com.chenchungwan.LotusPlannerV3</string>
+				</array>
+				<key>com.apple.developer.icloud-services</key>
+				<array>
+					<string>CloudKit</string>
+					<string>CloudDocuments</string>
+				</array>
+				<key>com.apple.developer.team-identifier</key>
+				<string>M39PXKFX82</string>
+				<key>com.apple.developer.ubiquity-container-identifiers</key>
+				<array>
+					<string>iCloud.com.chenchungwan.LotusPlannerV3</string>
+				</array>
+				<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+				<string>M39PXKFX82.com.chenchungwan.LotusPlannerV3</string>
+				<key>get-task-allow</key>
+				<true/>
+			</dict>
+			<key>name</key>
+			<string>LotusPlannerV3.app</string>
+			<key>profile</key>
+			<dict>
+				<key>UUID</key>
+				<string>43ad9b0f-9185-4ec1-9ef8-e97067a04bef</string>
+				<key>dateExpires</key>
+				<string>10/13/26</string>
+				<key>name</key>
+				<string>iOS Team Provisioning Profile: com.chenchungwan.LotusPlannerV3</string>
+			</dict>
+			<key>team</key>
+			<dict>
+				<key>id</key>
+				<string>M39PXKFX82</string>
+				<key>name</key>
+				<string></string>
+			</dict>
+			<key>versionNumber</key>
+			<string>2.0</string>
+		</dict>
+	</array>
+</dict>
+</plist>
