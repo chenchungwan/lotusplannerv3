@@ -104,54 +104,32 @@ struct DayViewClassic2: View {
     
     // MARK: - Left Section
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Events section with fixed height
-            eventsTimelineCard()
-                .frame(height: eventsHeight, alignment: .top)
-                .padding(.leading, 16 + geometry.safeAreaInsets.leading)
-                .padding(.trailing, 8)
-                .background(Color(.systemBackground))
-                .clipped()
-                .zIndex(0)
-
-            // Draggable divider between Events and Tasks
-            eventsTasksDivider
-            
-            // Tasks section (Personal + Professional)
-            VStack(alignment: .leading, spacing: 0) {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 16) {
+                // Events section
+                eventsTimelineCard()
+                    .padding(.leading, 16 + geometry.safeAreaInsets.leading)
+                    .padding(.trailing, 8)
+                
                 // Personal Tasks section
                 personalTasksSection
                     .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                     .padding(.trailing, 8)
-                    .background(Color(.systemBackground))
-                    .clipped()
-                    .zIndex(1)
-
+                
                 // Professional Tasks section
                 professionalTasksSection
                     .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                     .padding(.trailing, 8)
-                    .background(Color(.systemBackground))
-                    .clipped()
-                    .zIndex(2)
-            }
-            .frame(maxHeight: .infinity, alignment: .top)
-
-            // Logs section and divider (only if any logs are enabled)
-            if appPrefs.showAnyLogs {
-                logsDivider
                 
-                LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
-                    .frame(height: logsHeight)
-                    .padding(.all, 8)
-                    .background(Color(.systemBackground))
-                    .clipped()
-                    .zIndex(3) // Ensure Logs section overrides other sections when overlapping
+                // Logs section (only if any logs are enabled)
+                if appPrefs.showAnyLogs {
+                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                        .padding(.horizontal, 8)
+                }
             }
+            .padding(.vertical, 8)
         }
-        .frame(height: geometry.size.height, alignment: .top)
-        .padding(.top, 0)
-        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     // MARK: - Right Section

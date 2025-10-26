@@ -53,14 +53,14 @@ struct LogsComponent: View {
                                     Spacer()
                                 }
                                 
-                                // Second row: Water and Food
+                                // Second row: Food and Water
                                 HStack(alignment: .top, spacing: 16) {
-                                    if appPrefs.showWaterLogs {
-                                        waterSection
-                                    }
-                                    
                                     if appPrefs.showFoodLogs {
                                         foodSection
+                                    }
+                                    
+                                    if appPrefs.showWaterLogs {
+                                        waterSection
                                     }
                                     
                                     Spacer()
@@ -88,14 +88,14 @@ struct LogsComponent: View {
                                 workoutSection
                             }
                             
-                            // Water Section
-                            if appPrefs.showWaterLogs {
-                                waterSection
-                            }
-                            
                             // Food Section
                             if appPrefs.showFoodLogs {
                                 foodSection
+                            }
+                            
+                            // Water Section
+                            if appPrefs.showWaterLogs {
+                                waterSection
                             }
                             
                             // Custom Log Section
@@ -170,7 +170,7 @@ extension LogsComponent {
             }
             
             if viewModel.filteredWeightEntries.isEmpty {
-                Text("No weight entries for today")
+                Text("No entries")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -203,7 +203,7 @@ extension LogsComponent {
             }
             
             if viewModel.filteredWorkoutEntries.isEmpty {
-                Text("No workout entries for today")
+                Text("No entries")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -236,7 +236,7 @@ extension LogsComponent {
             }
             
             if viewModel.filteredFoodEntries.isEmpty {
-                Text("No food entries for today")
+                Text("No entries")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)

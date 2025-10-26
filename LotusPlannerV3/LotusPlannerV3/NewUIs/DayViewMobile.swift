@@ -117,7 +117,7 @@ struct DayViewMobile: View {
                         .buttonStyle(.plain)
                     } else {
                         // Account linked but no tasks
-                        Text("No personal tasks for today")
+                        Text("No tasks")
                             .font(.body)
                             .foregroundColor(.secondary)
                             .italic()
@@ -170,7 +170,7 @@ struct DayViewMobile: View {
                         EmptyView() // This will be handled by the personal tasks section
                     } else {
                         // Account linked but no tasks
-                        Text("No professional tasks for today")
+                        Text("No tasks")
                             .font(.body)
                             .foregroundColor(.secondary)
                             .italic()
