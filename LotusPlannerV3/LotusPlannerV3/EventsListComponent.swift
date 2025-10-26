@@ -29,7 +29,7 @@ struct EventsListComponent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if sortedEvents.isEmpty {
-                Text("No events today")
+                Text("No events")
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)

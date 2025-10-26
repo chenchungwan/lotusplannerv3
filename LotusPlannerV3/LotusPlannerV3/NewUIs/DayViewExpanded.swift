@@ -208,7 +208,7 @@ struct DayViewExpanded: View {
                                         .buttonStyle(.plain)
                                     } else {
                                         // Accounts linked but no tasks
-                                        Text("No tasks for today")
+                                        Text("No tasks")
                                             .font(.body)
                                             .foregroundColor(.secondary)
                                             .italic()

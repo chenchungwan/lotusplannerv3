@@ -774,48 +774,46 @@ struct SettingsView: View {
                     }
                 }
 
-                // Tasks View Preference (hide on iPhone portrait where stacked layout is forced)
-                if !shouldUseStackedLayout {
-                    Section("Tasks View Preferences") {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: !appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
-                                        .foregroundColor(!appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
-                                        .font(.title2)
-                                    
-                                    Text("Vertical stacks")
-                                        .font(.body)
-                                        .fontWeight(!appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
-                                }
+                // Tasks View Preference
+                Section("Tasks View Preferences") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: !appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(!appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Vertical stacks")
+                                    .font(.body)
+                                    .fontWeight(!appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
                             }
-                            
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            appPrefs.updateTasksLayoutHorizontal(false)
                         }
                         
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
-                                        .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
-                                        .font(.title2)
-                                    
-                                    Text("Horizontal stacks")
-                                        .font(.body)
-                                        .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
-                                }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateTasksLayoutHorizontal(false)
+                    }
+                    
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                    .font(.title2)
+                                
+                                Text("Horizontal stacks")
+                                    .font(.body)
+                                    .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
                             }
-                            
-                            Spacer()
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            appPrefs.updateTasksLayoutHorizontal(true)
-                        }
+                        
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appPrefs.updateTasksLayoutHorizontal(true)
                     }
                 }
                 
@@ -1180,7 +1178,12 @@ get: { appPrefs.showFoodLogs },
             }
             .buttonStyle(.borderedProminent)
             .disabled({
+                // Disable if syncing is in progress
                 if case .syncing = iCloudManagerInstance.syncStatus {
+                    return true
+                }
+                // Disable if iCloud is not available
+                if !iCloudManagerInstance.iCloudAvailable {
                     return true
                 }
                 return false
@@ -1192,18 +1195,6 @@ get: { appPrefs.showFoodLogs },
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            // Debug iCloud Inspection Button
-            Button(action: {
-                JournalStorageNew.shared.inspectiCloudContents()
-            }) {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                    Text("🔍 Inspect iCloud Contents")
-                }
-            }
-            .buttonStyle(.bordered)
-            .foregroundColor(.blue)
         }
     }
     

@@ -272,7 +272,7 @@ struct DayViewClassic2: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             } else {
                 // Account linked but no tasks
-                Text("No personal tasks for today")
+                Text("No tasks")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .italic()
@@ -332,7 +332,7 @@ struct DayViewClassic2: View {
                 EmptyView()
             } else {
                 // Account linked but no tasks
-                Text("No professional tasks for today")
+                Text("No tasks")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .italic()
