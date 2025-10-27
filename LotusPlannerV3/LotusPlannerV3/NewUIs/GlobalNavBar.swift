@@ -384,6 +384,14 @@ struct GlobalNavBar: View {
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                 }
                                 Button {
+                                    navigationManager.switchToSimpleWeekView()
+                                } label: {
+                                    Image(systemName: "7.circle")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(navigationManager.currentView == .simpleWeekView ? .accentColor : .secondary)
+                                }
+                                Button {
                                     handleTimeIntervalChange(.month)
                                 } label: {
                                     Image(systemName: "m.circle")
@@ -576,6 +584,14 @@ struct GlobalNavBar: View {
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                }
+                                Button {
+                                    navigationManager.switchToSimpleWeekView()
+                                } label: {
+                                    Image(systemName: "7.circle")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(navigationManager.currentView == .simpleWeekView ? .accentColor : .secondary)
                                 }
                                 Button {
                                     handleTimeIntervalChange(.month)
