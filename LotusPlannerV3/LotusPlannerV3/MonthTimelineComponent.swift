@@ -79,13 +79,20 @@ struct MonthTimelineComponent: View {
             let columnWidth = geometry.size.width / 7
             let config = adaptiveConfig(columnWidth: columnWidth)
             
+            // Calculate weeks needed for this month
+            let weeksNeeded = calculateWeeksNeeded()
+            
+            // Calculate available height for grid (subtract header ~30pt)
+            let availableHeight = geometry.size.height - 30
+            let preferredCellHeight = availableHeight / CGFloat(weeksNeeded)
+            
             VStack(spacing: 0) {
                 // Month header with day names
                 monthHeader(columnWidth: columnWidth, config: config)
                 
-                // Month grid with events (scrollable)
-                ScrollView(.vertical, showsIndicators: true) {
-                    monthGrid(columnWidth: columnWidth, config: config)
+                // Month grid with expanded cells - scrollable if content exceeds space
+                ScrollView(.vertical, showsIndicators: false) {
+                    monthGrid(columnWidth: columnWidth, config: config, preferredCellHeight: preferredCellHeight)
                 }
             }
         }
@@ -106,24 +113,38 @@ struct MonthTimelineComponent: View {
         }
     }
     
+    // Calculate how many weeks are needed for the month
+    private func calculateWeeksNeeded() -> Int {
+        let calendar = Calendar.mondayFirst
+        let firstOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: currentDate))!
+        let firstWeekday = calendar.component(.weekday, from: firstOfMonth)
+        let offset = (firstWeekday + 5) % 7 // Convert to Monday-first
+        
+        let daysInMonth = calendar.range(of: .day, in: .month, for: currentDate)?.count ?? 30
+        let totalDaysShown = offset + daysInMonth
+        let weeks = (totalDaysShown + 6) / 7
+        return max(weeks, 5) // Minimum 5 weeks
+    }
+    
     // MARK: - Month Grid
-    private func monthGrid(columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int)) -> some View {
+    private func monthGrid(columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int), preferredCellHeight: CGFloat) -> some View {
+        let weeksNeeded = calculateWeeksNeeded()
         return VStack(spacing: adaptiveWeekSpacing) {
-            ForEach(0..<6, id: \.self) { weekIndex in
-                weekRow(weekIndex: weekIndex, columnWidth: columnWidth, config: config)
+            ForEach(0..<weeksNeeded, id: \.self) { weekIndex in
+                weekRow(weekIndex: weekIndex, columnWidth: columnWidth, config: config, preferredHeight: preferredCellHeight)
             }
         }
     }
     
-    private func weekRow(weekIndex: Int, columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int)) -> some View {
+    private func weekRow(weekIndex: Int, columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int), preferredHeight: CGFloat) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(0..<7, id: \.self) { dayIndex in
-                dayCell(weekIndex: weekIndex, dayIndex: dayIndex, columnWidth: columnWidth, config: config)
+                dayCell(weekIndex: weekIndex, dayIndex: dayIndex, columnWidth: columnWidth, config: config, preferredHeight: preferredHeight)
             }
         }
     }
     
-    private func dayCell(weekIndex: Int, dayIndex: Int, columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int)) -> some View {
+    private func dayCell(weekIndex: Int, dayIndex: Int, columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int), preferredHeight: CGFloat) -> some View {
         let dayNumber = getDayNumber(weekIndex: weekIndex, dayIndex: dayIndex)
         let date = getDateForDay(dayNumber: dayNumber)
         let isValidDay = dayNumber > 0 && dayNumber <= daysInMonth
@@ -146,14 +167,16 @@ struct MonthTimelineComponent: View {
                 // Events area - shows limited events based on config
                 eventsArea(for: dayDate, columnWidth: columnWidth, config: config)
                     .padding(.bottom, padding)
+                
+                // Spacer to push content to top and expand cell
+                Spacer()
             } else {
-                // Empty day cell with adaptive minimum height
+                // Empty day cell
                 Color.clear
-                    .frame(height: adaptiveMinHeight)
             }
         }
-        .frame(width: columnWidth, alignment: .top)
-        .frame(minHeight: adaptiveMinHeight, alignment: .top)
+        .frame(width: columnWidth)
+        .frame(minHeight: max(adaptiveMinHeight, preferredHeight), maxHeight: preferredHeight)
         .background(isCurrentMonth ? Color(.systemBackground) : Color(.systemGray6).opacity(0.3))
         .contentShape(Rectangle())
         .onTapGesture {

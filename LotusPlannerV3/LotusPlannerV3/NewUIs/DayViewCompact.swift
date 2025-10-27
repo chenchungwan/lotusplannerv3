@@ -144,26 +144,19 @@ struct DayViewCompact: View {
     @ViewBuilder
     private var tasksSection: some View {
         ScrollView(.vertical, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
                 // Personal Tasks on the left
-                VStack(alignment: .leading, spacing: 8) {
-                    personalTasksSection
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Divider between Personal and Professional
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 1)
+                personalTasksSection
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Professional Tasks on the right
-                VStack(alignment: .leading, spacing: 8) {
-                    professionalTasksSection
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                professionalTasksSection
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.all, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
+        .background(Color(.systemBackground))
     }
     
     @ViewBuilder

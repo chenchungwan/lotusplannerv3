@@ -261,7 +261,6 @@ struct DayViewClassic2: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.top, 8)
         .padding(.bottom, 0)
-        .padding(.leading, 8)
     }
     
     private var professionalTasksSection: some View {
@@ -321,7 +320,6 @@ struct DayViewClassic2: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.top, 8)
         .padding(.bottom, 0)
-        .padding(.leading, 8)
     }
     
     private var dayEventsList: some View {
