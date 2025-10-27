@@ -56,129 +56,66 @@ struct DayViewMobile: View {
                     }
                 
                 // Personal tasks
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Personal Tasks")
-                        .font(.headline)
-                        .foregroundColor(appPrefs.personalColor)
-                        .padding(.horizontal, adaptivePadding)
-                    
-                    let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
-                    let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
-                    let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
-                    
-                    if hasPersonalTasks {
-                        TasksComponent(
-                            taskLists: tasksVM.personalTaskLists,
-                            tasksDict: personalTasks,
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
-                            onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedTaskAccount = .personal
-                                showingTaskDetails = true
-                            },
-                            onListRename: { listId, newName in
-                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
-                            },
-                            onOrderChanged: { newOrder in
-                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
-                            },
-                            hideDueDateTag: false,
-                            showEmptyState: false, // We handle empty state ourselves
-                            horizontalCards: false,
-                            isSingleDayView: true
-                        )
-                        .frame(maxWidth: .infinity, alignment: .top)
-                    } else if !hasAnyLinkedAccount {
-                        // No accounts linked - show link account UI
-                        Button(action: { NavigationManager.shared.showSettings() }) {
-                            VStack(spacing: 16) {
-                                Image(systemName: "person.crop.circle.badge.plus")
-                                    .font(.system(size: 48))
-                                    .foregroundColor(.secondary)
-                                
-                                Text("Link Your Google Account")
-                                    .font(.title2)
-                                    .fontWeight(.semibold)
-                                
-                                Text("Connect your Google account to view and manage your calendar events and tasks")
-                                    .font(.body)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 40)
-                            .padding(.horizontal, 20)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        // Account linked but no tasks
-                        Text("No tasks")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
+                let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
+                TasksCompactComponent(
+                    taskLists: tasksVM.personalTaskLists,
+                    tasksDict: personalTasks,
+                    accentColor: appPrefs.personalColor,
+                    accountType: .personal,
+                    onTaskToggle: { task, listId in
+                        Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
+                    },
+                    onTaskDetails: { task, listId in
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedTaskAccount = .personal
+                        showingTaskDetails = true
                     }
+                )
+                .padding(.horizontal, adaptivePadding)
+                
+                // Empty state for no accounts (shown only once)
+                if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
+                    Button(action: { NavigationManager.shared.showSettings() }) {
+                        VStack(spacing: 16) {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                                .font(.system(size: 48))
+                                .foregroundColor(.secondary)
+                            
+                            Text("Link Your Google Account")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                            
+                            Text("Connect your Google account to view and manage your calendar events and tasks")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 40)
+                        .padding(.horizontal, 20)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
                 
                 // Professional tasks
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Professional Tasks")
-                        .font(.headline)
-                        .foregroundColor(appPrefs.professionalColor)
-                        .padding(.horizontal, adaptivePadding)
-                    
-                    let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
-                    let hasProfessionalTasks = !professionalTasks.isEmpty && auth.isLinked(kind: .professional)
-                    let hasAnyLinkedAccount = auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)
-                    
-                    if hasProfessionalTasks {
-                        TasksComponent(
-                            taskLists: tasksVM.professionalTaskLists,
-                            tasksDict: professionalTasks,
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
-                            onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedTaskAccount = .professional
-                                showingTaskDetails = true
-                            },
-                            onListRename: { listId, newName in
-                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
-                            },
-                            onOrderChanged: { newOrder in
-                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
-                            },
-                            hideDueDateTag: false,
-                            showEmptyState: false, // We handle empty state ourselves
-                            horizontalCards: false,
-                            isSingleDayView: true
-                        )
-                        .frame(maxWidth: .infinity, alignment: .top)
-                    } else if !hasAnyLinkedAccount {
-                        // No accounts linked - show link account UI (only show once)
-                        EmptyView() // This will be handled by the personal tasks section
-                    } else {
-                        // Account linked but no tasks
-                        Text("No tasks")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
+                let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
+                TasksCompactComponent(
+                    taskLists: tasksVM.professionalTaskLists,
+                    tasksDict: professionalTasks,
+                    accentColor: appPrefs.professionalColor,
+                    accountType: .professional,
+                    onTaskToggle: { task, listId in
+                        Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
+                    },
+                    onTaskDetails: { task, listId in
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedTaskAccount = .professional
+                        showingTaskDetails = true
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .top)
+                )
+                .padding(.horizontal, adaptivePadding)
                 
                 // Logs (only if any logs are enabled)
                 if appPrefs.showAnyLogs {
