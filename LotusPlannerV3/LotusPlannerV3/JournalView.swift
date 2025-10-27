@@ -529,27 +529,9 @@ struct JournalView: View {
                 }
             }
             .ignoresSafeArea(embedded ? [] : .all)
-            // Movable photos overlay - Lazy loading for performance
-            LazyVStack(spacing: 0) {
-                ForEach(photos.indices, id: \.self) { idx in
-                    DraggablePhotoView(
-                        photo: $photos[idx],
-                        onDelete: {
-                            photos.remove(at: idx)
-                        },
-                        onChanged: {
-                            // Debounce saves to prevent position recalculation during dragging
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                savePhotos()
-                            }
-                        },
-                        canvasSize: canvasSize
-                    )
-                    .onAppear {
-                        print("🖼️ DraggablePhotoView created with canvas size: \(canvasSize)")
-                    }
-                }
-            }
+            
+            // Photos overlay
+            photosOverlay
             
             // Retry download overlay
             if showRetryDownload {
@@ -595,12 +577,20 @@ struct JournalView: View {
                 if canvasSize != newSize {
                     canvasSize = newSize
                 }
+                print("🖼️ Canvas onAppear: photos count = \(photos.count)")
+                for (idx, photo) in photos.enumerated() {
+                    print("🖼️ Photo \(idx): position = \(photo.position), size = \(photo.size)")
+                }
             }
             .onChange(of: newSize) { size in
                 // Update size and reflow when layout changes
+                let oldSize = canvasSize
                 canvasSize = size
-                // Don't reload photos on canvas size change to prevent position snapping
-                // Photos will maintain their current positions
+                
+                // Debug: Log when canvas size changes
+                if oldSize.width != size.width || oldSize.height != size.height {
+                    print("📐 Canvas size changed: \(oldSize) -> \(size), photos count: \(photos.count)")
+                }
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -617,6 +607,36 @@ struct JournalView: View {
                 }
             }
         }
+    }
+    
+    // Photos overlay for absolute positioning
+    private var photosOverlay: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .overlay(
+                ZStack {
+                    ForEach(photos.indices, id: \.self) { idx in
+                        DraggablePhotoView(
+                            photo: $photos[idx],
+                            onDelete: {
+                                photos.remove(at: idx)
+                            },
+                            onChanged: {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    savePhotos()
+                                }
+                            },
+                            canvasSize: canvasSize
+                        )
+                        .onAppear {
+                            print("🖼️ DraggablePhotoView created:")
+                            print("  - Photo position: \(photos[idx].position)")
+                            print("  - Photo size: \(photos[idx].size)")
+                            print("  - Canvas size: \(canvasSize)")
+                        }
+                    }
+                }
+            )
     }
     
     // (Old floating controlButtons removed)
@@ -837,24 +857,20 @@ struct JournalView: View {
                 let sizeW: CGFloat
                 let sizeH: CGFloat
                 
-                if let nx = meta.nx, let ny = meta.ny, let _ = meta.nw, let _ = meta.nh {
-                    // Keep photo size constant across divider/canvas size changes
-                    posX = CGFloat(nx) * width
-                    posY = CGFloat(ny) * height
-                    sizeW = CGFloat(meta.width)
-                    sizeH = CGFloat(meta.height)
-                } else {
-                    posX = CGFloat(meta.x)
-                    posY = CGFloat(meta.y)
-                    sizeW = CGFloat(meta.width)
-                    sizeH = CGFloat(meta.height)
-                }
+                // Always use absolute coordinates for fixed positions like drawings
+                // Don't recalculate positions based on canvas size changes
+                posX = CGFloat(meta.x)
+                posY = CGFloat(meta.y)
+                sizeW = CGFloat(meta.width)
+                sizeH = CGFloat(meta.height)
                 
                 // Validate dimensions to prevent "Invalid frame dimension" errors
                 let validWidth = max(1.0, sizeW.isFinite ? sizeW : 120.0)
                 let validHeight = max(1.0, sizeH.isFinite ? sizeH : 120.0)
-                let validPosX = posX.isFinite ? posX : 150.0
-                let validPosY = posY.isFinite ? posY : 150.0
+                // Clamp positions to reasonable bounds to ensure photo is visible
+                // Photos outside bounds will be clamped to a visible area
+                let validPosX = posX.isFinite ? max(0, min(width, posX)) : 150.0
+                let validPosY = posY.isFinite ? max(0, min(height, posY)) : 150.0
                 
                 // Cache the loaded image for future use
                 let cacheKey = "\(meta.id)_\(meta.fileName)"
@@ -974,10 +990,15 @@ struct JournalView: View {
             let posX = meta.x
             let posY = meta.y
             
+            // Use current canvas size for clamping when loading from cache
+            let width = canvasSize.width > 0 ? canvasSize.width : 600
+            let height = canvasSize.height > 0 ? canvasSize.height : 800
+            
             let validWidth = max(1.0, sizeW.isFinite ? sizeW : 120.0)
             let validHeight = max(1.0, sizeH.isFinite ? sizeH : 120.0)
-            let validPosX = posX.isFinite ? posX : 150.0
-            let validPosY = posY.isFinite ? posY : 150.0
+            // Clamp positions to reasonable bounds to ensure photo is visible
+            let validPosX = posX.isFinite ? max(0, min(width, posX)) : 150.0
+            let validPosY = posY.isFinite ? max(0, min(height, posY)) : 150.0
             
             return JournalPhoto(
                 id: UUID(uuidString: meta.id) ?? UUID(),
