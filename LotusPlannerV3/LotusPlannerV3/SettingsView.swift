@@ -34,7 +34,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         switch self {
         case .defaultNew: "Horizontal layout: Timeline & Tasks side-by-side, Logs row, then Journal"
         case .compact: "Classic layout with Timeline on left, Tasks and Journal on right with adjustable divider"
-        case .compactTwo: "Compact layout with Tasks first, then Timeline + Logs column next to Journal"
+        case .compactTwo: "Events & Logs on left, Tasks (Personal/Professional side-by-side) and Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .classic2: "Enhanced classic: Events, Personal Tasks, Professional Tasks on left, Journal on right"
         }
@@ -402,6 +402,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // DayViewClassic3 Divider Positions
+    @Published var dayViewClassic3TasksHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewClassic3TasksHeight, forKey: "dayViewClassic3TasksHeight")
+        }
+    }
+    
     // Calendar View Day Divider Positions
     @Published var calendarDayLeftSectionWidth: CGFloat {
         didSet {
@@ -496,6 +503,7 @@ class AppPreferences: ObservableObject {
         self.dayViewExpandedLogsHeight = UserDefaults.standard.object(forKey: "dayViewExpandedLogsHeight") as? CGFloat ?? 300
         self.dayViewClassic2EventsHeight = UserDefaults.standard.object(forKey: "dayViewClassic2EventsHeight") as? CGFloat ?? 250
         self.dayViewClassic2LogsHeight = UserDefaults.standard.object(forKey: "dayViewClassic2LogsHeight") as? CGFloat ?? 200
+        self.dayViewClassic3TasksHeight = UserDefaults.standard.object(forKey: "dayViewClassic3TasksHeight") as? CGFloat ?? 300
         self.calendarDayLeftSectionWidth = UserDefaults.standard.object(forKey: "calendarDayLeftSectionWidth") as? CGFloat ?? 200
         self.calendarDayRightColumn2Width = UserDefaults.standard.object(forKey: "calendarDayRightColumn2Width") as? CGFloat ?? 200
         self.calendarDayLeftTimelineHeight = UserDefaults.standard.object(forKey: "calendarDayLeftTimelineHeight") as? CGFloat ?? 500
@@ -578,6 +586,10 @@ class AppPreferences: ObservableObject {
     
     func updateDayViewClassic2LogsHeight(_ value: CGFloat) {
         dayViewClassic2LogsHeight = value
+    }
+    
+    func updateDayViewClassic3TasksHeight(_ value: CGFloat) {
+        dayViewClassic3TasksHeight = value
     }
     
     func updateCalendarDayLeftSectionWidth(_ value: CGFloat) {
