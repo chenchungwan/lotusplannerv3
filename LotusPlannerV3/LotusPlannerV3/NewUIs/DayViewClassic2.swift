@@ -346,100 +346,162 @@ struct DayViewClassic2: View {
     
     
     private var eventsTasksDivider: some View {
-        Rectangle()
-            .fill(isEventsTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isEventsTasksDividerDragging ? .white : .gray)
-            )
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                isEventsTasksDividerDragging = true
-                                let newHeight = eventsHeight + value.translation.height
-                                let minHeight: CGFloat = 150
-                                let maxHeight: CGFloat = 400
-                                eventsHeight = max(minHeight, min(maxHeight, newHeight))
-                            }
-                            .onEnded { _ in
-                                isEventsTasksDividerDragging = false
-                                appPrefs.updateDayViewClassic2EventsHeight(eventsHeight)
-                            }
-                    )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isEventsTasksDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isEventsTasksDividerDragging = true
+                    let newHeight = eventsHeight + value.translation.height
+                    let minHeight: CGFloat = 150
+                    let maxHeight: CGFloat = 400
+                    eventsHeight = max(minHeight, min(maxHeight, newHeight))
+                }
+                .onEnded { _ in
+                    isEventsTasksDividerDragging = false
+                    appPrefs.updateDayViewClassic2EventsHeight(eventsHeight)
+                }
+        )
     }
     
     private var logsDivider: some View {
-        Rectangle()
-            .fill(isLogsDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLogsDividerDragging ? .white : .gray)
-            )
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                isLogsDividerDragging = true
-                                let newHeight = logsHeight - value.translation.height
-                                let minHeight: CGFloat = 100
-                                let maxHeight: CGFloat = 1200
-                                logsHeight = max(minHeight, min(maxHeight, newHeight))
-                            }
-                            .onEnded { _ in
-                                isLogsDividerDragging = false
-                                appPrefs.updateDayViewClassic2LogsHeight(logsHeight)
-                            }
-                    )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isLogsDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isLogsDividerDragging = true
+                    let newHeight = logsHeight - value.translation.height
+                    let minHeight: CGFloat = 100
+                    let maxHeight: CGFloat = 1200
+                    logsHeight = max(minHeight, min(maxHeight, newHeight))
+                }
+                .onEnded { _ in
+                    isLogsDividerDragging = false
+                    appPrefs.updateDayViewClassic2LogsHeight(logsHeight)
+                }
+        )
     }
     
     private var leftTimelineDivider: some View {
-        Rectangle()
-            .fill(isLeftTimelineDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLeftTimelineDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLeftTimelineDividerDragging = true
-                        let newHeight = leftTimelineHeight + value.translation.height
-                        let minHeight: CGFloat = 200
-                        let maxHeight: CGFloat = 500
-                        leftTimelineHeight = max(minHeight, min(maxHeight, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLeftTimelineDividerDragging = false
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isLeftTimelineDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isLeftTimelineDividerDragging = true
+                    let newHeight = leftTimelineHeight + value.translation.height
+                    let minHeight: CGFloat = 200
+                    let maxHeight: CGFloat = 500
+                    leftTimelineHeight = max(minHeight, min(maxHeight, newHeight))
+                }
+                .onEnded { _ in
+                    isLeftTimelineDividerDragging = false
+                }
+        )
     }
     
     private var dayVerticalDivider: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.3))
-            .frame(width: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newWidth = dayLeftSectionWidth + value.translation.width
-                        let minWidth: CGFloat = 200
-                        let maxWidth: CGFloat = 500
-                        dayLeftSectionWidth = max(minWidth, min(maxWidth, newWidth))
-                    }
-                    .onEnded { _ in
-                        // Could save to preferences here if needed
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines on left
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 1)
+            // Handle lines on right
+            HStack(spacing: 4) {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+            }
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    let newWidth = dayLeftSectionWidth + value.translation.width
+                    let minWidth: CGFloat = 200
+                    let maxWidth: CGFloat = 500
+                    dayLeftSectionWidth = max(minWidth, min(maxWidth, newWidth))
+                }
+                .onEnded { _ in
+                    // Could save to preferences here if needed
+                }
+        )
     }
     
     // MARK: - Helper Functions

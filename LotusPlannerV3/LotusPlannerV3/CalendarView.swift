@@ -1892,25 +1892,39 @@ struct CalendarView: View {
     }
     
     private var weekTasksDivider: some View {
-        Rectangle()
-            .fill(isWeekTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(width: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isWeekTasksDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isWeekTasksDividerDragging = true
-                        let newWidth = weekTasksPersonalWidth + value.translation.width
-                        weekTasksPersonalWidth = max(150, min(UIScreen.main.bounds.width * 0.6, newWidth))
-                    }
-                    .onEnded { _ in
-                        isWeekTasksDividerDragging = false
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines on left
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isWeekTasksDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(width: 1)
+            // Handle lines on right
+            HStack(spacing: 4) {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+            }
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isWeekTasksDividerDragging = true
+                    let newWidth = weekTasksPersonalWidth + value.translation.width
+                    weekTasksPersonalWidth = max(150, min(UIScreen.main.bounds.width * 0.6, newWidth))
+                }
+                .onEnded { _ in
+                    isWeekTasksDividerDragging = false
+                }
+        )
     }
     
     private var weekPencilSection: some View {
@@ -2467,27 +2481,43 @@ struct CalendarView: View {
             .padding(.top, 8)
 
             // Draggable divider between top and bottom rows
-            Rectangle()
-                .fill(isWeekDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                .frame(height: 8)
-                .overlay(
-                    Image(systemName: "line.3.horizontal")
-                        .font(.caption)
-                        .foregroundColor(isWeekDividerDragging ? .white : .gray)
-                )
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            isWeekDividerDragging = true
-                            let newHeight = verticalTopRowHeight + value.translation.height
-                            let minHeight: CGFloat = 200
-                            let maxHeight: CGFloat = max(250, geometry.size.height - 250)
-                            verticalTopRowHeight = max(minHeight, min(maxHeight, newHeight))
-                        }
-                        .onEnded { _ in
-                            isWeekDividerDragging = false
-                        }
-                )
+            VStack(spacing: 4) {
+                // Handle lines above
+                HStack {
+                    Spacer()
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.4))
+                        .frame(width: 20, height: 1.5)
+                    Spacer()
+                }
+                // Main divider line
+                Rectangle()
+                    .fill(isWeekDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                    .frame(height: 1)
+                // Handle lines below
+                HStack {
+                    Spacer()
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.4))
+                        .frame(width: 20, height: 1.5)
+                    Spacer()
+                }
+            }
+            .frame(height: 8)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isWeekDividerDragging = true
+                        let newHeight = verticalTopRowHeight + value.translation.height
+                        let minHeight: CGFloat = 200
+                        let maxHeight: CGFloat = max(250, geometry.size.height - 250)
+                        verticalTopRowHeight = max(minHeight, min(maxHeight, newHeight))
+                    }
+                    .onEnded { _ in
+                        isWeekDividerDragging = false
+                    }
+            )
 
             // Bottom row: HStack of Events (left) and Notes (right) with vertical divider
             HStack(alignment: .top, spacing: 0) {
@@ -2794,121 +2824,195 @@ struct CalendarView: View {
     }
     
     private var rightSectionDivider: some View {
-        Rectangle()
-            .fill(isRightDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isRightDividerDragging ? .white : .gray)
-            )
-
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isRightDividerDragging = true
-                        let newHeight = rightSectionTopHeight + value.translation.height
-                        rightSectionTopHeight = max(200, min(UIScreen.main.bounds.height - 300, newHeight))
-                    }
-                    .onEnded { _ in
-                        isRightDividerDragging = false
-                        appPrefs.updateCalendarDayRightSectionTopHeight(rightSectionTopHeight)
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isRightDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isRightDividerDragging = true
+                    let newHeight = rightSectionTopHeight + value.translation.height
+                    rightSectionTopHeight = max(200, min(UIScreen.main.bounds.height - 300, newHeight))
+                }
+                .onEnded { _ in
+                    isRightDividerDragging = false
+                    appPrefs.updateCalendarDayRightSectionTopHeight(rightSectionTopHeight)
+                }
+        )
     }
     
     private var leftTimelineDivider: some View {
-        Rectangle()
-            .fill(isLeftTimelineDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLeftTimelineDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLeftTimelineDividerDragging = true
-                        let newHeight = leftTimelineHeight + value.translation.height
-                        leftTimelineHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLeftTimelineDividerDragging = false
-                        appPrefs.updateCalendarDayLeftTimelineHeight(leftTimelineHeight)
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isLeftTimelineDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isLeftTimelineDividerDragging = true
+                    let newHeight = leftTimelineHeight + value.translation.height
+                    leftTimelineHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
+                }
+                .onEnded { _ in
+                    isLeftTimelineDividerDragging = false
+                    appPrefs.updateCalendarDayLeftTimelineHeight(leftTimelineHeight)
+                }
+        )
     }
     
     private var weekDivider: some View {
-        Rectangle()
-            .fill(isWeekDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isWeekDividerDragging ? .white : .gray)
-            )
-
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isWeekDividerDragging = true
-                        let newHeight = weekTopSectionHeight + value.translation.height
-                        weekTopSectionHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
-                    }
-                    .onEnded { _ in
-                        isWeekDividerDragging = false
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isWeekDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isWeekDividerDragging = true
+                    let newHeight = weekTopSectionHeight + value.translation.height
+                    weekTopSectionHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
+                }
+                .onEnded { _ in
+                    isWeekDividerDragging = false
+                }
+        )
     }
     
     private var dayVerticalDivider: some View {
-        Rectangle()
-            .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(width: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isDayVerticalDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isDayVerticalDividerDragging = true
-                        let newWidth = dayLeftSectionWidth + value.translation.width
-                        // Constrain to reasonable bounds: minimum 200pt, maximum 80% of screen width
-                        dayLeftSectionWidth = max(200, min(UIScreen.main.bounds.width * 0.8, newWidth))
-                    }
-                    .onEnded { _ in
-                        isDayVerticalDividerDragging = false
-                        appPrefs.updateCalendarDayLeftSectionWidth(dayLeftSectionWidth)
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines on left
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isDayVerticalDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(width: 1)
+            // Handle lines on right
+            HStack(spacing: 4) {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+            }
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isDayVerticalDividerDragging = true
+                    let newWidth = dayLeftSectionWidth + value.translation.width
+                    // Constrain to reasonable bounds: minimum 200pt, maximum 80% of screen width
+                    dayLeftSectionWidth = max(200, min(UIScreen.main.bounds.width * 0.8, newWidth))
+                }
+                .onEnded { _ in
+                    isDayVerticalDividerDragging = false
+                    appPrefs.updateCalendarDayLeftSectionWidth(dayLeftSectionWidth)
+                }
+        )
     }
     
     private var dayRightColumnDivider: some View {
-        Rectangle()
-            .fill(isDayRightColumnDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(width: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isDayRightColumnDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isDayRightColumnDividerDragging = true
-                        let newWidth = dayRightColumn2Width + value.translation.width
-                        // Constrain to reasonable bounds: minimum 150pt, maximum to leave space for other columns
-                        dayRightColumn2Width = max(150, min(UIScreen.main.bounds.width * 0.4, newWidth))
-                    }
-                    .onEnded { _ in
-                        isDayRightColumnDividerDragging = false
-                        appPrefs.updateCalendarDayRightColumn2Width(dayRightColumn2Width)
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines on left
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isDayRightColumnDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(width: 1)
+            // Handle lines on right
+            HStack(spacing: 4) {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+            }
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isDayRightColumnDividerDragging = true
+                    let newWidth = dayRightColumn2Width + value.translation.width
+                    // Constrain to reasonable bounds: minimum 150pt, maximum to leave space for other columns
+                    dayRightColumn2Width = max(150, min(UIScreen.main.bounds.width * 0.4, newWidth))
+                }
+                .onEnded { _ in
+                    isDayRightColumnDividerDragging = false
+                    appPrefs.updateCalendarDayRightColumn2Width(dayRightColumn2Width)
+                }
+        )
     }
     
 

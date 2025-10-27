@@ -18,7 +18,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case classic2 = 5
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .classic2] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .classic2, .compactTwo, .defaultNew, .mobile] }
 
     var displayName: String {
         switch self {
@@ -935,9 +935,9 @@ get: { appPrefs.showFoodLogs },
                             Image(systemName: "target")
                                 .foregroundColor(appPrefs.hideGoals ? .secondary : .accentColor)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Show Goals")
+                                Text("Enable Goals")
                                     .font(.body)
-                                Text("Show goals in all views")
+                                Text("Enable goal management features")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

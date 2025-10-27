@@ -178,28 +178,44 @@ struct DayViewCompact: View {
     }
     
     private var horizontalDivider: some View {
-        Rectangle()
-            .fill(isTasksJournalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isTasksJournalDividerDragging ? .white : .gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isTasksJournalDividerDragging = true
-                        let newPosition = tasksJournalDividerPosition + value.translation.height
-                        let minHeight: CGFloat = 150
-                        let maxHeight: CGFloat = 600
-                        tasksJournalDividerPosition = max(minHeight, min(maxHeight, newPosition))
-                    }
-                    .onEnded { _ in
-                        isTasksJournalDividerDragging = false
-                        appPrefs.updateDayViewClassic3TasksHeight(tasksJournalDividerPosition)
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines above
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(isTasksJournalDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
+                .frame(height: 1)
+            // Handle lines below
+            HStack {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 20, height: 1.5)
+                Spacer()
+            }
+        }
+        .frame(height: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isTasksJournalDividerDragging = true
+                    let newPosition = tasksJournalDividerPosition + value.translation.height
+                    let minHeight: CGFloat = 150
+                    let maxHeight: CGFloat = 600
+                    tasksJournalDividerPosition = max(minHeight, min(maxHeight, newPosition))
+                }
+                .onEnded { _ in
+                    isTasksJournalDividerDragging = false
+                    appPrefs.updateDayViewClassic3TasksHeight(tasksJournalDividerPosition)
+                }
+        )
     }
     
     // MARK: - Components
@@ -404,26 +420,40 @@ struct DayViewCompact: View {
     }
     
     private var dayVerticalDivider: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.3))
-            .frame(width: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            )
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let newWidth = dayLeftSectionWidth + value.translation.width
-                        let minWidth: CGFloat = 200
-                        let maxWidth: CGFloat = 500
-                        dayLeftSectionWidth = max(minWidth, min(maxWidth, newWidth))
-                    }
-                    .onEnded { _ in
-                        // Could save to preferences here if needed
-                    }
-            )
+        VStack(spacing: 4) {
+            // Handle lines on left
+            HStack(spacing: 4) {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+                Spacer()
+            }
+            // Main divider line
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 1)
+            // Handle lines on right
+            HStack(spacing: 4) {
+                Spacer()
+                Rectangle()
+                    .fill(Color.gray.opacity(0.4))
+                    .frame(width: 1.5, height: 20)
+            }
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    let newWidth = dayLeftSectionWidth + value.translation.width
+                    let minWidth: CGFloat = 200
+                    let maxWidth: CGFloat = 500
+                    dayLeftSectionWidth = max(minWidth, min(maxWidth, newWidth))
+                }
+                .onEnded { _ in
+                    // Could save to preferences here if needed
+                }
+        )
     }
     
     // MARK: - Helper Functions
