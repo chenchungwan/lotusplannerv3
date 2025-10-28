@@ -6,12 +6,32 @@ struct SimpleWeekView: View {
     @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var drawingStorage = SimpleWeekDrawingStorage.shared
     
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var isDrawingMode = false
     @State private var canvasView = PKCanvasView()
     @State private var showToolPicker = false
     @State private var drawingCanvasView = PKCanvasView() // Transparent drawing overlay
+    
+    // MARK: - Drawing Management
+    
+    private func saveDrawingToiCloud() {
+        Task {
+            await drawingStorage.saveDrawing(drawingCanvasView.drawing, for: navigationManager.currentDate)
+        }
+    }
+    
+    private func loadDrawingFromiCloud() {
+        Task {
+            if let savedDrawing = await drawingStorage.loadDrawing(for: navigationManager.currentDate) {
+                await MainActor.run {
+                    drawingCanvasView.drawing = savedDrawing
+                    print("🎨 SimpleWeekView: Loaded saved drawing from iCloud")
+                }
+            }
+        }
+    }
     
     // MARK: - Computed Properties
     private var weekDates: [Date] {
@@ -109,24 +129,41 @@ struct SimpleWeekView: View {
                 // Unified scrollable timed events timeline
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: !isDrawingMode) {
-                        HStack(alignment: .top, spacing: 0) {
-                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                let eventsForDate = getEventsForDate(date)
-                                let timedEvents = eventsForDate.filter { !$0.isAllDay }
-                                
-                                timedEventsColumn(
-                                    date: date,
-                                    events: timedEvents,
-                                    width: columnWidth,
-                                    hourHeight: hourHeight,
-                                    timeColumnWidth: timeColumnWidth
-                                )
-                                
-                                if index < weekDates.count - 1 {
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 1)
+                        ZStack(alignment: .topLeading) {
+                            // Timeline content
+                            HStack(alignment: .top, spacing: 0) {
+                                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                    let eventsForDate = getEventsForDate(date)
+                                    let timedEvents = eventsForDate.filter { !$0.isAllDay }
+                                    
+                                    timedEventsColumn(
+                                        date: date,
+                                        events: timedEvents,
+                                        width: columnWidth,
+                                        hourHeight: hourHeight,
+                                        timeColumnWidth: timeColumnWidth
+                                    )
+                                    
+                                    if index < weekDates.count - 1 {
+                                        Rectangle()
+                                            .fill(Color(.systemGray4))
+                                            .frame(width: 1)
+                                    }
                                 }
+                            }
+                            
+                            // Drawing canvas positioned relative to timeline content
+                            if isDrawingMode || !drawingCanvasView.drawing.strokes.isEmpty {
+                                TransparentDrawingCanvas(
+                                    canvasView: $drawingCanvasView,
+                                    showsToolPicker: isDrawingMode,
+                                    onDrawingChanged: {
+                                        print("🎨 SimpleWeekView: Timeline canvas drawing changed!")
+                                    }
+                                )
+                                .frame(width: geometry.size.width, height: hourHeight * 24) // Full 24 hours height
+                                .allowsHitTesting(isDrawingMode) // Only allow interaction when in drawing mode
+                                .zIndex(isDrawingMode ? 1000 : 999) // Higher z-index when active
                             }
                         }
                     }
@@ -141,32 +178,6 @@ struct SimpleWeekView: View {
                         }
                     }
                 }
-            }
-            
-            // Transparent drawing overlay
-            if isDrawingMode {
-                TransparentDrawingCanvas(
-                    canvasView: $drawingCanvasView,
-                    showsToolPicker: showToolPicker,
-                    onDrawingChanged: {
-                        print("🎨 SimpleWeekView: Transparent canvas drawing changed!")
-                    }
-                )
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .allowsHitTesting(true)
-                .zIndex(1000) // Ensure it's on top
-            } else if !drawingCanvasView.drawing.strokes.isEmpty {
-                // Show persistent drawings when not in drawing mode
-                TransparentDrawingCanvas(
-                    canvasView: $drawingCanvasView,
-                    showsToolPicker: false,
-                    onDrawingChanged: {
-                        print("🎨 SimpleWeekView: Persistent canvas drawing changed!")
-                    }
-                )
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .allowsHitTesting(false) // Disable interaction when not in drawing mode
-                .zIndex(999) // Below active drawing mode but above timeline
             }
         }
         .padding(.horizontal, 12)
@@ -666,19 +677,35 @@ struct SimpleWeekView: View {
             Task {
                 // Load calendar data when the date changes
                 await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
+                
+                // Load saved drawing for the new week
+                await MainActor.run {
+                    loadDrawingFromiCloud()
+                }
             }
         }
         .onAppear {
+            // Load saved drawing for current week
+            loadDrawingFromiCloud()
+            
             // Listen for drawing mode toggle
             NotificationCenter.default.addObserver(forName: Notification.Name("ToggleSimpleWeekDrawing"), object: nil, queue: .main) { _ in
+                let wasInDrawingMode = isDrawingMode
                 isDrawingMode.toggle()
                 print("🎨 SimpleWeekView: Drawing mode toggled to: \(isDrawingMode)")
+                
                 if isDrawingMode {
                     showToolPicker = true
                     print("🎨 SimpleWeekView: Tool picker set to visible")
                 } else {
                     showToolPicker = false
                     print("🎨 SimpleWeekView: Tool picker set to hidden")
+                    
+                    // Save drawing when exiting drawing mode
+                    if wasInDrawingMode && !drawingCanvasView.drawing.strokes.isEmpty {
+                        saveDrawingToiCloud()
+                        print("🎨 SimpleWeekView: Saved drawing to iCloud on exit")
+                    }
                 }
             }
         }
