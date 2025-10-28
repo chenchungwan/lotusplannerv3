@@ -1849,7 +1849,18 @@ extension WeeklyView {
         
         return allEvents.filter { event in
             guard let startTime = event.startTime else { return false }
-            return Calendar.current.isDate(startTime, inSameDayAs: date)
+            
+            if event.isAllDay {
+                // For all-day events, check if the date falls within the event's date range
+                guard let endTime = event.endTime else { return false }
+                
+                // For all-day events, Google Calendar sets the end time to the start of the next day
+                // So we need to check if the date falls within [startTime, endTime)
+                return date >= Calendar.current.startOfDay(for: startTime) && date < Calendar.current.startOfDay(for: endTime)
+            } else {
+                // For timed events, check if the event starts on this date
+                return Calendar.current.isDate(startTime, inSameDayAs: date)
+            }
         }.sorted { (a, b) in
             let aDate = a.startTime ?? Date.distantPast
             let bDate = b.startTime ?? Date.distantPast

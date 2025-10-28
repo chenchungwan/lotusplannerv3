@@ -21,14 +21,19 @@ struct SimpleWeekView: View {
     private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.mondayFirst
         return (calendarViewModel.personalEvents + calendarViewModel.professionalEvents).filter { event in
-            if let startTime = event.startTime {
+            guard let startTime = event.startTime else { return false }
+            
+            if event.isAllDay {
+                // For all-day events, check if the date falls within the event's date range
+                guard let endTime = event.endTime else { return false }
+                
+                // For all-day events, Google Calendar sets the end time to the start of the next day
+                // So we need to check if the date falls within [startTime, endTime)
+                return date >= calendar.startOfDay(for: startTime) && date < calendar.startOfDay(for: endTime)
+            } else {
+                // For timed events, check if the event starts on this date
                 return calendar.isDate(startTime, inSameDayAs: date)
             }
-            // For all-day events, check if the event date matches
-            if let eventDate = event.startTime {
-                return calendar.isDate(eventDate, inSameDayAs: date)
-            }
-            return false
         }
     }
     

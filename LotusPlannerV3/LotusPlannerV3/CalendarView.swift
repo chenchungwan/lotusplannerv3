@@ -3678,7 +3678,18 @@ struct CalendarView: View {
             let calendar = Calendar.current
             let eventsForDate = allEvents.filter { event in
                 guard let startTime = event.startTime else { return false }
-                return calendar.isDate(startTime, inSameDayAs: date)
+                
+                if event.isAllDay {
+                    // For all-day events, check if the date falls within the event's date range
+                    guard let endTime = event.endTime else { return false }
+                    
+                    // For all-day events, Google Calendar sets the end time to the start of the next day
+                    // So we need to check if the date falls within [startTime, endTime)
+                    return date >= calendar.startOfDay(for: startTime) && date < calendar.startOfDay(for: endTime)
+                } else {
+                    // For timed events, check if the event starts on this date
+                    return calendar.isDate(startTime, inSameDayAs: date)
+                }
             }
             eventsGroupedByDate[date] = eventsForDate
             
@@ -3821,7 +3832,18 @@ struct CalendarView: View {
         
         let filteredEvents = allEvents.filter { event in
             guard let startTime = event.startTime else { return false }
-            return calendar.isDate(startTime, inSameDayAs: date)
+            
+            if event.isAllDay {
+                // For all-day events, check if the date falls within the event's date range
+                guard let endTime = event.endTime else { return false }
+                
+                // For all-day events, Google Calendar sets the end time to the start of the next day
+                // So we need to check if the date falls within [startTime, endTime)
+                return date >= calendar.startOfDay(for: startTime) && date < calendar.startOfDay(for: endTime)
+            } else {
+                // For timed events, check if the event starts on this date
+                return calendar.isDate(startTime, inSameDayAs: date)
+            }
         }
         
         
@@ -3837,11 +3859,12 @@ struct CalendarView: View {
             guard event.isAllDay else { return false }
             
             // For all-day events, check if the date falls within the event's date range
-            if let startTime = event.startTime {
-                return calendar.isDate(startTime, inSameDayAs: date)
-            }
+            guard let startTime = event.startTime,
+                  let endTime = event.endTime else { return false }
             
-            return false
+            // For all-day events, Google Calendar sets the end time to the start of the next day
+            // So we need to check if the date falls within [startTime, endTime)
+            return date >= calendar.startOfDay(for: startTime) && date < calendar.startOfDay(for: endTime)
         }
     }
     
@@ -5401,7 +5424,7 @@ struct AddItemView: View {
                 var endDict: [String: String] = [:]
                 if isAllDay {
                     let startDate = Calendar.current.startOfDay(for: eventStart)
-                    let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+                    let endDate = Calendar.current.startOfDay(for: eventEnd)
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "yyyy-MM-dd"
                     startDict["date"] = dateFormatter.string(from: startDate)
@@ -5501,7 +5524,7 @@ struct AddItemView: View {
         var endDict: [String: String] = [:]
         if isAllDay {
             let startDate = Calendar.current.startOfDay(for: eventStart)
-            let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+            let endDate = Calendar.current.startOfDay(for: eventEnd)
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             startDict["date"] = dateFormatter.string(from: startDate)
@@ -5584,7 +5607,7 @@ struct AddItemView: View {
         if isAllDay {
             // Converting to all-day event
             let startDate = Calendar.current.startOfDay(for: eventStart)
-            let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
+            let endDate = Calendar.current.startOfDay(for: eventEnd)
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
             startDict["date"] = dateFormatter.string(from: startDate)
