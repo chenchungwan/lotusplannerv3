@@ -25,6 +25,7 @@ struct GlobalNavBar: View {
     @State private var showingAddGoal = false
     @State private var showingAddCategory = false
     @State private var showingAddLog = false
+    @State private var isSimpleWeekDrawingMode = false
     
     // Date picker state
     @State private var selectedDateForPicker = Date()
@@ -527,6 +528,19 @@ struct GlobalNavBar: View {
                                     .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                             
+                            // Pencil icon for SimpleWeekView drawing mode
+                            if navigationManager.currentView == .simpleWeekView {
+                                Button {
+                                    // Toggle drawing mode
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleSimpleWeekDrawing"), object: nil)
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(isSimpleWeekDrawingMode ? .accentColor : .secondary)
+                                }
+                            }
+                            
                             // Hide completed tasks toggle (in Tasks, Lists, and Calendar day/week views only)
                             if navigationManager.currentView == .tasks || navigationManager.currentView == .lists || 
                                (navigationManager.currentView == .calendar && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) {
@@ -775,6 +789,19 @@ struct GlobalNavBar: View {
                                     .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                             
+                            // Pencil icon for SimpleWeekView drawing mode
+                            if navigationManager.currentView == .simpleWeekView {
+                                Button {
+                                    // Toggle drawing mode
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleSimpleWeekDrawing"), object: nil)
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(isSimpleWeekDrawingMode ? .accentColor : .secondary)
+                                }
+                            }
+                            
                             // Hide completed tasks toggle (in Tasks, Lists, and Calendar day/week views only)
                             if navigationManager.currentView == .tasks || navigationManager.currentView == .lists || 
                                (navigationManager.currentView == .calendar && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) {
@@ -964,6 +991,12 @@ struct GlobalNavBar: View {
         }
         .sheet(isPresented: $showingAddLog) {
             AddLogEntryView(viewModel: logsVM)
+        }
+        .onAppear {
+            // Listen for drawing mode changes
+            NotificationCenter.default.addObserver(forName: Notification.Name("ToggleSimpleWeekDrawing"), object: nil, queue: .main) { _ in
+                isSimpleWeekDrawingMode.toggle()
+            }
         }
     }
     

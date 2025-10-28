@@ -1,4 +1,5 @@
 import SwiftUI
+import PencilKit
 
 struct SimpleWeekView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
@@ -7,6 +8,10 @@ struct SimpleWeekView: View {
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
+    @State private var isDrawingMode = false
+    @State private var canvasView = PKCanvasView()
+    @State private var showToolPicker = false
+    @State private var drawingCanvasView = PKCanvasView() // Transparent drawing overlay
     
     // MARK: - Computed Properties
     private var weekDates: [Date] {
@@ -64,74 +69,104 @@ struct SimpleWeekView: View {
             let availableHeight = geometry.size.height - maxAllDayHeight - 1 // -1 for divider line
             let hourHeight = availableHeight / 10.0 // 10 hours visible
             
-            VStack(spacing: 0) {
-            // Persistent all-day events row for all 7 days
-            HStack(spacing: 0) {
-                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                    let eventsForDate = getEventsForDate(date)
-                    let allDayEvents = eventsForDate.filter { $0.isAllDay }
-                    
-                    allDayEventsRow(
-                        events: allDayEvents,
-                        personalEvents: calendarViewModel.personalEvents,
-                        professionalEvents: calendarViewModel.professionalEvents,
-                        personalColor: appPrefs.personalColor,
-                        professionalColor: appPrefs.professionalColor,
-                        timeColumnWidth: timeColumnWidth
-                    )
-                    .frame(width: columnWidth, height: maxAllDayHeight)
-                    
-                    if index < weekDates.count - 1 {
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .frame(width: 1)
+            ZStack {
+                // Main timeline content
+                VStack(spacing: 0) {
+                // Persistent all-day events row for all 7 days
+                HStack(spacing: 0) {
+                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                        let eventsForDate = getEventsForDate(date)
+                        let allDayEvents = eventsForDate.filter { $0.isAllDay }
+                        
+                        allDayEventsRow(
+                            events: allDayEvents,
+                            personalEvents: calendarViewModel.personalEvents,
+                            professionalEvents: calendarViewModel.professionalEvents,
+                            personalColor: appPrefs.personalColor,
+                            professionalColor: appPrefs.professionalColor,
+                            timeColumnWidth: timeColumnWidth
+                        )
+                        .frame(width: columnWidth, height: maxAllDayHeight)
+                        
+                        if index < weekDates.count - 1 {
+                            Rectangle()
+                                .fill(Color(.systemGray4))
+                                .frame(width: 1)
+                        }
                     }
                 }
-            }
-            
-            // Divider line
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(width: timeColumnWidth, height: 1)
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(height: 1)
-            }
-            
-            // Unified scrollable timed events timeline
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: true) {
-                    HStack(alignment: .top, spacing: 0) {
-                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                            let eventsForDate = getEventsForDate(date)
-                            let timedEvents = eventsForDate.filter { !$0.isAllDay }
-                            
-                            timedEventsColumn(
-                                date: date,
-                                events: timedEvents,
-                                width: columnWidth,
-                                hourHeight: hourHeight,
-                                timeColumnWidth: timeColumnWidth
-                            )
-                            
-                            if index < weekDates.count - 1 {
-                                Rectangle()
-                                    .fill(Color(.systemGray4))
-                                    .frame(width: 1)
+                
+                // Divider line
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(width: timeColumnWidth, height: 1)
+                    Rectangle()
+                        .fill(Color(.systemGray4))
+                        .frame(height: 1)
+                }
+                
+                // Unified scrollable timed events timeline
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: !isDrawingMode) {
+                        HStack(alignment: .top, spacing: 0) {
+                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                let eventsForDate = getEventsForDate(date)
+                                let timedEvents = eventsForDate.filter { !$0.isAllDay }
+                                
+                                timedEventsColumn(
+                                    date: date,
+                                    events: timedEvents,
+                                    width: columnWidth,
+                                    hourHeight: hourHeight,
+                                    timeColumnWidth: timeColumnWidth
+                                )
+                                
+                                if index < weekDates.count - 1 {
+                                    Rectangle()
+                                        .fill(Color(.systemGray4))
+                                        .frame(width: 1)
+                                }
+                            }
+                        }
+                    }
+                    .scrollDisabled(isDrawingMode) // Disable scrolling when in drawing mode
+                    .frame(height: hourHeight * 10) // Dynamic height for exactly 10 hours
+                    .onAppear {
+                        // Scroll to 8 AM by default
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                proxy.scrollTo(8, anchor: .top)
                             }
                         }
                     }
                 }
-                .frame(height: hourHeight * 10) // Dynamic height for exactly 10 hours
-                .onAppear {
-                    // Scroll to 8 AM by default
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation(.easeInOut(duration: 0.5)) {
-                            proxy.scrollTo(8, anchor: .top)
-                        }
+            }
+            
+            // Transparent drawing overlay
+            if isDrawingMode {
+                TransparentDrawingCanvas(
+                    canvasView: $drawingCanvasView,
+                    showsToolPicker: showToolPicker,
+                    onDrawingChanged: {
+                        print("🎨 SimpleWeekView: Transparent canvas drawing changed!")
                     }
-                }
+                )
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .allowsHitTesting(true)
+                .zIndex(1000) // Ensure it's on top
+            } else if !drawingCanvasView.drawing.strokes.isEmpty {
+                // Show persistent drawings when not in drawing mode
+                TransparentDrawingCanvas(
+                    canvasView: $drawingCanvasView,
+                    showsToolPicker: false,
+                    onDrawingChanged: {
+                        print("🎨 SimpleWeekView: Persistent canvas drawing changed!")
+                    }
+                )
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .allowsHitTesting(false) // Disable interaction when not in drawing mode
+                .zIndex(999) // Below active drawing mode but above timeline
             }
         }
         .padding(.horizontal, 12)
@@ -183,6 +218,7 @@ struct SimpleWeekView: View {
             }
         }
         .frame(width: width, height: CGFloat(24) * hourHeight + 20) // Full 24 hours
+        .allowsHitTesting(!isDrawingMode) // Disable event tapping when in drawing mode
     }
     
     private func timedEventsTimeline(date: Date, events: [GoogleCalendarEvent], hourHeight: CGFloat, personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color) -> some View {
@@ -632,6 +668,20 @@ struct SimpleWeekView: View {
                 await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
             }
         }
+        .onAppear {
+            // Listen for drawing mode toggle
+            NotificationCenter.default.addObserver(forName: Notification.Name("ToggleSimpleWeekDrawing"), object: nil, queue: .main) { _ in
+                isDrawingMode.toggle()
+                print("🎨 SimpleWeekView: Drawing mode toggled to: \(isDrawingMode)")
+                if isDrawingMode {
+                    showToolPicker = true
+                    print("🎨 SimpleWeekView: Tool picker set to visible")
+                } else {
+                    showToolPicker = false
+                    print("🎨 SimpleWeekView: Tool picker set to hidden")
+                }
+            }
+        }
         .sheet(item: Binding<GoogleCalendarEvent?>(
             get: { selectedCalendarEvent },
             set: { selectedCalendarEvent = $0 }
@@ -646,6 +696,163 @@ struct SimpleWeekView: View {
                 accountKind: accountKind,
                 showEventOnly: true
             )
+        }
+    }
+}
+
+// MARK: - TransparentDrawingCanvas
+struct TransparentDrawingCanvas: UIViewRepresentable {
+    @Binding var canvasView: PKCanvasView
+    var showsToolPicker: Bool = true
+    var onDrawingChanged: (() -> Void)?
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    func makeUIView(context: Context) -> PKCanvasView {
+        print("🎨 TransparentDrawingCanvas: Creating transparent canvas")
+        canvasView.tool = PKInkingTool(.pen, color: .black, width: 2)
+        canvasView.drawingPolicy = .anyInput
+        canvasView.backgroundColor = UIColor.clear // Completely transparent
+        canvasView.allowsFingerDrawing = true
+        canvasView.delegate = context.coordinator
+        canvasView.isOpaque = false
+        
+        // Attach the scene-shared PKToolPicker once the view is in a window
+        DispatchQueue.main.async {
+            if let window = canvasView.window, let picker = PKToolPicker.shared(for: window) {
+                context.coordinator.toolPicker = picker
+                picker.addObserver(canvasView)
+                picker.setVisible(showsToolPicker, forFirstResponder: canvasView)
+                if showsToolPicker {
+                    canvasView.becomeFirstResponder()
+                    print("🎨 TransparentDrawingCanvas: Canvas became first responder with tool picker")
+                }
+            }
+        }
+        
+        return canvasView
+    }
+    
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Update tool-picker visibility when state changes
+        if let picker = context.coordinator.toolPicker {
+            picker.setVisible(showsToolPicker, forFirstResponder: uiView)
+            if showsToolPicker {
+                if !uiView.isFirstResponder {
+                    DispatchQueue.main.async {
+                        uiView.becomeFirstResponder()
+                    }
+                }
+            }
+        }
+    }
+    
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+        let parent: TransparentDrawingCanvas
+        var toolPicker: PKToolPicker?
+        
+        init(parent: TransparentDrawingCanvas) {
+            self.parent = parent
+        }
+        
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            print("🎨 TransparentDrawingCanvas: Drawing changed! Strokes count: \(canvasView.drawing.strokes.count)")
+            parent.onDrawingChanged?()
+        }
+    }
+}
+
+// MARK: - WorkingCanvasView
+struct WorkingCanvasView: UIViewRepresentable {
+    @Binding var canvasView: PKCanvasView
+    var showsToolPicker: Bool = true
+    var onDrawingChanged: (() -> Void)?
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    func makeUIView(context: Context) -> PKCanvasView {
+        print("🎨 WorkingCanvasView: Creating canvas")
+        canvasView.tool = PKInkingTool(.pen, color: .red, width: 5)
+        canvasView.drawingPolicy = .anyInput
+        canvasView.backgroundColor = UIColor.white.withAlphaComponent(0.1)
+        canvasView.allowsFingerDrawing = true
+        canvasView.delegate = context.coordinator
+        
+        // Attach the scene-shared PKToolPicker once the view is in a window
+        DispatchQueue.main.async {
+            if let window = canvasView.window, let picker = PKToolPicker.shared(for: window) {
+                context.coordinator.toolPicker = picker
+                picker.addObserver(canvasView)
+                picker.setVisible(showsToolPicker, forFirstResponder: canvasView)
+                if showsToolPicker {
+                    canvasView.becomeFirstResponder()
+                    print("🎨 WorkingCanvasView: Canvas became first responder with tool picker")
+                }
+            }
+        }
+        
+        return canvasView
+    }
+    
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Update tool-picker visibility when state changes
+        if let picker = context.coordinator.toolPicker {
+            picker.setVisible(showsToolPicker, forFirstResponder: uiView)
+            if showsToolPicker {
+                if !uiView.isFirstResponder {
+                    DispatchQueue.main.async {
+                        uiView.becomeFirstResponder()
+                    }
+                }
+            }
+        }
+    }
+    
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+        let parent: WorkingCanvasView
+        var toolPicker: PKToolPicker?
+        
+        init(parent: WorkingCanvasView) {
+            self.parent = parent
+        }
+        
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            print("🎨 WorkingCanvasView: Drawing changed! Strokes count: \(canvasView.drawing.strokes.count)")
+            parent.onDrawingChanged?()
+        }
+    }
+}
+
+// MARK: - TestCanvasView
+struct TestCanvasView: UIViewRepresentable {
+    @Binding var canvasView: PKCanvasView
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    func makeUIView(context: Context) -> PKCanvasView {
+        print("🎨 TestCanvasView: Creating canvas")
+        canvasView.tool = PKInkingTool(.pen, color: .red, width: 5)
+        canvasView.drawingPolicy = .anyInput
+        canvasView.backgroundColor = UIColor.white.withAlphaComponent(0.8)
+        canvasView.allowsFingerDrawing = true
+        canvasView.delegate = context.coordinator
+        
+        return canvasView
+    }
+    
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        // Update if needed
+    }
+    
+    class Coordinator: NSObject, PKCanvasViewDelegate {
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            print("🎨 TestCanvasView: Drawing changed! Strokes count: \(canvasView.drawing.strokes.count)")
         }
     }
 }

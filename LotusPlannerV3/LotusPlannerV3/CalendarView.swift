@@ -4844,6 +4844,7 @@ struct PencilKitView: UIViewRepresentable {
         }
         
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            print("🎨 PencilKitView: Drawing changed! Strokes count: \(canvasView.drawing.strokes.count)")
             parent.onDrawingChanged?()
         }
     }
