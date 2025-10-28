@@ -611,6 +611,9 @@ struct JournalView: View {
                         .foregroundColor(.primary)
                     
                     Text("Your journal content couldn't be downloaded. This might be due to network issues or iCloud sync problems.")
+                        .onAppear {
+                            print("📝 JournalView: Drawing content for date: \(currentDate)")
+                        }
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)

@@ -1696,6 +1696,13 @@ struct TasksView: View {
                     logDebug("🔄 Subfilter set to: \(subfilter.rawValue)")
                 }
             }
+            // Listen for request to filter tasks to current week
+            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentWeek"), object: nil, queue: .main) { _ in
+                selectedFilter = .week
+                referenceDate = Date()
+                navigationManager.showingAllTasks = false
+                logDebug("🔄 Filter changed to week for current week")
+            }
         }
         .onChange(of: selectedFilter) { _, newValue in
             logDebug("🔄 Filter changed to: \(newValue.rawValue)")

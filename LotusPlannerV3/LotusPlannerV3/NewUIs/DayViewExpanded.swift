@@ -87,23 +87,16 @@ struct DayViewExpanded: View {
                                 )
 
                                 // Vertical draggable divider between timeline and tasks
-                                VStack(spacing: 4) {
-                                    // Handle lines above
-                                    Rectangle()
-                                        .fill(Color.gray.opacity(0.4))
-                                        .frame(width: 20, height: 1.5)
-                                    // Main divider line
-                                    Rectangle()
-                                        .fill(isLeftDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
-                                        .frame(width: 1, height: geometry.size.height - 24)
-                                    // Handle lines below
-                                    Rectangle()
-                                        .fill(Color.gray.opacity(0.4))
-                                        .frame(width: 20, height: 1.5)
-                                }
-                                .frame(width: 8, height: geometry.size.height - 24)
-                                .contentShape(Rectangle())
-                                .gesture(
+                                Rectangle()
+                                    .fill(isLeftDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                                    .frame(width: 8)
+                                    .overlay(
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.caption)
+                                            .foregroundColor(isLeftDividerDragging ? .white : .gray)
+                                    )
+                                    .contentShape(Rectangle())
+                                    .gesture(
                                     DragGesture()
                                         .onChanged { value in
                                             isLeftDividerDragging = true
@@ -228,44 +221,29 @@ struct DayViewExpanded: View {
                                 
                                 // Draggable divider between tasks and logs
                                 if appPrefs.showAnyLogs {
-                                    VStack(spacing: 4) {
-                                        // Handle lines above
-                                        HStack {
-                                            Spacer()
-                                            Rectangle()
-                                                .fill(Color.gray.opacity(0.4))
-                                                .frame(width: 20, height: 1.5)
-                                            Spacer()
-                                        }
-                                        // Main divider line
-                                        Rectangle()
-                                            .fill(isTopDividerDragging ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.2))
-                                            .frame(height: 1)
-                                        // Handle lines below
-                                        HStack {
-                                            Spacer()
-                                            Rectangle()
-                                                .fill(Color.gray.opacity(0.4))
-                                                .frame(width: 20, height: 1.5)
-                                            Spacer()
-                                        }
-                                    }
-                                    .frame(height: 8)
-                                    .contentShape(Rectangle())
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { value in
-                                                isTopDividerDragging = true
-                                                let newHeight = logsHeight - value.translation.height
-                                                let minHeight: CGFloat = 100
-                                                let maxHeight: CGFloat = max(200, geometry.size.height - 300)
-                                                logsHeight = max(minHeight, min(maxHeight, newHeight))
-                                            }
-                                            .onEnded { _ in
-                                                isTopDividerDragging = false
-                                                appPrefs.updateDayViewExpandedLogsHeight(logsHeight)
-                                            }
-                                    )
+                                    Rectangle()
+                                        .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                                        .frame(height: 8)
+                                        .overlay(
+                                            Image(systemName: "line.3.horizontal")
+                                                .font(.caption)
+                                                .foregroundColor(isTopDividerDragging ? .white : .gray)
+                                        )
+                                        .contentShape(Rectangle())
+                                        .gesture(
+                                            DragGesture()
+                                                .onChanged { value in
+                                                    isTopDividerDragging = true
+                                                    let newHeight = logsHeight - value.translation.height
+                                                    let minHeight: CGFloat = 100
+                                                    let maxHeight: CGFloat = max(200, geometry.size.height - 300)
+                                                    logsHeight = max(minHeight, min(maxHeight, newHeight))
+                                                }
+                                                .onEnded { _ in
+                                                    isTopDividerDragging = false
+                                                    appPrefs.updateDayViewExpandedLogsHeight(logsHeight)
+                                                }
+                                        )
                                 }
                                 
                                 // Logs component below tasks

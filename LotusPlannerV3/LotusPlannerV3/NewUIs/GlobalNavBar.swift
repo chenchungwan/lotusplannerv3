@@ -364,7 +364,7 @@ struct GlobalNavBar: View {
                         // Show interval buttons in single row on all devices
                         // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Simple Week View, show all buttons but highlight 7.circle
+                                // In Simple Week View, show all buttons but highlight w.circle
                                 if navigationManager.currentView == .simpleWeekView {
                                     // Only show d.circle in non-Goals views
                                     if navigationManager.currentView != .goals {
@@ -380,7 +380,7 @@ struct GlobalNavBar: View {
                                     Button {
                                         handleTimeIntervalChange(.week)
                                     } label: {
-                                        Image(systemName: "w.circle")
+                                        Image(systemName: "s.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(.secondary)
@@ -388,7 +388,7 @@ struct GlobalNavBar: View {
                                     Button {
                                         navigationManager.switchToSimpleWeekView()
                                     } label: {
-                                        Image(systemName: "7.circle")
+                                        Image(systemName: "w.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(.accentColor)
@@ -405,20 +405,30 @@ struct GlobalNavBar: View {
                                                 .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                         }
                                     }
-                                    Button {
-                                        handleTimeIntervalChange(.week)
-                                    } label: {
-                                        Image(systemName: "w.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
-                                    }
-                                    // Hide 7.circle in Tasks and Goals views
-                                    if navigationManager.currentView != .tasks && navigationManager.currentView != .goals {
+                                    // Hide s.circle in Tasks view
+                                    if navigationManager.currentView != .tasks {
                                         Button {
-                                            navigationManager.switchToSimpleWeekView()
+                                            // In other views: handle week interval change
+                                            handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: "7.circle")
+                                            Image(systemName: "s.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                        }
+                                    }
+                                    // Hide w.circle only in Goals view
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .tasks {
+                                                // In Tasks view: filter to current week's tasks
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                                            } else {
+                                                // In other views: switch to simple week view
+                                                navigationManager.switchToSimpleWeekView()
+                                            }
+                                        } label: {
+                                            Image(systemName: "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                                 .foregroundColor(.secondary)
@@ -601,7 +611,7 @@ struct GlobalNavBar: View {
                         HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
                             // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Simple Week View, show all buttons but highlight 7.circle
+                                // In Simple Week View, show all buttons but highlight w.circle
                                 if navigationManager.currentView == .simpleWeekView {
                                     // Only show d.circle in non-Goals views
                                     if navigationManager.currentView != .goals {
@@ -617,7 +627,7 @@ struct GlobalNavBar: View {
                                     Button {
                                         handleTimeIntervalChange(.week)
                                     } label: {
-                                        Image(systemName: "w.circle")
+                                        Image(systemName: "s.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(.secondary)
@@ -625,7 +635,7 @@ struct GlobalNavBar: View {
                                     Button {
                                         navigationManager.switchToSimpleWeekView()
                                     } label: {
-                                        Image(systemName: "7.circle")
+                                        Image(systemName: "w.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(.accentColor)
@@ -642,20 +652,30 @@ struct GlobalNavBar: View {
                                                 .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                         }
                                     }
-                                    Button {
-                                        handleTimeIntervalChange(.week)
-                                    } label: {
-                                        Image(systemName: "w.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
-                                    }
-                                    // Hide 7.circle in Tasks and Goals views
-                                    if navigationManager.currentView != .tasks && navigationManager.currentView != .goals {
+                                    // Hide s.circle in Tasks view
+                                    if navigationManager.currentView != .tasks {
                                         Button {
-                                            navigationManager.switchToSimpleWeekView()
+                                            // In other views: handle week interval change
+                                            handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: "7.circle")
+                                            Image(systemName: "s.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                        }
+                                    }
+                                    // Hide w.circle only in Goals view
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .tasks {
+                                                // In Tasks view: filter to current week's tasks
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                                            } else {
+                                                // In other views: switch to simple week view
+                                                navigationManager.switchToSimpleWeekView()
+                                            }
+                                        } label: {
+                                            Image(systemName: "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                                 .foregroundColor(.secondary)

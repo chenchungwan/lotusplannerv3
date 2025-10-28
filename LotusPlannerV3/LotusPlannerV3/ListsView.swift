@@ -92,7 +92,8 @@ struct ListsView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showingDetailView = true
                     }
-                }
+                },
+                initialExpandedAccount: getInitialExpandedAccount()
             )
             .opacity(showingDetailView ? 0 : 1)
             
@@ -162,7 +163,8 @@ struct ListsView: View {
                 hasProfessional: auth.isLinked(kind: .professional),
                 onSelectionChanged: { listId, accountKind in
                     saveLastSelection(listId: listId, accountKind: accountKind)
-                }
+                },
+                initialExpandedAccount: getInitialExpandedAccount()
             )
             .frame(width: geometry.size.width * 0.35)
             
@@ -214,6 +216,9 @@ struct ListsView: View {
             if shouldUseStackedLayout {
                 showingDetailView = true
             }
+            
+            // Collapse the other account's lists when showing the last selected list
+            // This will be handled by passing the account kind to AllTaskListsColumn
         }
     }
     
@@ -225,6 +230,23 @@ struct ListsView: View {
     private func clearLastSelection() {
         UserDefaults.standard.removeObject(forKey: lastSelectedListIdKey)
         UserDefaults.standard.removeObject(forKey: lastSelectedAccountKindKey)
+    }
+    
+    private func getInitialExpandedAccount() -> GoogleAuthManager.AccountKind? {
+        // Check if there's a last selected list
+        guard let savedListId = UserDefaults.standard.string(forKey: lastSelectedListIdKey),
+              let savedAccountKindRaw = UserDefaults.standard.string(forKey: lastSelectedAccountKindKey),
+              let savedAccountKind = GoogleAuthManager.AccountKind(rawValue: savedAccountKindRaw) else {
+            return nil // No last selection, both sections will be expanded
+        }
+        
+        // Verify the list still exists in the loaded data
+        let lists = savedAccountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        if lists.contains(where: { $0.id == savedListId }) {
+            return savedAccountKind // Return the account kind of the last selected list
+        }
+        
+        return nil // List doesn't exist anymore, both sections will be expanded
     }
 }
 
@@ -239,6 +261,7 @@ struct AllTaskListsColumn: View {
     let hasPersonal: Bool
     let hasProfessional: Bool
     let onSelectionChanged: (String, GoogleAuthManager.AccountKind) -> Void
+    let initialExpandedAccount: GoogleAuthManager.AccountKind?
     
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -249,8 +272,40 @@ struct AllTaskListsColumn: View {
     @State private var newListName = ""
     
     // State for collapsing/expanding sections
-    @State private var isPersonalExpanded = true
-    @State private var isProfessionalExpanded = true
+    @State private var isPersonalExpanded: Bool
+    @State private var isProfessionalExpanded: Bool
+    
+    init(personalLists: [GoogleTaskList], 
+         professionalLists: [GoogleTaskList], 
+         personalColor: Color, 
+         professionalColor: Color, 
+         selectedListId: Binding<String?>, 
+         selectedAccountKind: Binding<GoogleAuthManager.AccountKind?>, 
+         hasPersonal: Bool, 
+         hasProfessional: Bool, 
+         onSelectionChanged: @escaping (String, GoogleAuthManager.AccountKind) -> Void,
+         initialExpandedAccount: GoogleAuthManager.AccountKind?) {
+        self.personalLists = personalLists
+        self.professionalLists = professionalLists
+        self.personalColor = personalColor
+        self.professionalColor = professionalColor
+        self._selectedListId = selectedListId
+        self._selectedAccountKind = selectedAccountKind
+        self.hasPersonal = hasPersonal
+        self.hasProfessional = hasProfessional
+        self.onSelectionChanged = onSelectionChanged
+        self.initialExpandedAccount = initialExpandedAccount
+        
+        // Set initial expansion state based on the last selected account
+        if let expandedAccount = initialExpandedAccount {
+            self._isPersonalExpanded = State(initialValue: expandedAccount == .personal)
+            self._isProfessionalExpanded = State(initialValue: expandedAccount == .professional)
+        } else {
+            // No last selection, both sections expanded by default
+            self._isPersonalExpanded = State(initialValue: true)
+            self._isProfessionalExpanded = State(initialValue: true)
+        }
+    }
     
     private var adaptivePadding: CGFloat {
         horizontalSizeClass == .compact ? 8 : 12
