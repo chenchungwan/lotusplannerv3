@@ -1696,12 +1696,16 @@ struct TasksView: View {
                     logDebug("🔄 Subfilter set to: \(subfilter.rawValue)")
                 }
             }
-            // Listen for request to filter tasks to current week
+            // Listen for request to filter tasks to current week (when coming from All Tasks filter)
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentWeek"), object: nil, queue: .main) { _ in
                 selectedFilter = .week
                 referenceDate = Date()
                 navigationManager.showingAllTasks = false
-                logDebug("🔄 Filter changed to week for current week")
+                // Clear cache to ensure fresh filtering
+                cachedFilteredPersonalTasks.removeAll()
+                cachedFilteredProfessionalTasks.removeAll()
+                lastFilterState = ""
+                logDebug("🔄 Filter changed to week for current week from All Tasks")
             }
         }
         .onChange(of: selectedFilter) { _, newValue in
@@ -1745,6 +1749,8 @@ struct TasksView: View {
             case .year:
                 selectedFilter = .year
             }
+            // Update reference date to current date when interval changes
+            referenceDate = Date()
             // Clear cache when interval changes
             cachedFilteredPersonalTasks.removeAll()
             cachedFilteredProfessionalTasks.removeAll()

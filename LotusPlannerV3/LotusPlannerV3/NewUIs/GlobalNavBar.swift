@@ -420,18 +420,18 @@ struct GlobalNavBar: View {
                                     // Hide w.circle only in Goals view
                                     if navigationManager.currentView != .goals {
                                         Button {
-                                            if navigationManager.currentView == .tasks {
-                                                // In Tasks view: filter to current week's tasks
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
                                             } else {
-                                                // In other views: switch to simple week view
-                                                navigationManager.switchToSimpleWeekView()
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.week)
                                             }
                                         } label: {
                                             Image(systemName: "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -667,18 +667,18 @@ struct GlobalNavBar: View {
                                     // Hide w.circle only in Goals view
                                     if navigationManager.currentView != .goals {
                                         Button {
-                                            if navigationManager.currentView == .tasks {
-                                                // In Tasks view: filter to current week's tasks
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
                                             } else {
-                                                // In other views: switch to simple week view
-                                                navigationManager.switchToSimpleWeekView()
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.week)
                                             }
                                         } label: {
                                             Image(systemName: "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
