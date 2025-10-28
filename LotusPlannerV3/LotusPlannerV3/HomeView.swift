@@ -14,12 +14,18 @@ struct ContentView: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
 
     var body: some View {
-        NavigationStack {
-            currentView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
+        HStack(spacing: 0) {
+            // Left sidebar
+            Sidebar()
+            
+            // Main content area
+            NavigationStack {
+                currentView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+            }
+            .background(Color(.systemBackground))
         }
-        .background(Color(.systemBackground))
         .sheet(isPresented: $navigationManager.showingSettings) {
             SettingsView()
         }

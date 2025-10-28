@@ -13,9 +13,6 @@ struct GlobalNavBar: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
     // Sheet states
-    @State private var showingSettings = false
-    @State private var showingAbout = false
-    @State private var showingReportIssues = false
     @State private var showingDatePicker = false
     @State private var showingAddEvent = false
     @State private var showingAddTask = false
@@ -270,60 +267,8 @@ struct GlobalNavBar: View {
             
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                // First row: Main navigation
+                // First row: Main navigation (hamburger menu removed - now handled by sidebar)
                 HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
-                    Menu {
-                            Button(action: {
-                                navigationManager.switchToCalendar()
-                            }) {
-                                Label("Calendar", systemImage: "calendar")
-                            }
-                            
-                            Button(action: {
-                                navigationManager.switchToTasks()
-                            }) {
-                                Label("Tasks", systemImage: "checklist")
-                            }
-                            
-                            Button(action: {
-                                navigationManager.switchToLists()
-                            }) {
-                                Label("Lists", systemImage: "list.bullet")
-                            }
-                            
-                            Button(action: {
-                                navigationManager.switchToJournalDayViews()
-                            }) {
-                                Label("Journals", systemImage: "book")
-                            }
-                            
-                            if !appPrefs.hideGoals {
-                                Button(action: {
-                                    navigationManager.switchToGoals()
-                                }) {
-                                    Label("Goals", systemImage: "target")
-                                }
-                            }
-                            
-                            Divider()
-                            
-                            Button("Settings") {
-                                showingSettings = true
-                            }
-                            Button("About") {
-                                showingAbout = true
-                            }
-                            Button("Report Issue / Request Features") {
-                                showingReportIssues = true
-                            }
-                        } label: {
-                            Image(systemName: "line.3.horizontal")
-                                .font(adaptiveIconSize)
-                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.borderless)
-                        
                         // Hide navigation arrows in Lists view and in Goals All Goals view
                         if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                             Button { step(-1) } label: {
@@ -861,15 +806,6 @@ struct GlobalNavBar: View {
             }
         }
         .frame(height: shouldShowTwoRows ? 100 : 50)
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showingAbout) {
-            AboutView()
-        }
-        .sheet(isPresented: $showingReportIssues) {
-            ReportIssuesView()
-        }
         .sheet(isPresented: $showingDatePicker) {
             NavigationStack {
                 DatePicker(
