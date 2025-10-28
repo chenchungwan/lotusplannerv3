@@ -181,6 +181,7 @@ class NavigationManager: ObservableObject {
         currentView = .simpleWeekView
         showTasksView = false
         currentInterval = .week // SimpleWeekView is always week view
+        currentDate = Date() // Refresh to current week
     }
     
     func switchToYearlyCalendar() {

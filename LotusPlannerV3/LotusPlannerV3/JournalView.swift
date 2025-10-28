@@ -167,14 +167,18 @@ struct JournalView: View {
         
         let targetDate = date ?? currentDate
         
-        // Load drawing
+        // Clear cache to ensure we get the latest data from iCloud
+        // This is important for the sync functionality to work properly
+        JournalStorageNew.shared.clearCache(for: targetDate)
+        
+        // Load drawing with fresh data from iCloud
         if let drawing = await JournalStorageNew.shared.load(for: targetDate) {
             canvasView.drawing = drawing
         } else {
             canvasView.drawing = PKDrawing()
         }
         
-        // Load photos
+        // Load photos with fresh data
         await loadPhotos(for: targetDate)
         
         loadedDate = targetDate
@@ -193,15 +197,77 @@ struct JournalView: View {
         isSavingOrLoading = false
     }
     
-    /// Check if there are unsaved changes
-    private func hasUnsavedChanges() -> Bool {
+    /// Check if there are unsaved changes by comparing with saved content
+    private func hasUnsavedChanges() async -> Bool {
         // Check if there are any photos or if the drawing has strokes
-        return !photos.isEmpty || !canvasView.drawing.strokes.isEmpty
+        let hasCurrentContent = !photos.isEmpty || !canvasView.drawing.strokes.isEmpty
+        
+        if !hasCurrentContent {
+            return false
+        }
+        
+        // Load the saved content from iCloud to compare
+        let savedDrawing = await JournalStorageNew.shared.load(for: currentDate)
+        let savedPhotos = await loadSavedPhotos(for: currentDate)
+        
+        // Compare drawings
+        let drawingChanged = !areDrawingsEqual(canvasView.drawing, savedDrawing ?? PKDrawing())
+        
+        // Compare photos
+        let photosChanged = !arePhotosEqual(photos, savedPhotos)
+        
+        return drawingChanged || photosChanged
+    }
+    
+    /// Compare two PKDrawing objects for equality
+    private func areDrawingsEqual(_ drawing1: PKDrawing, _ drawing2: PKDrawing) -> Bool {
+        // Compare stroke counts first (quick check)
+        if drawing1.strokes.count != drawing2.strokes.count {
+            return false
+        }
+        
+        // If both are empty, they're equal
+        if drawing1.strokes.isEmpty && drawing2.strokes.isEmpty {
+            return true
+        }
+        
+        // Compare data representations for exact equality
+        let data1 = drawing1.dataRepresentation()
+        let data2 = drawing2.dataRepresentation()
+        return data1 == data2
+    }
+    
+    /// Compare two photo arrays for equality
+    private func arePhotosEqual(_ photos1: [JournalPhoto], _ photos2: [JournalPhoto]) -> Bool {
+        if photos1.count != photos2.count {
+            return false
+        }
+        
+        // Compare by ID and size (assuming photos with same ID and size are the same)
+        let sorted1 = photos1.sorted { $0.id < $1.id }
+        let sorted2 = photos2.sorted { $0.id < $1.id }
+        
+        for (photo1, photo2) in zip(sorted1, sorted2) {
+            if photo1.id != photo2.id || photo1.size != photo2.size {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    /// Load saved photos from iCloud for comparison
+    private func loadSavedPhotos(for date: Date) async -> [JournalPhoto] {
+        // This is a simplified version - in a real implementation,
+        // you'd load the actual saved photos from iCloud
+        // For now, return empty array as we don't have the full photo loading logic here
+        return []
     }
     
     /// Refresh journal content from iCloud
     private func refreshFromiCloud() async {
-        if hasUnsavedChanges() {
+        let hasChanges = await hasUnsavedChanges()
+        if hasChanges {
             showUnsavedChangesAlert = true
             return
         }

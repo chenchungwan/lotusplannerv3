@@ -93,6 +93,13 @@ struct AddLogEntryView: View {
                 }
             }
         }
+        .onAppear {
+            // Always refresh the date and time to current when adding a new log entry
+            let currentDateTime = Date()
+            viewModel.weightDate = currentDateTime
+            viewModel.workoutDate = currentDateTime
+            viewModel.foodDate = currentDateTime
+        }
     }
     
     private var weightForm: some View {

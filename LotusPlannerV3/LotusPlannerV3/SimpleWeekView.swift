@@ -4,6 +4,9 @@ struct SimpleWeekView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    
+    @State private var selectedCalendarEvent: GoogleCalendarEvent?
     
     // MARK: - Computed Properties
     private var weekDates: [Date] {
@@ -21,8 +24,11 @@ struct SimpleWeekView: View {
             if let startTime = event.startTime {
                 return calendar.isDate(startTime, inSameDayAs: date)
             }
-            // For all-day events, check if the all-day event applies to this date
-            return event.isAllDay
+            // For all-day events, check if the event date matches
+            if let eventDate = event.startTime {
+                return calendar.isDate(eventDate, inSameDayAs: date)
+            }
+            return false
         }
     }
     
@@ -37,24 +43,144 @@ struct SimpleWeekView: View {
         return availableContentWidth / 7
     }
     
-    private func weekDayRowEventsColumn(date: Date) -> some View {
-        let eventsForDate = getEventsForDate(date)
+    private func unifiedWeekTimeline(availableWidth: CGFloat) -> some View {
+        let columnWidth = contentColumnWidth(availableWidth: availableWidth)
+        let timeColumnWidth: CGFloat = 28
         
-        // Create timeline content without its own ScrollView
-        return timelineContent(
-            date: date,
-            events: eventsForDate,
-            personalEvents: calendarViewModel.personalEvents,
-            professionalEvents: calendarViewModel.professionalEvents,
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor
-        )
-        .padding(.horizontal, 4)
-        .frame(height: 991) // Fixed height: all-day row (30) + divider (1) + 24 hours * 40pt (960)
+        // Calculate the maximum height needed for all-day events across all days
+        let maxAllDayHeight = weekDates.map { date in
+            let eventsForDate = getEventsForDate(date)
+            let allDayEvents = eventsForDate.filter { $0.isAllDay }
+            return calculateAllDayEventsHeight(for: allDayEvents)
+        }.max() ?? 20
+        
+        return GeometryReader { geometry in
+            // Calculate dynamic hour height to fit exactly 10 hours in remaining space
+            let availableHeight = geometry.size.height - maxAllDayHeight - 1 // -1 for divider line
+            let hourHeight = availableHeight / 10.0 // 10 hours visible
+            
+            VStack(spacing: 0) {
+            // Persistent all-day events row for all 7 days
+            HStack(spacing: 0) {
+                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                    let eventsForDate = getEventsForDate(date)
+                    let allDayEvents = eventsForDate.filter { $0.isAllDay }
+                    
+                    allDayEventsRow(
+                        events: allDayEvents,
+                        personalEvents: calendarViewModel.personalEvents,
+                        professionalEvents: calendarViewModel.professionalEvents,
+                        personalColor: appPrefs.personalColor,
+                        professionalColor: appPrefs.professionalColor,
+                        timeColumnWidth: timeColumnWidth
+                    )
+                    .frame(width: columnWidth, height: maxAllDayHeight)
+                    
+                    if index < weekDates.count - 1 {
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(width: 1)
+                    }
+                }
+            }
+            
+            // Divider line
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color(.systemGray4))
+                    .frame(width: timeColumnWidth, height: 1)
+                Rectangle()
+                    .fill(Color(.systemGray4))
+                    .frame(height: 1)
+            }
+            
+            // Unified scrollable timed events timeline
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                            let eventsForDate = getEventsForDate(date)
+                            let timedEvents = eventsForDate.filter { !$0.isAllDay }
+                            
+                            timedEventsColumn(
+                                date: date,
+                                events: timedEvents,
+                                width: columnWidth,
+                                hourHeight: hourHeight,
+                                timeColumnWidth: timeColumnWidth
+                            )
+                            
+                            if index < weekDates.count - 1 {
+                                Rectangle()
+                                    .fill(Color(.systemGray4))
+                                    .frame(width: 1)
+                            }
+                        }
+                    }
+                }
+                .frame(height: hourHeight * 10) // Dynamic height for exactly 10 hours
+                .onAppear {
+                    // Scroll to 8 AM by default
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            proxy.scrollTo(8, anchor: .top)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        }
     }
     
-    private func timelineContent(date: Date, events: [GoogleCalendarEvent], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color) -> some View {
-        let hourHeight: CGFloat = 40
+    private func timedEventsColumn(date: Date, events: [GoogleCalendarEvent], width: CGFloat, hourHeight: CGFloat, timeColumnWidth: CGFloat) -> some View {
+        return GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                // Background grid - full 24 hours
+                VStack(spacing: 0) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        timeSlot(hour: hour, width: width - timeColumnWidth - 1, timeColumnWidth: timeColumnWidth, hourHeight: hourHeight)
+                            .frame(height: hourHeight)
+                    }
+                    
+                    // Final 12a line at the end of the day
+                    HStack(spacing: 0) {
+                        Text(formatHour(24))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .frame(width: timeColumnWidth, alignment: .leading)
+                        
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 1)
+                    }
+                    .frame(height: 20)
+                }
+                
+                // Timed events overlay
+                let eventLayouts = calculateEventLayouts(events: events, width: width - timeColumnWidth - 1, offsetX: timeColumnWidth + 1, hourHeight: hourHeight, personalEvents: calendarViewModel.personalEvents, professionalEvents: calendarViewModel.professionalEvents, personalColor: appPrefs.personalColor, professionalColor: appPrefs.professionalColor)
+                
+                ZStack(alignment: .topLeading) {
+                    ForEach(eventLayouts, id: \.event.id) { layout in
+                        eventBlock(layout: layout, personalColor: appPrefs.personalColor, professionalColor: appPrefs.professionalColor)
+                    }
+                    
+                    // Current time indicator (red line) - only for today
+                    if shouldShowCurrentTimeIndicator(for: date) {
+                        currentTimeIndicator(
+                            width: width - timeColumnWidth - 1,
+                            offsetX: timeColumnWidth + 1,
+                            hourHeight: hourHeight,
+                            startHour: 0
+                        )
+                    }
+                }
+            }
+        }
+        .frame(width: width, height: CGFloat(24) * hourHeight + 20) // Full 24 hours
+    }
+    
+    private func timedEventsTimeline(date: Date, events: [GoogleCalendarEvent], hourHeight: CGFloat, personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color) -> some View {
         let startHour = 0
         let endHour = 24
         let timeColumnWidth: CGFloat = 28
@@ -107,7 +233,7 @@ struct SimpleWeekView: View {
                     }
                     
                     // Timed events overlay
-                    let eventLayouts = calculateEventLayouts(events: timedEvents, width: geometry.size.width - timeColumnWidth - 1, offsetX: timeColumnWidth + 1, personalEvents: personalEvents, professionalEvents: professionalEvents, personalColor: personalColor, professionalColor: professionalColor)
+                    let eventLayouts = calculateEventLayouts(events: timedEvents, width: geometry.size.width - timeColumnWidth - 1, offsetX: timeColumnWidth + 1, hourHeight: hourHeight, personalEvents: personalEvents, professionalEvents: professionalEvents, personalColor: personalColor, professionalColor: professionalColor)
                     
                     ZStack(alignment: .topLeading) {
                         ForEach(eventLayouts, id: \.event.id) { layout in
@@ -132,24 +258,36 @@ struct SimpleWeekView: View {
                 // Empty spacer to maintain alignment
                 Spacer()
             } else {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(events, id: \.id) { event in
                         let isPersonal = personalEvents.contains { $0.id == event.id }
                         let color = isPersonal ? personalColor : professionalColor
                         
-                        HStack(spacing: 4) {
+                        HStack(spacing: 8) {
                             Circle()
                                 .fill(color)
-                                .frame(width: 6, height: 6)
+                                .frame(width: 8, height: 8)
                             
                             Text(event.summary)
-                                .font(.caption)
+                                .font(.body)
                                 .fontWeight(.medium)
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
+                            
+                            Spacer()
                         }
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(color.opacity(0.1))
+                        )
+                        .onTapGesture { 
+                            selectedCalendarEvent = event
+                        }
+                        .onLongPressGesture { 
+                            selectedCalendarEvent = event
+                        }
                     }
                 }
             }
@@ -161,19 +299,38 @@ struct SimpleWeekView: View {
     
     private func timeSlot(hour: Int, width: CGFloat, timeColumnWidth: CGFloat, hourHeight: CGFloat) -> some View {
         HStack(spacing: 0) {
-            Text(formatHour(hour))
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .frame(width: timeColumnWidth, alignment: .leading)
+            // Time label (left-aligned to match TimelineComponent)
+            VStack {
+                Text(formatHour(hour))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .frame(width: timeColumnWidth, alignment: .leading)
+                Spacer()
+            }
             
+            // Hour line and background (matching TimelineComponent)
             Rectangle()
-                .fill(Color(.systemGray5))
-                .frame(height: 1)
+                .fill(Color.clear)
+                .frame(height: hourHeight - 1)
+                .overlay(
+                    // Half-hour line
+                    Rectangle()
+                        .fill(Color(.systemGray6))
+                        .frame(height: 0.5)
+                        .offset(y: hourHeight / 2)
+                )
+                .overlay(
+                    // Hour line
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 1)
+                        .offset(y: -0.5),
+                    alignment: .top
+                )
         }
     }
     
-    private func calculateEventLayouts(events: [GoogleCalendarEvent], width: CGFloat, offsetX: CGFloat, personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color) -> [EventLayout] {
-        let hourHeight: CGFloat = 40
+    private func calculateEventLayouts(events: [GoogleCalendarEvent], width: CGFloat, offsetX: CGFloat, hourHeight: CGFloat, personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color) -> [EventLayout] {
         var layouts: [EventLayout] = []
         let calendar = Calendar.current
         
@@ -221,6 +378,10 @@ struct SimpleWeekView: View {
                 guard let startTime = event.startTime,
                       let endTime = event.endTime else { continue }
                 
+                var calendar = Calendar.current
+                calendar.timeZone = TimeZone.current
+                calendar.locale = Locale.current
+                
                 let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
                 let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
                 
@@ -229,11 +390,12 @@ struct SimpleWeekView: View {
                 let endHour = endComponents.hour ?? 0
                 let endMinute = endComponents.minute ?? 0
                 
-                let startMinutes = CGFloat(startHour * 60 + startMinute)
-                let endMinutes = CGFloat(endHour * 60 + endMinute)
+                // Use the same calculation as TimelineComponent
+                let startOffset = CGFloat(startHour - 0) * hourHeight + 
+                                 CGFloat(startMinute) * (hourHeight / 60.0)
                 
-                let startOffset = startMinutes * (hourHeight / 60.0)
-                let height = max(20, (endMinutes - startMinutes) * (hourHeight / 60.0))
+                let duration = endTime.timeIntervalSince(startTime)
+                let height = max(20, CGFloat(duration / 3600.0) * hourHeight)
                 
                 let isPersonal = personalEvents.contains { $0.id == event.id }
                 
@@ -270,6 +432,12 @@ struct SimpleWeekView: View {
         .background(color.opacity(0.8))
         .cornerRadius(4)
         .offset(x: layout.xOffset, y: layout.startOffset)
+        .onTapGesture { 
+            selectedCalendarEvent = layout.event
+        }
+        .onLongPressGesture { 
+            selectedCalendarEvent = layout.event
+        }
     }
     
     private func allDayEventsSection(events: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color) -> some View {
@@ -319,10 +487,54 @@ struct SimpleWeekView: View {
         return timeString
     }
     
+    private func calculateAllDayEventsHeight(for events: [GoogleCalendarEvent]) -> CGFloat {
+        if events.isEmpty {
+            return 20 // Minimum height for empty state
+        }
+        
+        // Each event takes: text height + vertical padding (2*2) + spacing (2)
+        let eventHeight: CGFloat = 16 + 4 + 2 // text height + padding + spacing
+        let totalHeight = CGFloat(events.count) * eventHeight + 4 // +4 for VStack padding
+        
+        return max(totalHeight, 20) // Minimum 20pt height
+    }
+    
+    private func shouldShowCurrentTimeIndicator(for date: Date) -> Bool {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
+        calendar.locale = Locale.current
+        let now = Date()
+        
+        // Only show on today's date
+        guard calendar.isDate(date, inSameDayAs: now) else { return false }
+        
+        // Only show if current time is within our visible range (8 AM - 6 PM)
+        let currentHour = calendar.component(.hour, from: now)
+        return currentHour >= 8 && currentHour < 18
+    }
+    
+    private func currentTimeIndicator(width: CGFloat, offsetX: CGFloat, hourHeight: CGFloat, startHour: Int) -> some View {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
+        calendar.locale = Locale.current
+        let now = Date()
+        let currentHour = calendar.component(.hour, from: now)
+        let currentMinute = calendar.component(.minute, from: now)
+        
+        // Use the same calculation as TimelineComponent
+        let yOffset = CGFloat(currentHour - 0) * hourHeight + CGFloat(currentMinute) * (hourHeight / 60.0)
+        
+        return Rectangle()
+            .fill(Color.red)
+            .frame(width: width, height: 2)
+            .offset(x: offsetX, y: yOffset)
+    }
+    
     private func weekDayColumnSticky(date: Date, isToday: Bool) -> some View {
         Button(action: {
             // Navigate to day view for this date
             navigationManager.updateInterval(.day, date: date)
+            navigationManager.switchToCalendar()
         }) {
             VStack(alignment: .center, spacing: 2) {
             Text(dayOfWeekAbbrev(from: date))
@@ -383,25 +595,8 @@ struct SimpleWeekView: View {
                         .frame(height: 60)
                         .background(Color(.systemBackground))
                         
-                    // Scrollable content with 7 Event columns (one for each day) - single scroll
-                    ScrollView(.vertical, showsIndicators: true) {
-                        HStack(alignment: .top, spacing: 0) {
-                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                // Events column for each day
-                                weekDayRowEventsColumn(date: date)
-                                .frame(width: contentColumnWidth(availableWidth: geometry.size.width))
-                                .background(Color(.systemBackground))
-                                
-                                // Divider between days (except for the last one)
-                                if index < weekDates.count - 1 {
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 1)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                    }
+                    // Unified scrollable timeline for all 7 days
+                    unifiedWeekTimeline(availableWidth: geometry.size.width)
                     }
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -422,6 +617,31 @@ struct SimpleWeekView: View {
         .sidebarToggleHidden()
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
+        .task {
+            // Load calendar data for the current week
+            await calendarViewModel.loadCalendarDataForWeek(containing: navigationManager.currentDate)
+        }
+        .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+            Task {
+                // Load calendar data when the date changes
+                await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
+            }
+        }
+        .sheet(item: Binding<GoogleCalendarEvent?>(
+            get: { selectedCalendarEvent },
+            set: { selectedCalendarEvent = $0 }
+        )) { ev in
+            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksViewModel,
+                calendarViewModel: calendarViewModel,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind,
+                showEventOnly: true
+            )
+        }
     }
 }
 

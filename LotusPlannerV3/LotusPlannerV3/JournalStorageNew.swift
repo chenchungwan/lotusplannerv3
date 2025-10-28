@@ -250,6 +250,11 @@ class JournalStorageNew {
         setCache(nil, for: date)
     }
     
+    /// Clear cache for a specific date to force fresh load from iCloud
+    func clearCache(for date: Date) {
+        setCache(nil, for: date)
+    }
+    
     // MARK: - Utilities
     
     /// Check if iCloud is available
