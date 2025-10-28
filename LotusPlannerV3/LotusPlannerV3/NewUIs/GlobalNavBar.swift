@@ -423,6 +423,9 @@ struct GlobalNavBar: View {
                                             if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
                                                 // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                                            } else if navigationManager.currentView == .calendar {
+                                                // In Calendar view: switch to simple week view
+                                                navigationManager.switchToSimpleWeekView()
                                             } else {
                                                 // In other cases: use standard interval change
                                                 handleTimeIntervalChange(.week)
@@ -670,6 +673,9 @@ struct GlobalNavBar: View {
                                             if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
                                                 // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                                            } else if navigationManager.currentView == .calendar {
+                                                // In Calendar view: switch to simple week view
+                                                navigationManager.switchToSimpleWeekView()
                                             } else {
                                                 // In other cases: use standard interval change
                                                 handleTimeIntervalChange(.week)
