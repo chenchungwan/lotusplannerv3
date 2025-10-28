@@ -374,7 +374,7 @@ private struct TaskComponentListCard: View {
     @ViewBuilder
     private var overlayView: some View {
         RoundedRectangle(cornerRadius: 8)
-            .stroke(isTopPriority ? accentColor : Color(.systemGray4), lineWidth: isTopPriority ? 2 : 1)
+            .stroke(Color.clear, lineWidth: 1)
     }
     
     private func startEditing() {

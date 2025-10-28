@@ -2446,28 +2446,28 @@ struct CalendarView: View {
                 .background(Color(.systemBackground))
                 .cornerRadius(12)
 
-                // Vertical divider between Tasks and Logs
-                Rectangle()
-                    .fill(isVerticalTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                    .frame(width: 8)
-                    .overlay(
-                        Image(systemName: "line.3.horizontal")
-                            .font(.caption)
-                            .foregroundColor(isVerticalTopDividerDragging ? .white : .gray)
-                    )
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                isVerticalTopDividerDragging = true
-                                let minWidth: CGFloat = 200
-                                let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
-                                let newWidth = verticalTopLeftWidth + value.translation.width
-                                verticalTopLeftWidth = max(minWidth, min(maxWidth, newWidth))
-                            }
-                            .onEnded { _ in
-                                isVerticalTopDividerDragging = false
-                            }
-                    )
+                // Vertical divider between Tasks and Logs - REMOVED
+                // Rectangle()
+                //     .fill(isVerticalTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+                //     .frame(width: 8)
+                //     .overlay(
+                //         Image(systemName: "line.3.horizontal")
+                //             .font(.caption)
+                //             .foregroundColor(isVerticalTopDividerDragging ? .white : .gray)
+                //     )
+                //     .gesture(
+                //         DragGesture()
+                //             .onChanged { value in
+                //                 isVerticalTopDividerDragging = true
+                //                 let minWidth: CGFloat = 200
+                //                 let maxWidth: CGFloat = max(minWidth, geometry.size.width - 8 - 200)
+                //                 let newWidth = verticalTopLeftWidth + value.translation.width
+                //                 verticalTopLeftWidth = max(minWidth, min(maxWidth, newWidth))
+                //             }
+                //             .onEnded { _ in
+                //                 isVerticalTopDividerDragging = false
+                //             }
+                //     )
 
                 // Logs on the right with weight, workout, water, food in a column
                 LogsComponent(currentDate: currentDate, horizontal: false)
