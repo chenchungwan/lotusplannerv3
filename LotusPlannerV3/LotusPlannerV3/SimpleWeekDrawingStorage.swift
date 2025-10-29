@@ -32,10 +32,13 @@ class SimpleWeekDrawingStorage: ObservableObject {
     
     func saveDrawing(_ drawing: PKDrawing, for date: Date) async {
         let weekKey = weekKey(for: date)
+        print("🎨 SimpleWeekDrawingStorage: saveDrawing() called for week: \(weekKey)")
+        print("🎨 SimpleWeekDrawingStorage: Drawing has \(drawing.strokes.count) strokes")
         
         do {
             // Convert PKDrawing to Data
             let drawingData = try drawing.dataRepresentation()
+            print("🎨 SimpleWeekDrawingStorage: Drawing data size: \(drawingData.count) bytes")
             
             // Create CKRecord
             let record = CKRecord(recordType: "SimpleWeekDrawing", recordID: CKRecord.ID(recordName: weekKey))
@@ -45,10 +48,11 @@ class SimpleWeekDrawingStorage: ObservableObject {
             
             // Save to iCloud
             let _ = try await database.save(record)
-            print("🎨 SimpleWeekDrawingStorage: Saved drawing for week \(weekKey)")
+            print("🎨 SimpleWeekDrawingStorage: Successfully saved drawing for week \(weekKey)")
             
         } catch {
             print("🎨 SimpleWeekDrawingStorage: Failed to save drawing: \(error)")
+            print("🎨 SimpleWeekDrawingStorage: Error details: \(error.localizedDescription)")
         }
     }
     
@@ -56,11 +60,13 @@ class SimpleWeekDrawingStorage: ObservableObject {
     
     func loadDrawing(for date: Date) async -> PKDrawing? {
         let weekKey = weekKey(for: date)
+        print("🎨 SimpleWeekDrawingStorage: loadDrawing() called for week: \(weekKey)")
         
         do {
             // Fetch from iCloud
             let recordID = CKRecord.ID(recordName: weekKey)
             let record = try await database.record(for: recordID)
+            print("🎨 SimpleWeekDrawingStorage: Found record for week: \(weekKey)")
             
             // Extract drawing data
             guard let drawingData = record["drawingData"] as? Data else {
@@ -68,9 +74,11 @@ class SimpleWeekDrawingStorage: ObservableObject {
                 return nil
             }
             
+            print("🎨 SimpleWeekDrawingStorage: Drawing data size: \(drawingData.count) bytes")
+            
             // Convert Data back to PKDrawing
             let drawing = try PKDrawing(data: drawingData)
-            print("🎨 SimpleWeekDrawingStorage: Loaded drawing for week \(weekKey)")
+            print("🎨 SimpleWeekDrawingStorage: Successfully loaded drawing for week \(weekKey) with \(drawing.strokes.count) strokes")
             return drawing
             
         } catch {
@@ -78,6 +86,7 @@ class SimpleWeekDrawingStorage: ObservableObject {
                 print("🎨 SimpleWeekDrawingStorage: No drawing found for week \(weekKey)")
             } else {
                 print("🎨 SimpleWeekDrawingStorage: Failed to load drawing: \(error)")
+                print("🎨 SimpleWeekDrawingStorage: Error details: \(error.localizedDescription)")
             }
             return nil
         }

@@ -13,24 +13,82 @@ struct SimpleWeekView: View {
     @State private var canvasView = PKCanvasView()
     @State private var showToolPicker = false
     @State private var drawingCanvasView = PKCanvasView() // Transparent drawing overlay
+    @State private var saveTask: Task<Void, Never>? // For debounced saving
     
     // MARK: - Drawing Management
     
     private func saveDrawingToiCloud() {
         Task {
+            let weekKey = getCurrentWeekKey()
+            print("🎨 SimpleWeekView: Saving drawing for week: \(weekKey)")
             await drawingStorage.saveDrawing(drawingCanvasView.drawing, for: navigationManager.currentDate)
+        }
+    }
+    
+    private func debouncedSaveDrawing() {
+        print("🎨 SimpleWeekView: debouncedSaveDrawing() called")
+        
+        // Cancel previous save task
+        saveTask?.cancel()
+        
+        // Create new debounced save task
+        saveTask = Task {
+            print("🎨 SimpleWeekView: Starting debounced save task")
+            
+            // Wait 1 second before saving
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            
+            // Check if task was cancelled
+            if Task.isCancelled { 
+                print("🎨 SimpleWeekView: Save task was cancelled")
+                return 
+            }
+            
+            // Save the drawing
+            let weekKey = getCurrentWeekKey()
+            print("🎨 SimpleWeekView: Debounced save for week: \(weekKey)")
+            print("🎨 SimpleWeekView: Drawing has \(drawingCanvasView.drawing.strokes.count) strokes")
+            await drawingStorage.saveDrawing(drawingCanvasView.drawing, for: navigationManager.currentDate)
+            print("🎨 SimpleWeekView: Debounced save completed")
         }
     }
     
     private func loadDrawingFromiCloud() {
         Task {
+            let weekKey = getCurrentWeekKey()
+            print("🎨 SimpleWeekView: Loading drawing for week: \(weekKey)")
+            
+            // First clear the current drawing
+            await MainActor.run {
+                drawingCanvasView.drawing = PKDrawing()
+                print("🎨 SimpleWeekView: Cleared current drawing")
+            }
+            
+            // Then load the drawing for the current week
             if let savedDrawing = await drawingStorage.loadDrawing(for: navigationManager.currentDate) {
                 await MainActor.run {
+                    print("🎨 SimpleWeekView: About to set drawing with \(savedDrawing.strokes.count) strokes")
                     drawingCanvasView.drawing = savedDrawing
-                    print("🎨 SimpleWeekView: Loaded saved drawing from iCloud")
+                    print("🎨 SimpleWeekView: Set drawing to canvas. Canvas now has \(drawingCanvasView.drawing.strokes.count) strokes")
                 }
+            } else {
+                print("🎨 SimpleWeekView: No saved drawing found for week: \(weekKey)")
             }
         }
+    }
+    
+    private func getCurrentWeekKey() -> String {
+        let calendar = Calendar.mondayFirst
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
+            return "unknown_week"
+        }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let startDateString = formatter.string(from: weekInterval.start)
+        let endDateString = formatter.string(from: weekInterval.end)
+        
+        return "simple_week_drawing_\(startDateString)_to_\(endDateString)"
     }
     
     // MARK: - Computed Properties
@@ -159,6 +217,8 @@ struct SimpleWeekView: View {
                                     showsToolPicker: isDrawingMode,
                                     onDrawingChanged: {
                                         print("🎨 SimpleWeekView: Timeline canvas drawing changed!")
+                                        // Save drawing with debouncing to avoid excessive iCloud calls
+                                        debouncedSaveDrawing()
                                     }
                                 )
                                 .frame(width: geometry.size.width, height: hourHeight * 24) // Full 24 hours height
@@ -674,6 +734,7 @@ struct SimpleWeekView: View {
             await calendarViewModel.loadCalendarDataForWeek(containing: navigationManager.currentDate)
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
+            print("🎨 SimpleWeekView: currentDate changed from \(oldValue) to \(newValue)")
             Task {
                 // Load calendar data when the date changes
                 await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
@@ -685,6 +746,7 @@ struct SimpleWeekView: View {
             }
         }
         .onAppear {
+            print("🎨 SimpleWeekView: onAppear called")
             // Load saved drawing for current week
             loadDrawingFromiCloud()
             
@@ -701,8 +763,9 @@ struct SimpleWeekView: View {
                     showToolPicker = false
                     print("🎨 SimpleWeekView: Tool picker set to hidden")
                     
-                    // Save drawing when exiting drawing mode
-                    if wasInDrawingMode && !drawingCanvasView.drawing.strokes.isEmpty {
+                    // Cancel any pending debounced save and save immediately when exiting drawing mode
+                    saveTask?.cancel()
+                    if wasInDrawingMode {
                         saveDrawingToiCloud()
                         print("🎨 SimpleWeekView: Saved drawing to iCloud on exit")
                     }
@@ -739,12 +802,14 @@ struct TransparentDrawingCanvas: UIViewRepresentable {
     
     func makeUIView(context: Context) -> PKCanvasView {
         print("🎨 TransparentDrawingCanvas: Creating transparent canvas")
+        print("🎨 TransparentDrawingCanvas: Shows tool picker: \(showsToolPicker)")
         canvasView.tool = PKInkingTool(.pen, color: .black, width: 2)
         canvasView.drawingPolicy = .anyInput
         canvasView.backgroundColor = UIColor.clear // Completely transparent
         canvasView.allowsFingerDrawing = true
         canvasView.delegate = context.coordinator
         canvasView.isOpaque = false
+        print("🎨 TransparentDrawingCanvas: Canvas configured with delegate: \(canvasView.delegate != nil)")
         
         // Attach the scene-shared PKToolPicker once the view is in a window
         DispatchQueue.main.async {
@@ -786,6 +851,7 @@ struct TransparentDrawingCanvas: UIViewRepresentable {
         
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             print("🎨 TransparentDrawingCanvas: Drawing changed! Strokes count: \(canvasView.drawing.strokes.count)")
+            print("🎨 TransparentDrawingCanvas: Calling onDrawingChanged callback")
             parent.onDrawingChanged?()
         }
     }
