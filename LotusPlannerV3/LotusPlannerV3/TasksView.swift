@@ -1696,6 +1696,17 @@ struct TasksView: View {
                     logDebug("🔄 Subfilter set to: \(subfilter.rawValue)")
                 }
             }
+            // Listen for request to filter tasks to current day (when coming from All Tasks filter)
+            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentDay"), object: nil, queue: .main) { _ in
+                selectedFilter = .day
+                referenceDate = Date()
+                navigationManager.showingAllTasks = false
+                // Clear cache to ensure fresh filtering
+                cachedFilteredPersonalTasks.removeAll()
+                cachedFilteredProfessionalTasks.removeAll()
+                lastFilterState = ""
+                logDebug("🔄 Filter changed to day for current day from All Tasks")
+            }
             // Listen for request to filter tasks to current week (when coming from All Tasks filter)
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentWeek"), object: nil, queue: .main) { _ in
                 selectedFilter = .week

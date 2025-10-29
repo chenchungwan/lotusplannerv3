@@ -397,7 +397,13 @@ struct GlobalNavBar: View {
                                     // Only show d.circle in non-Goals views
                                     if navigationManager.currentView != .goals {
                                         Button {
-                                            handleTimeIntervalChange(.day)
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
+                                            } else {
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.day)
+                                            }
                                         } label: {
                                             Image(systemName: "d.circle")
                                                 .font(adaptiveIconSize)
@@ -414,7 +420,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
                                         }
                                     }
                                     // Hide w.circle only in Goals view
@@ -434,7 +440,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .simpleWeekView ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -647,7 +653,13 @@ struct GlobalNavBar: View {
                                     // Only show d.circle in non-Goals views
                                     if navigationManager.currentView != .goals {
                                         Button {
-                                            handleTimeIntervalChange(.day)
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
+                                            } else {
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.day)
+                                            }
                                         } label: {
                                             Image(systemName: "d.circle")
                                                 .font(adaptiveIconSize)
@@ -664,7 +676,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
                                         }
                                     }
                                     // Hide w.circle only in Goals view
@@ -684,7 +696,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .simpleWeekView ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -705,7 +717,7 @@ struct GlobalNavBar: View {
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
                                 }
                             }
-                            
+                             
                             Spacer()
                             
                             // Hide ellipsis.circle in calendar views, lists view, journal day views, and simple week view
