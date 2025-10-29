@@ -200,24 +200,9 @@ struct DayViewCompact: View {
     // MARK: - Components
     
     private var leftTimelineSection: some View {
-        Group {
-            if appPrefs.showEventsAsListInDay {
-                dayEventsList
-            } else {
-                TimelineComponent(
-                    date: navigationManager.currentDate,
-                    events: getAllEventsForDate(navigationManager.currentDate),
-                    personalEvents: calendarVM.personalEvents,
-                    professionalEvents: calendarVM.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    onEventTap: { ev in
-                        onEventTap?(ev)
-                    }
-                )
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        // Always show events as a list in compact view
+        dayEventsList
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     // Shared Events timeline card used by all layouts
@@ -235,6 +220,26 @@ struct DayViewCompact: View {
         .padding(.top, 4)
         .padding(.bottom, 0)
         .padding(.leading, 8)
+    }
+    
+    private var dayEventsList: some View {
+        let events = getAllEventsForDate(navigationManager.currentDate)
+            .sorted { (a, b) in
+                let aDate = a.startTime ?? Date.distantPast
+                let bDate = b.startTime ?? Date.distantPast
+                return aDate < bDate
+            }
+        return EventsListComponent(
+            events: events,
+            personalEvents: calendarVM.personalEvents,
+            professionalEvents: calendarVM.professionalEvents,
+            personalColor: appPrefs.personalColor,
+            professionalColor: appPrefs.professionalColor,
+            onEventTap: { ev in
+                onEventTap?(ev)
+            },
+            date: navigationManager.currentDate
+        )
     }
     
     // MARK: - Task Sections
@@ -300,26 +305,6 @@ struct DayViewCompact: View {
                 selectedTaskAccount = .professional
                 showingTaskDetails = true
             }
-        )
-    }
-    
-    private var dayEventsList: some View {
-        let events = getAllEventsForDate(navigationManager.currentDate)
-            .sorted { (a, b) in
-                let aDate = a.startTime ?? Date.distantPast
-                let bDate = b.startTime ?? Date.distantPast
-                return aDate < bDate
-            }
-        return EventsListComponent(
-            events: events,
-            personalEvents: calendarVM.personalEvents,
-            professionalEvents: calendarVM.professionalEvents,
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor,
-            onEventTap: { ev in
-                onEventTap?(ev)
-            },
-            date: navigationManager.currentDate
         )
     }
     
