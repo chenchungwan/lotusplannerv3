@@ -1845,21 +1845,32 @@ extension WeeklyView {
     }
     
     private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
+        let calendar = Calendar.current
         let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
         
         return allEvents.filter { event in
-            guard let startTime = event.startTime else { return false }
+            guard let startTime = event.startTime else { return event.isAllDay }
             
             if event.isAllDay {
                 // For all-day events, check if the date falls within the event's date range
                 guard let endTime = event.endTime else { return false }
                 
-                // For all-day events, Google Calendar sets the end time to the start of the next day
+                // For all-day events, Google Calendar typically sets the end time to the start of the next day
+                // But for single-day events, end.date might equal start.date
                 // So we need to check if the date falls within [startTime, endTime)
-                return date >= Calendar.current.startOfDay(for: startTime) && date < Calendar.current.startOfDay(for: endTime)
+                let startDay = calendar.startOfDay(for: startTime)
+                let endDay = calendar.startOfDay(for: endTime)
+                let dateDay = calendar.startOfDay(for: date)
+                
+                // If endDay equals startDay (single-day event), check if date matches
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
+                // Otherwise, check if date is within [startDay, endDay)
+                return dateDay >= startDay && dateDay < endDay
             } else {
                 // For timed events, check if the event starts on this date
-                return Calendar.current.isDate(startTime, inSameDayAs: date)
+                return calendar.isDate(startTime, inSameDayAs: date)
             }
         }.sorted { (a, b) in
             let aDate = a.startTime ?? Date.distantPast

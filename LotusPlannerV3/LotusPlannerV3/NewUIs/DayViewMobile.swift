@@ -200,10 +200,32 @@ extension DayViewMobile {
     }
     
     private func filteredEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
+        let calendar = Calendar.mondayFirst
         let all = calendarVM.personalEvents + calendarVM.professionalEvents
         return all.filter { ev in
-            if let start = ev.startTime { return isSameDay(start, date) }
-            return ev.isAllDay
+            guard let startTime = ev.startTime else { return ev.isAllDay }
+            
+            if ev.isAllDay {
+                // For all-day events, check if the date falls within the event's date range
+                guard let endTime = ev.endTime else { return false }
+                
+                // For all-day events, Google Calendar typically sets the end time to the start of the next day
+                // But for single-day events, end.date might equal start.date
+                // So we need to check if the date falls within [startTime, endTime)
+                let startDay = calendar.startOfDay(for: startTime)
+                let endDay = calendar.startOfDay(for: endTime)
+                let dateDay = calendar.startOfDay(for: date)
+                
+                // If endDay equals startDay (single-day event), check if date matches
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
+                // Otherwise, check if date is within [startDay, endDay)
+                return dateDay >= startDay && dateDay < endDay
+            } else {
+                // For timed events, check if the event starts on this date
+                return isSameDay(startTime, date)
+            }
         }
     }
     
