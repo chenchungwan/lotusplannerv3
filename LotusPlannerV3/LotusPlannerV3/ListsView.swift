@@ -825,28 +825,32 @@ struct SimpleTaskRow: View {
             
             // Task details - tappable to open edit sheet
             VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
-                    .font(.body)
-                    .strikethrough(task.isCompleted)
-                    .foregroundColor(task.isCompleted ? .secondary : .primary)
+                HStack(spacing: 8) {
+                    Text(task.title)
+                        .font(.body)
+                        .strikethrough(task.isCompleted)
+                        .foregroundColor(task.isCompleted ? .secondary : .primary)
+                    
+                    Spacer()
+                    
+                    if let dueDateTag = dueDateTag(for: task) {
+                        Text(dueDateTag.text)
+                            .font(.caption)
+                            .foregroundColor(dueDateTag.textColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(dueDateTag.backgroundColor)
+                            )
+                    }
+                }
                 
                 if let notes = task.notes, !notes.isEmpty {
                     Text(notes)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
-                }
-                
-                if let dueDateTag = dueDateTag(for: task) {
-                    Text(dueDateTag.text)
-                        .font(.caption)
-                        .foregroundColor(dueDateTag.textColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(dueDateTag.backgroundColor)
-                        )
                 }
             }
             .contentShape(Rectangle())
