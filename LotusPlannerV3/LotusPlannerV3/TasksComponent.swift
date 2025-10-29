@@ -452,7 +452,11 @@ private struct TaskComponentRow: View {
         let today = calendar.startOfDay(for: Date())
         
         if task.isCompleted {
-            // Show completion date for completed tasks (same colors as future due tasks)
+            // In single day view, don't show date for completed tasks
+            if isSingleDayView {
+                return nil
+            }
+            // Show completion date for completed tasks (same colors as future due tasks) in other views
             guard let completionDate = task.completionDate else { return nil }
             let formatter = DateFormatter()
             formatter.dateFormat = "M/d/yy"
