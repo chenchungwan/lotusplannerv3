@@ -115,19 +115,19 @@ struct CalendarYearlyView: View {
                             verticalSizeClass: verticalSizeClass,
                             onDayTap: { date in
                                 selectedDate = date
-                                navigationManager.switchToCalendar()
                                 navigationManager.updateInterval(.day, date: date)
+                                navigationManager.switchToCalendar()
                             },
                             onMonthTap: {
                                 let monthDate = Calendar.mondayFirst.date(from: DateComponents(year: currentYear, month: month, day: 1))!
                                 selectedDate = monthDate
-                                navigationManager.switchToCalendar()
                                 navigationManager.updateInterval(.month, date: monthDate)
+                                navigationManager.switchToCalendar()
                             },
                             onWeekTap: { date in
                                 selectedDate = date
-                                navigationManager.switchToCalendar()
                                 navigationManager.updateInterval(.week, date: date)
+                                navigationManager.switchToCalendar()
                             }
                         )
                         .frame(height: monthCardHeight)
@@ -304,7 +304,11 @@ struct YearlyMonthCardView: View {
                 .background(isCurrentMonth ? Color.blue : Color.clear)
                 .cornerRadius(isSingleColumn ? 8 : (isCompactDevice ? 4 : 6))
                 .contentShape(Rectangle())
-                .onTapGesture { onMonthTap() }
+                .highPriorityGesture(
+                    TapGesture().onEnded { _ in
+                        onMonthTap()
+                    }
+                )
             
             // Week headers
             HStack(spacing: adaptiveSpacing) {
@@ -350,11 +354,13 @@ struct YearlyMonthCardView: View {
                     .foregroundColor(.secondary)
                     .frame(width: weekNumberWidth, height: dayCellHeight)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        if let weekStart = getWeekStartDate(for: week) {
-                            onWeekTap(weekStart)
+                    .highPriorityGesture(
+                        TapGesture().onEnded { _ in
+                            if let weekStart = getWeekStartDate(for: week) {
+                                onWeekTap(weekStart)
+                            }
                         }
-                    }
+                    )
             }
             
             // Days
@@ -380,12 +386,14 @@ struct YearlyMonthCardView: View {
                     .foregroundColor(isToday ? .white : .primary)
                     .clipShape(Circle())
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        let calendar = Calendar.mondayFirst
-                        if let date = calendar.date(from: DateComponents(year: year, month: month, day: dayNumber)) {
-                            onDayTap(date)
+                    .highPriorityGesture(
+                        TapGesture().onEnded { _ in
+                            let calendar = Calendar.mondayFirst
+                            if let date = calendar.date(from: DateComponents(year: year, month: month, day: dayNumber)) {
+                                onDayTap(date)
+                            }
                         }
-                    }
+                    )
             } else {
                 Color.clear
                     .frame(maxWidth: .infinity)
