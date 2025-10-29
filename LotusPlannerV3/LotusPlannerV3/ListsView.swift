@@ -698,7 +698,11 @@ struct TasksDetailColumn: View {
                     professionalTaskLists: tasksVM.professionalTaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
-                    onSave: { _ in },
+                    onSave: { updatedTask in
+                        Task {
+                            await tasksVM.updateTask(updatedTask, in: listId, for: accountKind)
+                        }
+                    },
                     onDelete: {
                         Task {
                             await deleteTask(task, from: listId, for: accountKind)

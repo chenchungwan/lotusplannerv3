@@ -115,7 +115,7 @@ private struct TaskCompactRow: View {
             }
             .buttonStyle(PlainButtonStyle())
             
-            // Task title
+            // Task title - allow it to shrink and truncate
             Text(task.title)
                 .font(.body)
                 .fontWeight(.medium)
@@ -123,11 +123,13 @@ private struct TaskCompactRow: View {
                 .strikethrough(task.isCompleted)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .frame(minWidth: 0)
+                .layoutPriority(0)
             
             Spacer()
             
-            // List name tag
-            Text(listName)
+            // List name tag - fixed size, higher priority to prevent wrapping, right-aligned
+            Text(listName.count > 12 ? String(listName.prefix(12)) + "..." : listName)
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundColor(.secondary)
@@ -137,6 +139,8 @@ private struct TaskCompactRow: View {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color(.systemGray5))
                 )
+                .fixedSize()
+                .layoutPriority(1)
         }
         .contentShape(Rectangle())
         .onTapGesture {

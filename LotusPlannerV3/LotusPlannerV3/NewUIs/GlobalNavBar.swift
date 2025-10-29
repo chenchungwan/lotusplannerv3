@@ -417,7 +417,7 @@ struct GlobalNavBar: View {
                                             // In other views: handle week interval change
                                             handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView) ? "w.circle" : "s.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                                 .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
@@ -673,7 +673,7 @@ struct GlobalNavBar: View {
                                             // In other views: handle week interval change
                                             handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView) ? "w.circle" : "s.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                                 .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
