@@ -54,29 +54,31 @@ struct DayViewExpanded: View {
                                         .font(.headline)
                                         .padding(.horizontal, 8)
                                     
-                                    Group {
-                                        if appPrefs.showEventsAsListInDay {
-                                            EventsListComponent(
-                                                events: filteredEventsForDay(navigationManager.currentDate),
-                                                personalEvents: calendarVM.personalEvents,
-                                                professionalEvents: calendarVM.professionalEvents,
-                                                personalColor: appPrefs.personalColor,
-                                                professionalColor: appPrefs.professionalColor,
-                                                onEventTap: { ev in onEventTap?(ev) },
-                                                date: navigationManager.currentDate
-                                            )
-                                        } else {
-                                            TimelineComponent(
-                                                date: navigationManager.currentDate,
-                                                events: filteredEventsForDay(navigationManager.currentDate),
-                                                personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                                                professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                                                personalColor: appPrefs.personalColor,
-                                                professionalColor: appPrefs.professionalColor,
-                                                onEventTap: { event in
-                                                    onEventTap?(event)
-                                                }
-                                            )
+                                    ScrollView(.vertical, showsIndicators: true) {
+                                        Group {
+                                            if appPrefs.showEventsAsListInDay {
+                                                EventsListComponent(
+                                                    events: filteredEventsForDay(navigationManager.currentDate),
+                                                    personalEvents: calendarVM.personalEvents,
+                                                    professionalEvents: calendarVM.professionalEvents,
+                                                    personalColor: appPrefs.personalColor,
+                                                    professionalColor: appPrefs.professionalColor,
+                                                    onEventTap: { ev in onEventTap?(ev) },
+                                                    date: navigationManager.currentDate
+                                                )
+                                            } else {
+                                                TimelineComponent(
+                                                    date: navigationManager.currentDate,
+                                                    events: filteredEventsForDay(navigationManager.currentDate),
+                                                    personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                                                    professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                                                    personalColor: appPrefs.personalColor,
+                                                    professionalColor: appPrefs.professionalColor,
+                                                    onEventTap: { event in
+                                                        onEventTap?(event)
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -117,7 +119,8 @@ struct DayViewExpanded: View {
                                     .font(.headline)
                                     .padding(.horizontal, 8)
                                 
-                                HStack(alignment: .top, spacing: 12) {
+                                ScrollView(.vertical, showsIndicators: true) {
+                                    HStack(alignment: .top, spacing: 12) {
                                 let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
                                 let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
                                 let hasPersonalTasks = !personalTasks.isEmpty && auth.isLinked(kind: .personal)
@@ -217,6 +220,9 @@ struct DayViewExpanded: View {
                                             .padding(.vertical, 20)
                                     }
                                 }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
                                 }
                                 
                                 // Draggable divider between tasks and logs

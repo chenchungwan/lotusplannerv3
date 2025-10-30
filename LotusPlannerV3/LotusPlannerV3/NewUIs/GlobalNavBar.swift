@@ -74,13 +74,18 @@ struct GlobalNavBar: View {
                     return "Goals"
                 }
                 let start = weekInterval.start
+                let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
                 
-                // Format dates as M/d/yy
+                // Get week number
+                let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
+                
+                // Format dates as M/d
                 let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "M/d/yy"
+                dateFormatter.dateFormat = "M/d"
                 let startString = dateFormatter.string(from: start)
+                let endString = dateFormatter.string(from: end)
                 
-                return "Week of \(startString)"
+                return "W\(weekNumber): \(startString) - \(endString)"
             case .month:
                 let formatter = DateFormatter()
                 formatter.dateFormat = "MMMM yyyy"
@@ -115,13 +120,18 @@ struct GlobalNavBar: View {
                 return ""
             }
             let start = weekInterval.start
+            let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
             
-            // Format dates as M/d/yy
+            // Get week number
+            let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
+            
+            // Format dates as M/d
             let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "M/d/yy"
+            dateFormatter.dateFormat = "M/d"
             let startString = dateFormatter.string(from: start)
+            let endString = dateFormatter.string(from: end)
             
-            return "Week of \(startString)"
+            return "W\(weekNumber): \(startString) - \(endString)"
         case .day:
             let date = navigationManager.currentDate
             
