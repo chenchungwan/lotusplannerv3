@@ -51,37 +51,30 @@ struct TasksCompactComponent: View {
     }
     
     private var sortedTasksWithLists: [TaskWithList] {
-        // Build array of tasks with their list info
+        // Build array of tasks with their list info and list position
         var tasksWithLists: [TaskWithList] = []
         for (listId, tasks) in tasksDict {
             let listName = taskLists.first(where: { $0.id == listId })?.title ?? "Unknown List"
+            // Find the position of this list in the taskLists array
+            let listPosition = taskLists.firstIndex(where: { $0.id == listId }) ?? Int.max
             for task in tasks {
-                tasksWithLists.append(TaskWithList(task: task, listId: listId, listName: listName))
+                tasksWithLists.append(TaskWithList(task: task, listId: listId, listName: listName, listPosition: listPosition))
             }
         }
         
         // Filter out completed tasks if hideCompletedTasks is enabled
         let filtered = appPrefs.hideCompletedTasks ? tasksWithLists.filter { !$0.task.isCompleted } : tasksWithLists
         
-        // Sort by: 1) completion status, 2) due date, 3) alphabetically
+        // Sort by: 1) completion status, 2) task list position, 3) alphabetically
         return filtered.sorted { (a, b) in
             // 1. Sort by completion status (incomplete first)
             if a.task.isCompleted != b.task.isCompleted {
                 return !a.task.isCompleted
             }
             
-            // 2. Sort by due date (soonest first, no due date goes last)
-            switch (a.task.dueDate, b.task.dueDate) {
-            case let (dateA?, dateB?):
-                if dateA != dateB {
-                    return dateA < dateB
-                }
-            case (_?, nil):
-                return true
-            case (nil, _?):
-                return false
-            case (nil, nil):
-                break
+            // 2. Sort by task list position (earlier lists first)
+            if a.listPosition != b.listPosition {
+                return a.listPosition < b.listPosition
             }
             
             // 3. Sort alphabetically by title
@@ -94,6 +87,7 @@ struct TaskWithList: Identifiable {
     let task: GoogleTask
     let listId: String
     let listName: String
+    let listPosition: Int
     
     var id: String { task.id }
 }

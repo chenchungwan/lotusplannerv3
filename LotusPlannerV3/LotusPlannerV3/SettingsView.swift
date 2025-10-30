@@ -329,13 +329,6 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Show simple week view
-    @Published var showSimpleWeekView: Bool {
-        didSet {
-            UserDefaults.standard.set(showSimpleWeekView, forKey: "showSimpleWeekView")
-        }
-    }
-    
     // Logs visibility preferences
     @Published var showWeightLogs: Bool {
         didSet {
@@ -489,9 +482,6 @@ class AppPreferences: ObservableObject {
         // Load tasks layout preference (default false - vertical layout)
         self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
 
-        // Load simple week view preference (default true - show simple week)
-        self.showSimpleWeekView = UserDefaults.standard.object(forKey: "showSimpleWeekView") as? Bool ?? true
-
         // Load logs visibility preferences (default all visible)
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
@@ -547,10 +537,6 @@ class AppPreferences: ObservableObject {
     
     func updateHideCompletedTasks(_ value: Bool) {
         hideCompletedTasks = value
-    }
-    
-    func updateShowSimpleWeekView(_ value: Bool) {
-        showSimpleWeekView = value
     }
     
     func updateHideGoals(_ value: Bool) {
@@ -998,23 +984,6 @@ get: { appPrefs.showFoodLogs },
                         ))
                     }
                     
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showSimpleWeekView },
-                        set: { appPrefs.updateShowSimpleWeekView($0) }
-                    )) {
-                        HStack {
-                            Image(systemName: "7.circle")
-                                .foregroundColor(appPrefs.showSimpleWeekView ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Simple Week View")
-                                    .font(.body)
-                                Text("Show simple week view navigation")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
                 }
                 
                 Section("iCloud Sync") {
