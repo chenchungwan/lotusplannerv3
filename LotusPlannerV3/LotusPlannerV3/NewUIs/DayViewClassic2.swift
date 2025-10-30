@@ -155,7 +155,10 @@ struct DayViewClassic2: View {
     private var leftTimelineSection: some View {
         Group {
             if appPrefs.showEventsAsListInDay {
-                dayEventsList
+                ScrollView(.vertical, showsIndicators: true) {
+                    dayEventsList
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             } else {
                 TimelineComponent(
                     date: navigationManager.currentDate,

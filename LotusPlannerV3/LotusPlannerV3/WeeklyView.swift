@@ -2179,7 +2179,13 @@ extension WeeklyView {
         
         for (listId, taskList) in tasks {
             let dateFilteredTasks = taskList.filter { task in
-                // Only show tasks that have a due date AND it matches the specified date
+                // For completed tasks, show them on their completion date
+                if task.isCompleted {
+                    guard let completionDate = task.completionDate else { return false }
+                    return Calendar.current.isDate(completionDate, inSameDayAs: date)
+                }
+                
+                // For incomplete tasks, only show tasks that have a due date AND it matches the specified date
                 guard let dueDate = task.dueDate else { 
                     return false // Tasks without due dates are NOT shown
                 }

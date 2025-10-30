@@ -2478,8 +2478,12 @@ struct CalendarView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 8)
-                    topLeftDaySection
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    ScrollView(.vertical, showsIndicators: true) {
+                        topLeftDaySection
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(.horizontal, 2)
+                            .padding(.vertical, 2)
+                    }
                 }
                 .frame(width: verticalTopLeftWidth, alignment: .topLeading)
                 .padding(.all, 8)
@@ -2743,9 +2747,13 @@ struct CalendarView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 8)
-                // Personal & Professional tasks (full width)
-                topLeftDaySection
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                // Personal & Professional tasks (full width) with vertical scrolling
+                ScrollView(.vertical, showsIndicators: true) {
+                    topLeftDaySection
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 2)
+                }
             }
             .frame(height: rightSectionTopHeight, alignment: .top)
             .padding(.all, 8)
@@ -2805,7 +2813,10 @@ struct CalendarView: View {
     private var leftTimelineSection: some View {
         Group {
             if appPrefs.showEventsAsListInDay {
-                dayEventsList
+                ScrollView(.vertical, showsIndicators: true) {
+                    dayEventsList
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
             } else {
                 TimelineComponent(
                     date: currentDate,
