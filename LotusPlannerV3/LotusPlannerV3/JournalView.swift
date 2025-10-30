@@ -843,9 +843,11 @@ struct JournalView: View {
         for attempt in 1...maxRetries {
             do {
                 let url = metadataURL(for: date)
+                print("📸 Loading photos for date: \(formatDateForDisplay(date)) (attempt \(attempt)/\(maxRetries))")
                 
                 // Check if metadata file exists
                 guard FileManager.default.fileExists(atPath: url.path) else {
+                    print("❌ Photo metadata file does not exist: \(url.lastPathComponent)")
                     return
                 }
                 
@@ -853,44 +855,58 @@ struct JournalView: View {
                 await ensureFileDownloadedWithRetry(url: url, maxRetries: 3)
                 
                 // Load metadata with timeout protection
-                let data = try await withTimeout(seconds: 2) {
+                let data = try await withTimeout(seconds: 3) { // Increased from 2 to 3 seconds
                     try Data(contentsOf: url)
                 }
                 let metas = try JSONDecoder().decode([PhotoMeta].self, from: data)
+                print("📋 Found \(metas.count) photo metadata entries")
                 
                 // If no photos found in iCloud, check local storage as fallback
                 if metas.isEmpty {
+                    print("🔍 No photos in iCloud, checking local storage...")
                     let localURL = JournalManager.shared.localPhotosURL.appendingPathComponent(url.lastPathComponent)
                     if FileManager.default.fileExists(atPath: localURL.path) {
                         do {
-                            let localData = try await withTimeout(seconds: 1) {
+                            let localData = try await withTimeout(seconds: 2) { // Increased from 1 to 2 seconds
                                 try Data(contentsOf: localURL)
                             }
                             let localMetas = try JSONDecoder().decode([PhotoMeta].self, from: localData)
+                            print("📁 Found \(localMetas.count) photos in local storage")
                             
                             // Copy to iCloud for future use
                             try localData.write(to: url, options: .atomic)
+                            print("💾 Copied local photos to iCloud")
                             
                             // Load photos in parallel for better performance
                             let loadedPhotos = await loadPhotosInParallel(metas: localMetas)
                             photos = loadedPhotos
+                            print("✅ Loaded \(loadedPhotos.count) photos from local storage")
                             return
                         } catch {
-                            // Silently fail - will retry on next attempt
+                            print("❌ Failed to load from local storage: \(error.localizedDescription)")
+                            // Continue to next attempt
                         }
+                    } else {
+                        print("❌ No local photos found either")
                     }
+                } else {
+                    // Load photos in parallel for better performance
+                    print("🔄 Loading \(metas.count) photos from iCloud...")
+                    let loadedPhotos = await loadPhotosInParallel(metas: metas)
+                    photos = loadedPhotos
+                    print("✅ Successfully loaded \(loadedPhotos.count) photos from iCloud")
+                    return
                 }
                 
-                // Load photos in parallel for better performance
-                let loadedPhotos = await loadPhotosInParallel(metas: metas)
-                photos = loadedPhotos
-                return
-                
             } catch {
+                print("❌ Photo loading attempt \(attempt) failed: \(error.localizedDescription)")
                 if attempt < maxRetries {
                     // Exponential backoff: 1s, 2s
                     let delay = UInt64(pow(2.0, Double(attempt - 1)) * 1_000_000_000)
+                    print("⏳ Waiting \(delay / 1_000_000_000) seconds before retry...")
                     try? await Task.sleep(nanoseconds: delay)
+                } else {
+                    print("❌ All photo loading attempts failed")
                 }
             }
         }
@@ -902,8 +918,11 @@ struct JournalView: View {
         
         for attempt in 1...maxRetries {
             do {
+                print("🖼️ Loading photo: \(meta.fileName) (attempt \(attempt)/\(maxRetries))")
+                
                 // Check if file exists
                 guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                    print("❌ Photo file does not exist: \(meta.fileName)")
                     return nil
                 }
                 
@@ -911,10 +930,12 @@ struct JournalView: View {
                 await ensureFileDownloaded(url: fileURL)
                 
                 // Load photo data with timeout protection
-                let data = try await withTimeout(seconds: 1.5) {
+                let data = try await withTimeout(seconds: 3.0) { // Increased from 1.5 to 3.0 seconds
                     try Data(contentsOf: fileURL)
                 }
+                
                 guard let uiImg = UIImage(data: data) else {
+                    print("❌ Failed to create UIImage from data for: \(meta.fileName)")
                     return nil
                 }
                 
@@ -953,14 +974,18 @@ struct JournalView: View {
                     rotation: Angle(radians: meta.rotation)
                 )
                 
-                print("🖼️ Photo loaded: position (\(validPosX), \(validPosY)), canvas size (\(width)x\(height))")
+                print("✅ Photo loaded successfully: \(meta.fileName) - position (\(validPosX), \(validPosY)), size (\(validWidth)x\(validHeight))")
                 
                 return photo
                 
             } catch {
+                print("❌ Photo loading attempt \(attempt) failed for \(meta.fileName): \(error.localizedDescription)")
                 if attempt < maxRetries {
                     let delay = UInt64(500_000_000) // 0.5 seconds
+                    print("⏳ Waiting 0.5 seconds before retry...")
                     try? await Task.sleep(nanoseconds: delay)
+                } else {
+                    print("❌ All attempts failed for photo: \(meta.fileName)")
                 }
             }
         }
@@ -970,18 +995,20 @@ struct JournalView: View {
     
     /// Ensure iCloud file is fully downloaded with robust retry logic
     private func ensureFileDownloadedWithRetry(url: URL, maxRetries: Int) async {
-        for _ in 1...maxRetries {
+        for attempt in 1...maxRetries {
             // Check if file is in iCloud
             var isUbiquitous: AnyObject?
             try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
             let isInCloud = (isUbiquitous as? Bool) == true
             
             if isInCloud {
+                print("📱 iCloud download attempt \(attempt)/\(maxRetries) for: \(url.lastPathComponent)")
+                
                 // Start download without blocking
                 try? FileManager.default.startDownloadingUbiquitousItem(at: url)
                 
-                // Wait for download with shorter timeout to prevent freezing
-                let timeout: TimeInterval = 1.5
+                // Wait for download with longer timeout for better reliability
+                let timeout: TimeInterval = 5.0 // Increased from 1.5 to 5.0 seconds
                 let startTime = Date()
                 
                 while Date().timeIntervalSince(startTime) < timeout {
@@ -990,19 +1017,31 @@ struct JournalView: View {
                     
                     if let status = downloadStatus as? URLUbiquitousItemDownloadingStatus {
                         if status == .current {
+                            print("✅ iCloud download completed for: \(url.lastPathComponent)")
                             return
+                        } else if status == .notDownloaded {
+                            print("⚠️ iCloud file not downloaded yet: \(url.lastPathComponent)")
                         }
                     }
                     
-                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds (faster polling)
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds (slower polling for better reliability)
                 }
                 
-                // Timeout reached, proceed with available data
+                print("⏰ iCloud download timeout for: \(url.lastPathComponent) (attempt \(attempt)/\(maxRetries))")
+                
+                // If this is the last attempt, proceed with available data
+                if attempt == maxRetries {
+                    print("❌ iCloud download failed after \(maxRetries) attempts for: \(url.lastPathComponent)")
+                    return
+                }
+                
+                // Wait before retry
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay between retries
+            } else {
+                print("📁 Local file (not in iCloud): \(url.lastPathComponent)")
+                return
             }
-            return
         }
-        
-        // Failed to download after max retries
     }
     
     /// Helper function to add timeout protection to async operations
@@ -1028,6 +1067,8 @@ struct JournalView: View {
     
     /// Load multiple photos in parallel for better performance with caching
     private func loadPhotosInParallel(metas: [PhotoMeta]) async -> [JournalPhoto] {
+        print("🔄 Starting parallel load of \(metas.count) photos...")
+        
         return await withTaskGroup(of: JournalPhoto?.self) { group in
             for meta in metas {
                 group.addTask {
@@ -1036,11 +1077,19 @@ struct JournalView: View {
             }
             
             var loadedPhotos: [JournalPhoto] = []
+            var successCount = 0
+            var failureCount = 0
+            
             for await photo in group {
                 if let photo = photo {
                     loadedPhotos.append(photo)
+                    successCount += 1
+                } else {
+                    failureCount += 1
                 }
             }
+            
+            print("📊 Parallel photo loading complete: \(successCount) successful, \(failureCount) failed")
             return loadedPhotos
         }
     }
