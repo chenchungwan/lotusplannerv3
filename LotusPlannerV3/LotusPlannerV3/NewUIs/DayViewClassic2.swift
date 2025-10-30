@@ -351,55 +351,13 @@ struct DayViewClassic2: View {
     
     
     private var eventsTasksDivider: some View {
-        Rectangle()
-            .fill(isEventsTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isEventsTasksDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isEventsTasksDividerDragging = true
-                        let newHeight = eventsHeight + value.translation.height
-                        let minHeight: CGFloat = 150
-                        let maxHeight: CGFloat = 400
-                        eventsHeight = max(minHeight, min(maxHeight, newHeight))
-                    }
-                    .onEnded { _ in
-                        isEventsTasksDividerDragging = false
-                        appPrefs.updateDayViewClassic2EventsHeight(eventsHeight)
-                    }
-            )
+        Divider()
+            .padding(.vertical, 4)
     }
     
     private var logsDivider: some View {
-        Rectangle()
-            .fill(isLogsDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLogsDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLogsDividerDragging = true
-                        let newHeight = logsHeight - value.translation.height
-                        let minHeight: CGFloat = 100
-                        let maxHeight: CGFloat = 1200
-                        logsHeight = max(minHeight, min(maxHeight, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLogsDividerDragging = false
-                        appPrefs.updateDayViewClassic2LogsHeight(logsHeight)
-                    }
-            )
+        Divider()
+            .padding(.vertical, 4)
     }
     
     private var leftTimelineDivider: some View {
