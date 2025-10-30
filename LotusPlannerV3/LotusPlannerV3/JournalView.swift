@@ -399,7 +399,7 @@ struct JournalView: View {
                                     }
                                     Spacer()
                                     Button(action: { showToolPicker.toggle() }) {
-                                        Image(systemName: "applepencil.and.scribble")
+                                        Image(systemName: "pencil.and.scribble")
                                     }
                                     if #available(iOS 17, *) {
                                         PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
@@ -491,7 +491,7 @@ struct JournalView: View {
                         case .saved:
                             return .green
                         default:
-                            return .primary
+                            return .accentColor
                         }
                     }())
                 }
@@ -505,12 +505,12 @@ struct JournalView: View {
                 }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.accentColor)
                 }
                 .disabled(isSavingOrLoading)
                 
                 Button(action: { showToolPicker.toggle() }) {
-                    Image(systemName: "applepencil.and.scribble")
+                    Image(systemName: "pencil.and.scribble")
                 }
                 if #available(iOS 17, *) {
                     PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {

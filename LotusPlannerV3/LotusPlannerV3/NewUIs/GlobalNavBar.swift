@@ -542,6 +542,7 @@ struct GlobalNavBar: View {
                                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
                                 }
                             }
                             
@@ -796,6 +797,7 @@ struct GlobalNavBar: View {
                                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
                                 }
                             }
                             
