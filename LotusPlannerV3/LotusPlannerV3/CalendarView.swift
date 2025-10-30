@@ -3829,10 +3829,9 @@ struct CalendarView: View {
     // New function that includes ALL events (both all-day and timed) for the TimelineComponent
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
-                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
-        
-        
+        // Match other day views: include both personal and professional events without gating here
+        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+
         let filteredEvents = allEvents.filter { event in
             guard let startTime = event.startTime else { return event.isAllDay }
             
@@ -3845,6 +3844,11 @@ struct CalendarView: View {
                 let startDay = calendar.startOfDay(for: startTime)
                 let endDay = calendar.startOfDay(for: endTime)
                 let dateDay = calendar.startOfDay(for: date)
+                
+                // Handle single-day all-day events where end == start (provider quirk)
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
                 
                 return dateDay >= startDay && dateDay < endDay
             } else {

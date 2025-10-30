@@ -86,6 +86,9 @@ struct EventsListComponent: View {
     }
 
     private func formatEventTime(_ ev: GoogleCalendarEvent) -> String {
+        if ev.isAllDay {
+            return "All Day"
+        }
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         let start = ev.startTime ?? Date()
