@@ -705,11 +705,19 @@ struct TasksDetailColumn: View {
                     },
                     onDelete: {
                         Task {
-                            await deleteTask(task, from: listId, for: accountKind)
+                            await tasksVM.deleteTask(task, from: listId, for: accountKind)
                         }
                     },
-                    onMove: { _, _ in },
-                    onCrossAccountMove: { _, _, _ in },
+                    onMove: { updatedTask, targetListId in
+                        Task {
+                            await tasksVM.moveTask(updatedTask, from: listId, to: targetListId, for: accountKind)
+                        }
+                    },
+                    onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                        Task {
+                            await tasksVM.crossAccountMoveTask(updatedTask, from: (accountKind, listId), to: (targetAccount, targetListId))
+                        }
+                    },
                     isNew: isNewTask
                 )
             }

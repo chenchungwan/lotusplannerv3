@@ -70,30 +70,26 @@ struct DayViewClassic2: View {
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
                     onSave: { updatedTask in
-                        let viewModel = tasksVM // Capture the view model
                         Task {
-                            await viewModel.updateTask(updatedTask, in: listId, for: account)
+                            await tasksVM.updateTask(updatedTask, in: listId, for: account)
                         }
                         showingTaskDetails = false
                     },
                     onDelete: {
-                        let viewModel = tasksVM // Capture the view model
                         Task {
-                            await viewModel.deleteTask(t, from: listId, for: account)
+                            await tasksVM.deleteTask(t, from: listId, for: account)
                         }
                         showingTaskDetails = false
                     },
                     onMove: { updatedTask, targetListId in
-                        let viewModel = tasksVM // Capture the view model
                         Task {
-                            await viewModel.moveTask(updatedTask, from: listId, to: targetListId, for: account)
+                            await tasksVM.moveTask(updatedTask, from: listId, to: targetListId, for: account)
                         }
                         showingTaskDetails = false
                     },
                     onCrossAccountMove: { updatedTask, targetAccount, targetListId in
-                        let viewModel = tasksVM // Capture the view model
                         Task {
-                            await viewModel.crossAccountMoveTask(updatedTask, from: (account, listId), to: (targetAccount, targetListId))
+                            await tasksVM.crossAccountMoveTask(updatedTask, from: (account, listId), to: (targetAccount, targetListId))
                         }
                         showingTaskDetails = false
                     },

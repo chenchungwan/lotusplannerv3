@@ -947,10 +947,24 @@ struct GlobalNavBar: View {
                     professionalTaskLists: tasksVM.professionalTaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
-                    onSave: { _ in },
-                    onDelete: {},
-                    onMove: { _, _ in },
-                    onCrossAccountMove: { _, _, _ in },
+                    onSave: { updatedTask in
+                        Task {
+                            await tasksVM.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
+                        }
+                    },
+                    onDelete: {
+                        // No-op for new task creation
+                    },
+                    onMove: { updatedTask, targetListId in
+                        Task {
+                            await tasksVM.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
+                        }
+                    },
+                    onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                        Task {
+                            await tasksVM.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
+                        }
+                    },
                     isNew: true
                 )
             }

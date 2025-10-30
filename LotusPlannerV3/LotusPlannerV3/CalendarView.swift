@@ -1238,10 +1238,24 @@ struct CalendarView: View {
                 professionalTaskLists: tasksViewModel.professionalTaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
-                onSave: { _ in },
-                onDelete: {},
-                onMove: { _, _ in },
-                onCrossAccountMove: { _, _, _ in },
+                onSave: { updatedTask in
+                    Task {
+                        await tasksViewModel.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
+                    }
+                },
+                onDelete: {
+                    // No-op for new task creation
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await tasksViewModel.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                    Task {
+                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
+                    }
+                },
                 isNew: true
             )
         }
@@ -1361,10 +1375,24 @@ struct CalendarView: View {
                 professionalTaskLists: tasksViewModel.professionalTaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
-                onSave: { _ in },
-                onDelete: {},
-                onMove: { _, _ in },
-                onCrossAccountMove: { _, _, _ in },
+                onSave: { updatedTask in
+                    Task {
+                        await tasksViewModel.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
+                    }
+                },
+                onDelete: {
+                    // No-op for new task creation
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await tasksViewModel.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                    Task {
+                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
+                    }
+                },
                 isNew: true
             )
         }

@@ -623,61 +623,171 @@ class TasksViewModel: ObservableObject {
     }
     
     private func deleteTaskFromServer(_ task: GoogleTask, from listId: String, for kind: GoogleAuthManager.AccountKind) async throws {
+        print("🗑️ deleteTaskFromServer: Deleting task '\(task.title)' (ID: \(task.id)) from list \(listId)")
+        
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
+            print("❌ deleteTaskFromServer: No access token for \(kind)")
             throw TasksError.notAuthenticated
         }
         
         let url = URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listId)/tasks/\(task.id)")!
+        print("🗑️ deleteTaskFromServer: URL: \(url.absoluteString)")
+        
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ deleteTaskFromServer: Invalid response type")
             throw TasksError.invalidResponse
         }
         
+        print("🗑️ deleteTaskFromServer: HTTP Status: \(httpResponse.statusCode)")
+        
         if httpResponse.statusCode != 204 {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("❌ deleteTaskFromServer: Error response: \(errorData)")
+            }
+            print("❌ deleteTaskFromServer: API error with status \(httpResponse.statusCode)")
             throw TasksError.apiError(httpResponse.statusCode)
         }
+        
+        print("✅ deleteTaskFromServer: Success! Task deleted")
     }
     
     func moveTask(_ updatedTask: GoogleTask, from sourceListId: String, to targetListId: String, for kind: GoogleAuthManager.AccountKind) async {
-        do {
-            // First create the task in the target list
-            let _ = try await createTaskOnServer(updatedTask, in: targetListId, for: kind)
-            
-            // Then delete from source list using original task ID
-            try await deleteTaskFromServer(updatedTask, from: sourceListId, for: kind)
-            
-            // Update local state
+        print("🔄 moveTask: Starting move operation")
+        print("   - Task: '\(updatedTask.title)' (ID: \(updatedTask.id))")
+        print("   - From: \(sourceListId) -> To: \(targetListId)")
+        print("   - Account: \(kind)")
+        
+        // First, get the original task from local state to ensure we have the correct server ID
+        let originalTask = await MainActor.run {
+            switch kind {
+            case .personal:
+                return personalTasks[sourceListId]?.first { $0.id == updatedTask.id }
+            case .professional:
+                return professionalTasks[sourceListId]?.first { $0.id == updatedTask.id }
+            }
+        }
+        
+        // CRITICAL: We MUST find the original task in local state to get the correct server ID
+        guard let taskToDelete = originalTask else {
+            print("❌ moveTask: Cannot find original task in local state!")
+            print("   - Task ID in updatedTask: \(updatedTask.id)")
+            print("   - Source list: \(sourceListId)")
             await MainActor.run {
+                self.errorMessage = "Cannot find original task to move"
+            }
+            return
+        }
+        
+        print("✅ moveTask: Found original task with ID: \(taskToDelete.id)")
+        
+        // Check if this is a local UUID (not synced to server yet)
+        let isLocalUUID = taskToDelete.id.count > 20 && taskToDelete.id.contains("-")
+        if isLocalUUID {
+            print("   ⚠️ WARNING: Task appears to be local UUID (not synced to server)")
+            print("   - This task may not exist on the server yet")
+            print("   - Will attempt to create in target and remove from local state only")
+        }
+        
+        if taskToDelete.id != updatedTask.id {
+            print("   ⚠️ WARNING: Task ID mismatch detected!")
+            print("   - updatedTask.id: \(updatedTask.id)")
+            print("   - originalTask.id: \(taskToDelete.id)")
+            print("   - Using original task ID for deletion: \(taskToDelete.id)")
+        }
+        
+        var newTask: GoogleTask?
+        do {
+            // First create the task in the target list (returns new task with server-assigned ID)
+            print("🔄 moveTask: Step 1 - Creating task in target list...")
+            newTask = try await createTaskOnServer(updatedTask, in: targetListId, for: kind)
+            print("✅ moveTask: Step 1 - Success! New task ID: \(newTask?.id ?? "nil")")
+            
+            // Then delete from source list using original task ID (from server)
+            print("🔄 moveTask: Step 2 - Deleting task from source list...")
+            
+            // Check if this is a local UUID - if so, skip server deletion
+            let isLocalUUID = taskToDelete.id.count > 20 && taskToDelete.id.contains("-")
+            if isLocalUUID {
+                print("   - Skipping server deletion (local UUID - task not on server)")
+            } else {
+                try await deleteTaskFromServer(taskToDelete, from: sourceListId, for: kind)
+                print("✅ moveTask: Step 2 - Success! Deleted from source list")
+            }
+            
+            // Update local state using the new task (with correct server ID)
+            guard let taskToAdd = newTask else { 
+                print("❌ moveTask: No new task returned from server!")
+                return 
+            }
+            
+            print("🔄 moveTask: Step 3 - Updating local state...")
+            await MainActor.run {
+                // Remove from source list using original task ID (the one we deleted from server)
+                let originalTaskId = taskToDelete.id
                 switch kind {
                 case .personal:
-                    // Remove from source list
-                    self.personalTasks[sourceListId]?.removeAll { $0.id == updatedTask.id }
+                    let beforeRemoveCount = self.personalTasks[sourceListId]?.count ?? 0
+                    self.personalTasks[sourceListId]?.removeAll { $0.id == originalTaskId }
+                    let afterRemoveCount = self.personalTasks[sourceListId]?.count ?? 0
+                    print("   - Personal: Removed from source list (\(beforeRemoveCount) -> \(afterRemoveCount))")
                     
-                    // Add to target list
+                    // Add to target list using new task (with server ID)
+                    let beforeAddCount = self.personalTasks[targetListId]?.count ?? 0
                     if self.personalTasks[targetListId] != nil {
-                        self.personalTasks[targetListId]?.append(updatedTask)
+                        self.personalTasks[targetListId]?.append(taskToAdd)
                     } else {
-                        self.personalTasks[targetListId] = [updatedTask]
+                        self.personalTasks[targetListId] = [taskToAdd]
                     }
+                    let afterAddCount = self.personalTasks[targetListId]?.count ?? 0
+                    print("   - Personal: Added to target list (\(beforeAddCount) -> \(afterAddCount))")
                     
                 case .professional:
-                    // Remove from source list
-                    self.professionalTasks[sourceListId]?.removeAll { $0.id == updatedTask.id }
+                    let beforeRemoveCount = self.professionalTasks[sourceListId]?.count ?? 0
+                    self.professionalTasks[sourceListId]?.removeAll { $0.id == originalTaskId }
+                    let afterRemoveCount = self.professionalTasks[sourceListId]?.count ?? 0
+                    print("   - Professional: Removed from source list (\(beforeRemoveCount) -> \(afterRemoveCount))")
                     
-                    // Add to target list
+                    // Add to target list using new task (with server ID)
+                    let beforeAddCount = self.professionalTasks[targetListId]?.count ?? 0
                     if self.professionalTasks[targetListId] != nil {
-                        self.professionalTasks[targetListId]?.append(updatedTask)
+                        self.professionalTasks[targetListId]?.append(taskToAdd)
                     } else {
-                        self.professionalTasks[targetListId] = [updatedTask]
+                        self.professionalTasks[targetListId] = [taskToAdd]
                     }
+                    let afterAddCount = self.professionalTasks[targetListId]?.count ?? 0
+                    print("   - Professional: Added to target list (\(beforeAddCount) -> \(afterAddCount))")
+                }
+                
+                // Clear caches to ensure UI refreshes
+                print("🔄 moveTask: Step 4 - Clearing caches...")
+                self.clearCacheForAccount(kind)
+                self.clearAllFilteredCaches()
+                print("✅ moveTask: Step 4 - Caches cleared")
+            }
+            print("✅ moveTask: Complete! Task successfully moved")
+            
+        } catch {
+            print("❌ moveTask: Error occurred: \(error.localizedDescription)")
+            print("   - Error type: \(type(of: error))")
+            
+            // If deletion failed, clean up the task we created in the target list
+            if let createdTask = newTask {
+                print("🧹 moveTask: Cleaning up created task in target list...")
+                do {
+                    try await deleteTaskFromServer(createdTask, from: targetListId, for: kind)
+                    print("✅ moveTask: Cleanup successful")
+                } catch {
+                    // Log cleanup error but don't throw - we already have the original error
+                    print("⚠️ moveTask: Failed to clean up moved task after error: \(error.localizedDescription)")
                 }
             }
-        } catch {
+            
             await MainActor.run {
                 self.errorMessage = "Failed to move task: \(error.localizedDescription)"
             }
@@ -685,8 +795,11 @@ class TasksViewModel: ObservableObject {
     }
     
     func crossAccountMoveTask(_ updatedTask: GoogleTask, from source: (GoogleAuthManager.AccountKind, String), to target: (GoogleAuthManager.AccountKind, String)) async {
+        print("🔄 crossAccountMoveTask: Starting cross-account move operation")
+        print("   - Task: '\(updatedTask.title)' (ID: \(updatedTask.id))")
+        print("   - From: \(source.0)/\(source.1) -> To: \(target.0)/\(target.1)")
         
-        // Store original task for potential rollback
+        // First, get the original task from local state to ensure we have the correct server ID
         let originalTask = await MainActor.run {
             switch source.0 {
             case .personal:
@@ -696,108 +809,140 @@ class TasksViewModel: ObservableObject {
             }
         }
         
-        // OPTIMISTIC MOVE: Update UI immediately
-        await MainActor.run {
-            // Remove from source account
-            switch source.0 {
-            case .personal:
-                self.personalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
-                
-            case .professional:
-                self.professionalTasks[source.1]?.removeAll { $0.id == updatedTask.id }
-                
+        // CRITICAL: We MUST find the original task in local state to get the correct server ID
+        guard let taskToDelete = originalTask else {
+            print("❌ crossAccountMoveTask: Cannot find original task in local state!")
+            print("   - Task ID in updatedTask: \(updatedTask.id)")
+            print("   - Source list: \(source.1)")
+            await MainActor.run {
+                self.errorMessage = "Cannot find original task to move"
             }
-            
-            // Add to target account
-            switch target.0 {
-            case .personal:
-                if self.personalTasks[target.1] != nil {
-                    self.personalTasks[target.1]?.append(updatedTask)
-                } else {
-                    self.personalTasks[target.1] = [updatedTask]
-                }
-                
-            case .professional:
-                if self.professionalTasks[target.1] != nil {
-                    self.professionalTasks[target.1]?.append(updatedTask)
-                } else {
-                    self.professionalTasks[target.1] = [updatedTask]
-                }
-                
-            }
+            return
         }
         
-        // BACKGROUND SYNC: Perform server operations in background
-        Task {
-            do {
-                // Create task in target account
-                let _ = try await createTaskOnServer(updatedTask, in: target.1, for: target.0)
-                
-                // Delete from source account
-                try await deleteTaskFromServer(updatedTask, from: source.1, for: source.0)
-                
-                // Replace temporary task with server task (correct ID)
-                await MainActor.run {
-                    switch target.0 {
-                    case .personal:
-                        if var tasks = personalTasks[target.1] {
-                            if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-                                tasks[index] = updatedTask
-                                personalTasks[target.1] = tasks
-                            }
-                        }
-                    case .professional:
-                        if var tasks = professionalTasks[target.1] {
-                            if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
-                                tasks[index] = updatedTask
-                                professionalTasks[target.1] = tasks
-                            }
-                        }
-                    }
+        print("✅ crossAccountMoveTask: Found original task with ID: \(taskToDelete.id)")
+        
+        // Check if this is a local UUID (not synced to server yet)
+        let isLocalUUID = taskToDelete.id.count > 20 && taskToDelete.id.contains("-")
+        if isLocalUUID {
+            print("   ⚠️ WARNING: Task appears to be local UUID (not synced to server)")
+            print("   - This task may not exist on the server yet")
+            print("   - Will attempt to create in target and remove from local state only")
+        }
+        
+        if taskToDelete.id != updatedTask.id {
+            print("   ⚠️ WARNING: Task ID mismatch detected!")
+            print("   - updatedTask.id: \(updatedTask.id)")
+            print("   - originalTask.id: \(taskToDelete.id)")
+            print("   - Using original task ID for deletion: \(taskToDelete.id)")
+        }
+        
+        var newTask: GoogleTask?
+        do {
+            // First create the task in the target account (returns new task with server-assigned ID)
+            print("🔄 crossAccountMoveTask: Step 1 - Creating task in target account...")
+            newTask = try await createTaskOnServer(updatedTask, in: target.1, for: target.0)
+            print("✅ crossAccountMoveTask: Step 1 - Success! New task ID: \(newTask?.id ?? "nil")")
+            
+            // Then delete from source account using original task ID (from server)
+            print("🔄 crossAccountMoveTask: Step 2 - Deleting task from source account...")
+            
+            // Check if this is a local UUID - if so, skip server deletion
+            let isLocalUUID = taskToDelete.id.count > 20 && taskToDelete.id.contains("-")
+            if isLocalUUID {
+                print("   - Skipping server deletion (local UUID - task not on server)")
+            } else {
+                try await deleteTaskFromServer(taskToDelete, from: source.1, for: source.0)
+                print("✅ crossAccountMoveTask: Step 2 - Success! Deleted from source account")
+            }
+            
+            // Update local state using the new task (with correct server ID)
+            guard let taskToAdd = newTask else { 
+                print("❌ crossAccountMoveTask: No new task returned from server!")
+                return 
+            }
+            
+            print("🔄 crossAccountMoveTask: Step 3 - Updating local state...")
+            await MainActor.run {
+                // Remove from source account using original task ID (the one we deleted from server)
+                let originalTaskId = taskToDelete.id
+                switch source.0 {
+                case .personal:
+                    let beforeRemoveCount = self.personalTasks[source.1]?.count ?? 0
+                    self.personalTasks[source.1]?.removeAll { $0.id == originalTaskId }
+                    let afterRemoveCount = self.personalTasks[source.1]?.count ?? 0
+                    print("   - Personal: Removed from source list (\(beforeRemoveCount) -> \(afterRemoveCount))")
+                case .professional:
+                    let beforeRemoveCount = self.professionalTasks[source.1]?.count ?? 0
+                    self.professionalTasks[source.1]?.removeAll { $0.id == originalTaskId }
+                    let afterRemoveCount = self.professionalTasks[source.1]?.count ?? 0
+                    print("   - Professional: Removed from source list (\(beforeRemoveCount) -> \(afterRemoveCount))")
                 }
                 
-            } catch {
-                // REVERT OPTIMISTIC MOVE on error
-                if let original = originalTask {
-                    await MainActor.run {
-                        // Remove from target (rollback addition)
-                        switch target.0 {
-                        case .personal:
-                            self.personalTasks[target.1]?.removeAll { $0.id == updatedTask.id }
-                        case .professional:
-                            self.professionalTasks[target.1]?.removeAll { $0.id == updatedTask.id }
-                        }
-                        
-                        // Restore to source (rollback removal)
-                        switch source.0 {
-                        case .personal:
-                            if self.personalTasks[source.1] != nil {
-                                self.personalTasks[source.1]?.append(original)
-                            } else {
-                                self.personalTasks[source.1] = [original]
-                            }
-                        case .professional:
-                            if self.professionalTasks[source.1] != nil {
-                                self.professionalTasks[source.1]?.append(original)
-                            } else {
-                                self.professionalTasks[source.1] = [original]
-                            }
-                        }
-                        
-                        self.errorMessage = "Failed to move task across accounts: \(error.localizedDescription)"
+                // Add to target account using new task (with server ID)
+                switch target.0 {
+                case .personal:
+                    let beforeAddCount = self.personalTasks[target.1]?.count ?? 0
+                    if self.personalTasks[target.1] != nil {
+                        self.personalTasks[target.1]?.append(taskToAdd)
+                    } else {
+                        self.personalTasks[target.1] = [taskToAdd]
                     }
+                    let afterAddCount = self.personalTasks[target.1]?.count ?? 0
+                    print("   - Personal: Added to target list (\(beforeAddCount) -> \(afterAddCount))")
+                case .professional:
+                    let beforeAddCount = self.professionalTasks[target.1]?.count ?? 0
+                    if self.professionalTasks[target.1] != nil {
+                        self.professionalTasks[target.1]?.append(taskToAdd)
+                    } else {
+                        self.professionalTasks[target.1] = [taskToAdd]
+                    }
+                    let afterAddCount = self.professionalTasks[target.1]?.count ?? 0
+                    print("   - Professional: Added to target list (\(beforeAddCount) -> \(afterAddCount))")
                 }
+                
+                // Clear caches to ensure UI refreshes
+                print("🔄 crossAccountMoveTask: Step 4 - Clearing caches...")
+                self.clearCacheForAccount(source.0)
+                self.clearCacheForAccount(target.0)
+                self.clearAllFilteredCaches()
+                print("✅ crossAccountMoveTask: Step 4 - Caches cleared")
+            }
+            print("✅ crossAccountMoveTask: Complete! Task successfully moved across accounts")
+            
+        } catch {
+            print("❌ crossAccountMoveTask: Error occurred: \(error.localizedDescription)")
+            print("   - Error type: \(type(of: error))")
+            
+            // If deletion failed, clean up the task we created in the target account
+            if let createdTask = newTask {
+                print("🧹 crossAccountMoveTask: Cleaning up created task in target account...")
+                do {
+                    try await deleteTaskFromServer(createdTask, from: target.1, for: target.0)
+                    print("✅ crossAccountMoveTask: Cleanup successful")
+                } catch {
+                    // Log cleanup error but don't throw - we already have the original error
+                    print("⚠️ crossAccountMoveTask: Failed to clean up moved task after error: \(error.localizedDescription)")
+                }
+            }
+            
+            await MainActor.run {
+                self.errorMessage = "Failed to move task across accounts: \(error.localizedDescription)"
             }
         }
     }
     
     func createTaskOnServer(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async throws -> GoogleTask {
+        print("📝 createTaskOnServer: Creating task '\(task.title)' in list \(listId)")
         
         guard let accessToken = try await getAccessTokenThrows(for: kind) else {
+            print("❌ createTaskOnServer: No access token for \(kind)")
             throw TasksError.notAuthenticated
         }
         
         let url = URL(string: "https://tasks.googleapis.com/tasks/v1/lists/\(listId)/tasks")!
+        print("📝 createTaskOnServer: URL: \(url.absoluteString)")
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
@@ -821,21 +966,29 @@ class TasksViewModel: ObservableObject {
             }
         }
         
+        print("📝 createTaskOnServer: Request body: \(requestBody)")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ createTaskOnServer: Invalid response type")
             throw TasksError.invalidResponse
         }
         
+        print("📝 createTaskOnServer: HTTP Status: \(httpResponse.statusCode)")
+        
         if httpResponse.statusCode != 200 {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("❌ createTaskOnServer: Error response: \(errorData)")
+            }
+            print("❌ createTaskOnServer: API error with status \(httpResponse.statusCode)")
             throw TasksError.apiError(httpResponse.statusCode)
         }
         
-        
         // Parse response to get the created task with server ID
         let createdTask = try JSONDecoder().decode(GoogleTask.self, from: data)
+        print("✅ createTaskOnServer: Success! Created task with ID: \(createdTask.id)")
         return createdTask
     }
     
@@ -1330,7 +1483,6 @@ struct TasksView: View {
     
     // Direct filtering function that bypasses caching - like day views
     private func getDirectFilteredTasks(for tasksDict: [String: [GoogleTask]], accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
-        logDebug("🔍 Direct filtering for \(accountKind.rawValue): \(tasksDict.count) lists")
         let result = filterTasks(tasksDict)
         logDebug("🔍 Direct filtering result: \(result.count) lists")
         return result
@@ -2840,11 +2992,20 @@ struct TaskDetailsView: View {
                 }
             } else {
                 // Editing path (perform updates directly to ensure they complete)
+                print("💾 TaskDetailsView: Editing path - determining operation type")
+                print("   - selectedAccountKind: \(selectedAccountKind)")
+                print("   - accountKind: \(accountKind)")
+                print("   - targetListId: \(targetListId)")
+                print("   - taskListId: \(taskListId)")
+                
                 if selectedAccountKind != accountKind {
+                    print("💾 TaskDetailsView: Cross-account move detected")
                     await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (selectedAccountKind, targetListId))
                 } else if targetListId != taskListId {
+                    print("💾 TaskDetailsView: Same-account move detected")
                     await viewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: selectedAccountKind)
                 } else {
+                    print("💾 TaskDetailsView: In-place update detected")
                     await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
                 }
                 // No need to reload all tasks - individual methods update local state
