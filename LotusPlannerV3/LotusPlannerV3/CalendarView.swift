@@ -3054,7 +3054,7 @@ struct CalendarView: View {
     }
     
     private var eventLayoutView: some View {
-        let timelineEvents = getTimelineEvents()
+        let timelineEvents = getTimelineEvents(date: currentDate)
         
         return GeometryReader { geometry in
             // The geometry here is for the timelineWithEvents view, which already accounts for the timeline column
@@ -3287,42 +3287,25 @@ struct CalendarView: View {
         }
         
         var topOffset: CGFloat {
-            // Calculate precise position based on actual start time
-            guard let startTime = event.startTime else { return 0 }
-            
-            let calendar = Calendar.current
-            let components = calendar.dateComponents([.hour, .minute], from: startTime)
-            let hour = components.hour ?? 0
-            let minute = components.minute ?? 0
-            
-            // Each hour = 2 slots = 100pt (50pt per 30-min slot)
-            // Each minute = 100pt / 60min = 1.667pt per minute
-            let hourOffset = CGFloat(hour) * 100.0 // 2 slots * 50pt per slot
-            let minuteOffset = CGFloat(minute) * (100.0 / 60.0) // Precise minute positioning
-            
-            return hourOffset + minuteOffset
+            // Calculate from slots (which are already adjusted for multi-day events)
+            // Each slot = 30 minutes = 50pt, so startSlot * 50 = offset
+            return CGFloat(startSlot) * 50.0
         }
         
         var height: CGFloat {
-            // Calculate precise height based on actual duration
-            guard let startTime = event.startTime,
-                  let endTime = event.endTime else { 
-                return 50.0 // Default minimum height
-            }
-            
-            let duration = endTime.timeIntervalSince(startTime)
-            let durationMinutes = duration / 60.0 // Convert seconds to minutes
-            
-            // Each minute = 100pt / 60min = 1.667pt per minute
-            let calculatedHeight = CGFloat(durationMinutes) * (100.0 / 60.0)
+            // Calculate from slots (which are already adjusted for multi-day events)
+            // Each slot = 30 minutes = 50pt
+            let slotDuration = endSlot - startSlot
+            let calculatedHeight = CGFloat(slotDuration) * 50.0
             
             // Minimum height of 25pt for very short events
             return max(25.0, calculatedHeight)
         }
     }
     
-    private func getTimelineEvents() -> [TimelineEvent] {
+    private func getTimelineEvents(date: Date) -> [TimelineEvent] {
         var timelineEvents: [TimelineEvent] = []
+        let calendar = Calendar.current
         
         // Process personal events
         for event in calendarViewModel.personalEvents {
@@ -3331,8 +3314,35 @@ struct CalendarView: View {
             guard let startTime = event.startTime,
                   let endTime = event.endTime else { continue }
             
-            let startSlot = timeToSlot(startTime, isEndTime: false)
-            let endSlot = timeToSlot(endTime, isEndTime: true)
+            // Determine if this is a multi-day event and which day we're rendering
+            let eventStartDay = calendar.startOfDay(for: startTime)
+            let eventEndDay = calendar.startOfDay(for: endTime)
+            let currentDay = calendar.startOfDay(for: date)
+            
+            // Calculate adjusted start and end times for this specific day
+            let dayStartTime: Date
+            let dayEndTime: Date
+            
+            if eventStartDay == eventEndDay {
+                // Single-day event
+                dayStartTime = startTime
+                dayEndTime = endTime
+            } else if currentDay == eventStartDay {
+                // First day of multi-day event: use actual start time to end of day
+                dayStartTime = startTime
+                dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? endTime
+            } else if currentDay == eventEndDay {
+                // Last day of multi-day event: use start of day to actual end time
+                dayStartTime = calendar.startOfDay(for: currentDay)
+                dayEndTime = endTime
+            } else {
+                // Middle day(s): use start of day to end of day (full day)
+                dayStartTime = calendar.startOfDay(for: currentDay)
+                dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? currentDay
+            }
+            
+            let startSlot = timeToSlot(dayStartTime, isEndTime: false)
+            let endSlot = timeToSlot(dayEndTime, isEndTime: true)
             
             if startSlot < 48 && endSlot > 0 { // Event is within our 24-hour view
                 timelineEvents.append(TimelineEvent(
@@ -3351,8 +3361,35 @@ struct CalendarView: View {
             guard let startTime = event.startTime,
                   let endTime = event.endTime else { continue }
             
-            let startSlot = timeToSlot(startTime, isEndTime: false)
-            let endSlot = timeToSlot(endTime, isEndTime: true)
+            // Determine if this is a multi-day event and which day we're rendering
+            let eventStartDay = calendar.startOfDay(for: startTime)
+            let eventEndDay = calendar.startOfDay(for: endTime)
+            let currentDay = calendar.startOfDay(for: date)
+            
+            // Calculate adjusted start and end times for this specific day
+            let dayStartTime: Date
+            let dayEndTime: Date
+            
+            if eventStartDay == eventEndDay {
+                // Single-day event
+                dayStartTime = startTime
+                dayEndTime = endTime
+            } else if currentDay == eventStartDay {
+                // First day of multi-day event: use actual start time to end of day
+                dayStartTime = startTime
+                dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? endTime
+            } else if currentDay == eventEndDay {
+                // Last day of multi-day event: use start of day to actual end time
+                dayStartTime = calendar.startOfDay(for: currentDay)
+                dayEndTime = endTime
+            } else {
+                // Middle day(s): use start of day to end of day (full day)
+                dayStartTime = calendar.startOfDay(for: currentDay)
+                dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? currentDay
+            }
+            
+            let startSlot = timeToSlot(dayStartTime, isEndTime: false)
+            let endSlot = timeToSlot(dayEndTime, isEndTime: true)
             
             if startSlot < 48 && endSlot > 0 { // Event is within our 24-hour view
                 timelineEvents.append(TimelineEvent(
@@ -3542,7 +3579,7 @@ struct CalendarView: View {
                 
                 // Events for this day (same positioning as day view)
                 ForEach(dayEvents, id: \.id) { event in
-                    miniDayEventView(event: event, dayWidth: width)
+                    miniDayEventView(event: event, dayWidth: width, date: date)
                 }
                 
                 // Current time indicator (only for today)
@@ -3555,23 +3592,51 @@ struct CalendarView: View {
     }
     
     // Mini event view for week timeline (same positioning as day view)
-    private func miniDayEventView(event: GoogleCalendarEvent, dayWidth: CGFloat) -> AnyView {
+    private func miniDayEventView(event: GoogleCalendarEvent, dayWidth: CGFloat, date: Date) -> AnyView {
         guard let startTime = event.startTime,
               let endTime = event.endTime else {
             return AnyView(EmptyView())
         }
         
         let calendar = Calendar.current
-        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-        let _ = calendar.dateComponents([.hour, .minute], from: endTime)
+        
+        // Determine if this is a multi-day event and which day we're rendering
+        let eventStartDay = calendar.startOfDay(for: startTime)
+        let eventEndDay = calendar.startOfDay(for: endTime)
+        let currentDay = calendar.startOfDay(for: date)
+        
+        // Calculate adjusted start and end times for this specific day
+        let dayStartTime: Date
+        let dayEndTime: Date
+        
+        if eventStartDay == eventEndDay {
+            // Single-day event
+            dayStartTime = startTime
+            dayEndTime = endTime
+        } else if currentDay == eventStartDay {
+            // First day of multi-day event: use actual start time to end of day
+            dayStartTime = startTime
+            dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? endTime
+        } else if currentDay == eventEndDay {
+            // Last day of multi-day event: use start of day to actual end time
+            dayStartTime = calendar.startOfDay(for: currentDay)
+            dayEndTime = endTime
+        } else {
+            // Middle day(s): use start of day to end of day (full day)
+            dayStartTime = calendar.startOfDay(for: currentDay)
+            dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? currentDay
+        }
+        
+        let startComponents = calendar.dateComponents([.hour, .minute], from: dayStartTime)
+        let endComponents = calendar.dateComponents([.hour, .minute], from: dayEndTime)
         
         let startHour = startComponents.hour ?? 0
         let startMinute = startComponents.minute ?? 0
         
         // Calculate position and height (same as day view: 100pt per hour)
         let topOffset = CGFloat(startHour) * 100.0 + CGFloat(startMinute) * (100.0 / 60.0)
-        let duration = endTime.timeIntervalSince(startTime)
-        let durationMinutes = duration / 60.0
+        let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
+        let durationMinutes = dayDuration / 60.0
         let height = max(20.0, CGFloat(durationMinutes) * (100.0 / 60.0)) // Minimum 20pt for narrow columns
         
         let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
@@ -3690,8 +3755,24 @@ struct CalendarView: View {
                     // Otherwise, check if date is within [startDay, endDay)
                     return dateDay >= startDay && dateDay < endDay
                 } else {
-                    // For timed events, check if the event starts on this date
-                    return calendar.isDate(startTime, inSameDayAs: date)
+                    // For timed events, check if the date falls within the event's date range
+                    guard let endTime = event.endTime else {
+                        // If no end time, only show on start date
+                        return calendar.isDate(startTime, inSameDayAs: date)
+                    }
+                    
+                    let startDay = calendar.startOfDay(for: startTime)
+                    let endDay = calendar.startOfDay(for: endTime)
+                    let dateDay = calendar.startOfDay(for: date)
+                    
+                    // If event is on the same day, show only if date matches
+                    if endDay == startDay {
+                        return dateDay == startDay
+                    }
+                    
+                    // Otherwise, show if date is within [startDay, endDay]
+                    // Include both start and end days
+                    return dateDay >= startDay && dateDay <= endDay
                 }
             }
             eventsGroupedByDate[date] = eventsForDate
@@ -3852,8 +3933,24 @@ struct CalendarView: View {
                 
                 return dateDay >= startDay && dateDay < endDay
             } else {
-                // For timed events, check if the event starts on this date
-                return calendar.isDate(startTime, inSameDayAs: date)
+                // For timed events, check if the date falls within the event's date range
+                guard let endTime = event.endTime else {
+                    // If no end time, only show on start date
+                    return calendar.isDate(startTime, inSameDayAs: date)
+                }
+                
+                let startDay = calendar.startOfDay(for: startTime)
+                let endDay = calendar.startOfDay(for: endTime)
+                let dateDay = calendar.startOfDay(for: date)
+                
+                // If event is on the same day, show only if date matches
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
+                
+                // Otherwise, show if date is within [startDay, endDay]
+                // Include both start and end days
+                return dateDay >= startDay && dateDay <= endDay
             }
         }
         

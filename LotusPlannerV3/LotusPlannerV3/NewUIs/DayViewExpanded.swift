@@ -354,7 +354,24 @@ extension DayViewExpanded {
                 if endDay == startDay { return dateDay == startDay }
                 return dateDay >= startDay && dateDay < endDay
             } else {
-                return calendar.isDate(start, inSameDayAs: date)
+                // For timed events, check if the date falls within the event's date range
+                guard let endTime = ev.endTime else {
+                    // If no end time, only show on start date
+                    return calendar.isDate(start, inSameDayAs: date)
+                }
+                
+                let startDay = calendar.startOfDay(for: start)
+                let endDay = calendar.startOfDay(for: endTime)
+                let dateDay = calendar.startOfDay(for: date)
+                
+                // If event is on the same day, show only if date matches
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
+                
+                // Otherwise, show if date is within [startDay, endDay]
+                // Include both start and end days
+                return dateDay >= startDay && dateDay <= endDay
             }
         }
     }
@@ -371,7 +388,24 @@ extension DayViewExpanded {
                 if endDay == startDay { return dateDay == startDay }
                 return dateDay >= startDay && dateDay < endDay
             } else {
-                return calendar.isDate(start, inSameDayAs: date)
+                // For timed events, check if the date falls within the event's date range
+                guard let endTime = ev.endTime else {
+                    // If no end time, only show on start date
+                    return calendar.isDate(start, inSameDayAs: date)
+                }
+                
+                let startDay = calendar.startOfDay(for: start)
+                let endDay = calendar.startOfDay(for: endTime)
+                let dateDay = calendar.startOfDay(for: date)
+                
+                // If event is on the same day, show only if date matches
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
+                
+                // Otherwise, show if date is within [startDay, endDay]
+                // Include both start and end days
+                return dateDay >= startDay && dateDay <= endDay
             }
         }
     }
@@ -388,7 +422,24 @@ extension DayViewExpanded {
                 if endDay == startDay { return dateDay == startDay }
                 return dateDay >= startDay && dateDay < endDay
             } else {
-                return calendar.isDate(start, inSameDayAs: date)
+                // For timed events, check if the date falls within the event's date range
+                guard let endTime = ev.endTime else {
+                    // If no end time, only show on start date
+                    return calendar.isDate(start, inSameDayAs: date)
+                }
+                
+                let startDay = calendar.startOfDay(for: start)
+                let endDay = calendar.startOfDay(for: endTime)
+                let dateDay = calendar.startOfDay(for: date)
+                
+                // If event is on the same day, show only if date matches
+                if endDay == startDay {
+                    return dateDay == startDay
+                }
+                
+                // Otherwise, show if date is within [startDay, endDay]
+                // Include both start and end days
+                return dateDay >= startDay && dateDay <= endDay
             }
         }
     }

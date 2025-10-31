@@ -340,16 +340,47 @@ struct TimelineComponent: View {
                 guard let startTime = event.startTime,
                       let endTime = event.endTime else { continue }
                 
-                let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                // Determine if this is a multi-day event and which day we're rendering
+                let eventStartDay = calendar.startOfDay(for: startTime)
+                let eventEndDay = calendar.startOfDay(for: endTime)
+                let currentDay = calendar.startOfDay(for: date)
+                
+                // Calculate adjusted start and end times for this specific day
+                let dayStartTime: Date
+                let dayEndTime: Date
+                
+                if eventStartDay == eventEndDay {
+                    // Single-day event
+                    dayStartTime = startTime
+                    dayEndTime = endTime
+                } else if currentDay == eventStartDay {
+                    // First day of multi-day event: use actual start time to end of day
+                    dayStartTime = startTime
+                    dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? endTime
+                } else if currentDay == eventEndDay {
+                    // Last day of multi-day event: use start of day to actual end time
+                    dayStartTime = calendar.startOfDay(for: currentDay)
+                    dayEndTime = endTime
+                } else {
+                    // Middle day(s): use start of day to end of day (full day)
+                    dayStartTime = calendar.startOfDay(for: currentDay)
+                    dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? currentDay
+                }
+                
+                let startComponents = calendar.dateComponents([.hour, .minute], from: dayStartTime)
+                let endComponents = calendar.dateComponents([.hour, .minute], from: dayEndTime)
                 
                 let startHour = startComponents.hour ?? 0
                 let startMinute = startComponents.minute ?? 0
+                let endHour = endComponents.hour ?? 23
+                let endMinute = endComponents.minute ?? 59
                 
                 let startOffset = CGFloat(startHour - self.startHour) * hourHeight + 
                                  CGFloat(startMinute) * (hourHeight / 60.0)
                 
-                let duration = endTime.timeIntervalSince(startTime)
-                let height = max(30.0, CGFloat(duration / 3600.0) * hourHeight)
+                // Calculate height based on duration for this day
+                let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
+                let height = max(30.0, CGFloat(dayDuration / 3600.0) * hourHeight)
                 
                 let isPersonal = personalEvents.contains { $0.id == event.id }
                 

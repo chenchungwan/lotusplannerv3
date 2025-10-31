@@ -85,8 +85,40 @@ class JournalStorageNew {
                          userInfo: [NSLocalizedDescriptionKey: "No storage location available"])
         }
         
-        // Write directly to the URL (iCloud or local)
+        // Check if file already exists (this is an update/overwrite)
+        let fileExists = FileManager.default.fileExists(atPath: url.path)
+        let existingSize = fileExists ? (try? Data(contentsOf: url))?.count ?? 0 : 0
+        
+        // Write directly to the URL (iCloud or local) - OVERWRITES existing file
         try data.write(to: url, options: [.atomic])
+        
+        // Check if file is in iCloud and wait for upload to complete
+        var isUbiquitous: AnyObject?
+        try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+        let isInCloud = (isUbiquitous as? Bool) == true
+        
+        if isInCloud {
+            // Wait for iCloud upload to complete to ensure other devices see the update
+            await ensureFileUploaded(url: url)
+        }
+        
+        // Print save information
+        let operation = fileExists ? "OVERWRITE" : "CREATE"
+        print("💾 JOURNAL SAVE - \(operation) drawing file:")
+        print("   📍 Location: \(url.path)")
+        print("   📅 Date: \(formatDate(date))")
+        print("   ☁️ Storage: \(isInCloud ? "iCloud" : "Local")")
+        print("   ✏️ Strokes: \(drawing.strokes.count)")
+        print("   📏 New size: \(data.count) bytes (\(String(format: "%.2f", Double(data.count) / 1024.0)) KB)")
+        if fileExists {
+            print("   ⚠️ Previous size: \(existingSize) bytes (\(String(format: "%.2f", Double(existingSize) / 1024.0)) KB)")
+            print("   🔄 File overwritten (previous data replaced)")
+            if isInCloud {
+                print("   ☁️ Waiting for iCloud upload to complete...")
+            }
+        } else {
+            print("   ✨ New file created")
+        }
         
         // Cache it
         setCache(drawing, for: date)
@@ -137,13 +169,36 @@ class JournalStorageNew {
                     await ensureFileDownloaded(url: url)
                 }
                 
+                // Get file modification date to verify freshness
+                var modificationDate: AnyObject?
+                try? (url as NSURL).getResourceValue(&modificationDate, forKey: URLResourceKey.contentModificationDateKey)
+                let modDate = modificationDate as? Date
+                
                 // Try to load the data
                 let data = try Data(contentsOf: url)
+                
+                // Print raw iCloud data information
+                let fileSize = data.count
+                let storageType = isInCloud ? "iCloud" : "Local"
+                print("📦 JOURNAL RAW DATA - Drawing file:")
+                print("   📍 Location: \(url.path)")
+                print("   ☁️ Storage: \(storageType)")
+                print("   📏 File size: \(fileSize) bytes (\(String(format: "%.2f", Double(fileSize) / 1024.0)) KB)")
+                print("   📅 Date: \(formatDate(date))")
+                if let modDate = modDate {
+                    let formatter = DateFormatter()
+                    formatter.dateStyle = .medium
+                    formatter.timeStyle = .medium
+                    print("   🕐 Modified: \(formatter.string(from: modDate))")
+                }
+                
                 let drawing = try PKDrawing(data: data)
                 
                 // Validate the drawing has content
                 // Cache it
                 setCache(drawing, for: date)
+                
+                print("   ✏️ Strokes: \(drawing.strokes.count)")
                 
                 return drawing
                 
@@ -193,6 +248,30 @@ class JournalStorageNew {
         }
         
         // Timeout reached, proceed with available data
+    }
+    
+    /// Ensure iCloud file upload is complete after saving
+    /// Note: There's no direct API to check upload status, so we wait a reasonable time
+    /// and verify the file exists locally to ensure it's queued for upload
+    private func ensureFileUploaded(url: URL) async {
+        // Verify file exists locally (required for upload to start)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("   ⚠️ File doesn't exist locally, upload may not start")
+            return
+        }
+        
+        // Wait a reasonable time for iCloud to queue and process the upload
+        // iCloud uploads happen asynchronously, so we just ensure the file is saved locally
+        // The actual upload happens in the background
+        let waitTime: UInt64 = 1_000_000_000 // 1 second
+        try? await Task.sleep(nanoseconds: waitTime)
+        
+        // Check file attributes to verify it's been saved
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) {
+            print("   ✅ File saved locally, iCloud upload queued")
+        } else {
+            print("   ⚠️ Could not verify file save")
+        }
     }
     
     // MARK: - Debug Inspection

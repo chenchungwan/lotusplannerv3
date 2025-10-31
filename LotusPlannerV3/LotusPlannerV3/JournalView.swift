@@ -127,7 +127,7 @@ struct JournalView: View {
             try await JournalStorageNew.shared.save(canvasView.drawing, for: saveDate)
             
             // Save photos
-            savePhotos(for: saveDate)
+            await savePhotos(for: saveDate)
             
             saveStatus = .saved
             
@@ -184,13 +184,24 @@ struct JournalView: View {
         loadedDate = targetDate
         contentDate = targetDate  // Set the content date to the loaded date
         
-        // Print detailed render information
+        // Print detailed render information with raw iCloud data
         print("📖 JOURNAL RENDER - Loading content for date: \(formatDateForDisplay(targetDate))")
-        print("📖 JOURNAL RENDER - Drawing strokes: \(canvasView.drawing.strokes.count)")
+        
+        // Print drawing data summary
+        let drawingData = canvasView.drawing.dataRepresentation()
+        print("📖 JOURNAL RENDER - Drawing:")
+        print("   ✏️ Strokes: \(canvasView.drawing.strokes.count)")
+        print("   📏 Data size: \(drawingData.count) bytes (\(String(format: "%.2f", Double(drawingData.count) / 1024.0)) KB)")
+        
+        // Print photos data summary
         print("📖 JOURNAL RENDER - Photos count: \(photos.count)")
         if !photos.isEmpty {
             for (index, photo) in photos.enumerated() {
-                print("📖 JOURNAL RENDER - Photo \(index + 1): \(photo.id) (\(Int(photo.size.width))x\(Int(photo.size.height)))")
+                let photoDataSize = photo.image.pngData()?.count ?? 0
+                print("📖 JOURNAL RENDER - Photo \(index + 1):")
+                print("   🆔 ID: \(photo.id)")
+                print("   📐 Size: \(Int(photo.size.width))x\(Int(photo.size.height))")
+                print("   📏 PNG data size: \(photoDataSize) bytes (\(String(format: "%.2f", Double(photoDataSize) / 1024.0)) KB)")
             }
         }
         
@@ -420,7 +431,7 @@ struct JournalView: View {
                                     Task { @MainActor in
                                         // Save any pending changes
                                         await drawingManager.saveImmediately()
-                                        savePhotos()
+                                        await savePhotos()
                                         dismiss()
                                     }
                                 }
@@ -692,7 +703,9 @@ struct JournalView: View {
                             },
                             onChanged: {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    savePhotos()
+                                    Task { @MainActor in
+                                        await savePhotos()
+                                    }
                                 }
                             },
                             canvasSize: canvasSize
@@ -740,7 +753,9 @@ struct JournalView: View {
     private func exportJournal() {
         // Save current drawing/photos first
         JournalStorageNew.shared.saveSync(canvasView.drawing, for: currentDate)
-        savePhotos()
+        Task { @MainActor in
+            await savePhotos()
+        }
         // Stub: actual export (PDF/image) can be implemented as needed
     }
     
@@ -770,7 +785,7 @@ struct JournalView: View {
         return JournalManager.shared.metadataURL(for: date)
     }
     
-    private func savePhotos(for date: Date? = nil) {
+    private func savePhotos(for date: Date? = nil) async {
         do {
             let targetDate = date ?? currentDate
             
@@ -823,6 +838,13 @@ struct JournalView: View {
             let jsonData = try JSONEncoder().encode(metas)
             let url = metadataURL(for: targetDate)
             try jsonData.write(to: url, options: [.atomic])
+            
+            // Wait for iCloud upload to complete if file is in iCloud
+            var isUbiquitous: AnyObject?
+            try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+            if (isUbiquitous as? Bool) == true {
+                await ensureFileUploadedForPhotos(url: url)
+            }
         } catch {
             // Silently fail - photos will be retried on next save
         }
@@ -858,8 +880,30 @@ struct JournalView: View {
                 let data = try await withTimeout(seconds: 3) { // Increased from 2 to 3 seconds
                     try Data(contentsOf: url)
                 }
+                
+                // Print raw photo metadata JSON data
+                let metadataSize = data.count
+                print("📦 JOURNAL RAW DATA - Photo metadata file:")
+                print("   📍 Location: \(url.path)")
+                print("   📏 File size: \(metadataSize) bytes (\(String(format: "%.2f", Double(metadataSize) / 1024.0)) KB)")
+                
+                // Print JSON string if available
+                if let jsonString = String(data: data, encoding: .utf8) {
+                    print("   📄 JSON content: \(jsonString)")
+                }
+                
                 let metas = try JSONDecoder().decode([PhotoMeta].self, from: data)
                 print("📋 Found \(metas.count) photo metadata entries")
+                
+                // Print each photo metadata entry
+                for (index, meta) in metas.enumerated() {
+                    print("   📸 Photo \(index + 1) metadata:")
+                    print("      ID: \(meta.id)")
+                    print("      File: \(meta.fileName)")
+                    print("      Position: (\(Int(meta.x)), \(Int(meta.y)))")
+                    print("      Size: \(Int(meta.width))x\(Int(meta.height))")
+                    print("      Rotation: \(String(format: "%.2f", meta.rotation)) radians")
+                }
                 
                 // If no photos found in iCloud, check local storage as fallback
                 if metas.isEmpty {
@@ -933,6 +977,17 @@ struct JournalView: View {
                 let data = try await withTimeout(seconds: 3.0) { // Increased from 1.5 to 3.0 seconds
                     try Data(contentsOf: fileURL)
                 }
+                
+                // Print raw photo file data information
+                var isUbiquitous: AnyObject?
+                try? (fileURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+                let isInCloud = (isUbiquitous as? Bool) == true
+                let storageType = isInCloud ? "iCloud" : "Local"
+                print("📦 JOURNAL RAW DATA - Photo file:")
+                print("   📍 Location: \(fileURL.path)")
+                print("   ☁️ Storage: \(storageType)")
+                print("   📏 File size: \(data.count) bytes (\(String(format: "%.2f", Double(data.count) / 1024.0)) KB)")
+                print("   🖼️ Format: PNG")
                 
                 guard let uiImg = UIImage(data: data) else {
                     print("❌ Failed to create UIImage from data for: \(meta.fileName)")
@@ -1200,6 +1255,21 @@ struct JournalView: View {
         
         // Timeout reached, proceed with available data
     }
+    
+    /// Ensure iCloud file upload is complete after saving photos metadata
+    /// Note: There's no direct API to check upload status, so we wait a reasonable time
+    /// and verify the file exists locally to ensure it's queued for upload
+    private func ensureFileUploadedForPhotos(url: URL) async {
+        // Verify file exists locally (required for upload to start)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return
+        }
+        
+        // Wait a reasonable time for iCloud to queue and process the upload
+        // iCloud uploads happen asynchronously, so we just ensure the file is saved locally
+        let waitTime: UInt64 = 1_000_000_000 // 1 second
+        try? await Task.sleep(nanoseconds: waitTime)
+    }
     private func loadSelectedPhotos() {
         guard !pickerItems.isEmpty else { 
             return 
@@ -1240,11 +1310,13 @@ struct JournalView: View {
                 photos.append(contentsOf: loadedPhotos)
                 pickerItems.removeAll()
                 contentDate = targetDate  // Update content date when photos are added
-                savePhotos(for: targetDate) // Save to the journal page date, not current system date
                 
                 // Reset processing flag
                 isProcessingPhotos = false
             }
+            
+            // Save photos asynchronously outside the MainActor.run closure
+            await savePhotos(for: targetDate) // Save to the journal page date, not current system date
         }
     }
     

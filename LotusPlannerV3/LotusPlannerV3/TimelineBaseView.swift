@@ -359,7 +359,34 @@ struct TimelineBaseView: View {
                 guard let startTime = event.startTime,
                       let endTime = event.endTime else { continue }
                 
-                let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                // Determine if this is a multi-day event and which day we're rendering
+                let eventStartDay = calendar.startOfDay(for: startTime)
+                let eventEndDay = calendar.startOfDay(for: endTime)
+                let currentDay = calendar.startOfDay(for: date)
+                
+                // Calculate adjusted start and end times for this specific day
+                let dayStartTime: Date
+                let dayEndTime: Date
+                
+                if eventStartDay == eventEndDay {
+                    // Single-day event
+                    dayStartTime = startTime
+                    dayEndTime = endTime
+                } else if currentDay == eventStartDay {
+                    // First day of multi-day event: use actual start time to end of day
+                    dayStartTime = startTime
+                    dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? endTime
+                } else if currentDay == eventEndDay {
+                    // Last day of multi-day event: use start of day to actual end time
+                    dayStartTime = calendar.startOfDay(for: currentDay)
+                    dayEndTime = endTime
+                } else {
+                    // Middle day(s): use start of day to end of day (full day)
+                    dayStartTime = calendar.startOfDay(for: currentDay)
+                    dayEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: currentDay) ?? currentDay
+                }
+                
+                let startComponents = calendar.dateComponents([.hour, .minute], from: dayStartTime)
                 
                 let startHour = startComponents.hour ?? 0
                 let startMinute = startComponents.minute ?? 0
@@ -367,8 +394,9 @@ struct TimelineBaseView: View {
                 let startOffset = CGFloat(startHour - config.startHour) * config.hourHeight + 
                                  CGFloat(startMinute) * (config.hourHeight / 60.0)
                 
-                let duration = endTime.timeIntervalSince(startTime)
-                let height = max(20, CGFloat(duration / 3600.0) * config.hourHeight)
+                // Calculate height based on duration for this day
+                let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
+                let height = max(20, CGFloat(dayDuration / 3600.0) * config.hourHeight)
                 
                 let isPersonal = personalEvents.contains { $0.id == event.id }
                 
