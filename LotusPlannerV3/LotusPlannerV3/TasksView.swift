@@ -1134,7 +1134,8 @@ class TasksViewModel: ObservableObject {
         // BACKGROUND SYNC: Create on server in background
         Task {
             do {
-                let _ = try await createTaskOnServer(task, in: listId, for: kind)
+                // Get the created task with real server ID
+                let createdTask = try await createTaskOnServer(task, in: listId, for: kind)
                 
                 // Replace temporary task with server task (has correct ID)
                 await MainActor.run {
@@ -1142,14 +1143,16 @@ class TasksViewModel: ObservableObject {
                     case .personal:
                         if var tasks = personalTasks[listId] {
                             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                                tasks[index] = task
+                                // Replace temporary task with server task that has real ID
+                                tasks[index] = createdTask
                                 personalTasks[listId] = tasks
                             }
                         }
                     case .professional:
                         if var tasks = professionalTasks[listId] {
                             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-                                tasks[index] = task
+                                // Replace temporary task with server task that has real ID
+                                tasks[index] = createdTask
                                 professionalTasks[listId] = tasks
                             }
                         }

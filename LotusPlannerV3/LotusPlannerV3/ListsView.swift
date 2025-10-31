@@ -470,6 +470,11 @@ struct TasksDetailColumn: View {
     // State for deleting completed tasks
     @State private var showingDeleteCompletedConfirmation = false
     
+    // State for inline task creation
+    @State private var isCreatingNewTask = false
+    @State private var newTaskTitle = ""
+    @FocusState private var isNewTaskFieldFocused: Bool
+    
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
     
@@ -595,42 +600,56 @@ struct TasksDetailColumn: View {
                 // Tasks list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Quick "New Task" row at the top
-                        Button {
-                            // Create a new task with pre-filled values
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-                            let todayString = formatter.string(from: Calendar.current.startOfDay(for: Date()))
-                            
-                            let newTask = GoogleTask(
-                                id: UUID().uuidString,
-                                title: "",
-                                notes: nil,
-                                status: "needsAction",
-                                due: todayString,
-                                completed: nil,
-                                updated: nil,
-                                position: nil
-                            )
-                            selectedTask = newTask
-                        } label: {
+                        // Inline "New Task" row at the top
+                        if isCreatingNewTask {
+                            // TextField mode - user is typing
                             HStack(spacing: 12) {
                                 // Plus icon
                                 Image(systemName: "plus.circle")
                                     .font(.title2)
                                     .foregroundColor(accentColor)
                                 
-                                // Placeholder text
-                                Text("New task")
+                                // TextField for entering task title
+                                TextField("New task", text: $newTaskTitle)
                                     .font(.body)
-                                    .foregroundColor(.secondary)
+                                    .focused($isNewTaskFieldFocused)
+                                    .submitLabel(.done)
+                                    .onSubmit {
+                                        createNewTaskInline()
+                                    }
+                                    .onAppear {
+                                        // Focus the TextField when it appears
+                                        isNewTaskFieldFocused = true
+                                    }
                                 
                                 Spacer()
                             }
                             .padding(adaptivePadding)
                             .background(Color(.systemBackground))
+                        } else {
+                            // Button mode - tap to start creating
+                            Button {
+                                isCreatingNewTask = true
+                                newTaskTitle = ""
+                            } label: {
+                                HStack(spacing: 12) {
+                                    // Plus icon
+                                    Image(systemName: "plus.circle")
+                                        .font(.title2)
+                                        .foregroundColor(accentColor)
+                                    
+                                    // Placeholder text
+                                    Text("New task")
+                                        .font(.body)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                }
+                                .padding(adaptivePadding)
+                                .background(Color(.systemBackground))
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                         
                         Divider()
                         
@@ -761,6 +780,12 @@ struct TasksDetailColumn: View {
         } message: {
             Text("Are you sure you want to delete all completed tasks from this list? This action cannot be undone.")
         }
+        .onChange(of: selectedListId) { _ in
+            // Reset inline task creation when list changes
+            isCreatingNewTask = false
+            newTaskTitle = ""
+            isNewTaskFieldFocused = false
+        }
     }
     
     private func renameList(listId: String, accountKind: GoogleAuthManager.AccountKind) {
@@ -806,6 +831,42 @@ struct TasksDetailColumn: View {
     
     private func deleteTask(_ task: GoogleTask, from listId: String, for accountKind: GoogleAuthManager.AccountKind) async {
         await tasksVM.deleteTask(task, from: listId, for: accountKind)
+    }
+    
+    private func createNewTaskInline() {
+        guard let listId = selectedListId,
+              let accountKind = selectedAccountKind,
+              !newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // If title is empty, just cancel editing
+            isCreatingNewTask = false
+            newTaskTitle = ""
+            return
+        }
+        
+        let trimmedTitle = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentDate = Date() // Current date as due date
+        
+        // Clear the text field immediately for better UX
+        newTaskTitle = ""
+        
+        // Create the task
+        Task {
+            await tasksVM.createTask(
+                title: trimmedTitle,
+                notes: nil,
+                dueDate: currentDate,
+                in: listId,
+                for: accountKind
+            )
+            
+            // Keep the TextField visible and focused for quick addition of another task
+            await MainActor.run {
+                // Keep isCreatingNewTask = true so TextField stays visible
+                // Keep isNewTaskFieldFocused = true so cursor stays in place
+                // Text field is already cleared above
+                isNewTaskFieldFocused = true
+            }
+        }
     }
 }
 
