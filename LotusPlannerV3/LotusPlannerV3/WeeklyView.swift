@@ -990,7 +990,8 @@ extension WeeklyView {
                         },
                         hideDueDateTag: true,
                         showEmptyState: false,
-                        isSingleDayView: true
+                        isSingleDayView: true,
+                        showTitle: false
                     )
                 }
             }
@@ -1029,7 +1030,8 @@ extension WeeklyView {
                         },
                         hideDueDateTag: true,
                         showEmptyState: false,
-                        isSingleDayView: true
+                        isSingleDayView: true,
+                        showTitle: false
                     )
                 }
             }
@@ -2139,7 +2141,8 @@ extension WeeklyView {
                     },
                     hideDueDateTag: true,
                     showEmptyState: false,
-                    isSingleDayView: true
+                    isSingleDayView: true,
+                    showTitle: false
                 )
             } else {
                 EmptyView()
@@ -2179,7 +2182,8 @@ extension WeeklyView {
                     },
                     hideDueDateTag: true,
                     showEmptyState: false,
-                    isSingleDayView: true
+                    isSingleDayView: true,
+                    showTitle: false
                 )
             } else {
                 EmptyView()

@@ -196,14 +196,6 @@ struct DayViewClassic2: View {
     // MARK: - Task Sections
     private var personalTasksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Personal Tasks")
-                    .font(.headline)
-                    .foregroundColor(appPrefs.personalColor)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            
             let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
             if auth.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
                 TasksComponent(
@@ -271,14 +263,6 @@ struct DayViewClassic2: View {
     
     private var professionalTasksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Professional Tasks")
-                    .font(.headline)
-                    .foregroundColor(appPrefs.professionalColor)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            
             let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
             if auth.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
                 TasksComponent(

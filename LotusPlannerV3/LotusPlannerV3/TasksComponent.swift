@@ -13,12 +13,13 @@ struct TasksComponent: View {
     let showEmptyState: Bool
     let horizontalCards: Bool
     let isSingleDayView: Bool
+    let showTitle: Bool
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
     
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -33,17 +34,31 @@ struct TasksComponent: View {
         self.showEmptyState = showEmptyState
         self.horizontalCards = horizontalCards
         self.isSingleDayView = isSingleDayView
+        self.showTitle = showTitle
         self._localTaskLists = State(initialValue: taskLists)
     }
     
-    // Account title removed as requested
+    // Account-specific title
+    private var accountTitle: String {
+        accountType == .personal ? "Personal Tasks" : "Professional Tasks"
+    }
     
     var body: some View {
         // Hide entirely if the corresponding account is not linked
         if !authManager.isLinked(kind: accountType) {
             EmptyView()
         } else {
-            contentView
+            VStack(alignment: .leading, spacing: 8) {
+                // Account-specific title (conditionally shown)
+                if showTitle {
+                    Text(accountTitle)
+                        .font(.headline)
+                        .foregroundColor(accentColor)
+                        .padding(.horizontal, 8)
+                }
+                
+                contentView
+            }
             .onAppear {
                 // Sync local copy with upstream lists on first render
                 localTaskLists = taskLists

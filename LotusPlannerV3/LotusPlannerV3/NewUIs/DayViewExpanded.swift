@@ -115,10 +115,6 @@ struct DayViewExpanded: View {
 
                             // Tasks (two side-by-side columns)
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Tasks")
-                                    .font(.headline)
-                                    .padding(.horizontal, 8)
-                                
                                 ScrollView(.vertical, showsIndicators: true) {
                                     HStack(alignment: .top, spacing: 12) {
                                 let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)

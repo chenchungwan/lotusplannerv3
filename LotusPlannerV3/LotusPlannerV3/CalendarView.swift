@@ -1893,7 +1893,8 @@ struct CalendarView: View {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                     }
                 },
-                isSingleDayView: true
+                isSingleDayView: true,
+                showTitle: false
             )
             .frame(width: weekTasksPersonalWidth, alignment: .topLeading)
             
@@ -1925,7 +1926,8 @@ struct CalendarView: View {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
                 },
-                isSingleDayView: true
+                isSingleDayView: true,
+                showTitle: false
             )
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
@@ -2472,12 +2474,6 @@ struct CalendarView: View {
             HStack(spacing: 0) {
                 // Tasks content (reuse topLeftDaySection)
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Tasks")
-                            .font(.headline)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
                     ScrollView(.vertical, showsIndicators: true) {
                         topLeftDaySection
                             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -2622,9 +2618,6 @@ struct CalendarView: View {
             VStack(spacing: 12) {
                 // Row 1: Tasks (Personal + Professional stacked vertically)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Tasks")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
                     // Reuse existing day tasks section which renders personal and professional
                     topLeftDaySection
                 }
@@ -2705,9 +2698,6 @@ struct CalendarView: View {
 
                 // Row 2: Tasks (Personal + Professional stacked vertically)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Tasks")
-                        .font(.headline)
-                        .padding(.horizontal, 12)
                     topLeftDaySection
                 }
                 .padding(.horizontal, 8)
@@ -2741,12 +2731,6 @@ struct CalendarView: View {
         return VStack(spacing: 0) {
             // Top section - Tasks
             VStack(spacing: 6) {
-                HStack {
-                    Text("Tasks")
-                        .font(.headline)
-                    Spacer()
-                }
-                .padding(.horizontal, 8)
                 // Personal & Professional tasks (full width) with vertical scrolling
                 ScrollView(.vertical, showsIndicators: true) {
                     topLeftDaySection
