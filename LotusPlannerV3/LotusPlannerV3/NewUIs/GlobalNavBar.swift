@@ -315,6 +315,12 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
+                            Button(action: {
+                                navigationManager.switchToTimebox()
+                            }) {
+                                Label("Timebox", systemImage: "clock")
+                            }
+                            
                             Divider()
                             
                             Button("Settings") {

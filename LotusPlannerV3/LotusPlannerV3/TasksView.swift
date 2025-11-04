@@ -1091,7 +1091,16 @@ class TasksViewModel: ObservableObject {
         }
     }
     
-    func createTask(title: String, notes: String?, dueDate: Date?, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
+    func createTask(
+        title: String,
+        notes: String?,
+        dueDate: Date?,
+        in listId: String,
+        for kind: GoogleAuthManager.AccountKind,
+        startTime: Date? = nil,
+        endTime: Date? = nil,
+        isAllDay: Bool = true
+    ) async {
         
         let dueDateString: String?
         if let dueDate = dueDate {
@@ -1136,6 +1145,16 @@ class TasksViewModel: ObservableObject {
             do {
                 // Get the created task with real server ID
                 let createdTask = try await createTaskOnServer(task, in: listId, for: kind)
+                
+                // Save time window if due date and times are provided
+                if let dueDate = dueDate, let startTime = startTime, let endTime = endTime {
+                    TaskTimeWindowManager.shared.saveTimeWindow(
+                        taskId: createdTask.id,
+                        startTime: startTime,
+                        endTime: endTime,
+                        isAllDay: isAllDay
+                    )
+                }
                 
                 // Replace temporary task with server task (has correct ID)
                 await MainActor.run {
@@ -2665,9 +2684,19 @@ struct TaskDetailsView: View {
     @State private var showingDatePicker = false
     @State private var isSaving = false
     @State private var tempSelectedDate = Date()
+    @State private var startTime: Date = Date()
+    @State private var endTime: Date = Date()
+    @State private var isAllDay: Bool = true
+    
+    @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     
     // Track original due date to detect changes properly
     private let originalDueDate: Date?
+    
+    // Track original time window values to detect changes
+    private let originalIsAllDay: Bool
+    private let originalStartTime: Date
+    private let originalEndTime: Date
     
     private let dueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -2699,6 +2728,45 @@ struct TaskDetailsView: View {
         _editedDueDate = State(initialValue: isNew ? Calendar.current.startOfDay(for: Date()) : task.dueDate)
         _selectedAccountKind = State(initialValue: accountKind)
         _selectedListId = State(initialValue: taskListId)
+        
+        // Initialize time window state and store original values
+        let calendar = Calendar.current
+        if let existingTimeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
+            _isAllDay = State(initialValue: existingTimeWindow.isAllDay)
+            _startTime = State(initialValue: existingTimeWindow.startTime)
+            _endTime = State(initialValue: existingTimeWindow.endTime)
+            
+            // Store original values
+            self.originalIsAllDay = existingTimeWindow.isAllDay
+            self.originalStartTime = existingTimeWindow.startTime
+            self.originalEndTime = existingTimeWindow.endTime
+        } else {
+            // No time window exists - default to all-day
+            let defaultIsAllDay = true
+            let defaultStartTime: Date
+            let defaultEndTime: Date
+            
+            if let dueDate = task.dueDate {
+                let startOfDay = calendar.startOfDay(for: dueDate)
+                defaultStartTime = startOfDay
+                defaultEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+            } else {
+                // Default to today's start and end of day
+                let today = Date()
+                let startOfDay = calendar.startOfDay(for: today)
+                defaultStartTime = startOfDay
+                defaultEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: today) ?? startOfDay
+            }
+            
+            _isAllDay = State(initialValue: defaultIsAllDay)
+            _startTime = State(initialValue: defaultStartTime)
+            _endTime = State(initialValue: defaultEndTime)
+            
+            // Store original values (default values)
+            self.originalIsAllDay = defaultIsAllDay
+            self.originalStartTime = defaultStartTime
+            self.originalEndTime = defaultEndTime
+        }
     }
     
     var availableTaskLists: [GoogleTaskList] {
@@ -2719,7 +2787,18 @@ struct TaskDetailsView: View {
         editedDueDate != originalDueDate ||
         selectedAccountKind != accountKind ||
         selectedListId != taskListId ||
-        isCreatingNewList
+        isCreatingNewList ||
+        isAllDay != originalIsAllDay ||
+        !areTimesEqual(startTime, originalStartTime) ||
+        !areTimesEqual(endTime, originalEndTime)
+    }
+    
+    // Helper function to compare times (ignoring seconds and milliseconds)
+    private func areTimesEqual(_ time1: Date, _ time2: Date) -> Bool {
+        let calendar = Calendar.current
+        let components1 = calendar.dateComponents([.hour, .minute], from: time1)
+        let components2 = calendar.dateComponents([.hour, .minute], from: time2)
+        return components1.hour == components2.hour && components1.minute == components2.minute
     }
     
     var canSave: Bool {
@@ -2829,11 +2908,104 @@ struct TaskDetailsView: View {
                         
                         Button(action: {
                             editedDueDate = nil
+                            // Reset times when due date is removed
+                            isAllDay = true
                         }) {
                             Image(systemName: "trash")
                                 .foregroundColor(.red)
                         }
                         .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                    // All-day toggle
+                    Toggle(isOn: $isAllDay) {
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundColor(.blue)
+                            Text("All-day task")
+                        }
+                    }
+                    .onChange(of: isAllDay) { oldValue, newValue in
+                        if !newValue {
+                            // When switching from all-day to timed, set default times to next nearest half hour
+                            let calendar = Calendar.current
+                            let startOfDay = calendar.startOfDay(for: dueDate)
+                            let currentStartHour = calendar.component(.hour, from: startTime)
+                            let currentStartMinute = calendar.component(.minute, from: startTime)
+                            let currentEndHour = calendar.component(.hour, from: endTime)
+                            
+                            // Only set defaults if times are at start/end of day (indicating default all-day values)
+                            if currentStartHour == 0 && currentEndHour == 23 && currentStartMinute == 0 {
+                                // Calculate next nearest half hour
+                                let now = Date()
+                                let hour: Int
+                                let minute: Int
+                                
+                                if calendar.isDate(dueDate, inSameDayAs: now) {
+                                    // If due date is today, use current time
+                                    let components = calendar.dateComponents([.hour, .minute], from: now)
+                                    hour = components.hour ?? 9
+                                    minute = components.minute ?? 0
+                                } else {
+                                    // If due date is in the future, default to 9:00 AM
+                                    hour = 9
+                                    minute = 0
+                                }
+                                
+                                // Calculate next half hour
+                                var nextHour = hour
+                                var nextMinute: Int
+                                
+                                if minute < 30 {
+                                    // Next half hour is :30 of current hour
+                                    nextMinute = 30
+                                } else {
+                                    // Next half hour is :00 of next hour
+                                    nextMinute = 0
+                                    nextHour = (hour + 1) % 24
+                                }
+                                
+                                // Set start time to next half hour on the due date
+                                if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: dueDate) {
+                                    startTime = startTimeDate
+                                    
+                                    // Set end time to 30 minutes after start time
+                                    if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
+                                        endTime = endTimeDate
+                                    } else {
+                                        // Fallback: set to next hour if adding 30 minutes fails
+                                        endTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: dueDate) ?? startOfDay
+                                    }
+                                } else {
+                                    // Fallback: set to 9 AM if calculation fails
+                                    startTime = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
+                                    endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Start and End time pickers (only show if not all-day)
+                    if !isAllDay {
+                        DatePicker("Start Time", selection: $startTime, displayedComponents: [.hourAndMinute])
+                            .onChange(of: dueDate) { oldValue, newValue in
+                                // Update start time to match new due date
+                                let calendar = Calendar.current
+                                let components = calendar.dateComponents([.hour, .minute], from: startTime)
+                                if let hour = components.hour, let minute = components.minute {
+                                    startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newValue) ?? newValue
+                                }
+                            }
+                        
+                        DatePicker("End Time", selection: $endTime, displayedComponents: [.hourAndMinute])
+                            .onChange(of: dueDate) { oldValue, newValue in
+                                // Update end time to match new due date
+                                let calendar = Calendar.current
+                                let components = calendar.dateComponents([.hour, .minute], from: endTime)
+                                if let hour = components.hour, let minute = components.minute {
+                                    endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newValue) ?? newValue
+                                }
+                            }
                     }
                 } else {
                     // Show placeholder button
@@ -2889,6 +3061,8 @@ struct TaskDetailsView: View {
                 }
             }
         }
+        .presentationDetents([.large, .height(isAllDay ? 600 : 750)])
+        .presentationDragIndicator(.visible)
         .alert("Delete Task", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -2918,6 +3092,25 @@ struct TaskDetailsView: View {
                 .onAppear {
                     // Initialize tempSelectedDate with current editedDueDate or today
                     tempSelectedDate = editedDueDate ?? Date()
+                    // Update start and end times when due date changes
+                    if let dueDate = editedDueDate {
+                        let calendar = Calendar.current
+                        // Keep the time but update the date
+                        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                        
+                        if let hour = startComponents.hour, let minute = startComponents.minute {
+                            startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? dueDate
+                        } else {
+                            startTime = calendar.startOfDay(for: dueDate)
+                        }
+                        
+                        if let hour = endComponents.hour, let minute = endComponents.minute {
+                            endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? dueDate
+                        } else {
+                            endTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? dueDate
+                        }
+                    }
                 }
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -2928,7 +3121,36 @@ struct TaskDetailsView: View {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Done") {
                             // Sync the selected date to editedDueDate
+                            let oldDueDate = editedDueDate
                             editedDueDate = tempSelectedDate
+                            
+                            // Update start and end times to match new due date
+                            if let newDueDate = editedDueDate {
+                                let calendar = Calendar.current
+                                if let oldDueDate = oldDueDate {
+                                    // Transfer time components from old date to new date
+                                    let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                                    let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                                    
+                                    if let hour = startComponents.hour, let minute = startComponents.minute {
+                                        startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDueDate) ?? newDueDate
+                                    } else {
+                                        startTime = calendar.startOfDay(for: newDueDate)
+                                    }
+                                    
+                                    if let hour = endComponents.hour, let minute = endComponents.minute {
+                                        endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDueDate) ?? newDueDate
+                                    } else {
+                                        endTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: newDueDate) ?? newDueDate
+                                    }
+                                } else {
+                                    // New due date - set default times
+                                    let startOfDay = calendar.startOfDay(for: newDueDate)
+                                    startTime = startOfDay
+                                    endTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: newDueDate) ?? startOfDay
+                                }
+                            }
+                            
                             showingDatePicker = false
                         }
                     }
@@ -2983,13 +3205,51 @@ struct TaskDetailsView: View {
             
             if isNew {
                 // Creation path
+                // Prepare time window data if due date exists
+                let finalStartTime: Date?
+                let finalEndTime: Date?
+                
+                if let dueDate = editedDueDate {
+                    let calendar = Calendar.current
+                    let startOfDay = calendar.startOfDay(for: dueDate)
+                    
+                    if isAllDay {
+                        finalStartTime = startOfDay
+                        finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                    } else {
+                        // Ensure times are on the due date
+                        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                        
+                        if let hour = startComponents.hour, let minute = startComponents.minute {
+                            finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                        } else {
+                            finalStartTime = startOfDay
+                        }
+                        
+                        if let hour = endComponents.hour, let minute = endComponents.minute {
+                            finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                        } else {
+                            finalEndTime = startOfDay.addingTimeInterval(1800) // Default 30 minutes
+                        }
+                    }
+                } else {
+                    finalStartTime = nil
+                    finalEndTime = nil
+                }
+                
+                // Create task with time window parameters
                 await viewModel.createTask(
                     title: updatedTask.title,
                     notes: updatedTask.notes,
                     dueDate: editedDueDate,
                     in: targetListId,
-                    for: selectedAccountKind
+                    for: selectedAccountKind,
+                    startTime: finalStartTime,
+                    endTime: finalEndTime,
+                    isAllDay: isAllDay
                 )
+                
                 await MainActor.run {
                     dismiss()
                 }
@@ -3011,6 +3271,48 @@ struct TaskDetailsView: View {
                     print("💾 TaskDetailsView: In-place update detected")
                     await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
                 }
+                
+                // Save time window if due date exists
+                if let dueDate = editedDueDate {
+                    // Ensure start and end times are on the same day as due date
+                    let calendar = Calendar.current
+                    let startOfDay = calendar.startOfDay(for: dueDate)
+                    
+                    let finalStartTime: Date
+                    let finalEndTime: Date
+                    
+                    if isAllDay {
+                        finalStartTime = startOfDay
+                        finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                    } else {
+                        // Ensure times are on the due date
+                        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                        
+                        if let hour = startComponents.hour, let minute = startComponents.minute {
+                            finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                        } else {
+                            finalStartTime = startOfDay
+                        }
+                        
+                        if let hour = endComponents.hour, let minute = endComponents.minute {
+                            finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                        } else {
+                            finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                        }
+                    }
+                    
+                    TaskTimeWindowManager.shared.saveTimeWindow(
+                        taskId: task.id,
+                        startTime: finalStartTime,
+                        endTime: finalEndTime,
+                        isAllDay: isAllDay
+                    )
+                } else {
+                    // Remove time window if due date is removed
+                    TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                }
+                
                 // No need to reload all tasks - individual methods update local state
                 await MainActor.run { dismiss() }
             }

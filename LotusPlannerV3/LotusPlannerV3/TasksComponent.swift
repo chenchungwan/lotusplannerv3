@@ -439,21 +439,6 @@ private struct TaskComponentRow: View {
                     .truncationMode(.tail)
 
                 Spacer()
-
-                // Due date tag
-                if !hideDueDate, let dateTag = dueDateTag(for: task) {
-                    Text(dateTag.text)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(dateTag.textColor)
-                        .strikethrough(task.isCompleted)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(dateTag.backgroundColor)
-                        )
-                }
             }
             .contentShape(Rectangle())
             .onTapGesture { 

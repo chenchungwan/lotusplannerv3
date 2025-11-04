@@ -82,6 +82,9 @@ struct ContentView: View {
             case .yearlyCalendar:
                 CalendarYearlyView()
                     .id("CalendarYearlyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
+            case .timebox:
+                TimeboxView()
+                    .id("TimeboxView-\(navigationManager.currentDate)")
         }
     }
 }

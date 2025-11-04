@@ -305,6 +305,124 @@ class CoreDataManager: ObservableObject {
         
         defaults.set(true, forKey: legacyMigrationFlagKey)
     }
+    
+    // MARK: - Task Time Windows
+    func saveTaskTimeWindow(_ timeWindow: TaskTimeWindowData) {
+        // Check if a time window already exists for this task ID
+        let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        request.predicate = NSPredicate(format: "taskId == %@", timeWindow.taskId)
+        
+        let existingWindow: TaskTimeWindow
+        if let existing = try? context.fetch(request).first {
+            existingWindow = existing
+            // Update existing
+            existingWindow.taskId = timeWindow.taskId
+            existingWindow.startTime = timeWindow.startTime
+            existingWindow.endTime = timeWindow.endTime
+            existingWindow.isAllDay = timeWindow.isAllDay
+            existingWindow.userId = timeWindow.userId
+            existingWindow.updatedAt = Date()
+        } else {
+            // Create new
+            existingWindow = TaskTimeWindow(context: context)
+            existingWindow.id = timeWindow.id
+            existingWindow.taskId = timeWindow.taskId
+            existingWindow.startTime = timeWindow.startTime
+            existingWindow.endTime = timeWindow.endTime
+            existingWindow.isAllDay = timeWindow.isAllDay
+            existingWindow.userId = timeWindow.userId
+            existingWindow.createdAt = timeWindow.createdAt
+            existingWindow.updatedAt = timeWindow.updatedAt
+        }
+        
+        save()
+    }
+    
+    func loadTaskTimeWindow(for taskId: String) -> TaskTimeWindowData? {
+        let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        request.predicate = NSPredicate(format: "taskId == %@", taskId)
+        request.fetchLimit = 1
+        
+        do {
+            let windows = try context.fetch(request)
+            guard let window = windows.first,
+                  let id = window.id,
+                  let taskId = window.taskId,
+                  let startTime = window.startTime,
+                  let endTime = window.endTime,
+                  let userId = window.userId,
+                  let createdAt = window.createdAt,
+                  let updatedAt = window.updatedAt else {
+                return nil
+            }
+            
+            return TaskTimeWindowData(
+                id: id,
+                taskId: taskId,
+                startTime: startTime,
+                endTime: endTime,
+                isAllDay: window.isAllDay,
+                userId: userId,
+                createdAt: createdAt,
+                updatedAt: updatedAt
+            )
+        } catch {
+            return nil
+        }
+    }
+    
+    func loadAllTaskTimeWindows(for userId: String? = nil) -> [TaskTimeWindowData] {
+        let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \TaskTimeWindow.createdAt, ascending: false)]
+        
+        if let userId = userId {
+            request.predicate = NSPredicate(format: "userId == %@", userId)
+        }
+        
+        do {
+            let windows = try context.fetch(request)
+            return windows.compactMap { window in
+                guard let id = window.id,
+                      let taskId = window.taskId,
+                      let startTime = window.startTime,
+                      let endTime = window.endTime,
+                      let userId = window.userId,
+                      let createdAt = window.createdAt,
+                      let updatedAt = window.updatedAt else {
+                    return nil
+                }
+                
+                return TaskTimeWindowData(
+                    id: id,
+                    taskId: taskId,
+                    startTime: startTime,
+                    endTime: endTime,
+                    isAllDay: window.isAllDay,
+                    userId: userId,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+    
+    func deleteTaskTimeWindow(for taskId: String) {
+        let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        request.predicate = NSPredicate(format: "taskId == %@", taskId)
+        
+        do {
+            let windows = try context.fetch(request)
+            windows.forEach(context.delete)
+            save()
+        } catch {
+        }
+    }
+    
+    func deleteTaskTimeWindow(_ timeWindow: TaskTimeWindowData) {
+        deleteTaskTimeWindow(for: timeWindow.taskId)
+    }
 }
 
 // MARK: - Extensions for WeightLogEntry
