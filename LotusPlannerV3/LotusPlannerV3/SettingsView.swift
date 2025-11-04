@@ -16,9 +16,10 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case defaultNew = 3
     case mobile = 4
     case classic2 = 5
+    case timebox = 6
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .classic2, .compactTwo, .defaultNew, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .classic2, .compactTwo, .defaultNew, .mobile, .timebox] }
 
     var displayName: String {
         switch self {
@@ -27,6 +28,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compactTwo: "Compact"
         case .mobile: "Mobile"
         case .classic2: "Classic 2"
+        case .timebox: "Timebox"
         }
     }
     
@@ -37,6 +39,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compactTwo: "Events & Logs on left, Tasks (Personal/Professional side-by-side) and Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .classic2: "Enhanced classic: Events, Personal Tasks, Professional Tasks on left, Journal on right"
+        case .timebox: "Timebox timeline on left, Journal on top right, Logs on bottom right"
         }
     }
 }
@@ -193,7 +196,7 @@ class NavigationManager: ObservableObject {
     func switchToTimebox() {
         currentView = .timebox
         showTasksView = false
-        currentInterval = .day // Timebox is always day view
+        currentInterval = .week // Timebox is a weekly 7-column view
     }
     
     func showSettings() {

@@ -235,7 +235,10 @@ struct TimeboxView: View {
                 },
                 onDelete: {
                     Task {
+                        // Delete the task
                         await tasksVM.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
+                        // Also delete the time window for this task
+                        TaskTimeWindowManager.shared.deleteTimeWindow(for: sel.task.id)
                     }
                 },
                 onMove: { updatedTask, targetListId in

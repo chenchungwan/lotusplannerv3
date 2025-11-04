@@ -2447,6 +2447,11 @@ struct CalendarView: View {
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
+        case .timebox:
+            DayViewTimebox(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         default:
             dayViewContentCompact(geometry: geometry)
         }
@@ -5345,6 +5350,21 @@ struct AddItemView: View {
                                 .environment(\.calendar, Calendar.mondayFirst)
                         }
                     }
+                    
+                    // Danger Zone section at bottom
+                    if isEditingEvent {
+                        Section("Danger Zone") {
+                            Button(role: .destructive) {
+                                showingDeleteEventAlert = true
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    Text("Delete Event")
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
                 }
                 .onChange(of: eventStart) { oldValue, newValue in
                     // When start date/time changes, preserve the duration by adjusting end date
@@ -5425,19 +5445,6 @@ struct AddItemView: View {
                 }
                 
                 // Removed delete button from top toolbar
-            }
-            // Add Delete section at bottom for editing event
-            .safeAreaInset(edge: .bottom) {
-                if isEditingEvent {
-                    Button(role: .destructive) {
-                        showingDeleteEventAlert = true
-                    } label: {
-                        Text("Delete Event")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .padding()
-                }
             }
         }
         .alert("Delete Event", isPresented: $showingDeleteEventAlert) {

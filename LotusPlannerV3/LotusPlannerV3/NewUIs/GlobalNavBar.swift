@@ -315,12 +315,6 @@ struct GlobalNavBar: View {
                                 }
                             }
                             
-                            Button(action: {
-                                navigationManager.switchToTimebox()
-                            }) {
-                                Label("Timebox", systemImage: "clock")
-                            }
-                            
                             Divider()
                             
                             Button("Settings") {
@@ -380,8 +374,8 @@ struct GlobalNavBar: View {
                         // Show interval buttons in single row on all devices
                         // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Simple Week View, show all buttons but highlight w.circle
-                                if navigationManager.currentView == .simpleWeekView {
+                                // In Simple Week View or Timebox View, show all buttons but highlight appropriate circle
+                                if navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .timebox {
                                     // Only show d.circle in non-Goals views
                                     if navigationManager.currentView != .goals {
                                         Button {
@@ -402,12 +396,16 @@ struct GlobalNavBar: View {
                                             .foregroundColor(.secondary)
                                     }
                                     Button {
-                                        navigationManager.switchToSimpleWeekView()
+                                        if navigationManager.currentView == .timebox {
+                                            // Already in timebox, do nothing or stay
+                                        } else {
+                                            navigationManager.switchToTimebox()
+                                        }
                                     } label: {
                                         Image(systemName: "7.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(.accentColor)
+                                            .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
                                     }
                                 } else {
                                     // Only show d.circle in non-Goals views
@@ -446,8 +444,8 @@ struct GlobalNavBar: View {
                                                 // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
                                             } else if navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar {
-                                                // In Calendar or Yearly Calendar view: switch to simple week view
-                                                navigationManager.switchToSimpleWeekView()
+                                                // In Calendar or Yearly Calendar view: switch to timebox view
+                                                navigationManager.switchToTimebox()
                                             } else {
                                                 // In other cases: use standard interval change
                                                 handleTimeIntervalChange(.week)
@@ -456,7 +454,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "7.circle" : "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .simpleWeekView ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -482,8 +480,8 @@ struct GlobalNavBar: View {
                             // Only show action buttons in first row if NOT using two-row layout
                             if !shouldShowTwoRows {
                             
-                            // Hide ellipsis.circle in calendar views, lists view, journal day views, and simple week view
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView {
+                            // Hide ellipsis.circle in calendar views, lists view, journal day views, simple week view, and timebox view
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView && navigationManager.currentView != .timebox {
                                 if navigationManager.currentView == .goals {
                                     // In Goals view: button to show all goals
                                     Button {
@@ -549,9 +547,10 @@ struct GlobalNavBar: View {
                                     .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                             
-                            // Hide completed tasks toggle (in Tasks, Lists, and Calendar day/week views only)
+                            // Hide completed tasks toggle (in Tasks, Lists, Calendar day/week views, and Timebox view)
                             if navigationManager.currentView == .tasks || navigationManager.currentView == .lists || 
-                               (navigationManager.currentView == .calendar && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) {
+                               (navigationManager.currentView == .calendar && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) ||
+                               navigationManager.currentView == .timebox {
                                 Button {
                                     appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
                                 } label: {
@@ -659,7 +658,7 @@ struct GlobalNavBar: View {
                                             .foregroundColor(.secondary)
                                     }
                                     Button {
-                                        navigationManager.switchToSimpleWeekView()
+                                        navigationManager.switchToTimebox()
                                     } label: {
                                         Image(systemName: "7.circle")
                                             .font(adaptiveIconSize)
@@ -703,8 +702,8 @@ struct GlobalNavBar: View {
                                                 // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
                                             } else if navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar {
-                                                // In Calendar or Yearly Calendar view: switch to simple week view
-                                                navigationManager.switchToSimpleWeekView()
+                                                // In Calendar or Yearly Calendar view: switch to timebox view
+                                                navigationManager.switchToTimebox()
                                             } else {
                                                 // In other cases: use standard interval change
                                                 handleTimeIntervalChange(.week)
@@ -713,7 +712,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "7.circle" : "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .simpleWeekView ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -737,8 +736,8 @@ struct GlobalNavBar: View {
                              
                             Spacer()
                             
-                            // Hide ellipsis.circle in calendar views, lists view, journal day views, and simple week view
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView {
+                            // Hide ellipsis.circle in calendar views, lists view, journal day views, simple week view, and timebox view
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView && navigationManager.currentView != .timebox {
                                 if navigationManager.currentView == .goals {
                                     // In Goals view: button to show all goals
                                     Button {
@@ -804,9 +803,10 @@ struct GlobalNavBar: View {
                                     .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                             }
                             
-                            // Hide completed tasks toggle (in Tasks, Lists, and Calendar day/week views only)
+                            // Hide completed tasks toggle (in Tasks, Lists, Calendar day/week views, and Timebox view)
                             if navigationManager.currentView == .tasks || navigationManager.currentView == .lists || 
-                               (navigationManager.currentView == .calendar && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) {
+                               (navigationManager.currentView == .calendar && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) ||
+                               navigationManager.currentView == .timebox {
                                 Button {
                                     appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
                                 } label: {

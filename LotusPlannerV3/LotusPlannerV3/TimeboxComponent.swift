@@ -14,6 +14,7 @@ struct TimeboxComponent: View {
     let onTaskToggle: ((GoogleTask, String) -> Void)?
     
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
     
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
@@ -341,7 +342,8 @@ struct TimeboxComponent: View {
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
         let timeString = formatter.string(from: date).lowercased()
-        return timeString
+        // Remove "m" from "am" and "pm"
+        return timeString.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
     }
     
     @ViewBuilder
@@ -477,6 +479,11 @@ struct TimeboxComponent: View {
         }
         for (_, tasks) in professionalTasks {
             allTasks.append(contentsOf: tasks)
+        }
+        
+        // Filter out completed tasks if hideCompletedTasks is enabled
+        if appPrefs.hideCompletedTasks {
+            allTasks = allTasks.filter { !$0.isCompleted }
         }
         
         // Filter tasks for the given date

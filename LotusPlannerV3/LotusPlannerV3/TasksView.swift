@@ -593,6 +593,8 @@ class TasksViewModel: ObservableObject {
             case .professional:
                 self.professionalTasks[listId]?.removeAll { $0.id == task.id }
             }
+            // Also delete the time window for this task
+            TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
         }
         
         // BACKGROUND SYNC: Delete from server in background
@@ -618,6 +620,8 @@ class TasksViewModel: ObservableObject {
                     }
                     self.errorMessage = "Failed to delete task: \(error.localizedDescription)"
                 }
+                // Note: We don't restore the time window on error - if deletion fails, 
+                // the task will be treated as all-day (no time window)
             }
         }
     }
@@ -2928,14 +2932,66 @@ struct TaskDetailsView: View {
                     .onChange(of: isAllDay) { oldValue, newValue in
                         if !newValue {
                             // When switching from all-day to timed, set default times to next nearest half hour
+                            guard let dueDate = editedDueDate else {
+                                // If no due date, use today
+                                let today = Date()
+                                let calendar = Calendar.current
+                                let startOfDay = calendar.startOfDay(for: today)
+                                
+                                // Calculate next nearest half hour
+                                let now = Date()
+                                let components = calendar.dateComponents([.hour, .minute], from: now)
+                                let hour = components.hour ?? 9
+                                let minute = components.minute ?? 0
+                                
+                                // Calculate next half hour
+                                var nextHour = hour
+                                var nextMinute: Int
+                                
+                                if minute < 30 {
+                                    // Next half hour is :30 of current hour
+                                    nextMinute = 30
+                                } else {
+                                    // Next half hour is :00 of next hour
+                                    nextMinute = 0
+                                    nextHour = (hour + 1) % 24
+                                }
+                                
+                                // Set start time to next half hour
+                                if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: today) {
+                                    startTime = startTimeDate
+                                    // Set end time to 30 minutes after start time
+                                    if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
+                                        endTime = endTimeDate
+                                    } else {
+                                        endTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: today) ?? startOfDay
+                                    }
+                                } else {
+                                    startTime = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today) ?? startOfDay
+                                    endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: today) ?? startOfDay
+                                }
+                                return
+                            }
+                            
+                            // For new tasks, always set defaults. For existing tasks, check if times are at start/end of day
                             let calendar = Calendar.current
                             let startOfDay = calendar.startOfDay(for: dueDate)
-                            let currentStartHour = calendar.component(.hour, from: startTime)
-                            let currentStartMinute = calendar.component(.minute, from: startTime)
-                            let currentEndHour = calendar.component(.hour, from: endTime)
                             
-                            // Only set defaults if times are at start/end of day (indicating default all-day values)
-                            if currentStartHour == 0 && currentEndHour == 23 && currentStartMinute == 0 {
+                            // Always set defaults for new tasks, or for existing tasks if times are at start/end of day
+                            let shouldSetDefaults: Bool
+                            if isNew {
+                                shouldSetDefaults = true
+                            } else {
+                                let currentStartHour = calendar.component(.hour, from: startTime)
+                                let currentStartMinute = calendar.component(.minute, from: startTime)
+                                let currentEndHour = calendar.component(.hour, from: endTime)
+                                let currentEndMinute = calendar.component(.minute, from: endTime)
+                                // Check if times are at start/end of day (indicating default all-day values)
+                                shouldSetDefaults = currentStartHour == 0 && currentStartMinute == 0 && 
+                                                   ((currentEndHour == 23 && currentEndMinute == 59) || (currentEndHour == 23 && currentEndMinute == 0))
+                            }
+                            
+                            if shouldSetDefaults {
                                 // Calculate next nearest half hour
                                 let now = Date()
                                 let hour: Int
@@ -3022,10 +3078,33 @@ struct TaskDetailsView: View {
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
-                    }
+                }
+                    
+                    // Removed Task Status section per request
                 }
                 
-                // Removed Task Status section per request
+                // Add empty section at bottom to provide space when time pickers are visible
+                if !isNew && !isAllDay {
+                    Section {
+                        EmptyView()
+                    }
+                    .frame(height: 60)
+                }
+                
+                // Danger Zone section at bottom
+                if !isNew {
+                    Section("Danger Zone") {
+                        Button(role: .destructive) {
+                            showingDeleteAlert = true
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Delete Task")
+                                Spacer()
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle(isNew ? "New Task" : "Task Details")
             .navigationBarTitleDisplayMode(.inline)
@@ -3047,21 +3126,8 @@ struct TaskDetailsView: View {
                     .opacity((canSave && (isNew || hasChanges) && !isSaving) ? 1.0 : 0.5)
                 }
             }
-            // Add Delete section at bottom for editing task
-            .safeAreaInset(edge: .bottom) {
-                if !isNew {
-                    Button(role: .destructive) {
-                        showingDeleteAlert = true
-                    } label: {
-                        Text("Delete Task")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .padding()
-                }
-            }
         }
-        .presentationDetents([.large, .height(isAllDay ? 600 : 750)])
+        .presentationDetents([.large, .height(isAllDay ? 600 : (!isNew ? 850 : 750))]) // Increase height when delete button and time pickers are visible
         .presentationDragIndicator(.visible)
         .alert("Delete Task", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
