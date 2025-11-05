@@ -76,7 +76,13 @@ struct TimeboxView: View {
         let allTasks = tasksVM.personalTasks.merging(tasksVM.professionalTasks) { (personal, _) in personal }
         
         for (listId, tasks) in allTasks {
-            let dateFilteredTasks = tasks.filter { task in
+            // Filter out completed tasks if hideCompletedTasks is enabled
+            var tasksToFilter = tasks
+            if appPrefs.hideCompletedTasks {
+                tasksToFilter = tasks.filter { !$0.isCompleted }
+            }
+            
+            let dateFilteredTasks = tasksToFilter.filter { task in
                 // For completed tasks, show on completion date
                 if task.isCompleted {
                     guard let completionDate = task.completionDate else { return false }
@@ -294,11 +300,16 @@ struct TimeboxView: View {
             
             // Count all-day items
             let allDayEvents = eventsForDate.filter { $0.isAllDay }
-            let allDayTasks = tasksForDate.values.flatMap { $0 }.filter { task in
+            var allDayTasks = tasksForDate.values.flatMap { $0 }.filter { task in
                 if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
                     return timeWindow.isAllDay
                 }
                 return true // If no time window, treat as all-day
+            }
+            
+            // Filter out completed tasks if hideCompletedTasks is enabled
+            if appPrefs.hideCompletedTasks {
+                allDayTasks = allDayTasks.filter { !$0.isCompleted }
             }
             
             // Calculate height for events row and tasks row separately (matching SimpleWeekView style)
@@ -381,12 +392,15 @@ struct TimeboxView: View {
     @ViewBuilder
     private func allDaySection(date: Date, events: [GoogleCalendarEvent], personalTasks: [String: [GoogleTask]], professionalTasks: [String: [GoogleTask]], maxHeight: CGFloat) -> some View {
         let allDayEvents = events.filter { $0.isAllDay }
-        let allDayTasks = (personalTasks.values.flatMap { $0 } + professionalTasks.values.flatMap { $0 }).filter { task in
+        let allDayTasksRaw = (personalTasks.values.flatMap { $0 } + professionalTasks.values.flatMap { $0 }).filter { task in
             if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
                 return timeWindow.isAllDay
             }
             return true
         }
+        
+        // Filter out completed tasks if hideCompletedTasks is enabled
+        let allDayTasks = appPrefs.hideCompletedTasks ? allDayTasksRaw.filter { !$0.isCompleted } : allDayTasksRaw
         
         VStack(spacing: 2) {
             // All-day events row (compact horizontal)
