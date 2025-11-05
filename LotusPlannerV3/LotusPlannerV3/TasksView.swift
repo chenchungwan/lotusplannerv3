@@ -1417,8 +1417,13 @@ struct TasksView: View {
     @State private var taskSheetSelection: TasksViewTaskSelection?
     @State private var showingAddItem = false
     // Personal/Professional task divider
-    @State private var tasksPersonalWidth: CGFloat = 0
+    @State private var tasksPersonalWidth: CGFloat
     @State private var isTasksDividerDragging = false
+    
+    init() {
+        // Initialize divider position from AppPreferences
+        self._tasksPersonalWidth = State(initialValue: AppPreferences.shared.tasksViewPersonalWidth)
+    }
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
     @State private var showingAddEvent = false
@@ -1718,7 +1723,7 @@ struct TasksView: View {
             .onAppear {
                 // Initialize screen-dependent values
                 if tasksPersonalWidth == 0 {
-                    tasksPersonalWidth = geometry.size.width * 0.5
+                    tasksPersonalWidth = appPrefs.tasksViewPersonalWidth
                 }
             }
         }
@@ -2161,6 +2166,7 @@ struct TasksView: View {
                     }
                     .onEnded { _ in
                         isTasksDividerDragging = false
+                        appPrefs.updateTasksViewPersonalWidth(tasksPersonalWidth)
                     }
             )
     }
@@ -2745,11 +2751,12 @@ struct TaskDetailsView: View {
             self.originalStartTime = existingTimeWindow.startTime
             self.originalEndTime = existingTimeWindow.endTime
         } else {
-            // No time window exists - default to all-day
+            // No time window exists - default to all-day initially
             let defaultIsAllDay = true
             let defaultStartTime: Date
             let defaultEndTime: Date
             
+            // Use all-day defaults (will be updated when user toggles to timed via onChange)
             if let dueDate = task.dueDate {
                 let startOfDay = calendar.startOfDay(for: dueDate)
                 defaultStartTime = startOfDay
@@ -2922,76 +2929,19 @@ struct TaskDetailsView: View {
                     }
                     
                     // All-day toggle
-                    Toggle(isOn: $isAllDay) {
-                        HStack {
-                            Image(systemName: "clock")
-                                .foregroundColor(.blue)
-                            Text("All-day task")
-                        }
-                    }
-                    .onChange(of: isAllDay) { oldValue, newValue in
-                        if !newValue {
-                            // When switching from all-day to timed, set default times to next nearest half hour
-                            guard let dueDate = editedDueDate else {
-                                // If no due date, use today
-                                let today = Date()
+                    Toggle(isOn: Binding(
+                        get: { isAllDay },
+                        set: { newValue in
+                            let wasAllDay = isAllDay
+                            isAllDay = newValue
+                            
+                            // When switching from all-day to timed, always set default times to next nearest half hour
+                            if !newValue && wasAllDay {
+                                // User toggled from all-day to timed - update times immediately
                                 let calendar = Calendar.current
-                                let startOfDay = calendar.startOfDay(for: today)
+                                let dueDate = editedDueDate ?? Date()
+                                let startOfDay = calendar.startOfDay(for: dueDate)
                                 
-                                // Calculate next nearest half hour
-                                let now = Date()
-                                let components = calendar.dateComponents([.hour, .minute], from: now)
-                                let hour = components.hour ?? 9
-                                let minute = components.minute ?? 0
-                                
-                                // Calculate next half hour
-                                var nextHour = hour
-                                var nextMinute: Int
-                                
-                                if minute < 30 {
-                                    // Next half hour is :30 of current hour
-                                    nextMinute = 30
-                                } else {
-                                    // Next half hour is :00 of next hour
-                                    nextMinute = 0
-                                    nextHour = (hour + 1) % 24
-                                }
-                                
-                                // Set start time to next half hour
-                                if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: today) {
-                                    startTime = startTimeDate
-                                    // Set end time to 30 minutes after start time
-                                    if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
-                                        endTime = endTimeDate
-                                    } else {
-                                        endTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: today) ?? startOfDay
-                                    }
-                                } else {
-                                    startTime = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today) ?? startOfDay
-                                    endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: today) ?? startOfDay
-                                }
-                                return
-                            }
-                            
-                            // For new tasks, always set defaults. For existing tasks, check if times are at start/end of day
-                            let calendar = Calendar.current
-                            let startOfDay = calendar.startOfDay(for: dueDate)
-                            
-                            // Always set defaults for new tasks, or for existing tasks if times are at start/end of day
-                            let shouldSetDefaults: Bool
-                            if isNew {
-                                shouldSetDefaults = true
-                            } else {
-                                let currentStartHour = calendar.component(.hour, from: startTime)
-                                let currentStartMinute = calendar.component(.minute, from: startTime)
-                                let currentEndHour = calendar.component(.hour, from: endTime)
-                                let currentEndMinute = calendar.component(.minute, from: endTime)
-                                // Check if times are at start/end of day (indicating default all-day values)
-                                shouldSetDefaults = currentStartHour == 0 && currentStartMinute == 0 && 
-                                                   ((currentEndHour == 23 && currentEndMinute == 59) || (currentEndHour == 23 && currentEndMinute == 0))
-                            }
-                            
-                            if shouldSetDefaults {
                                 // Calculate next nearest half hour
                                 let now = Date()
                                 let hour: Int
@@ -3034,10 +2984,17 @@ struct TaskDetailsView: View {
                                     }
                                 } else {
                                     // Fallback: set to 9 AM if calculation fails
-                                    startTime = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
+                                    let fallbackStart = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
+                                    startTime = fallbackStart
                                     endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
                                 }
                             }
+                        }
+                    )) {
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundColor(.blue)
+                            Text("All-day task")
                         }
                     }
                     
@@ -3142,6 +3099,64 @@ struct TaskDetailsView: View {
             // Load tasks on-demand when popup opens (performance optimization)
             Task {
                 await viewModel.loadTasksOnDemand()
+            }
+            
+            // For new tasks, if they're already timed (shouldn't happen normally, but just in case)
+            // or if they're all-day but we want to ensure proper initialization
+            // This is a backup to ensure times are set correctly
+            if isNew && !isAllDay {
+                let calendar = Calendar.current
+                let dueDate = editedDueDate ?? Date()
+                let startOfDay = calendar.startOfDay(for: dueDate)
+                
+                // Check if times are still at default all-day values
+                let startHour = calendar.component(.hour, from: startTime)
+                let startMinute = calendar.component(.minute, from: startTime)
+                let endHour = calendar.component(.hour, from: endTime)
+                let endMinute = calendar.component(.minute, from: endTime)
+                
+                let isStartAtMidnight = startHour == 0 && startMinute == 0
+                let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
+                let isDefaultAllDayTime = isStartAtMidnight && isEndAtEndOfDay
+                
+                if isDefaultAllDayTime {
+                    // Calculate next half hour
+                    let now = Date()
+                    let hour: Int
+                    let minute: Int
+                    
+                    if calendar.isDate(dueDate, inSameDayAs: now) {
+                        let components = calendar.dateComponents([.hour, .minute], from: now)
+                        hour = components.hour ?? 9
+                        minute = components.minute ?? 0
+                    } else {
+                        hour = 9
+                        minute = 0
+                    }
+                    
+                    var nextHour = hour
+                    var nextMinute: Int
+                    
+                    if minute < 30 {
+                        nextMinute = 30
+                    } else {
+                        nextMinute = 0
+                        nextHour = (hour + 1) % 24
+                    }
+                    
+                    if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: dueDate) {
+                        startTime = startTimeDate
+                        if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
+                            endTime = endTimeDate
+                        } else {
+                            endTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: dueDate) ?? startOfDay
+                        }
+                    } else {
+                        let fallbackStart = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
+                        startTime = fallbackStart
+                        endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingDatePicker) {
@@ -3283,20 +3298,83 @@ struct TaskDetailsView: View {
                         finalStartTime = startOfDay
                         finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
                     } else {
-                        // Ensure times are on the due date
-                        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-                        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                        // For new timed tasks, check if times are still at default all-day values
+                        let startComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+                        let endComponents = calendar.dateComponents([.hour, .minute, .second], from: endTime)
+                        let startHour = startComponents.hour ?? 0
+                        let startMinute = startComponents.minute ?? 0
+                        let startSecond = startComponents.second ?? 0
+                        let endHour = endComponents.hour ?? 23
+                        let endMinute = endComponents.minute ?? 59
+                        let endSecond = endComponents.second ?? 59
                         
-                        if let hour = startComponents.hour, let minute = startComponents.minute {
-                            finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
-                        } else {
-                            finalStartTime = startOfDay
-                        }
+                        // Check if times are at default all-day values (12:00am and 11:59pm)
+                        // Also check if start time is at start of day (00:00:00) and end time is close to end of day
+                        let isStartAtMidnight = startHour == 0 && startMinute == 0
+                        let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0) || (endHour == 23 && endMinute == 58)
+                        let isDefaultAllDayTime = isStartAtMidnight && isEndAtEndOfDay
                         
-                        if let hour = endComponents.hour, let minute = endComponents.minute {
-                            finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                        // Also check if the start time matches the start of the due date
+                        let startTimeMatchesStartOfDay = calendar.isDate(startTime, inSameDayAs: dueDate) && 
+                                                       calendar.component(.hour, from: startTime) == 0 &&
+                                                       calendar.component(.minute, from: startTime) == 0
+                        
+                        if isDefaultAllDayTime || startTimeMatchesStartOfDay {
+                            // Calculate next half hour for the due date
+                            let now = Date()
+                            let hour: Int
+                            let minute: Int
+                            
+                            if calendar.isDate(dueDate, inSameDayAs: now) {
+                                // If due date is today, use current time
+                                let nowComponents = calendar.dateComponents([.hour, .minute], from: now)
+                                hour = nowComponents.hour ?? 9
+                                minute = nowComponents.minute ?? 0
+                            } else {
+                                // If due date is in the future, default to 9:00 AM
+                                hour = 9
+                                minute = 0
+                            }
+                            
+                            // Calculate next half hour
+                            var nextHour = hour
+                            var nextMinute: Int
+                            
+                            if minute < 30 {
+                                // Next half hour is :30 of current hour
+                                nextMinute = 30
+                            } else {
+                                // Next half hour is :00 of next hour
+                                nextMinute = 0
+                                nextHour = (hour + 1) % 24
+                            }
+                            
+                            // Set start time to next half hour on the due date
+                            if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: dueDate) {
+                                finalStartTime = startTimeDate
+                                // Set end time to 30 minutes after start time
+                                if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
+                                    finalEndTime = endTimeDate
+                                } else {
+                                    finalEndTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: dueDate) ?? startOfDay
+                                }
+                            } else {
+                                finalStartTime = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
+                                finalEndTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
+                            }
                         } else {
-                            finalEndTime = startOfDay.addingTimeInterval(1800) // Default 30 minutes
+                            // Use the times as set by the user
+                            if let hour = startComponents.hour, let minute = startComponents.minute {
+                                finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                            } else {
+                                finalStartTime = startOfDay
+                            }
+                            
+                            if let hour = endComponents.hour, let minute = endComponents.minute {
+                                finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                            } else {
+                                finalEndTime = startOfDay.addingTimeInterval(1800) // Default 30 minutes
+                            }
                         }
                     }
                 } else {

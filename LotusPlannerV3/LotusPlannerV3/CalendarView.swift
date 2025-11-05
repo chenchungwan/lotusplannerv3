@@ -1013,17 +1013,24 @@ struct CalendarView: View {
         self._dayRightColumn2Width = State(initialValue: AppPreferences.shared.calendarDayRightColumn2Width)
         self._leftTimelineHeight = State(initialValue: AppPreferences.shared.calendarDayLeftTimelineHeight)
         self._rightSectionTopHeight = State(initialValue: AppPreferences.shared.calendarDayRightSectionTopHeight)
+        self._topSectionHeight = State(initialValue: AppPreferences.shared.calendarTopSectionHeight)
+        self._verticalTopRowHeight = State(initialValue: AppPreferences.shared.calendarVerticalTopRowHeight)
+        self._verticalTopLeftWidth = State(initialValue: AppPreferences.shared.calendarVerticalTopLeftWidth)
+        self._verticalBottomLeftWidth = State(initialValue: AppPreferences.shared.calendarVerticalBottomLeftWidth)
+        self._weekTasksPersonalWidth = State(initialValue: AppPreferences.shared.calendarWeekTasksPersonalWidth)
+        self._weekTopSectionHeight = State(initialValue: AppPreferences.shared.calendarWeekTopSectionHeight)
+        self._longEventsLeftWidth = State(initialValue: AppPreferences.shared.calendarVerticalTopLeftWidth) // Reuse same preference
     }
     
     @State private var currentDate = Date()
-    @State private var topSectionHeight: CGFloat = UIScreen.main.bounds.height * 0.85
+    @State private var topSectionHeight: CGFloat
     @State private var rightSectionTopHeight: CGFloat
     // Vertical layout row height
-    @State private var verticalTopRowHeight: CGFloat = UIScreen.main.bounds.height * 0.55
+    @State private var verticalTopRowHeight: CGFloat
     // Vertical layout column widths and drag states
-    @State private var verticalTopLeftWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var verticalTopLeftWidth: CGFloat
     @State private var isVerticalTopDividerDragging: Bool = false
-    @State private var verticalBottomLeftWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var verticalBottomLeftWidth: CGFloat
     @State private var isVerticalBottomDividerDragging: Bool = false
     @State private var isDragging = false
     @State private var isRightDividerDragging = false
@@ -1085,7 +1092,7 @@ struct CalendarView: View {
     // Long layout adjustable sizes and drag states
     @State private var longTopRowHeight: CGFloat = UIScreen.main.bounds.height * 0.35
     @State private var isLongHorizontalDividerDragging: Bool = false
-    @State private var longEventsLeftWidth: CGFloat = UIScreen.main.bounds.width * 0.5
+    @State private var longEventsLeftWidth: CGFloat
     @State private var isLongVerticalDividerDragging: Bool = false
     
     // Date picker state
@@ -1751,6 +1758,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isDragging = false
+                        appPrefs.updateCalendarTopSectionHeight(topSectionHeight)
                     }
             )
     }
@@ -1965,6 +1973,7 @@ struct CalendarView: View {
                 }
                 .onEnded { _ in
                     isWeekTasksDividerDragging = false
+                    appPrefs.updateCalendarWeekTasksPersonalWidth(weekTasksPersonalWidth)
                 }
         )
     }
@@ -2561,6 +2570,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isWeekDividerDragging = false
+                        appPrefs.updateCalendarVerticalTopRowHeight(verticalTopRowHeight)
                     }
             )
 
@@ -2591,6 +2601,7 @@ struct CalendarView: View {
                             }
                             .onEnded { _ in
                                 isVerticalBottomDividerDragging = false
+                                appPrefs.updateCalendarVerticalBottomLeftWidth(verticalBottomLeftWidth)
                             }
                     )
 
@@ -2659,6 +2670,7 @@ struct CalendarView: View {
                                 }
                                 .onEnded { _ in
                                     isLongVerticalDividerDragging = false
+                                    appPrefs.updateCalendarVerticalTopLeftWidth(longEventsLeftWidth)
                                 }
                         )
 
@@ -2930,6 +2942,7 @@ struct CalendarView: View {
                     }
                     .onEnded { _ in
                         isWeekDividerDragging = false
+                        appPrefs.updateCalendarWeekTopSectionHeight(weekTopSectionHeight)
                     }
             )
     }

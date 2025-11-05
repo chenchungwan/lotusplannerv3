@@ -35,8 +35,8 @@ struct DayViewCompact: View {
         self.onEventTap = onEventTap
         
         // Initialize state variables with stored values from AppPreferences
-        self._dayLeftSectionWidth = State(initialValue: 300)
-        self._leftTimelineHeight = State(initialValue: 300)
+        self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewCompactLeftColumnWidth)
+        self._leftTimelineHeight = State(initialValue: AppPreferences.shared.dayViewCompactLeftTopHeight)
         self._eventsHeight = State(initialValue: AppPreferences.shared.dayViewClassic2EventsHeight)
         self._logsHeight = State(initialValue: AppPreferences.shared.dayViewClassic2LogsHeight)
         self._tasksJournalDividerPosition = State(initialValue: AppPreferences.shared.dayViewClassic3TasksHeight)
@@ -375,6 +375,7 @@ struct DayViewCompact: View {
                     }
                     .onEnded { _ in
                         isLeftTimelineDividerDragging = false
+                        appPrefs.updateDayViewCompactLeftTopHeight(leftTimelineHeight)
                     }
             )
     }
@@ -400,7 +401,7 @@ struct DayViewCompact: View {
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
-                        // Could save to preferences here if needed
+                        appPrefs.updateDayViewCompactLeftColumnWidth(dayLeftSectionWidth)
                     }
             )
     }

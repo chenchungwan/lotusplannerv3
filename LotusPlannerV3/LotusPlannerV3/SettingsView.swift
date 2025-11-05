@@ -452,6 +452,76 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // DayViewTimebox Divider Positions
+    @Published var dayViewTimeboxLeftSectionWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewTimeboxLeftSectionWidth, forKey: "dayViewTimeboxLeftSectionWidth")
+        }
+    }
+    
+    @Published var dayViewTimeboxRightSectionWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewTimeboxRightSectionWidth, forKey: "dayViewTimeboxRightSectionWidth")
+        }
+    }
+    
+    @Published var dayViewTimeboxTasksSectionHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewTimeboxTasksSectionHeight, forKey: "dayViewTimeboxTasksSectionHeight")
+        }
+    }
+    
+    // CalendarView Additional Divider Positions
+    @Published var calendarTopSectionHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarTopSectionHeight, forKey: "calendarTopSectionHeight")
+        }
+    }
+    
+    @Published var calendarVerticalTopRowHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarVerticalTopRowHeight, forKey: "calendarVerticalTopRowHeight")
+        }
+    }
+    
+    @Published var calendarVerticalTopLeftWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarVerticalTopLeftWidth, forKey: "calendarVerticalTopLeftWidth")
+        }
+    }
+    
+    @Published var calendarVerticalBottomLeftWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarVerticalBottomLeftWidth, forKey: "calendarVerticalBottomLeftWidth")
+        }
+    }
+    
+    @Published var calendarWeekTasksPersonalWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarWeekTasksPersonalWidth, forKey: "calendarWeekTasksPersonalWidth")
+        }
+    }
+    
+    @Published var calendarWeekTopSectionHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(calendarWeekTopSectionHeight, forKey: "calendarWeekTopSectionHeight")
+        }
+    }
+    
+    // TasksView Divider Positions
+    @Published var tasksViewPersonalWidth: CGFloat {
+        didSet {
+            UserDefaults.standard.set(tasksViewPersonalWidth, forKey: "tasksViewPersonalWidth")
+        }
+    }
+    
+    // WeekTimelineComponent Divider Positions
+    @Published var weekTimelineTasksRowHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(weekTimelineTasksRowHeight, forKey: "weekTimelineTasksRowHeight")
+        }
+    }
+    
 
     
 
@@ -526,6 +596,25 @@ class AppPreferences: ObservableObject {
         self.calendarDayRightColumn2Width = UserDefaults.standard.object(forKey: "calendarDayRightColumn2Width") as? CGFloat ?? 200
         self.calendarDayLeftTimelineHeight = UserDefaults.standard.object(forKey: "calendarDayLeftTimelineHeight") as? CGFloat ?? 500
         self.calendarDayRightSectionTopHeight = UserDefaults.standard.object(forKey: "calendarDayRightSectionTopHeight") as? CGFloat ?? 500
+        
+        // Load DayViewTimebox divider positions
+        self.dayViewTimeboxLeftSectionWidth = UserDefaults.standard.object(forKey: "dayViewTimeboxLeftSectionWidth") as? CGFloat ?? 300
+        self.dayViewTimeboxRightSectionWidth = UserDefaults.standard.object(forKey: "dayViewTimeboxRightSectionWidth") as? CGFloat ?? 250
+        self.dayViewTimeboxTasksSectionHeight = UserDefaults.standard.object(forKey: "dayViewTimeboxTasksSectionHeight") as? CGFloat ?? 400
+        
+        // Load CalendarView additional divider positions
+        self.calendarTopSectionHeight = UserDefaults.standard.object(forKey: "calendarTopSectionHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.85
+        self.calendarVerticalTopRowHeight = UserDefaults.standard.object(forKey: "calendarVerticalTopRowHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.55
+        self.calendarVerticalTopLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalTopLeftWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
+        self.calendarVerticalBottomLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalBottomLeftWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
+        self.calendarWeekTasksPersonalWidth = UserDefaults.standard.object(forKey: "calendarWeekTasksPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.3
+        self.calendarWeekTopSectionHeight = UserDefaults.standard.object(forKey: "calendarWeekTopSectionHeight") as? CGFloat ?? 400
+        
+        // Load TasksView divider positions
+        self.tasksViewPersonalWidth = UserDefaults.standard.object(forKey: "tasksViewPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
+        
+        // Load WeekTimelineComponent divider positions
+        self.weekTimelineTasksRowHeight = UserDefaults.standard.object(forKey: "weekTimelineTasksRowHeight") as? CGFloat ?? 120
     }
     
     func updateDarkMode(_ value: Bool) {
@@ -625,6 +714,54 @@ class AppPreferences: ObservableObject {
     
     func updateCalendarDayRightSectionTopHeight(_ value: CGFloat) {
         calendarDayRightSectionTopHeight = value
+    }
+    
+    // DayViewTimebox Divider Position Update Methods
+    func updateDayViewTimeboxLeftSectionWidth(_ value: CGFloat) {
+        dayViewTimeboxLeftSectionWidth = value
+    }
+    
+    func updateDayViewTimeboxRightSectionWidth(_ value: CGFloat) {
+        dayViewTimeboxRightSectionWidth = value
+    }
+    
+    func updateDayViewTimeboxTasksSectionHeight(_ value: CGFloat) {
+        dayViewTimeboxTasksSectionHeight = value
+    }
+    
+    // CalendarView Additional Divider Position Update Methods
+    func updateCalendarTopSectionHeight(_ value: CGFloat) {
+        calendarTopSectionHeight = value
+    }
+    
+    func updateCalendarVerticalTopRowHeight(_ value: CGFloat) {
+        calendarVerticalTopRowHeight = value
+    }
+    
+    func updateCalendarVerticalTopLeftWidth(_ value: CGFloat) {
+        calendarVerticalTopLeftWidth = value
+    }
+    
+    func updateCalendarVerticalBottomLeftWidth(_ value: CGFloat) {
+        calendarVerticalBottomLeftWidth = value
+    }
+    
+    func updateCalendarWeekTasksPersonalWidth(_ value: CGFloat) {
+        calendarWeekTasksPersonalWidth = value
+    }
+    
+    func updateCalendarWeekTopSectionHeight(_ value: CGFloat) {
+        calendarWeekTopSectionHeight = value
+    }
+    
+    // TasksView Divider Position Update Methods
+    func updateTasksViewPersonalWidth(_ value: CGFloat) {
+        tasksViewPersonalWidth = value
+    }
+    
+    // WeekTimelineComponent Divider Position Update Methods
+    func updateWeekTimelineTasksRowHeight(_ value: CGFloat) {
+        weekTimelineTasksRowHeight = value
     }
 
     // removed updateUseDayViewDefault

@@ -22,9 +22,10 @@ struct WeekTimelineComponent: View {
     let onTaskTap: ((GoogleTask, String) -> Void)?
     
     // MARK: - State
+    @ObservedObject private var appPrefs = AppPreferences.shared
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
-    @State private var tasksRowHeight: CGFloat = 120 // Default height for tasks section
+    @State private var tasksRowHeight: CGFloat
     @State private var isDraggingSlider: Bool = false
     @State private var dragStartHeight: CGFloat = 0
     @State private var scrollProxy: ScrollViewProxy? = nil
@@ -58,6 +59,9 @@ struct WeekTimelineComponent: View {
         self.onTaskTap = onTaskTap
         self.showTasksSection = showTasksSection
         self.fixedStartHour = fixedStartHour
+        
+        // Initialize tasksRowHeight from AppPreferences
+        self._tasksRowHeight = State(initialValue: AppPreferences.shared.weekTimelineTasksRowHeight)
     }
     
     // MARK: - Data Models
@@ -570,6 +574,7 @@ struct WeekTimelineComponent: View {
                         .onEnded { _ in
                             isDraggingSlider = false
                             dragStartHeight = 0
+                            appPrefs.updateWeekTimelineTasksRowHeight(tasksRowHeight)
                         }
                 )
         }

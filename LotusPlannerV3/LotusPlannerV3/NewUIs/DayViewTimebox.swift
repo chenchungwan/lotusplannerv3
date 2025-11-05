@@ -34,11 +34,11 @@ struct DayViewTimebox: View {
         self.onEventTap = onEventTap
         
         // Initialize state variables with stored values from AppPreferences
-        self._dayLeftSectionWidth = State(initialValue: 300)
-        self._dayRightSectionWidth = State(initialValue: 250)
+        self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxLeftSectionWidth)
+        self._dayRightSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxRightSectionWidth)
         self._isLogsColumnCollapsed = State(initialValue: false)
         self._isTasksSectionCollapsed = State(initialValue: false)
-        self._tasksSectionHeight = State(initialValue: 400)
+        self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionHeight)
         self._isTasksDividerDragging = State(initialValue: false)
     }
     
@@ -414,7 +414,7 @@ struct DayViewTimebox: View {
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
-                        // Could save to preferences here if needed
+                        appPrefs.updateDayViewTimeboxLeftSectionWidth(dayLeftSectionWidth)
                     }
             )
     }
@@ -440,7 +440,7 @@ struct DayViewTimebox: View {
                     }
                     .onEnded { _ in
                         isDayRightVerticalDividerDragging = false
-                        // Could save to preferences here if needed
+                        appPrefs.updateDayViewTimeboxRightSectionWidth(dayRightSectionWidth)
                     }
             )
     }
@@ -513,7 +513,7 @@ struct DayViewTimebox: View {
                     }
                     .onEnded { _ in
                         isTasksDividerDragging = false
-                        // Could save to preferences here if needed
+                        appPrefs.updateDayViewTimeboxTasksSectionHeight(tasksSectionHeight)
                     }
             )
     }
