@@ -439,6 +439,20 @@ private struct TaskComponentRow: View {
                     .truncationMode(.tail)
 
                 Spacer()
+                
+                // Due date tags (only show if not hidden and tag is available) - aligned to the right
+                if !hideDueDate, let tagInfo = dueDateTag(for: task) {
+                    Text(tagInfo.text)
+                        .font(.caption)
+                        .foregroundColor(tagInfo.textColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(tagInfo.backgroundColor)
+                        )
+                        .fixedSize()
+                }
             }
             .contentShape(Rectangle())
             .onTapGesture { 
