@@ -5094,6 +5094,11 @@ struct AddItemView: View {
     
     private let authManager = GoogleAuthManager.shared
     
+    // Store original event properties to preserve them during updates
+    private let originalIsAllDay: Bool
+    private let originalEventStart: Date
+    private let originalEventEnd: Date
+    
     private var availableTaskLists: [GoogleTaskList] {
         guard let accountKind = selectedAccountKind else { return [] }
         switch accountKind {
@@ -5118,10 +5123,48 @@ struct AddItemView: View {
     
     private var hasEventChanges: Bool {
         guard let ev = existingEvent else { return false }
+        
+        // Helper function to compare times (ignoring seconds and milliseconds)
+        func areTimesEqual(_ time1: Date, _ time2: Date) -> Bool {
+            let calendar = Calendar.current
+            let components1 = calendar.dateComponents([.hour, .minute], from: time1)
+            let components2 = calendar.dateComponents([.hour, .minute], from: time2)
+            return components1.hour == components2.hour && components1.minute == components2.minute
+        }
+        
+        // Compare dates (for all-day events) or dates + times (for timed events)
+        let calendar = Calendar.current
+        let originalStart = ev.startTime ?? Date()
+        let originalEnd = ev.endTime ?? Date()
+        
+        let startChanged: Bool
+        let endChanged: Bool
+        
+        if isAllDay {
+            // For all-day events, compare dates only
+            let currentStartDate = calendar.startOfDay(for: eventStart)
+            let originalStartDate = calendar.startOfDay(for: originalStart)
+            let currentEndDate = calendar.startOfDay(for: eventEnd)
+            let originalEndDate = calendar.startOfDay(for: originalEnd)
+            startChanged = currentStartDate != originalStartDate
+            endChanged = currentEndDate != originalEndDate
+        } else {
+            // For timed events, compare date and time (hour and minute) separately
+            let currentStartDate = calendar.startOfDay(for: eventStart)
+            let originalStartDate = calendar.startOfDay(for: originalStart)
+            let currentEndDate = calendar.startOfDay(for: eventEnd)
+            let originalEndDate = calendar.startOfDay(for: originalEnd)
+            
+            // Start changed if date changed OR time changed
+            startChanged = (currentStartDate != originalStartDate) || !areTimesEqual(eventStart, originalStart)
+            // End changed if date changed OR time changed
+            endChanged = (currentEndDate != originalEndDate) || !areTimesEqual(eventEnd, originalEnd)
+        }
+        
         return itemTitle != ev.summary ||
                itemNotes != (ev.description ?? "") ||
-               eventStart != (ev.startTime ?? Date()) ||
-               eventEnd != (ev.endTime ?? Date()) ||
+               startChanged ||
+               endChanged ||
                isAllDay != ev.isAllDay ||
                selectedAccountKind != existingEventAccountKind
     }
@@ -5155,13 +5198,27 @@ struct AddItemView: View {
             _itemTitle = State(initialValue: ev.summary)
             _itemNotes = State(initialValue: ev.description ?? "")
             _selectedAccountKind = State(initialValue: accountKind)
-            _eventStart = State(initialValue: ev.startTime ?? Date())
-            _eventEnd   = State(initialValue: ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800))
+            let initStart = ev.startTime ?? Date()
+            let initEnd = ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800)
+            _eventStart = State(initialValue: initStart)
+            _eventEnd   = State(initialValue: initEnd)
             _isAllDay = State(initialValue: ev.isAllDay)
+            
+            // Store original values to preserve them
+            self.originalIsAllDay = ev.isAllDay
+            self.originalEventStart = initStart
+            self.originalEventEnd = initEnd
         } else {
             let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
+            let initEnd = cal.date(byAdding: .minute, value: 30, to: rounded)!
             _eventStart = State(initialValue: rounded)
-            _eventEnd = State(initialValue: cal.date(byAdding: .minute, value: 30, to: rounded)!)
+            _eventEnd = State(initialValue: initEnd)
+            
+            // For new events, store defaults
+            self.originalIsAllDay = false
+            self.originalEventStart = rounded
+            self.originalEventEnd = initEnd
+            
             if showEventOnly {
                 _selectedTab = State(initialValue: 1)
                 // Default to Personal account if available
@@ -5221,9 +5278,15 @@ struct AddItemView: View {
                         HStack(spacing: 12) {
                             if authManager.isLinked(kind: .personal) {
                                 Button(action: {
+                                    let previousAccount = selectedAccountKind
                                     selectedAccountKind = .personal
                                     selectedTaskListId = ""
                                     isCreatingNewList = false
+                                    // When switching accounts for an existing event, preserve isAllDay and times
+                                    if isEditingEvent && previousAccount != nil && previousAccount != .personal {
+                                        // Don't reset isAllDay or times - preserve them
+                                        // The eventStart and eventEnd should remain unchanged
+                                    }
                                 }) {
                                     HStack {
                                         Image(systemName: "person.circle.fill")
@@ -5246,9 +5309,15 @@ struct AddItemView: View {
 
                             if authManager.isLinked(kind: .professional) {
                                 Button(action: {
+                                    let previousAccount = selectedAccountKind
                                     selectedAccountKind = .professional
                                     selectedTaskListId = ""
                                     isCreatingNewList = false
+                                    // When switching accounts for an existing event, preserve isAllDay and times
+                                    if isEditingEvent && previousAccount != nil && previousAccount != .professional {
+                                        // Don't reset isAllDay or times - preserve them
+                                        // The eventStart and eventEnd should remain unchanged
+                                    }
                                 }) {
                                     HStack {
                                         Image(systemName: "briefcase.circle.fill")
@@ -5356,10 +5425,53 @@ struct AddItemView: View {
                     } else {
                         // Calendar event-specific fields
                         Section("Event Time") {
-                            Toggle("All Day", isOn: $isAllDay)
-                            DatePicker("Start", selection: $eventStart, displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
+                            Toggle("All Day", isOn: Binding(
+                                get: { isAllDay },
+                                set: { newValue in
+                                    // Only update if the value actually changed
+                                    // This prevents accidental resets when other properties change
+                                    if isAllDay != newValue {
+                                        isAllDay = newValue
+                                    }
+                                }
+                            ))
+                            DatePicker("Start", selection: Binding(
+                                get: { eventStart },
+                                set: { newValue in
+                                    // When editing an existing timed event, preserve the time component
+                                    if isEditingEvent && !isAllDay {
+                                        let calendar = Calendar.current
+                                        let oldComponents = calendar.dateComponents([.hour, .minute, .second], from: eventStart)
+                                        let newDate = calendar.startOfDay(for: newValue)
+                                        if let hour = oldComponents.hour, let minute = oldComponents.minute, let second = oldComponents.second {
+                                            eventStart = calendar.date(bySettingHour: hour, minute: minute, second: second, of: newDate) ?? newValue
+                                        } else {
+                                            eventStart = newValue
+                                        }
+                                    } else {
+                                        eventStart = newValue
+                                    }
+                                }
+                            ), displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                                 .environment(\.calendar, Calendar.mondayFirst)
-                            DatePicker("End", selection: $eventEnd, in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
+                            DatePicker("End", selection: Binding(
+                                get: { eventEnd },
+                                set: { newValue in
+                                    // When editing an existing timed event, preserve the time component
+                                    if isEditingEvent && !isAllDay {
+                                        let calendar = Calendar.current
+                                        let oldComponents = calendar.dateComponents([.hour, .minute, .second], from: eventEnd)
+                                        let newDate = calendar.startOfDay(for: newValue)
+                                        if let hour = oldComponents.hour, let minute = oldComponents.minute, let second = oldComponents.second {
+                                            eventEnd = calendar.date(bySettingHour: hour, minute: minute, second: second, of: newDate) ?? newValue
+                                        } else {
+                                            eventEnd = newValue
+                                        }
+                                    } else {
+                                        eventEnd = newValue
+                                    }
+                                }
+                            ), in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                                 .environment(\.calendar, Calendar.mondayFirst)
                         }
                     }
@@ -5390,41 +5502,58 @@ struct AddItemView: View {
                         eventEnd = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue.addingTimeInterval(1800)
                     }
                 }
+                .onChange(of: selectedAccountKind) { oldValue, newValue in
+                    // When switching accounts for an existing event, preserve isAllDay and times
+                    // Only preserve if we're editing an existing event and the account actually changed
+                    if isEditingEvent && oldValue != nil && newValue != nil && oldValue != newValue {
+                        // Don't reset isAllDay or times - they should remain as they were
+                        // The user is just moving the event to a different account
+                    }
+                }
                 .onChange(of: isAllDay) { oldValue, newValue in
-                    let cal = Calendar.current
-                    if newValue {
-                        // Converting to all-day: use start of day
-                        let startDate = cal.startOfDay(for: eventStart)
-                        eventStart = startDate
-                        eventEnd = cal.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24*3600)
-                    } else {
-                        // Converting to timed event: provide sensible default times
-                        let eventDate = cal.startOfDay(for: eventStart)
-                        let isToday = cal.isDateInToday(eventDate)
-                        let isFuture = eventDate > cal.startOfDay(for: Date())
-                        
-                        if isToday {
-                            // For today, use current time rounded to next 30-min mark
-                            let now = Date()
-                            let minute = cal.component(.minute, from: now)
-                            let rounded = cal.nextDate(
-                                after: now,
-                                matching: DateComponents(minute: minute < 30 ? 30 : 0),
-                                matchingPolicy: .nextTime,
-                                direction: .forward
-                            ) ?? now
-                            eventStart = rounded
-                            eventEnd = cal.date(byAdding: .minute, value: 30, to: rounded) ?? rounded.addingTimeInterval(1800)
+                    // Only update times if the user explicitly changed isAllDay (not during account switching)
+                    // When editing an existing event and switching accounts, we want to preserve the original times
+                    if oldValue != newValue {
+                        let cal = Calendar.current
+                        if newValue {
+                            // Converting to all-day: use start of day
+                            let startDate = cal.startOfDay(for: eventStart)
+                            eventStart = startDate
+                            eventEnd = cal.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24*3600)
                         } else {
-                            // For past or future dates, use 9:00 AM as default
-                            if let defaultStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: eventDate) {
-                                eventStart = defaultStart
-                                eventEnd = cal.date(byAdding: .minute, value: 30, to: defaultStart) ?? defaultStart.addingTimeInterval(1800)
-                            } else {
-                                // Fallback if date creation fails
-                                eventStart = eventDate.addingTimeInterval(9 * 3600) // 9 AM
-                                eventEnd = eventStart.addingTimeInterval(1800) // 30 minutes later
+                            // Only set default times if the event was previously all-day
+                            // If it was already timed, preserve the existing times
+                            if oldValue == true {
+                                // Converting from all-day to timed event: provide sensible default times
+                                let eventDate = cal.startOfDay(for: eventStart)
+                                let isToday = cal.isDateInToday(eventDate)
+                                let isFuture = eventDate > cal.startOfDay(for: Date())
+                                
+                                if isToday {
+                                    // For today, use current time rounded to next 30-min mark
+                                    let now = Date()
+                                    let minute = cal.component(.minute, from: now)
+                                    let rounded = cal.nextDate(
+                                        after: now,
+                                        matching: DateComponents(minute: minute < 30 ? 30 : 0),
+                                        matchingPolicy: .nextTime,
+                                        direction: .forward
+                                    ) ?? now
+                                    eventStart = rounded
+                                    eventEnd = cal.date(byAdding: .minute, value: 30, to: rounded) ?? rounded.addingTimeInterval(1800)
+                                } else {
+                                    // For past or future dates, use 9:00 AM as default
+                                    if let defaultStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: eventDate) {
+                                        eventStart = defaultStart
+                                        eventEnd = cal.date(byAdding: .minute, value: 30, to: defaultStart) ?? defaultStart.addingTimeInterval(1800)
+                                    } else {
+                                        // Fallback if date creation fails
+                                        eventStart = eventDate.addingTimeInterval(9 * 3600) // 9 AM
+                                        eventEnd = eventStart.addingTimeInterval(1800) // 30 minutes later
+                                    }
+                                }
                             }
+                            // If oldValue was false (already timed), don't change the times
                         }
                     }
                 }
@@ -5569,18 +5698,25 @@ struct AddItemView: View {
                 }
                 
                 
-                guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-                    if let responseString = String(data: data, encoding: .utf8) {
-                    }
-                    throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
-                }
+        guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   - ❌ Error response: \(responseString)")
+            }
+            throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
+        }
+        
+        // Log successful creation
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("   - ✅ Success! Response: \(responseString.prefix(500))")
+        }
+        print("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
 
-                // Refresh the current view to reflect changes
-                Task {
-                    await calendarViewModel.refreshDataForCurrentView()
-                }
+        // Refresh the current view to reflect changes
+        Task {
+            await calendarViewModel.refreshDataForCurrentView()
+        }
 
-                await MainActor.run { dismiss() }
+        await MainActor.run { dismiss() }
             } catch {
                 await MainActor.run { isCreating = false }
             }
@@ -5593,6 +5729,40 @@ struct AddItemView: View {
         guard let originalAccountKind = existingEventAccountKind else { return }
         let targetAccountKind = selectedAccountKind ?? originalAccountKind
         
+        // Log existing event details
+        let calendar = Calendar.current
+        let existingStartTime = ev.startTime ?? Date()
+        let existingEndTime = ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800)
+        let existingStartHour = calendar.component(.hour, from: existingStartTime)
+        let existingStartMinute = calendar.component(.minute, from: existingStartTime)
+        let existingEndHour = calendar.component(.hour, from: existingEndTime)
+        let existingEndMinute = calendar.component(.minute, from: existingEndTime)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .short
+        
+        print("📅 EVENT UPDATE - Existing Event Details:")
+        print("   - Event ID: \(ev.id)")
+        print("   - Title: \(ev.summary)")
+        print("   - isAllDay: \(ev.isAllDay)")
+        print("   - Start Time: \(dateFormatter.string(from: existingStartTime)) (\(existingStartHour):\(String(format: "%02d", existingStartMinute)))")
+        print("   - End Time: \(dateFormatter.string(from: existingEndTime)) (\(existingEndHour):\(String(format: "%02d", existingEndMinute)))")
+        print("   - Original Account: \(originalAccountKind)")
+        print("   - Target Account: \(targetAccountKind)")
+        
+        // Log current state values
+        let currentStartHour = calendar.component(.hour, from: eventStart)
+        let currentStartMinute = calendar.component(.minute, from: eventStart)
+        let currentEndHour = calendar.component(.hour, from: eventEnd)
+        let currentEndMinute = calendar.component(.minute, from: eventEnd)
+        
+        print("📅 EVENT UPDATE - Current State Values:")
+        print("   - isAllDay: \(isAllDay)")
+        print("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(currentStartHour):\(String(format: "%02d", currentStartMinute)))")
+        print("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(currentEndHour):\(String(format: "%02d", currentEndMinute)))")
+        print("   - originalIsAllDay: \(originalIsAllDay)")
+        print("   - originalEventStart: \(dateFormatter.string(from: originalEventStart))")
+        print("   - originalEventEnd: \(dateFormatter.string(from: originalEventEnd))")
         
         isCreating = true
 
@@ -5600,6 +5770,7 @@ struct AddItemView: View {
             do {
                 // Check if we're moving between accounts
                 if originalAccountKind != targetAccountKind {
+                    print("📅 EVENT UPDATE - Moving between accounts")
                     
                     // First create the event in the new account
                     try await createEventInAccount(targetAccountKind)
@@ -5608,6 +5779,7 @@ struct AddItemView: View {
                     try await deleteEventFromAccount(ev, from: originalAccountKind, viewModel: calendarViewModel)
                     
                 } else {
+                    print("📅 EVENT UPDATE - Updating in same account")
                     // Same account - just update the existing event
                     try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
@@ -5625,6 +5797,22 @@ struct AddItemView: View {
     }
     
     private func createEventInAccount(_ accountKind: GoogleAuthManager.AccountKind) async throws {
+        
+        // Log what's being sent to API
+        let calendar = Calendar.current
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .short
+        let startHour = calendar.component(.hour, from: eventStart)
+        let startMinute = calendar.component(.minute, from: eventStart)
+        let endHour = calendar.component(.hour, from: eventEnd)
+        let endMinute = calendar.component(.minute, from: eventEnd)
+        
+        print("📅 CREATE EVENT IN ACCOUNT - Sending to API:")
+        print("   - Account: \(accountKind)")
+        print("   - isAllDay: \(isAllDay)")
+        print("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
+        print("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
@@ -5645,11 +5833,15 @@ struct AddItemView: View {
             dateFormatter.dateFormat = "yyyy-MM-dd"
             startDict["date"] = dateFormatter.string(from: startDate)
             endDict["date"] = dateFormatter.string(from: endDate)
+            print("   - Start dict (all-day): \(startDict)")
+            print("   - End dict (all-day): \(endDict)")
         } else {
             startDict["dateTime"] = isoFormatter.string(from: eventStart)
             endDict["dateTime"] = isoFormatter.string(from: eventEnd)
             startDict["timeZone"] = TimeZone.current.identifier
             endDict["timeZone"] = TimeZone.current.identifier
+            print("   - Start dict (timed): \(startDict)")
+            print("   - End dict (timed): \(endDict)")
         }
 
         var body: [String: Any] = [
@@ -5658,6 +5850,10 @@ struct AddItemView: View {
             "end": endDict
         ]
         if !itemNotes.isEmpty { body["description"] = itemNotes }
+        
+        print("   - Start dict: \(startDict)")
+        print("   - End dict: \(endDict)")
+        print("   - Body being sent: \(body)")
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -5669,9 +5865,53 @@ struct AddItemView: View {
         
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
             if let responseString = String(data: data, encoding: .utf8) {
+                print("   - ❌ Error response: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
+        
+        // Log successful creation and parse response to see what was saved
+        if let responseString = String(data: data, encoding: .utf8),
+           let responseData = responseString.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
+            
+            print("   - ✅ Success! Response received")
+            
+            // Parse response to see what was saved
+            if let startDict = json["start"] as? [String: Any] {
+                print("   - Response start: \(startDict)")
+            }
+            if let endDict = json["end"] as? [String: Any] {
+                print("   - Response end: \(endDict)")
+            }
+            
+            // Extract dates from response
+            if let startDict = json["start"] as? [String: Any],
+               let dateTimeStr = startDict["dateTime"] as? String {
+                let isoFormatter = ISO8601DateFormatter()
+                if let savedStartTime = isoFormatter.date(from: dateTimeStr) {
+                    let savedFormatter = DateFormatter()
+                    savedFormatter.dateStyle = .short
+                    savedFormatter.timeStyle = .short
+                    let savedStartHour = calendar.component(.hour, from: savedStartTime)
+                    let savedStartMinute = calendar.component(.minute, from: savedStartTime)
+                    print("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
+                }
+            }
+            if let endDict = json["end"] as? [String: Any],
+               let dateTimeStr = endDict["dateTime"] as? String {
+                let isoFormatter = ISO8601DateFormatter()
+                if let savedEndTime = isoFormatter.date(from: dateTimeStr) {
+                    let savedFormatter = DateFormatter()
+                    savedFormatter.dateStyle = .short
+                    savedFormatter.timeStyle = .short
+                    let savedEndHour = calendar.component(.hour, from: savedEndTime)
+                    let savedEndMinute = calendar.component(.minute, from: savedEndTime)
+                    print("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
+                }
+            }
+        }
+        print("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
         
     }
     
@@ -5702,6 +5942,23 @@ struct AddItemView: View {
     }
     
     private func updateEventInSameAccount(_ event: GoogleCalendarEvent, accountKind: GoogleAuthManager.AccountKind) async throws {
+        
+        // Log what's being sent to API
+        let calendar = Calendar.current
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        dateFormatter.timeStyle = .short
+        let startHour = calendar.component(.hour, from: eventStart)
+        let startMinute = calendar.component(.minute, from: eventStart)
+        let endHour = calendar.component(.hour, from: eventEnd)
+        let endMinute = calendar.component(.minute, from: eventEnd)
+        
+        print("📅 UPDATE EVENT IN SAME ACCOUNT - Sending to API:")
+        print("   - Event ID: \(event.id)")
+        print("   - Account: \(accountKind)")
+        print("   - isAllDay: \(isAllDay)")
+        print("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
+        print("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
@@ -5751,6 +6008,10 @@ struct AddItemView: View {
             // Always include description so clearing notes works
             "description": itemNotes
         ]
+        
+        print("   - Start dict: \(startDict)")
+        print("   - End dict: \(endDict)")
+        print("   - Body being sent: \(body)")
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -5762,9 +6023,53 @@ struct AddItemView: View {
         
         guard httpResponse.statusCode == 200 else {
             if let responseString = String(data: data, encoding: .utf8) {
+                print("   - ❌ Error response: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
+        
+        // Log successful update and parse response to see what was saved
+        if let responseString = String(data: data, encoding: .utf8),
+           let responseData = responseString.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
+            
+            print("   - ✅ Success! Response received")
+            
+            // Parse response to see what was saved
+            if let startDict = json["start"] as? [String: Any] {
+                print("   - Response start: \(startDict)")
+            }
+            if let endDict = json["end"] as? [String: Any] {
+                print("   - Response end: \(endDict)")
+            }
+            
+            // Extract dates from response
+            if let startDict = json["start"] as? [String: Any],
+               let dateTimeStr = startDict["dateTime"] as? String {
+                let isoFormatter = ISO8601DateFormatter()
+                if let savedStartTime = isoFormatter.date(from: dateTimeStr) {
+                    let savedFormatter = DateFormatter()
+                    savedFormatter.dateStyle = .short
+                    savedFormatter.timeStyle = .short
+                    let savedStartHour = calendar.component(.hour, from: savedStartTime)
+                    let savedStartMinute = calendar.component(.minute, from: savedStartTime)
+                    print("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
+                }
+            }
+            if let endDict = json["end"] as? [String: Any],
+               let dateTimeStr = endDict["dateTime"] as? String {
+                let isoFormatter = ISO8601DateFormatter()
+                if let savedEndTime = isoFormatter.date(from: dateTimeStr) {
+                    let savedFormatter = DateFormatter()
+                    savedFormatter.dateStyle = .short
+                    savedFormatter.timeStyle = .short
+                    let savedEndHour = calendar.component(.hour, from: savedEndTime)
+                    let savedEndMinute = calendar.component(.minute, from: savedEndTime)
+                    print("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
+                }
+            }
+        }
+        print("📅 UPDATE EVENT IN SAME ACCOUNT - Update completed")
         
     }
     

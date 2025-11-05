@@ -661,7 +661,7 @@ class TasksViewModel: ObservableObject {
         print("✅ deleteTaskFromServer: Success! Task deleted")
     }
     
-    func moveTask(_ updatedTask: GoogleTask, from sourceListId: String, to targetListId: String, for kind: GoogleAuthManager.AccountKind) async {
+    func moveTask(_ updatedTask: GoogleTask, from sourceListId: String, to targetListId: String, for kind: GoogleAuthManager.AccountKind) async -> GoogleTask? {
         print("🔄 moveTask: Starting move operation")
         print("   - Task: '\(updatedTask.title)' (ID: \(updatedTask.id))")
         print("   - From: \(sourceListId) -> To: \(targetListId)")
@@ -685,7 +685,7 @@ class TasksViewModel: ObservableObject {
             await MainActor.run {
                 self.errorMessage = "Cannot find original task to move"
             }
-            return
+            return nil
         }
         
         print("✅ moveTask: Found original task with ID: \(taskToDelete.id)")
@@ -727,7 +727,7 @@ class TasksViewModel: ObservableObject {
             // Update local state using the new task (with correct server ID)
             guard let taskToAdd = newTask else { 
                 print("❌ moveTask: No new task returned from server!")
-                return 
+                return nil
             }
             
             print("🔄 moveTask: Step 3 - Updating local state...")
@@ -776,6 +776,9 @@ class TasksViewModel: ObservableObject {
             }
             print("✅ moveTask: Complete! Task successfully moved")
             
+            // Return the new task so caller can transfer time window
+            return taskToAdd
+            
         } catch {
             print("❌ moveTask: Error occurred: \(error.localizedDescription)")
             print("   - Error type: \(type(of: error))")
@@ -795,10 +798,11 @@ class TasksViewModel: ObservableObject {
             await MainActor.run {
                 self.errorMessage = "Failed to move task: \(error.localizedDescription)"
             }
+            return nil
         }
     }
     
-    func crossAccountMoveTask(_ updatedTask: GoogleTask, from source: (GoogleAuthManager.AccountKind, String), to target: (GoogleAuthManager.AccountKind, String)) async {
+    func crossAccountMoveTask(_ updatedTask: GoogleTask, from source: (GoogleAuthManager.AccountKind, String), to target: (GoogleAuthManager.AccountKind, String)) async -> GoogleTask? {
         print("🔄 crossAccountMoveTask: Starting cross-account move operation")
         print("   - Task: '\(updatedTask.title)' (ID: \(updatedTask.id))")
         print("   - From: \(source.0)/\(source.1) -> To: \(target.0)/\(target.1)")
@@ -821,7 +825,7 @@ class TasksViewModel: ObservableObject {
             await MainActor.run {
                 self.errorMessage = "Cannot find original task to move"
             }
-            return
+            return nil
         }
         
         print("✅ crossAccountMoveTask: Found original task with ID: \(taskToDelete.id)")
@@ -863,7 +867,7 @@ class TasksViewModel: ObservableObject {
             // Update local state using the new task (with correct server ID)
             guard let taskToAdd = newTask else { 
                 print("❌ crossAccountMoveTask: No new task returned from server!")
-                return 
+                return nil
             }
             
             print("🔄 crossAccountMoveTask: Step 3 - Updating local state...")
@@ -914,6 +918,9 @@ class TasksViewModel: ObservableObject {
             }
             print("✅ crossAccountMoveTask: Complete! Task successfully moved across accounts")
             
+            // Return the new task so caller can transfer time window
+            return taskToAdd
+            
         } catch {
             print("❌ crossAccountMoveTask: Error occurred: \(error.localizedDescription)")
             print("   - Error type: \(type(of: error))")
@@ -933,6 +940,7 @@ class TasksViewModel: ObservableObject {
             await MainActor.run {
                 self.errorMessage = "Failed to move task across accounts: \(error.localizedDescription)"
             }
+            return nil
         }
     }
     
@@ -2842,10 +2850,21 @@ struct TaskDetailsView: View {
 
                                 HStack(spacing: 10) {
                                     Button {
+                                        let previousAccount = selectedAccountKind
                                         selectedAccountKind = kind
                                         if let first = lists.first { selectedListId = first.id }
                                         isCreatingNewList = false
                                         newListName = ""
+                                        // When switching accounts for an existing timed task, preserve times
+                                        if !isNew && !isAllDay && previousAccount != kind {
+                                            // Preserve original times - don't reset them
+                                            if startTime == Calendar.current.startOfDay(for: startTime) || 
+                                               endTime == Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endTime) {
+                                                // Times were reset - restore from original
+                                                startTime = originalStartTime
+                                                endTime = originalEndTime
+                                            }
+                                        }
                                     } label: {
                                         HStack(spacing: 6) {
                                             Image(systemName: selectedAccountKind == kind ? "largecircle.fill.circle" : "circle")
@@ -2865,9 +2884,20 @@ struct TaskDetailsView: View {
                                             }
                                             ForEach(lists) { taskList in
                                                 Button(taskList.title) {
+                                                    let previousList = selectedListId
                                                     selectedAccountKind = kind
                                                     selectedListId = taskList.id
                                                     isCreatingNewList = false
+                                                    // When switching lists for an existing timed task, preserve times
+                                                    if !isNew && !isAllDay && previousList != taskList.id {
+                                                        // Preserve original times - don't reset them
+                                                        if startTime == Calendar.current.startOfDay(for: startTime) || 
+                                                           endTime == Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endTime) {
+                                                            // Times were reset - restore from original
+                                                            startTime = originalStartTime
+                                                            endTime = originalEndTime
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -3000,23 +3030,67 @@ struct TaskDetailsView: View {
                     
                     // Start and End time pickers (only show if not all-day)
                     if !isAllDay {
-                        DatePicker("Start Time", selection: $startTime, displayedComponents: [.hourAndMinute])
-                            .onChange(of: dueDate) { oldValue, newValue in
-                                // Update start time to match new due date
-                                let calendar = Calendar.current
-                                let components = calendar.dateComponents([.hour, .minute], from: startTime)
-                                if let hour = components.hour, let minute = components.minute {
-                                    startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newValue) ?? newValue
+                        DatePicker("Start Time", selection: Binding(
+                            get: { startTime },
+                            set: { newValue in
+                                // When editing an existing timed task, preserve the date component but use the new time
+                                if !isNew && !isAllDay {
+                                    let calendar = Calendar.current
+                                    // Extract the date from the current startTime
+                                    let currentDate = calendar.startOfDay(for: startTime)
+                                    // Extract the time components from the newValue (what user selected)
+                                    let newTimeComponents = calendar.dateComponents([.hour, .minute], from: newValue)
+                                    if let hour = newTimeComponents.hour, let minute = newTimeComponents.minute {
+                                        // Use the new time on the current date
+                                        startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: currentDate) ?? newValue
+                                    } else {
+                                        startTime = newValue
+                                    }
+                                } else {
+                                    startTime = newValue
+                                }
+                            }
+                        ), displayedComponents: [.hourAndMinute])
+                            .onChange(of: editedDueDate) { oldValue, newValue in
+                                // Update start time to match new due date, preserving time component
+                                if let newDueDate = newValue {
+                                    let calendar = Calendar.current
+                                    let components = calendar.dateComponents([.hour, .minute], from: startTime)
+                                    if let hour = components.hour, let minute = components.minute {
+                                        startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDueDate) ?? newDueDate
+                                    }
                                 }
                             }
                         
-                        DatePicker("End Time", selection: $endTime, displayedComponents: [.hourAndMinute])
-                            .onChange(of: dueDate) { oldValue, newValue in
-                                // Update end time to match new due date
-                                let calendar = Calendar.current
-                                let components = calendar.dateComponents([.hour, .minute], from: endTime)
-                                if let hour = components.hour, let minute = components.minute {
-                                    endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newValue) ?? newValue
+                        DatePicker("End Time", selection: Binding(
+                            get: { endTime },
+                            set: { newValue in
+                                // When editing an existing timed task, preserve the date component but use the new time
+                                if !isNew && !isAllDay {
+                                    let calendar = Calendar.current
+                                    // Extract the date from the current endTime
+                                    let currentDate = calendar.startOfDay(for: endTime)
+                                    // Extract the time components from the newValue (what user selected)
+                                    let newTimeComponents = calendar.dateComponents([.hour, .minute], from: newValue)
+                                    if let hour = newTimeComponents.hour, let minute = newTimeComponents.minute {
+                                        // Use the new time on the current date
+                                        endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: currentDate) ?? newValue
+                                    } else {
+                                        endTime = newValue
+                                    }
+                                } else {
+                                    endTime = newValue
+                                }
+                            }
+                        ), displayedComponents: [.hourAndMinute])
+                            .onChange(of: editedDueDate) { oldValue, newValue in
+                                // Update end time to match new due date, preserving time component
+                                if let newDueDate = newValue {
+                                    let calendar = Calendar.current
+                                    let components = calendar.dateComponents([.hour, .minute], from: endTime)
+                                    if let hour = components.hour, let minute = components.minute {
+                                        endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDueDate) ?? newDueDate
+                                    }
                                 }
                             }
                     }
@@ -3094,6 +3168,46 @@ struct TaskDetailsView: View {
             }
         } message: {
             Text("Are you sure you want to delete '\(task.title)'? This action cannot be undone.")
+        }
+        .onChange(of: selectedListId) { oldValue, newValue in
+            // When switching lists for an existing timed task, preserve times
+            if !isNew && !isAllDay && oldValue != newValue {
+                // Check if times are at default all-day values
+                let calendar = Calendar.current
+                let startHour = calendar.component(.hour, from: startTime)
+                let startMinute = calendar.component(.minute, from: startTime)
+                let endHour = calendar.component(.hour, from: endTime)
+                let endMinute = calendar.component(.minute, from: endTime)
+                
+                let isStartAtMidnight = startHour == 0 && startMinute == 0
+                let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
+                
+                // If times were reset to defaults, restore from original
+                if isStartAtMidnight && isEndAtEndOfDay && !originalIsAllDay {
+                    startTime = originalStartTime
+                    endTime = originalEndTime
+                }
+            }
+        }
+        .onChange(of: selectedAccountKind) { oldValue, newValue in
+            // When switching accounts for an existing timed task, preserve times
+            if !isNew && !isAllDay && oldValue != newValue {
+                // Check if times are at default all-day values
+                let calendar = Calendar.current
+                let startHour = calendar.component(.hour, from: startTime)
+                let startMinute = calendar.component(.minute, from: startTime)
+                let endHour = calendar.component(.hour, from: endTime)
+                let endMinute = calendar.component(.minute, from: endTime)
+                
+                let isStartAtMidnight = startHour == 0 && startMinute == 0
+                let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
+                
+                // If times were reset to defaults, restore from original
+                if isStartAtMidnight && isEndAtEndOfDay && !originalIsAllDay {
+                    startTime = originalStartTime
+                    endTime = originalEndTime
+                }
+            }
         }
         .onAppear {
             // Load tasks on-demand when popup opens (performance optimization)
@@ -3405,19 +3519,253 @@ struct TaskDetailsView: View {
                 print("   - targetListId: \(targetListId)")
                 print("   - taskListId: \(taskListId)")
                 
+                // Get the original time window before moving (if it exists)
+                var originalTimeWindow: TaskTimeWindowData? = nil
+                if selectedAccountKind != accountKind || targetListId != taskListId {
+                    // Get time window from original task before moving (for both cross-account and same-account moves)
+                    originalTimeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id)
+                    if selectedAccountKind != accountKind {
+                        print("💾 TaskDetailsView: Cross-account move detected")
+                    } else {
+                        print("💾 TaskDetailsView: Same-account move detected")
+                    }
+                    print("   - Original time window: \(originalTimeWindow != nil ? "exists" : "none")")
+                    if let timeWindow = originalTimeWindow {
+                        print("   - Original start time: \(timeWindow.startTime)")
+                        print("   - Original end time: \(timeWindow.endTime)")
+                        print("   - Original isAllDay: \(timeWindow.isAllDay)")
+                    }
+                }
+                
                 if selectedAccountKind != accountKind {
-                    print("💾 TaskDetailsView: Cross-account move detected")
-                    await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (selectedAccountKind, targetListId))
+                    let newTask = await viewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (selectedAccountKind, targetListId))
+                    
+                    // After cross-account move, use the returned new task
+                    if let newTask = newTask {
+                        let newTaskId = newTask.id
+                        print("💾 TaskDetailsView: Transferring time window to new task ID: \(newTaskId)")
+                        
+                        // Save time window for the new task if we have original time window or calculated times
+                        if let dueDate = editedDueDate {
+                            let calendar = Calendar.current
+                            let startOfDay = calendar.startOfDay(for: dueDate)
+                            
+                            let finalStartTime: Date
+                            let finalEndTime: Date
+                            
+                            if isAllDay {
+                                finalStartTime = startOfDay
+                                finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                            } else {
+                                // Use original time window if available, otherwise use calculated times
+                                if let originalTimeWindow = originalTimeWindow, !originalTimeWindow.isAllDay {
+                                    // Transfer original times to new due date
+                                    let originalStartComponents = calendar.dateComponents([.hour, .minute], from: originalTimeWindow.startTime)
+                                    let originalEndComponents = calendar.dateComponents([.hour, .minute], from: originalTimeWindow.endTime)
+                                    
+                                    if let hour = originalStartComponents.hour, let minute = originalStartComponents.minute {
+                                        finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalStartTime = startOfDay
+                                    }
+                                    
+                                    if let hour = originalEndComponents.hour, let minute = originalEndComponents.minute {
+                                        finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                                    }
+                                } else {
+                                    // Calculate times from current state
+                                    let effectiveStartTime: Date
+                                    let effectiveEndTime: Date
+                                    
+                                    let startComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+                                    let endComponents = calendar.dateComponents([.hour, .minute, .second], from: endTime)
+                                    let startHour = startComponents.hour ?? 0
+                                    let startMinute = startComponents.minute ?? 0
+                                    let endHour = endComponents.hour ?? 23
+                                    let endMinute = endComponents.minute ?? 59
+                                    
+                                    let isStartAtMidnight = startHour == 0 && startMinute == 0
+                                    let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
+                                    let isDefaultAllDayTime = isStartAtMidnight && isEndAtEndOfDay
+                                    
+                                    let originalStartComponents = calendar.dateComponents([.hour, .minute], from: originalStartTime)
+                                    let originalEndComponents = calendar.dateComponents([.hour, .minute], from: originalEndTime)
+                                    let currentStartComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                                    let currentEndComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                                    
+                                    let timesMatchOriginal = originalStartComponents.hour == currentStartComponents.hour &&
+                                                            originalStartComponents.minute == currentStartComponents.minute &&
+                                                            originalEndComponents.hour == currentEndComponents.hour &&
+                                                            originalEndComponents.minute == currentEndComponents.minute
+                                    
+                                    if !originalIsAllDay {
+                                        if isDefaultAllDayTime || timesMatchOriginal {
+                                            effectiveStartTime = originalStartTime
+                                            effectiveEndTime = originalEndTime
+                                        } else {
+                                            effectiveStartTime = startTime
+                                            effectiveEndTime = endTime
+                                        }
+                                    } else {
+                                        effectiveStartTime = startTime
+                                        effectiveEndTime = endTime
+                                    }
+                                    
+                                    let effectiveStartComponents = calendar.dateComponents([.hour, .minute], from: effectiveStartTime)
+                                    let effectiveEndComponents = calendar.dateComponents([.hour, .minute], from: effectiveEndTime)
+                                    
+                                    if let hour = effectiveStartComponents.hour, let minute = effectiveStartComponents.minute {
+                                        finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalStartTime = startOfDay
+                                    }
+                                    
+                                    if let hour = effectiveEndComponents.hour, let minute = effectiveEndComponents.minute {
+                                        finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                                    }
+                                }
+                            }
+                            
+                            TaskTimeWindowManager.shared.saveTimeWindow(
+                                taskId: newTaskId,
+                                startTime: finalStartTime,
+                                endTime: finalEndTime,
+                                isAllDay: isAllDay
+                            )
+                            print("   - ✅ Time window saved for new task: \(finalStartTime) - \(finalEndTime)")
+                        } else {
+                            // Remove time window if due date is removed
+                            TaskTimeWindowManager.shared.deleteTimeWindow(for: newTaskId)
+                        }
+                        
+                        // Delete time window from old task
+                        TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                        print("   - ✅ Time window deleted from old task")
+                    } else {
+                        print("   - ⚠️ Could not get new task after cross-account move")
+                    }
                 } else if targetListId != taskListId {
-                    print("💾 TaskDetailsView: Same-account move detected")
-                    await viewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: selectedAccountKind)
+                    let newTask = await viewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: selectedAccountKind)
+                    
+                    // After same-account move, use the returned new task
+                    if let newTask = newTask {
+                        let newTaskId = newTask.id
+                        print("💾 TaskDetailsView: Transferring time window to new task ID: \(newTaskId)")
+                        
+                        // Save time window for the new task if we have original time window or calculated times
+                        if let dueDate = editedDueDate {
+                            let calendar = Calendar.current
+                            let startOfDay = calendar.startOfDay(for: dueDate)
+                            
+                            let finalStartTime: Date
+                            let finalEndTime: Date
+                            
+                            if isAllDay {
+                                finalStartTime = startOfDay
+                                finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                            } else {
+                                // Use original time window if available, otherwise use calculated times
+                                if let originalTimeWindow = originalTimeWindow, !originalTimeWindow.isAllDay {
+                                    // Transfer original times to new due date
+                                    let originalStartComponents = calendar.dateComponents([.hour, .minute], from: originalTimeWindow.startTime)
+                                    let originalEndComponents = calendar.dateComponents([.hour, .minute], from: originalTimeWindow.endTime)
+                                    
+                                    if let hour = originalStartComponents.hour, let minute = originalStartComponents.minute {
+                                        finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalStartTime = startOfDay
+                                    }
+                                    
+                                    if let hour = originalEndComponents.hour, let minute = originalEndComponents.minute {
+                                        finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                                    }
+                                } else {
+                                    // Calculate times from current state
+                                    let effectiveStartTime: Date
+                                    let effectiveEndTime: Date
+                                    
+                                    let startComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+                                    let endComponents = calendar.dateComponents([.hour, .minute, .second], from: endTime)
+                                    let startHour = startComponents.hour ?? 0
+                                    let startMinute = startComponents.minute ?? 0
+                                    let endHour = endComponents.hour ?? 23
+                                    let endMinute = endComponents.minute ?? 59
+                                    
+                                    let isStartAtMidnight = startHour == 0 && startMinute == 0
+                                    let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
+                                    let isDefaultAllDayTime = isStartAtMidnight && isEndAtEndOfDay
+                                    
+                                    let originalStartComponents = calendar.dateComponents([.hour, .minute], from: originalStartTime)
+                                    let originalEndComponents = calendar.dateComponents([.hour, .minute], from: originalEndTime)
+                                    let currentStartComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                                    let currentEndComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                                    
+                                    let timesMatchOriginal = originalStartComponents.hour == currentStartComponents.hour &&
+                                                            originalStartComponents.minute == currentStartComponents.minute &&
+                                                            originalEndComponents.hour == currentEndComponents.hour &&
+                                                            originalEndComponents.minute == currentEndComponents.minute
+                                    
+                                    if !originalIsAllDay {
+                                        if isDefaultAllDayTime || timesMatchOriginal {
+                                            effectiveStartTime = originalStartTime
+                                            effectiveEndTime = originalEndTime
+                                        } else {
+                                            effectiveStartTime = startTime
+                                            effectiveEndTime = endTime
+                                        }
+                                    } else {
+                                        effectiveStartTime = startTime
+                                        effectiveEndTime = endTime
+                                    }
+                                    
+                                    let effectiveStartComponents = calendar.dateComponents([.hour, .minute], from: effectiveStartTime)
+                                    let effectiveEndComponents = calendar.dateComponents([.hour, .minute], from: effectiveEndTime)
+                                    
+                                    if let hour = effectiveStartComponents.hour, let minute = effectiveStartComponents.minute {
+                                        finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalStartTime = startOfDay
+                                    }
+                                    
+                                    if let hour = effectiveEndComponents.hour, let minute = effectiveEndComponents.minute {
+                                        finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
+                                    } else {
+                                        finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
+                                    }
+                                }
+                            }
+                            
+                            TaskTimeWindowManager.shared.saveTimeWindow(
+                                taskId: newTaskId,
+                                startTime: finalStartTime,
+                                endTime: finalEndTime,
+                                isAllDay: isAllDay
+                            )
+                            print("   - ✅ Time window saved for new task: \(finalStartTime) - \(finalEndTime)")
+                        } else {
+                            // Remove time window if due date is removed
+                            TaskTimeWindowManager.shared.deleteTimeWindow(for: newTaskId)
+                        }
+                        
+                        // Delete time window from old task
+                        TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                        print("   - ✅ Time window deleted from old task")
+                    } else {
+                        print("   - ⚠️ Could not get new task after same-account move")
+                    }
                 } else {
                     print("💾 TaskDetailsView: In-place update detected")
                     await viewModel.updateTask(updatedTask, in: targetListId, for: selectedAccountKind)
                 }
                 
-                // Save time window if due date exists
-                if let dueDate = editedDueDate {
+                // Save time window if due date exists (only for same-account moves or in-place updates)
+                if selectedAccountKind == accountKind, let dueDate = editedDueDate {
                     // Ensure start and end times are on the same day as due date
                     let calendar = Calendar.current
                     let startOfDay = calendar.startOfDay(for: dueDate)
@@ -3429,17 +3777,66 @@ struct TaskDetailsView: View {
                         finalStartTime = startOfDay
                         finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
                     } else {
-                        // Ensure times are on the due date
-                        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-                        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                        // For existing timed tasks, always prefer original times unless user explicitly changed them
+                        let effectiveStartTime: Date
+                        let effectiveEndTime: Date
                         
-                        if let hour = startComponents.hour, let minute = startComponents.minute {
+                        // For existing timed tasks, always prefer original times unless explicitly changed
+                        // Check if current times are at default all-day values (midnight/end of day)
+                        let startComponents = calendar.dateComponents([.hour, .minute, .second], from: startTime)
+                        let endComponents = calendar.dateComponents([.hour, .minute, .second], from: endTime)
+                        let startHour = startComponents.hour ?? 0
+                        let startMinute = startComponents.minute ?? 0
+                        let endHour = endComponents.hour ?? 23
+                        let endMinute = endComponents.minute ?? 59
+                        
+                        let isStartAtMidnight = startHour == 0 && startMinute == 0
+                        let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
+                        let isDefaultAllDayTime = isStartAtMidnight && isEndAtEndOfDay
+                        
+                        // Check if current times match original times (ignoring date, just time components)
+                        let originalStartComponents = calendar.dateComponents([.hour, .minute], from: originalStartTime)
+                        let originalEndComponents = calendar.dateComponents([.hour, .minute], from: originalEndTime)
+                        let currentStartComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                        let currentEndComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                        
+                        let timesMatchOriginal = originalStartComponents.hour == currentStartComponents.hour &&
+                                                originalStartComponents.minute == currentStartComponents.minute &&
+                                                originalEndComponents.hour == currentEndComponents.hour &&
+                                                originalEndComponents.minute == currentEndComponents.minute
+                        
+                        // For existing timed tasks:
+                        // - Always use original times if current times are at defaults (were reset)
+                        // - Always use original times if times match (user didn't change them, just due date changed)
+                        // - Otherwise, use current times (user explicitly modified them)
+                        if !originalIsAllDay {
+                            if isDefaultAllDayTime || timesMatchOriginal {
+                                // Use original times - they're the correct values
+                                // This ensures we preserve the original times even if due date changed
+                                effectiveStartTime = originalStartTime
+                                effectiveEndTime = originalEndTime
+                            } else {
+                                // User explicitly modified times - use current values
+                                effectiveStartTime = startTime
+                                effectiveEndTime = endTime
+                            }
+                        } else {
+                            // Task was originally all-day - use current times
+                            effectiveStartTime = startTime
+                            effectiveEndTime = endTime
+                        }
+                        
+                        // Ensure times are on the due date
+                        let effectiveStartComponents = calendar.dateComponents([.hour, .minute], from: effectiveStartTime)
+                        let effectiveEndComponents = calendar.dateComponents([.hour, .minute], from: effectiveEndTime)
+                        
+                        if let hour = effectiveStartComponents.hour, let minute = effectiveStartComponents.minute {
                             finalStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
                         } else {
                             finalStartTime = startOfDay
                         }
                         
-                        if let hour = endComponents.hour, let minute = endComponents.minute {
+                        if let hour = effectiveEndComponents.hour, let minute = effectiveEndComponents.minute {
                             finalEndTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: dueDate) ?? startOfDay
                         } else {
                             finalEndTime = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
