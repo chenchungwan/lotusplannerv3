@@ -116,6 +116,12 @@ struct TimeboxView: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 6)
         .background(isToday ? Color.blue : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Navigate to the selected day's day view
+            navigationManager.switchToCalendar()
+            navigationManager.updateInterval(.day, date: date)
+        }
     }
     
     private func dayOfWeekAbbrev(from date: Date) -> String {

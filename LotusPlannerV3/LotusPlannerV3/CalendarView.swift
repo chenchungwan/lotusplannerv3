@@ -5438,38 +5438,16 @@ struct AddItemView: View {
                             DatePicker("Start", selection: Binding(
                                 get: { eventStart },
                                 set: { newValue in
-                                    // When editing an existing timed event, preserve the time component
-                                    if isEditingEvent && !isAllDay {
-                                        let calendar = Calendar.current
-                                        let oldComponents = calendar.dateComponents([.hour, .minute, .second], from: eventStart)
-                                        let newDate = calendar.startOfDay(for: newValue)
-                                        if let hour = oldComponents.hour, let minute = oldComponents.minute, let second = oldComponents.second {
-                                            eventStart = calendar.date(bySettingHour: hour, minute: minute, second: second, of: newDate) ?? newValue
-                                        } else {
-                                            eventStart = newValue
-                                        }
-                                    } else {
-                                        eventStart = newValue
-                                    }
+                                    // Accept the new value directly - user can change both date and time
+                                    eventStart = newValue
                                 }
                             ), displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                                 .environment(\.calendar, Calendar.mondayFirst)
                             DatePicker("End", selection: Binding(
                                 get: { eventEnd },
                                 set: { newValue in
-                                    // When editing an existing timed event, preserve the time component
-                                    if isEditingEvent && !isAllDay {
-                                        let calendar = Calendar.current
-                                        let oldComponents = calendar.dateComponents([.hour, .minute, .second], from: eventEnd)
-                                        let newDate = calendar.startOfDay(for: newValue)
-                                        if let hour = oldComponents.hour, let minute = oldComponents.minute, let second = oldComponents.second {
-                                            eventEnd = calendar.date(bySettingHour: hour, minute: minute, second: second, of: newDate) ?? newValue
-                                        } else {
-                                            eventEnd = newValue
-                                        }
-                                    } else {
-                                        eventEnd = newValue
-                                    }
+                                    // Accept the new value directly - user can change both date and time
+                                    eventEnd = newValue
                                 }
                             ), in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                                 .environment(\.calendar, Calendar.mondayFirst)

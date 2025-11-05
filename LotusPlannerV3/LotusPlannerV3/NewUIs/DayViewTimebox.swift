@@ -12,8 +12,6 @@ struct DayViewTimebox: View {
     @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
     @State private var dayRightSectionWidth: CGFloat
-    @State private var isDayRightVerticalDividerDragging = false
-    @State private var isLogsColumnCollapsed: Bool = false
     @State private var isTasksSectionCollapsed: Bool = false
     @State private var tasksSectionHeight: CGFloat = 400
     @State private var isTasksDividerDragging = false
@@ -36,7 +34,6 @@ struct DayViewTimebox: View {
         // Initialize state variables with stored values from AppPreferences
         self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxLeftSectionWidth)
         self._dayRightSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxRightSectionWidth)
-        self._isLogsColumnCollapsed = State(initialValue: false)
         self._isTasksSectionCollapsed = State(initialValue: false)
         self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionHeight)
         self._isTasksDividerDragging = State(initialValue: false)
@@ -44,30 +41,29 @@ struct DayViewTimebox: View {
     
     var body: some View {
         GeometryReader { geometry in
-            HStack(alignment: .top, spacing: 0) {
-                // Left section (dynamic width) - TimeboxComponent
-                leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
-                
-                // First vertical divider
-                dayVerticalDivider
-                
-                // Middle section (Journal) - expands to fill remaining space
-                middleDaySection(geometry: geometry)
-                    .frame(maxWidth: .infinity)
-                
-                // Second vertical divider (only show if logs column is not collapsed)
-                if !isLogsColumnCollapsed {
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 0) {
+                    // First two columns container - takes 100% of screen width
+                    HStack(alignment: .top, spacing: 0) {
+                        // Left section (dynamic width) - TimeboxComponent
+                        leftDaySectionWithDivider(geometry: geometry)
+                            .frame(width: dayLeftSectionWidth)
+                        
+                        // First vertical divider
+                        dayVerticalDivider
+                        
+                        // Middle section (Journal) - expands to fill remaining space to make total 100%
+                        middleDaySection(geometry: geometry)
+                            .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
+                    }
+                    .frame(width: geometry.size.width)
+                    
+                    // Second vertical divider
                     dayRightVerticalDivider
-                } else {
-                    // Expand button when collapsed
-                    expandLogsButton
-                }
-                
-                // Right section (Logs) - collapsible
-                if !isLogsColumnCollapsed {
+                    
+                    // Right section (Logs) - 25% of screen width, requires horizontal scroll
                     rightDaySection(geometry: geometry)
-                        .frame(width: dayRightSectionWidth)
+                        .frame(width: geometry.size.width * 0.25)
                 }
             }
         }
@@ -364,24 +360,6 @@ struct DayViewTimebox: View {
     // MARK: - Right Section (Logs)
     private func rightDaySection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Collapse button at the top
-            HStack {
-                Spacer()
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isLogsColumnCollapsed = true
-                    }
-                }) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(4)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 4)
-            .padding(.top, 4)
-            
             // Logs section
             if appPrefs.showAnyLogs {
                 LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
@@ -420,53 +398,8 @@ struct DayViewTimebox: View {
     }
     
     private var dayRightVerticalDivider: some View {
-        Rectangle()
-            .fill(isDayRightVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(width: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isDayRightVerticalDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isDayRightVerticalDividerDragging = true
-                        let newWidth = dayRightSectionWidth - value.translation.width
-                        let minWidth: CGFloat = 150
-                        let maxWidth: CGFloat = 400
-                        dayRightSectionWidth = max(minWidth, min(maxWidth, newWidth))
-                    }
-                    .onEnded { _ in
-                        isDayRightVerticalDividerDragging = false
-                        appPrefs.updateDayViewTimeboxRightSectionWidth(dayRightSectionWidth)
-                    }
-            )
-    }
-    
-    private var expandLogsButton: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isLogsColumnCollapsed = false
-            }
-        }) {
-            VStack(spacing: 4) {
-                Image(systemName: "chevron.left")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                if appPrefs.showAnyLogs {
-                    Text("Logs")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(-90))
-                }
-            }
-            .padding(4)
-        }
-        .buttonStyle(.plain)
-        .frame(width: 24)
-        .background(Color(.systemGray6))
+        Divider()
+            .frame(width: 1)
     }
     
     private var expandTasksButton: some View {
