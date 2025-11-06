@@ -68,6 +68,19 @@ struct TimeboxComponent: View {
     }
     
     var body: some View {
+        Group {
+            if appPrefs.showEventsAsListInDay {
+                // List format: show events and tasks in a list
+                listFormatView
+            } else {
+                // Timeline format: show events and tasks on a timeline
+                timelineFormatView
+            }
+        }
+    }
+    
+    // MARK: - Timeline Format
+    private var timelineFormatView: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 0) {
@@ -131,6 +144,53 @@ struct TimeboxComponent: View {
                         }
                     }
                 }
+            }
+            .onDisappear {
+                stopCurrentTimeTimer()
+            }
+        }
+    }
+    
+    // MARK: - List Format
+    private var listFormatView: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    // All-day items section (events and tasks) - only show if enabled
+                    if showAllDaySection && !allDayItems.isEmpty {
+                        allDayItemsSection
+                            .padding(.bottom, 8)
+                    }
+                    
+                    // List of timed events and tasks
+                    VStack(alignment: .leading, spacing: 8) {
+                        if sortedTimedItems.isEmpty {
+                            Text("No events or tasks")
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        } else {
+                            ForEach(Array(sortedTimedItems.enumerated()), id: \.element.id) { index, item in
+                                // Draw red line above item if current time is before item's end time
+                                if shouldShowCurrentTimeLineAbove(item: item, atIndex: index) {
+                                    currentTimeLineForList
+                                }
+                                
+                                listItemView(item: item)
+                                
+                                // Draw red line below item if it's the last item and is completely in the past
+                                if shouldShowCurrentTimeLineBelow(item: item, atIndex: index) {
+                                    currentTimeLineForList
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                }
+            }
+            .onAppear {
+                startCurrentTimeTimer()
             }
             .onDisappear {
                 stopCurrentTimeTimer()
@@ -517,6 +577,219 @@ struct TimeboxComponent: View {
         
         // Default fallback
         return ("", true)
+    }
+    
+    // MARK: - List Format Helpers
+    private struct TimedItem: Identifiable {
+        let id: String
+        let isTask: Bool
+        let item: Any // Either GoogleCalendarEvent or GoogleTask
+        let startTime: Date
+        let endTime: Date?
+        let isPersonal: Bool
+    }
+    
+    private var sortedTimedItems: [TimedItem] {
+        var items: [TimedItem] = []
+        let calendar = Calendar.current
+        
+        // Add timed events
+        let timedEvents = events.filter { !$0.isAllDay }
+        for event in timedEvents {
+            guard let startTime = event.startTime else { continue }
+            let isPersonal = personalEvents.contains { $0.id == event.id }
+            items.append(TimedItem(
+                id: event.id,
+                isTask: false,
+                item: event,
+                startTime: startTime,
+                endTime: event.endTime,
+                isPersonal: isPersonal
+            ))
+        }
+        
+        // Add timed tasks
+        let tasks = getTasksForDate(date)
+        let timedTasks = tasks.filter { task in
+            if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
+                return !timeWindow.isAllDay
+            }
+            return false
+        }
+        
+        for task in timedTasks {
+            guard let timeWindow = timeWindowManager.getTimeWindow(for: task.id) else { continue }
+            let (_, isPersonal) = findTaskListAndKind(for: task)
+            items.append(TimedItem(
+                id: task.id,
+                isTask: true,
+                item: task,
+                startTime: timeWindow.startTime,
+                endTime: timeWindow.endTime,
+                isPersonal: isPersonal
+            ))
+        }
+        
+        // Sort by start time
+        return items.sorted { $0.startTime < $1.startTime }
+    }
+    
+    @ViewBuilder
+    private func listItemView(item: TimedItem) -> some View {
+        let itemColor = item.isPersonal ? personalColor : professionalColor
+        
+        if item.isTask, let task = item.item as? GoogleTask {
+            let (listId, _) = findTaskListAndKind(for: task)
+            
+            Button(action: { onTaskTap?(task, listId) }) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(formatItemTime(item))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 52, alignment: .trailing)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            // Checkmark circle button - tappable to toggle completion
+                            Button(action: {
+                                onTaskToggle?(task, listId)
+                            }) {
+                                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .font(.body)
+                                    .foregroundColor(task.isCompleted ? itemColor : .secondary)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Text(task.title)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(task.isCompleted ? .secondary : .primary)
+                                .strikethrough(task.isCompleted)
+                                .lineLimit(2)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Circle()
+                        .fill(itemColor)
+                        .frame(width: 8, height: 8)
+                }
+                .padding(10)
+                .background(itemColor.opacity(0.12))
+                .cornerRadius(8)
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else if let event = item.item as? GoogleCalendarEvent {
+            Button(action: { onEventTap?(event) }) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(formatItemTime(item))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 52, alignment: .trailing)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(event.summary)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .lineLimit(2)
+                        if let location = event.location, !location.isEmpty {
+                            Text(location)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Circle()
+                        .fill(itemColor)
+                        .frame(width: 8, height: 8)
+                }
+                .padding(10)
+                .background(itemColor.opacity(0.12))
+                .cornerRadius(8)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+    
+    private func formatItemTime(_ item: TimedItem) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if let endTime = item.endTime {
+            return "\(formatter.string(from: item.startTime)) - \(formatter.string(from: endTime))"
+        }
+        return formatter.string(from: item.startTime)
+    }
+    
+    private var currentTimeLineForList: some View {
+        HStack(spacing: 4) {
+            Text(currentTimeString)
+                .font(.caption2)
+                .foregroundColor(.red)
+                .fontWeight(.semibold)
+            
+            Rectangle()
+                .fill(Color.red)
+                .frame(height: 2)
+        }
+    }
+    
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: Date())
+    }
+    
+    private func shouldShowCurrentTimeLineAbove(item: TimedItem, atIndex index: Int) -> Bool {
+        // Only show red line if this is the current day
+        guard Calendar.current.isDate(date, inSameDayAs: Date()) else {
+            return false
+        }
+        
+        let now = Date()
+        
+        // Only show line above this item if:
+        // 1. Current time is before the item's end time
+        // 2. This is the first TIMED item whose end time is after current time
+        // 3. All previous items have ended
+        
+        guard let endTime = item.endTime else { return false }
+        
+        // If current time is >= item's end time, don't show line above
+        if now >= endTime {
+            return false
+        }
+        
+        // Check if all previous items have ended
+        for i in 0..<index {
+            let prevItem = sortedTimedItems[i]
+            if let prevEndTime = prevItem.endTime, now < prevEndTime {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    private func shouldShowCurrentTimeLineBelow(item: TimedItem, atIndex index: Int) -> Bool {
+        // Only show red line if this is the current day
+        guard Calendar.current.isDate(date, inSameDayAs: Date()) else {
+            return false
+        }
+        
+        let now = Date()
+        
+        // Only show line below if this is the last item
+        guard index == sortedTimedItems.count - 1 else { return false }
+        
+        // For items at the end, only show if the item has ended
+        guard let endTime = item.endTime else { return false }
+        
+        return now >= endTime
     }
     
     // MARK: - Layout Calculation

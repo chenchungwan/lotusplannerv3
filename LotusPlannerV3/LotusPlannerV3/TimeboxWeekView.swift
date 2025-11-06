@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct TimeboxView: View {
+struct TimeboxWeekView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
