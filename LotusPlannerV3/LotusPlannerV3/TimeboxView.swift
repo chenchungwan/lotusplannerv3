@@ -7,6 +7,9 @@ struct TimeboxView: View {
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     
+    // MARK: - Device-Aware Layout
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
     @State private var selectedEvent: GoogleCalendarEvent?
     @State private var taskSheetSelection: TimeboxTaskSelection?
     
@@ -27,11 +30,37 @@ struct TimeboxView: View {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
     
-    private func contentColumnWidth(availableWidth: CGFloat) -> CGFloat {
-        // Calculate width to fit all 7 columns in the view
-        // Account for padding (12 * 2 = 24) and a bit of margin
+    // MARK: - Adaptive Layout Properties
+    private var isCompact: Bool {
+        horizontalSizeClass == .compact
+    }
+    
+    private func visibleDaysCount(for geometry: GeometryProxy) -> Int {
+        if isCompact {
+            // iPhone: Show 2 days at a time
+            return 2
+        } else {
+            // For screens larger than iPad (laptops): Show all 7 days
+            // iPad Pro 12.9" landscape is ~1024 points, laptops typically 1280+
+            if geometry.size.width > 1200 {
+                return 7
+            }
+            // iPad: Show 3 days in portrait, 5 in landscape
+            // Detect landscape by checking if width > height
+            let isLandscape = geometry.size.width > geometry.size.height
+            return isLandscape ? 5 : 3
+        }
+    }
+    
+    private func dayColumnWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
+        // Account for padding (12 * 2 = 24)
         let availableContentWidth = availableWidth - 24
-        return availableContentWidth / 7
+        return availableContentWidth / CGFloat(visibleDays)
+    }
+    
+    private func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
+        // Total width for all 7 days
+        return dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
     }
     
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
@@ -143,48 +172,57 @@ struct TimeboxView: View {
                 .background(.ultraThinMaterial)
             
             GeometryReader { geometry in
+                let availableWidth = geometry.size.width
+                let visibleDays = visibleDaysCount(for: geometry)
+                let columnWidth = dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+                let contentWidth = totalContentWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+                
                 ScrollViewReader { proxy in
-                    VStack(spacing: 0) {
-                        if weekDates.count == 7 {
-                            // Fixed header row with day dates (7 columns)
-                            HStack(spacing: 0) {
-                                ForEach(0..<weekDates.count, id: \.self) { index in
-                                    let date = weekDates[index]
-                                    let calendar = Calendar.mondayFirst
-                                    let isToday = calendar.isDate(date, inSameDayAs: Date())
-                                    weekDayColumnHeader(date: date, isToday: isToday)
-                                        .frame(width: contentColumnWidth(availableWidth: geometry.size.width))
-                                        .background(Color(.systemGray6))
-                                        .id("day_\(index)")
-                                    
-                                    // Divider between days (except for the last one)
-                                    if index < weekDates.count - 1 {
-                                        Rectangle()
-                                            .fill(Color(.systemGray4))
-                                            .frame(width: 1)
-                                    }
-                                }
-                            }
-                            .frame(height: 60)
-                            .background(Color(.systemBackground))
-                            
-                            // Unified scrollable timeline for all 7 days with TimeboxComponent
-                            ScrollView(.vertical, showsIndicators: true) {
-                                HStack(alignment: .top, spacing: 0) {
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            if weekDates.count == 7 {
+                                // Fixed header row with day dates (7 columns)
+                                HStack(spacing: 0) {
                                     ForEach(0..<weekDates.count, id: \.self) { index in
-                                        if index < weekDates.count {
-                                            timeboxColumn(for: weekDates[index], index: index, availableWidth: geometry.size.width)
+                                        let date = weekDates[index]
+                                        let calendar = Calendar.mondayFirst
+                                        let isToday = calendar.isDate(date, inSameDayAs: Date())
+                                        weekDayColumnHeader(date: date, isToday: isToday)
+                                            .frame(width: columnWidth)
+                                            .background(Color(.systemGray6))
+                                            .id("day_\(index)")
+                                        
+                                        // Divider between days (except for the last one)
+                                        if index < weekDates.count - 1 {
+                                            Rectangle()
+                                                .fill(Color(.systemGray4))
+                                                .frame(width: 1)
                                         }
                                     }
                                 }
-                                .padding(.horizontal, 12)
+                                .frame(width: contentWidth, height: 60)
+                                .background(Color(.systemBackground))
+                                
+                                // Unified scrollable timeline for all 7 days with TimeboxComponent
+                                ScrollView(.vertical, showsIndicators: true) {
+                                    HStack(alignment: .top, spacing: 0) {
+                                        ForEach(0..<weekDates.count, id: \.self) { index in
+                                            if index < weekDates.count {
+                                                timeboxColumn(for: weekDates[index], index: index, availableWidth: availableWidth, columnWidth: columnWidth)
+                                            }
+                                        }
+                                    }
+                                    .frame(width: contentWidth)
+                                    .padding(.horizontal, 12)
+                                }
+                            } else {
+                                // Fallback if week dates couldn't be calculated
+                                Text("Unable to load week dates")
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
-                        } else {
-                            // Fallback if week dates couldn't be calculated
-                            Text("Unable to load week dates")
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
+                        .frame(width: contentWidth)
                     }
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -335,7 +373,7 @@ struct TimeboxView: View {
     
     // MARK: - Helper Views
     @ViewBuilder
-    private func timeboxColumn(for date: Date, index: Int, availableWidth: CGFloat) -> some View {
+    private func timeboxColumn(for date: Date, index: Int, availableWidth: CGFloat, columnWidth: CGFloat) -> some View {
         let eventsForDate = getAllEventsForDate(date)
         let tasksForDate = getTasksForDate(date)
         let (personalTasksForDate, professionalTasksForDate) = splitTasksByAccount(tasksForDate)
@@ -384,7 +422,7 @@ struct TimeboxView: View {
                 },
                 showAllDaySection: false
             )
-            .frame(width: contentColumnWidth(availableWidth: availableWidth))
+            .frame(width: columnWidth)
         }
         
         // Divider between days (except for the last one)

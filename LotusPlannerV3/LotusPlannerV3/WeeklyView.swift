@@ -52,6 +52,11 @@ struct WeeklyView: View {
             // iPhone: Show 2 days at a time
             return 2
         } else {
+            // For screens larger than iPad (laptops): Show all 7 days
+            // iPad Pro 12.9" landscape is ~1024 points, laptops typically 1280+
+            if geometry.size.width > 1200 {
+                return 7
+            }
             // iPad: Show 3 days in portrait, 5 in landscape
             // Detect landscape by checking if width > height
             let isLandscape = geometry.size.width > geometry.size.height

@@ -459,15 +459,27 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var dayViewTimeboxRightSectionWidth: CGFloat {
-        didSet {
-            UserDefaults.standard.set(dayViewTimeboxRightSectionWidth, forKey: "dayViewTimeboxRightSectionWidth")
-        }
-    }
-    
     @Published var dayViewTimeboxTasksSectionHeight: CGFloat {
         didSet {
             UserDefaults.standard.set(dayViewTimeboxTasksSectionHeight, forKey: "dayViewTimeboxTasksSectionHeight")
+        }
+    }
+    
+    @Published var dayViewTimeboxLogsSectionHeight: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewTimeboxLogsSectionHeight, forKey: "dayViewTimeboxLogsSectionHeight")
+        }
+    }
+    
+    @Published var dayViewTimeboxTasksSectionCollapsed: Bool {
+        didSet {
+            UserDefaults.standard.set(dayViewTimeboxTasksSectionCollapsed, forKey: "dayViewTimeboxTasksSectionCollapsed")
+        }
+    }
+    
+    @Published var dayViewTimeboxLogsSectionCollapsed: Bool {
+        didSet {
+            UserDefaults.standard.set(dayViewTimeboxLogsSectionCollapsed, forKey: "dayViewTimeboxLogsSectionCollapsed")
         }
     }
     
@@ -599,8 +611,10 @@ class AppPreferences: ObservableObject {
         
         // Load DayViewTimebox divider positions
         self.dayViewTimeboxLeftSectionWidth = UserDefaults.standard.object(forKey: "dayViewTimeboxLeftSectionWidth") as? CGFloat ?? 300
-        self.dayViewTimeboxRightSectionWidth = UserDefaults.standard.object(forKey: "dayViewTimeboxRightSectionWidth") as? CGFloat ?? 250
         self.dayViewTimeboxTasksSectionHeight = UserDefaults.standard.object(forKey: "dayViewTimeboxTasksSectionHeight") as? CGFloat ?? 400
+        self.dayViewTimeboxLogsSectionHeight = UserDefaults.standard.object(forKey: "dayViewTimeboxLogsSectionHeight") as? CGFloat ?? 300
+        self.dayViewTimeboxTasksSectionCollapsed = UserDefaults.standard.object(forKey: "dayViewTimeboxTasksSectionCollapsed") as? Bool ?? false
+        self.dayViewTimeboxLogsSectionCollapsed = UserDefaults.standard.object(forKey: "dayViewTimeboxLogsSectionCollapsed") as? Bool ?? false
         
         // Load CalendarView additional divider positions
         self.calendarTopSectionHeight = UserDefaults.standard.object(forKey: "calendarTopSectionHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.85
@@ -721,12 +735,20 @@ class AppPreferences: ObservableObject {
         dayViewTimeboxLeftSectionWidth = value
     }
     
-    func updateDayViewTimeboxRightSectionWidth(_ value: CGFloat) {
-        dayViewTimeboxRightSectionWidth = value
-    }
-    
     func updateDayViewTimeboxTasksSectionHeight(_ value: CGFloat) {
         dayViewTimeboxTasksSectionHeight = value
+    }
+    
+    func updateDayViewTimeboxLogsSectionHeight(_ value: CGFloat) {
+        dayViewTimeboxLogsSectionHeight = value
+    }
+    
+    func updateDayViewTimeboxTasksSectionCollapsed(_ value: Bool) {
+        dayViewTimeboxTasksSectionCollapsed = value
+    }
+    
+    func updateDayViewTimeboxLogsSectionCollapsed(_ value: Bool) {
+        dayViewTimeboxLogsSectionCollapsed = value
     }
     
     // CalendarView Additional Divider Position Update Methods

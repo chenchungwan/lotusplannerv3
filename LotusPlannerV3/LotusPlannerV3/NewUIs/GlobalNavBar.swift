@@ -636,8 +636,8 @@ struct GlobalNavBar: View {
                         HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
                             // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Simple Week View, show all buttons but highlight w.circle
-                                if navigationManager.currentView == .simpleWeekView {
+                                // In Simple Week View or Timebox View, show all buttons but highlight appropriate circle
+                                if navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .timebox {
                                     // Only show d.circle in non-Goals views
                                     if navigationManager.currentView != .goals {
                                         Button {
@@ -658,12 +658,16 @@ struct GlobalNavBar: View {
                                             .foregroundColor(.secondary)
                                     }
                                     Button {
-                                        navigationManager.switchToTimebox()
+                                        if navigationManager.currentView == .timebox {
+                                            // Already in timebox, do nothing or stay
+                                        } else {
+                                            navigationManager.switchToTimebox()
+                                        }
                                     } label: {
                                         Image(systemName: "7.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(.accentColor)
+                                            .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
                                     }
                                 } else {
                                     // Only show d.circle in non-Goals views
