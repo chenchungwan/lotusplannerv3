@@ -35,6 +35,57 @@ struct AllGoalsTableContent: View {
         goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition })
     }
     
+    // Find the current period's timeframe
+    private var currentTimeframe: TimeframeGroup? {
+        let now = Date()
+        let calendar = Calendar.mondayFirst
+        
+        // Find the timeframe that contains the current date
+        // Priority: current week > current month > current year > first non-past
+        
+        // First, try to find the current week
+        if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: now) {
+            let currentWeekStart = weekInterval.start
+            let currentYear = calendar.component(.year, from: now)
+            let currentWeekOfYear = calendar.component(.weekOfYear, from: now)
+            
+            if let found = timeframes.first(where: { timeframe in
+                timeframe.type == .week &&
+                timeframe.year == currentYear &&
+                timeframe.weekOfYear == currentWeekOfYear &&
+                timeframe.weekStartDate == currentWeekStart
+            }) {
+                return found
+            }
+        }
+        
+        // Then try to find the current month
+        if let monthInterval = calendar.dateInterval(of: .month, for: now) {
+            let currentYear = calendar.component(.year, from: now)
+            let currentMonth = calendar.component(.month, from: now)
+            
+            if let found = timeframes.first(where: { timeframe in
+                timeframe.type == .month &&
+                timeframe.year == currentYear &&
+                timeframe.month == currentMonth
+            }) {
+                return found
+            }
+        }
+        
+        // Then try to find the current year
+        let currentYear = calendar.component(.year, from: now)
+        if let found = timeframes.first(where: { timeframe in
+            timeframe.type == .year &&
+            timeframe.year == currentYear
+        }) {
+            return found
+        }
+        
+        // If no exact match, find the first non-past timeframe (current or future)
+        return timeframes.first(where: { $0.endDate >= now })
+    }
+    
     // MARK: - Adaptive Layout Properties
     private var isCompact: Bool {
         horizontalSizeClass == .compact
@@ -97,41 +148,56 @@ struct AllGoalsTableContent: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView(.horizontal, showsIndicators: true) {
-                    HStack(alignment: .top, spacing: 16) {
-                        ForEach(timeframes) { timeframe in
-                            TimeframeColumnView(
-                                timeframe: timeframe,
-                                categories: categories,
-                                columnWidth: colWidth,
-                                adaptivePadding: adaptivePadding,
-                                adaptiveSpacing: adaptiveSpacing,
-                                isCompact: isCompact,
-                                onGoalTap: { goal in
-                                    goalToEdit = goal
-                                    showingEditGoal = true
-                                },
-                                onGoalEdit: { goal in
-                                    goalToEdit = goal
-                                    showingEditGoal = true
-                                },
-                                onGoalDelete: { goal in
-                                    goalsManager.deleteGoal(goal.id)
-                                },
-                                onCategoryEdit: { category in
-                                    categoryToEdit = category
-                                    showingEditCategory = true
-                                },
-                                onCategoryDelete: { category in
-                                    goalsManager.deleteCategory(category.id)
-                                }
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        HStack(alignment: .top, spacing: 16) {
+                            ForEach(timeframes) { timeframe in
+                                TimeframeColumnView(
+                                    timeframe: timeframe,
+                                    categories: categories,
+                                    columnWidth: colWidth,
+                                    adaptivePadding: adaptivePadding,
+                                    adaptiveSpacing: adaptiveSpacing,
+                                    isCompact: isCompact,
+                                    onGoalTap: { goal in
+                                        goalToEdit = goal
+                                        showingEditGoal = true
+                                    },
+                                    onGoalEdit: { goal in
+                                        goalToEdit = goal
+                                        showingEditGoal = true
+                                    },
+                                    onGoalDelete: { goal in
+                                        goalsManager.deleteGoal(goal.id)
+                                    },
+                                    onCategoryEdit: { category in
+                                        categoryToEdit = category
+                                        showingEditCategory = true
+                                    },
+                                    onCategoryDelete: { category in
+                                        goalsManager.deleteCategory(category.id)
+                                    }
+                                )
+                                .id(timeframe.id)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 20)
+                    .id(refreshTrigger) // Force refresh when trigger changes
+                    .onAppear {
+                        // Auto-scroll to current period's column on launch
+                        // Use multiple attempts to ensure scroll happens after layout
+                        scrollToCurrentTimeframe(proxy: proxy, delay: 0.1)
+                        scrollToCurrentTimeframe(proxy: proxy, delay: 0.3)
+                        scrollToCurrentTimeframe(proxy: proxy, delay: 0.5)
+                    }
+                    .onChange(of: refreshTrigger) { _ in
+                        // Also scroll to current timeframe when view refreshes
+                        scrollToCurrentTimeframe(proxy: proxy, delay: 0.1)
+                        scrollToCurrentTimeframe(proxy: proxy, delay: 0.3)
+                    }
                 }
-                .id(refreshTrigger) // Force refresh when trigger changes
             }
         }
         .sheet(isPresented: $showingEditGoal) {
@@ -159,6 +225,29 @@ struct AllGoalsTableContent: View {
             TimeframeGroup(from: goal) == timeframe
         }
         .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+    }
+    
+    private func scrollToCurrentTimeframe(proxy: ScrollViewProxy, delay: Double = 0.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let now = Date()
+            // Find the first non-past timeframe (current or future)
+            // This ensures we scroll past all collapsed past columns
+            if let targetTimeframe = timeframes.first(where: { $0.endDate >= now }) {
+                // Use stable ID that matches the view
+                let targetId = targetTimeframe.id
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    // Use .leading anchor to position target column at left edge,
+                    // pushing all past collapsed columns off-screen to the left
+                    proxy.scrollTo(targetId, anchor: .leading)
+                }
+            } else if let lastTimeframe = timeframes.last {
+                // Fallback: if all are past, scroll to the most recent one
+                let targetId = lastTimeframe.id
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    proxy.scrollTo(targetId, anchor: .leading)
+                }
+            }
+        }
     }
     
 }
@@ -485,7 +574,23 @@ struct EditCategoryView: View {
 
 // MARK: - Timeframe Group
 struct TimeframeGroup: Identifiable, Hashable, Comparable {
-    let id = UUID()
+    // Use a stable identifier based on timeframe properties
+    var id: String {
+        switch type {
+        case .year:
+            return "year_\(year)"
+        case .month:
+            return "month_\(year)_\(month ?? 0)"
+        case .week:
+            if let weekStart = weekStartDate {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                return "week_\(formatter.string(from: weekStart))"
+            }
+            return "week_\(year)_\(weekOfYear ?? 0)"
+        }
+    }
+    
     let type: GoalTimeframe
     let year: Int
     let month: Int? // For month timeframe
