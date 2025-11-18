@@ -220,7 +220,9 @@ struct TimelineComponent: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
-        let timeString = formatter.string(from: date).lowercased()
+        var timeString = formatter.string(from: date).lowercased()
+        // Remove the "m" from "am/pm" to show "6a" instead of "6am"
+        timeString = timeString.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
         return timeString
     }
     

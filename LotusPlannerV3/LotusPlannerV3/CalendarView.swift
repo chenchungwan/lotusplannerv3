@@ -2451,11 +2451,6 @@ struct CalendarView: View {
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
-        case .classic2:
-            DayViewClassic2(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
         case .timebox:
             DayViewTimebox(onEventTap: { ev in
                 selectedCalendarEvent = ev

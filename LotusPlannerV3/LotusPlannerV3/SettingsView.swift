@@ -15,11 +15,10 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compactTwo = 1
     case defaultNew = 3
     case mobile = 4
-    case classic2 = 5
     case timebox = 6
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .classic2, .compactTwo, .defaultNew, .mobile, .timebox] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .timebox] }
 
     var displayName: String {
         switch self {
@@ -27,7 +26,6 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compact: "Classic"
         case .compactTwo: "Compact"
         case .mobile: "Mobile"
-        case .classic2: "Classic 2"
         case .timebox: "Timebox"
         }
     }
@@ -38,7 +36,6 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compact: "Classic layout with Timeline on left, Tasks and Journal on right with adjustable divider"
         case .compactTwo: "Events & Logs on left, Tasks (Personal/Professional side-by-side) and Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
-        case .classic2: "Enhanced classic: Events, Personal Tasks, Professional Tasks on left, Journal on right"
         case .timebox: "Timebox timeline on left, Journal on top right, Logs on bottom right"
         }
     }
