@@ -7,6 +7,7 @@ class LogsViewModel: ObservableObject {
     
     private init() {
         loadLocalData()
+        setupiCloudSync()
     }
     
     // Reload data from Core Data
@@ -85,15 +86,37 @@ class LogsViewModel: ObservableObject {
     
     // MARK: - Data Loading and Syncing
     private func loadLocalData() {
+        // Refresh Core Data context to get latest changes from iCloud
+        let context = PersistenceController.shared.container.viewContext
+        context.refreshAllObjects()
         
         weightEntries = coreDataManager.loadWeightEntries()
         workoutEntries = coreDataManager.loadWorkoutEntries()
         foodEntries = coreDataManager.loadFoodEntries()
         waterEntries = coreDataManager.loadWaterEntries()
-        
     }
     
-    private func setupiCloudSync() {}
+    private func setupiCloudSync() {
+        // Listen for iCloud data change notifications
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Reload data when iCloud sync completes
+            self?.loadLocalData()
+        }
+        
+        // Listen for Core Data remote change notifications
+        NotificationCenter.default.addObserver(
+            forName: .NSPersistentStoreRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Reload data when CloudKit changes are received
+            self?.loadLocalData()
+        }
+    }
     
     func loadLogsForCurrentDate() {
         // Data is already loaded locally, just filter for current date

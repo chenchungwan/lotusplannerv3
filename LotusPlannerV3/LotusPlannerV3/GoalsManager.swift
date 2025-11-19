@@ -2,6 +2,9 @@ import Foundation
 import CoreData
 import CloudKit
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 class GoalsManager: ObservableObject {
@@ -45,6 +48,7 @@ class GoalsManager: ObservableObject {
         self.privateDatabase = cloudKitContainer.privateCloudDatabase
         loadData()
         setupCloudKitSubscription()
+        setupiCloudSync()
     }
     
     // MARK: - Data Loading
@@ -62,6 +66,9 @@ class GoalsManager: ObservableObject {
     }
     
     private func loadFromCoreData() {
+        // Refresh Core Data context to get latest changes from iCloud
+        context.refreshAllObjects()
+        
         // Load categories
         let categoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
         categoryRequest.sortDescriptors = [NSSortDescriptor(keyPath: \GoalCategory.displayPosition, ascending: true)]
@@ -402,15 +409,21 @@ class GoalsManager: ObservableObject {
                 switch result {
                 case .success(let record):
                     if let data = record["data"] as? Data {
-                        let decoder = JSONDecoder()
-                        decoder.dateDecodingStrategy = .iso8601
-                        let container = try decoder.decode(GoalsContainer.self, from: data)
-                        
-                        // Update local data if CloudKit data is newer
-                        if let cloudSyncDate = record["lastSyncDate"] as? Date,
-                           let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date,
-                           cloudSyncDate > localSyncDate {
+                        do {
+                            let decoder = JSONDecoder()
+                            decoder.dateDecodingStrategy = .iso8601
+                            let container = try decoder.decode(GoalsContainer.self, from: data)
                             
+                            // Get sync dates for comparison
+                            let cloudSyncDate = record["lastSyncDate"] as? Date ?? Date()
+                            let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date
+                            
+                            // Update local data if CloudKit data is newer, or if we don't have a local sync date
+                            if let localSync = localSyncDate {
+                                // We have a local sync date, only update if CloudKit is newer
+                                guard cloudSyncDate > localSync else { continue }
+                            }
+                            // If no local sync date, or CloudKit is newer, update
                             categories = container.categories
                             goals = container.goals
                             
@@ -418,6 +431,8 @@ class GoalsManager: ObservableObject {
                             await updateCoreDataFromCloudKit()
                             
                             UserDefaults.standard.set(cloudSyncDate, forKey: lastSyncKey)
+                        } catch {
+                            print("Error decoding goals data from CloudKit: \(error)")
                         }
                     }
                 case .failure(let error):
@@ -474,6 +489,51 @@ class GoalsManager: ObservableObject {
                 print("Error setting up CloudKit subscription: \(error)")
             }
         }
+    }
+    
+    // MARK: - iCloud Sync Notifications
+    private func setupiCloudSync() {
+        // Listen for iCloud data change notifications
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Reload data when iCloud sync completes
+            Task { @MainActor in
+                self?.loadFromCoreData()
+                // Also fetch from CloudKit to ensure we have the latest
+                await self?.fetchFromiCloud()
+            }
+        }
+        
+        // Listen for Core Data remote change notifications
+        NotificationCenter.default.addObserver(
+            forName: .NSPersistentStoreRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Reload data when CloudKit changes are received
+            Task { @MainActor in
+                self?.loadFromCoreData()
+                // Also fetch from CloudKit to ensure we have the latest
+                await self?.fetchFromiCloud()
+            }
+        }
+        
+        // Fetch from iCloud when app becomes active
+        #if canImport(UIKit)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.fetchFromiCloud()
+                self?.loadFromCoreData()
+            }
+        }
+        #endif
     }
     
     // MARK: - Public Sync Methods
