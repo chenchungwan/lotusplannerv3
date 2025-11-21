@@ -187,34 +187,22 @@ class CustomLogManager: ObservableObject {
         if let existingIndex = entries.firstIndex(where: { 
             $0.itemId == itemId && calendar.isDate($0.date, inSameDayAs: targetDate) 
         }) {
-            // Toggle existing entry
-            var entry = entries[existingIndex]
-            entry.isCompleted.toggle()
-            entry.updatedAt = Date()
-            
-            let entity = CustomLogEntry(context: context)
-            entity.id = entry.id.uuidString
-            entity.itemId = entry.itemId.uuidString
-            entity.date = entry.date
-            entity.isCompleted = entry.isCompleted
-            entity.createdAt = entry.createdAt
-            entity.updatedAt = entry.updatedAt
-            
-            // Delete old entry
+            // Toggle existing entry in Core Data
+            let entry = entries[existingIndex]
             let request: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
             request.predicate = NSPredicate(format: "id == %@", entry.id.uuidString)
             
             do {
                 let entities = try context.fetch(request)
-                for entity in entities {
-                    context.delete(entity)
+                if let entity = entities.first {
+                    entity.isCompleted.toggle()
+                    entity.updatedAt = Date()
+                    saveContext()
+                    loadEntries()
                 }
             } catch {
-                print("Error deleting old entry: \(error)")
+                print("Error updating entry: \(error)")
             }
-            
-            saveContext()
-            loadEntries()
         } else {
             // Create new entry
             let entry = CustomLogEntryData(
@@ -350,25 +338,63 @@ class CustomLogManager: ObservableObject {
     }
     
     private func saveItemToCoreData(_ item: CustomLogItemData) {
-        let entity = CustomLogItem(context: context)
-        entity.id = item.id.uuidString
-        entity.title = item.title
-        entity.isEnabled = item.isEnabled
-        entity.displayOrder = Int16(item.displayOrder)
-        entity.createdAt = item.createdAt
-        entity.updatedAt = item.updatedAt
-        entity.userId = "default" // Add default userId for CloudKit sync
+        // Check if item already exists
+        let request: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", item.id.uuidString)
+        
+        do {
+            let existingEntities = try context.fetch(request)
+            let entity: CustomLogItem
+            
+            if let existing = existingEntities.first {
+                // Update existing item
+                entity = existing
+            } else {
+                // Create new item
+                entity = CustomLogItem(context: context)
+                entity.id = item.id.uuidString
+                entity.createdAt = item.createdAt
+            }
+            
+            // Set/update properties
+            entity.title = item.title
+            entity.isEnabled = item.isEnabled
+            entity.displayOrder = Int16(item.displayOrder)
+            entity.updatedAt = item.updatedAt
+            entity.userId = "default" // Add default userId for CloudKit sync
+        } catch {
+            print("Error saving item to Core Data: \(error)")
+        }
     }
     
     private func saveEntryToCoreData(_ entry: CustomLogEntryData) {
-        let entity = CustomLogEntry(context: context)
-        entity.id = entry.id.uuidString
-        entity.itemId = entry.itemId.uuidString
-        entity.date = entry.date
-        entity.isCompleted = entry.isCompleted
-        entity.createdAt = entry.createdAt
-        entity.updatedAt = entry.updatedAt
-        entity.userId = "default" // Add default userId for CloudKit sync
+        // Check if entry already exists
+        let request: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id.uuidString)
+        
+        do {
+            let existingEntities = try context.fetch(request)
+            let entity: CustomLogEntry
+            
+            if let existing = existingEntities.first {
+                // Update existing entry
+                entity = existing
+            } else {
+                // Create new entry
+                entity = CustomLogEntry(context: context)
+                entity.id = entry.id.uuidString
+                entity.createdAt = entry.createdAt
+            }
+            
+            // Set/update properties
+            entity.itemId = entry.itemId.uuidString
+            entity.date = entry.date
+            entity.isCompleted = entry.isCompleted
+            entity.updatedAt = entry.updatedAt
+            entity.userId = "default" // Add default userId for CloudKit sync
+        } catch {
+            print("Error saving entry to Core Data: \(error)")
+        }
     }
     
     private func updateCoreDataFromCloudKit(container: CustomLogContainer) async {
@@ -408,6 +434,37 @@ class CustomLogManager: ObservableObject {
     
     func refreshData() {
         loadData()
+    }
+    
+    // MARK: - Delete All Data
+    func deleteAllData() {
+        // Clear local arrays
+        items.removeAll()
+        entries.removeAll()
+        
+        // Delete all from Core Data
+        let itemRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogItem.fetchRequest()
+        let deleteItemRequest = NSBatchDeleteRequest(fetchRequest: itemRequest)
+        
+        let entryRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogEntry.fetchRequest()
+        let deleteEntryRequest = NSBatchDeleteRequest(fetchRequest: entryRequest)
+        
+        do {
+            try context.execute(deleteItemRequest)
+            try context.execute(deleteEntryRequest)
+            try context.save()
+            
+            // Clear UserDefaults
+            UserDefaults.standard.removeObject(forKey: lastSyncKey)
+            
+            // Update visibility
+            updateCustomLogVisibility()
+            
+            // Sync deletion to CloudKit
+            syncToCloudKit()
+        } catch {
+            print("Error deleting all custom log data: \(error)")
+        }
     }
     
     // MARK: - Visibility Management

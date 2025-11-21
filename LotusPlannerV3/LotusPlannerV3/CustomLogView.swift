@@ -14,7 +14,7 @@ struct CustomLogView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
             if enabledItems.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "list.bullet.rectangle")
@@ -33,7 +33,7 @@ struct CustomLogView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
             } else {
-                LazyVStack(spacing: 4) {
+                LazyVStack(spacing: 2) {
                     ForEach(enabledItems) { item in
                         CustomLogItemView(
                             item: item,

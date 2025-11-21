@@ -666,7 +666,7 @@ extension WeeklyView {
                                                         .frame(width: 0.5),
                                                     alignment: .trailing
                                                 )
-                                                .id("custom_day_\(index)")
+                                                .id("customlog_day_\(index)")
                                         }
                                     }
                                     .frame(width: fixedWidth)
@@ -1121,7 +1121,7 @@ extension WeeklyView {
             // Custom Logs
             if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: 2) {
                         let enabledItems = customLogManager.items.filter { $0.isEnabled }
                         customLogSummary(items: enabledItems, date: date)
                     }
@@ -1298,18 +1298,6 @@ extension WeeklyView {
                 .frame(minHeight: 80)
                 
                 Divider()
-            }
-            
-            // Custom Logs column
-            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
-                VStack(alignment: .leading, spacing: 4) {
-                    let enabledItems = customLogManager.items.filter { $0.isEnabled }
-                    customLogSummary(items: enabledItems, date: date)
-                    Spacer(minLength: 0)
-                }
-                .padding(.all, 8)
-                .frame(width: 228.6, alignment: .topLeading)
-                .frame(minHeight: 80)
             }
         }
     }
@@ -1489,17 +1477,6 @@ extension WeeklyView {
                     ForEach(foodLogsForDate, id: \.id) { entry in
                         foodLogCard(entry: entry)
                     }
-                    Spacer(minLength: 0)
-                }
-                .padding(.all, 8)
-                .frame(minWidth: 200, maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-            }
-            
-            // Custom Logs column
-            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
-                VStack(alignment: .leading, spacing: 4) {
-                    let enabledItems = customLogManager.items.filter { $0.isEnabled }
-                    customLogSummary(items: enabledItems, date: date)
                     Spacer(minLength: 0)
                 }
                 .padding(.all, 8)
@@ -1750,7 +1727,7 @@ extension WeeklyView {
             count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
         }
         
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 2) {
             if !enabledItems.isEmpty && completedCount > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "list.bullet.rectangle")
@@ -1762,19 +1739,19 @@ extension WeeklyView {
                         .foregroundColor(.primary)
                 }
                 .padding(.horizontal, 6)
-                .padding(.vertical, 6)
+                .padding(.vertical, 2)
                 .background(Color(.systemGray6).opacity(0.5))
                 .cornerRadius(6)
                 
                 // Show individual items
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(enabledItems) { item in
-                        HStack(spacing: 4) {
+                        HStack(spacing: 8) {
                             Button(action: {
                                 customLogManager.toggleEntry(for: item.id, date: date)
                             }) {
                                 Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
-                                    .font(.caption)
+                                    .font(.body)
                                     .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
                             }
                             .buttonStyle(.plain)
@@ -1783,7 +1760,6 @@ extension WeeklyView {
                                 .font(.body)
                                 .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
                                 .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
-                                .lineLimit(1)
                             
                             Spacer()
                         }
@@ -1797,7 +1773,7 @@ extension WeeklyView {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
@@ -2026,7 +2002,7 @@ extension WeeklyView {
         
         return Group {
             if completedCount > 0 {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
                         Image(systemName: "list.bullet.rectangle")
                             .font(.body)
@@ -2039,12 +2015,12 @@ extension WeeklyView {
                     // Show individual items
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(items) { item in
-                            HStack(spacing: 4) {
+                            HStack(spacing: 8) {
                                 Button(action: {
                                     customLogManager.toggleEntry(for: item.id, date: date)
                                 }) {
                                     Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
-                                        .font(.caption)
+                                        .font(.body)
                                         .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
                                 }
                                 .buttonStyle(.plain)
@@ -2053,14 +2029,13 @@ extension WeeklyView {
                                     .font(.body)
                                     .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
                                     .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
-                                    .lineLimit(1)
                                 
                                 Spacer()
                             }
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
                 .padding(.horizontal, 8)
                 .background(Color(.systemGray6).opacity(0.5))
                 .cornerRadius(6)

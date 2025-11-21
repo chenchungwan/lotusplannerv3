@@ -1312,6 +1312,12 @@ get: { appPrefs.showFoodLogs },
         LogsViewModel.shared.reloadData()
         LogsViewModel.shared.loadLogsForCurrentDate()
         
+        // Delete all Custom Logs data (Core Data + CloudKit)
+        CustomLogManager.shared.deleteAllData()
+        
+        // Delete all Goals data (Core Data + CloudKit)
+        GoalsManager.shared.deleteAllData()
+        
         // Delete all journal data (drawings, photos, background PDFs)
         JournalManager.shared.deleteAllJournalData()
         

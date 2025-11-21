@@ -370,7 +370,7 @@ extension LogsComponent {
     }
     
     var customLogSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundColor(viewModel.accentColor)
@@ -393,7 +393,7 @@ extension LogsComponent {
     }
     
     var customLogSectionHorizontal: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundColor(viewModel.accentColor)

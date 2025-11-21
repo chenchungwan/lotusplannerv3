@@ -244,15 +244,34 @@ class GoalsManager: ObservableObject {
     
     // MARK: - Core Data Operations
     private func saveCategoryToCoreData(_ category: GoalCategoryData) {
-        let entity = GoalCategory(context: context)
-        entity.id = category.id.uuidString
-        entity.title = category.title
-        entity.displayPosition = Int16(category.displayPosition)
-        entity.createdAt = category.createdAt
-        entity.updatedAt = category.updatedAt
-        entity.userId = "default" // You might want to use actual user ID
+        // Check if category already exists
+        let request: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", category.id.uuidString)
         
-        saveContext()
+        do {
+            let existingEntities = try context.fetch(request)
+            let entity: GoalCategory
+            
+            if let existing = existingEntities.first {
+                // Update existing category
+                entity = existing
+            } else {
+                // Create new category
+                entity = GoalCategory(context: context)
+                entity.id = category.id.uuidString
+                entity.createdAt = category.createdAt
+            }
+            
+            // Set/update properties
+            entity.title = category.title
+            entity.displayPosition = Int16(category.displayPosition)
+            entity.updatedAt = category.updatedAt
+            entity.userId = "default" // You might want to use actual user ID
+            
+            saveContext()
+        } catch {
+            print("Error saving category to Core Data: \(error)")
+        }
     }
     
     private func updateCategoryInCoreData(_ category: GoalCategoryData) {
@@ -288,20 +307,39 @@ class GoalsManager: ObservableObject {
     }
     
     private func saveGoalToCoreData(_ goal: GoalData) {
-        let entity = Goal(context: context)
-        entity.id = goal.id.uuidString
-        entity.title = goal.title
-        entity.goalDescription = goal.description
-        entity.successMetric = goal.successMetric
-        entity.categoryId = goal.categoryId.uuidString
-        entity.targetTimeframe = goal.targetTimeframe.rawValue
-        entity.dueDate = goal.dueDate
-        entity.isCompleted = goal.isCompleted
-        entity.createdAt = goal.createdAt
-        entity.updatedAt = goal.updatedAt
-        entity.userId = "default" // You might want to use actual user ID
+        // Check if goal already exists
+        let request: NSFetchRequest<Goal> = Goal.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", goal.id.uuidString)
         
-        saveContext()
+        do {
+            let existingEntities = try context.fetch(request)
+            let entity: Goal
+            
+            if let existing = existingEntities.first {
+                // Update existing goal
+                entity = existing
+            } else {
+                // Create new goal
+                entity = Goal(context: context)
+                entity.id = goal.id.uuidString
+                entity.createdAt = goal.createdAt
+            }
+            
+            // Set/update properties
+            entity.title = goal.title
+            entity.goalDescription = goal.description
+            entity.successMetric = goal.successMetric
+            entity.categoryId = goal.categoryId.uuidString
+            entity.targetTimeframe = goal.targetTimeframe.rawValue
+            entity.dueDate = goal.dueDate
+            entity.isCompleted = goal.isCompleted
+            entity.updatedAt = goal.updatedAt
+            entity.userId = "default" // You might want to use actual user ID
+            
+            saveContext()
+        } catch {
+            print("Error saving goal to Core Data: \(error)")
+        }
     }
     
     private func updateGoalInCoreData(_ goal: GoalData) {
@@ -363,6 +401,36 @@ class GoalsManager: ObservableObject {
             } catch {
                 print("Error saving context: \(error)")
             }
+        }
+    }
+    
+    // MARK: - Delete All Data
+    func deleteAllData() {
+        // Clear local arrays
+        categories.removeAll()
+        goals.removeAll()
+        
+        // Delete all from Core Data
+        let categoryRequest: NSFetchRequest<NSFetchRequestResult> = GoalCategory.fetchRequest()
+        let deleteCategoryRequest = NSBatchDeleteRequest(fetchRequest: categoryRequest)
+        
+        let goalRequest: NSFetchRequest<NSFetchRequestResult> = Goal.fetchRequest()
+        let deleteGoalRequest = NSBatchDeleteRequest(fetchRequest: goalRequest)
+        
+        do {
+            try context.execute(deleteCategoryRequest)
+            try context.execute(deleteGoalRequest)
+            try context.save()
+            
+            // Clear UserDefaults
+            UserDefaults.standard.removeObject(forKey: lastSyncKey)
+            
+            // Sync deletion to CloudKit
+            Task {
+                await syncWithiCloud()
+            }
+        } catch {
+            print("Error deleting all goals data: \(error)")
         }
     }
     
