@@ -16,8 +16,6 @@ struct DayViewCompact: View {
     @State private var isEventsTasksDividerDragging = false
     @State private var logsHeight: CGFloat
     @State private var isLogsDividerDragging = false
-    @State private var tasksJournalDividerPosition: CGFloat
-    @State private var isTasksJournalDividerDragging = false
     @State private var isDayVerticalDividerDragging = false
     
     // MARK: - Selection State
@@ -39,7 +37,6 @@ struct DayViewCompact: View {
         self._leftTimelineHeight = State(initialValue: AppPreferences.shared.dayViewCompactLeftTopHeight)
         self._eventsHeight = State(initialValue: AppPreferences.shared.dayViewClassic2EventsHeight)
         self._logsHeight = State(initialValue: AppPreferences.shared.dayViewClassic2LogsHeight)
-        self._tasksJournalDividerPosition = State(initialValue: AppPreferences.shared.dayViewClassic3TasksHeight)
     }
     
     var body: some View {
@@ -125,14 +122,13 @@ struct DayViewCompact: View {
     // MARK: - Right Section
     private func rightDaySection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Top section: Tasks arranged horizontally
+            // Top section: Tasks arranged horizontally - takes natural height based on content
             tasksSection
-                .frame(height: tasksJournalDividerPosition)
             
             // Horizontal divider
-            horizontalDivider
+            Divider()
             
-            // Bottom section: Journal
+            // Bottom section: Journal - expands to fill remaining space
             journalSection
                 .frame(maxHeight: .infinity)
         }
@@ -140,7 +136,7 @@ struct DayViewCompact: View {
     
     @ViewBuilder
     private var tasksSection: some View {
-        ScrollView(.vertical, showsIndicators: true) {
+        VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
                 // Personal Tasks on the left
                 personalTasksSection
@@ -151,7 +147,8 @@ struct DayViewCompact: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
         .background(Color(.systemBackground))
     }
@@ -165,32 +162,6 @@ struct DayViewCompact: View {
         .padding(.all, 8)
         .background(Color(.systemBackground))
         .clipped()
-    }
-    
-    private var horizontalDivider: some View {
-        Rectangle()
-            .fill(isTasksJournalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isTasksJournalDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isTasksJournalDividerDragging = true
-                        let newPosition = tasksJournalDividerPosition + value.translation.height
-                        let minHeight: CGFloat = 150
-                        let maxHeight: CGFloat = 600
-                        tasksJournalDividerPosition = max(minHeight, min(maxHeight, newPosition))
-                    }
-                    .onEnded { _ in
-                        isTasksJournalDividerDragging = false
-                        appPrefs.updateDayViewClassic3TasksHeight(tasksJournalDividerPosition)
-                    }
-            )
     }
     
     // MARK: - Components
