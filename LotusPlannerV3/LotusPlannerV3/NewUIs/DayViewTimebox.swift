@@ -11,9 +11,8 @@ struct DayViewTimebox: View {
     // MARK: - State Variables
     @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
-    @State private var isTasksSectionCollapsed: Bool = false
-    @State private var tasksSectionHeight: CGFloat = 400
-    @State private var isTasksDividerDragging = false
+    @State private var dayMiddleSectionWidth: CGFloat
+    @State private var isMiddleVerticalDividerDragging = false
     @State private var isLogsSectionCollapsed: Bool = false
     
     // MARK: - Selection State
@@ -33,25 +32,34 @@ struct DayViewTimebox: View {
         
         // Initialize state variables with stored values from AppPreferences
         self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxLeftSectionWidth)
-        self._isTasksSectionCollapsed = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionCollapsed)
-        self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionHeight)
-        self._isTasksDividerDragging = State(initialValue: false)
+        self._dayMiddleSectionWidth = State(initialValue: AppPreferences.shared.dayViewCompactLeftColumnWidth) // Reuse existing preference
         self._isLogsSectionCollapsed = State(initialValue: AppPreferences.shared.dayViewTimeboxLogsSectionCollapsed)
     }
     
     var body: some View {
         GeometryReader { geometry in
             HStack(alignment: .top, spacing: 0) {
-                // Left section (dynamic width) - TimeboxComponent and Logs
-                leftDaySectionWithDivider(geometry: geometry)
+                // Left section - TimeboxComponent only
+                leftSection(geometry: geometry)
                     .frame(width: dayLeftSectionWidth)
                 
-                // Vertical divider
-                dayVerticalDivider
+                // First vertical divider
+                leftVerticalDivider
                 
-                // Middle section (Tasks and Journal) - expands to fill remaining space
-                middleDaySection(geometry: geometry)
-                    .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
+                // Middle section - Logs (collapsible horizontally)
+                if appPrefs.showAnyLogs {
+                    middleSection(geometry: geometry)
+                        .frame(width: isLogsSectionCollapsed ? 44 : dayMiddleSectionWidth)
+                    
+                    // Second vertical divider (only show when logs are expanded)
+                    if !isLogsSectionCollapsed {
+                        middleVerticalDivider
+                    }
+                }
+                
+                // Right section - Journal only (expands to fill remaining space)
+                rightSection(geometry: geometry)
+                    .frame(maxWidth: .infinity)
             }
         }
         // Task details sheet
@@ -115,10 +123,21 @@ struct DayViewTimebox: View {
         }
     }
     
-    // MARK: - Left Section
-    private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
+    // MARK: - Left Section (TimeboxComponent only)
+    private func leftSection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // TimeboxComponent section
+            // Fixed all-day section at top (always visible)
+            if !allDayItems.isEmpty {
+                allDayItemsSection
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
+                    .background(Color(.systemBackground))
+                
+                Divider()
+            }
+            
+            // Scrollable timeline below
             TimeboxComponent(
                 date: navigationManager.currentDate,
                 events: getAllEventsForDate(navigationManager.currentDate),
@@ -150,33 +169,43 @@ struct DayViewTimebox: View {
                         await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
                     }
                 },
-                showAllDaySection: true
+                showAllDaySection: false
             )
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
-            
-            // Logs section (collapsible)
-            if appPrefs.showAnyLogs {
-                if !isLogsSectionCollapsed {
-                    // Expand/collapse button
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Middle Section (Logs only)
+    private func middleSection(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            if !isLogsSectionCollapsed {
+                // Expanded state - show full logs with collapse button
+                VStack(spacing: 0) {
+                    // Header with collapse button
                     HStack {
                         Spacer()
+                        
                         Button(action: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 isLogsSectionCollapsed = true
                                 appPrefs.updateDayViewTimeboxLogsSectionCollapsed(true)
                             }
                         }) {
-                            Image(systemName: "chevron.down")
+                            Image(systemName: "chevron.left")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .padding(4)
                         }
                         .buttonStyle(.plain)
-                        .padding(.trailing, 8)
                     }
-                    .padding(.vertical, 4)
-                    .background(Color(.systemBackground))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray6).opacity(0.5))
+                    
+                    Divider()
                     
                     // Logs content
                     ScrollView(.vertical, showsIndicators: true) {
@@ -185,36 +214,39 @@ struct DayViewTimebox: View {
                             .padding(.vertical, 8)
                     }
                     .frame(maxHeight: .infinity)
-                    .background(Color(.systemBackground))
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    // Collapsed state - show expand button
-                    expandLogsButton
                 }
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            } else {
+                // Collapsed state - show vertical expand button
+                VStack {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isLogsSectionCollapsed = false
+                            appPrefs.updateDayViewTimeboxLogsSectionCollapsed(false)
+                        }
+                    }) {
+                        Image(systemName: "chevron.right")
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
+                    
+                    Spacer()
+                }
+                .frame(width: 44)
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.systemBackground))
     }
     
-    // MARK: - Middle Section (Tasks and Journal)
-    private func middleDaySection(geometry: GeometryProxy) -> some View {
+    // MARK: - Right Section (Journal only)
+    private func rightSection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Tasks section (collapsible)
-            if !isTasksSectionCollapsed {
-                tasksSection
-                    .frame(height: tasksSectionHeight)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            } else {
-                // Expand button when collapsed
-                expandTasksButton
-            }
-            
-            // Draggable divider between Tasks and Journal (only show if tasks section is visible)
-            if !isTasksSectionCollapsed {
-                tasksJournalDivider
-            }
-            
-            // Journal section (expands to fill remaining space)
+            // Journal section (expands to fill full height)
             VStack(alignment: .leading, spacing: 6) {
                 JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .compact)
             }
@@ -226,164 +258,8 @@ struct DayViewTimebox: View {
         }
     }
     
-    // MARK: - Tasks Section
-    private var tasksSection: some View {
-        VStack(spacing: 0) {
-            // Header with collapse button in top-right corner
-            HStack {
-                Spacer()
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isTasksSectionCollapsed = true
-                        appPrefs.updateDayViewTimeboxTasksSectionCollapsed(true)
-                    }
-                }) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(4)
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 8)
-            }
-            .padding(.vertical, 4)
-            .background(Color(.systemBackground))
-            
-            // Tasks content - side by side
-            ScrollView(.vertical, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 8) {
-                    // Personal Tasks section
-                    personalTasksSection
-                        .frame(maxWidth: .infinity)
-                    
-                    // Divider between personal and professional
-                    Divider()
-                    
-                    // Professional Tasks section
-                    professionalTasksSection
-                        .frame(maxWidth: .infinity)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
-            }
-            .frame(maxHeight: .infinity)
-            .background(Color(.systemBackground))
-        }
-    }
-    
-    // MARK: - Task Sections
-    private var personalTasksSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
-                TasksComponent(
-                    taskLists: tasksVM.personalTaskLists,
-                    tasksDict: personalFiltered,
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
-                    onTaskToggle: { task, listId in
-                        Task {
-                            await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal)
-                        }
-                    },
-                    onTaskDetails: { task, listId in
-                        selectedTask = task
-                        selectedTaskListId = listId
-                        selectedTaskAccount = .personal
-                        showingTaskDetails = true
-                    },
-                    onListRename: { listId, newName in
-                        Task {
-                            await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                        }
-                    },
-                    onOrderChanged: { newOrder in
-                        Task {
-                            await tasksVM.updateTaskListOrder(newOrder, for: .personal)
-                        }
-                    },
-                    isSingleDayView: true
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
-                // Empty state - show link account UI
-                Button(action: { NavigationManager.shared.showSettings() }) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 24))
-                            .foregroundColor(.secondary)
-                        Text("Link Your Google Account")
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                        Text("Connect your Google account to view and manage your tasks")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-                // Account linked but no personal tasks
-                Text("No tasks")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-    
-    private var professionalTasksSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
-                TasksComponent(
-                    taskLists: tasksVM.professionalTaskLists,
-                    tasksDict: professionalFiltered,
-                    accentColor: appPrefs.professionalColor,
-                    accountType: .professional,
-                    onTaskToggle: { task, listId in
-                        Task {
-                            await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional)
-                        }
-                    },
-                    onTaskDetails: { task, listId in
-                        selectedTask = task
-                        selectedTaskListId = listId
-                        selectedTaskAccount = .professional
-                        showingTaskDetails = true
-                    },
-                    onListRename: { listId, newName in
-                        Task {
-                            await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                        }
-                    },
-                    onOrderChanged: { newOrder in
-                        Task {
-                            await tasksVM.updateTaskListOrder(newOrder, for: .professional)
-                        }
-                    },
-                    isSingleDayView: true
-                )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else {
-                // Account linked but no professional tasks
-                Text("No tasks")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-    
-    private var dayVerticalDivider: some View {
+    // MARK: - Dividers
+    private var leftVerticalDivider: some View {
         Rectangle()
             .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
@@ -409,78 +285,159 @@ struct DayViewTimebox: View {
             )
     }
     
-    private var expandLogsButton: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isLogsSectionCollapsed = false
-                appPrefs.updateDayViewTimeboxLogsSectionCollapsed(false)
-            }
-        }) {
-            HStack {
-                Image(systemName: "chevron.up")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("Logs")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemGray6))
-    }
-    
-    private var expandTasksButton: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTasksSectionCollapsed = false
-                appPrefs.updateDayViewTimeboxTasksSectionCollapsed(false)
-            }
-        }) {
-            HStack {
-                Image(systemName: "chevron.down")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("Tasks")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemGray6))
-    }
-    
-    private var tasksJournalDivider: some View {
+    private var middleVerticalDivider: some View {
         Rectangle()
-            .fill(isTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
+            .fill(isMiddleVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(width: 8)
             .overlay(
                 Image(systemName: "line.3.horizontal")
                     .font(.caption)
-                    .foregroundColor(isTasksDividerDragging ? .white : .gray)
+                    .foregroundColor(isMiddleVerticalDividerDragging ? .white : .gray)
             )
             .contentShape(Rectangle())
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        isTasksDividerDragging = true
-                        let newHeight = tasksSectionHeight + value.translation.height
-                        let minHeight: CGFloat = 200
-                        let maxHeight: CGFloat = 800
-                        tasksSectionHeight = max(minHeight, min(maxHeight, newHeight))
+                        isMiddleVerticalDividerDragging = true
+                        let newWidth = dayMiddleSectionWidth + value.translation.width
+                        let minWidth: CGFloat = 200
+                        let maxWidth: CGFloat = 500
+                        dayMiddleSectionWidth = max(minWidth, min(maxWidth, newWidth))
                     }
                     .onEnded { _ in
-                        isTasksDividerDragging = false
-                        appPrefs.updateDayViewTimeboxTasksSectionHeight(tasksSectionHeight)
+                        isMiddleVerticalDividerDragging = false
+                        appPrefs.updateDayViewCompactLeftColumnWidth(dayMiddleSectionWidth)
                     }
             )
+    }
+    
+    // MARK: - All-Day Items Section
+    private var allDayItems: [(isEvent: Bool, isTask: Bool, id: String, title: String, isPersonal: Bool)] {
+        var items: [(isEvent: Bool, isTask: Bool, id: String, title: String, isPersonal: Bool)] = []
+        
+        // Add all-day events
+        let allEvents = getAllEventsForDate(navigationManager.currentDate)
+        let allDayEvents = allEvents.filter { $0.isAllDay }
+        for event in allDayEvents {
+            let isPersonal = calendarVM.personalEvents.contains { $0.id == event.id }
+            items.append((isEvent: true, isTask: false, id: event.id, title: event.summary, isPersonal: isPersonal))
+        }
+        
+        // Add all-day tasks (tasks without specific times)
+        let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
+        let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
+        
+        for (listId, tasks) in personalFiltered {
+            for task in tasks {
+                items.append((isEvent: false, isTask: true, id: task.id, title: task.title, isPersonal: true))
+            }
+        }
+        
+        for (listId, tasks) in professionalFiltered {
+            for task in tasks {
+                items.append((isEvent: false, isTask: true, id: task.id, title: task.title, isPersonal: false))
+            }
+        }
+        
+        return items
+    }
+    
+    private var allDayItemsSection: some View {
+        VStack(spacing: 4) {
+            ForEach(allDayItems, id: \.id) { item in
+                allDayItemBlock(item: item)
+            }
+        }
+    }
+    
+    private func allDayItemBlock(item: (isEvent: Bool, isTask: Bool, id: String, title: String, isPersonal: Bool)) -> some View {
+        let itemColor = item.isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        
+        return Group {
+            if item.isTask {
+                // Find the task to get its completion status
+                let allTasks = (item.isPersonal ? tasksVM.personalTasks : tasksVM.professionalTasks)
+                    .values.flatMap { $0 }
+                if let task = allTasks.first(where: { $0.id == item.id }) {
+                    let listId = findTaskListId(for: task, isPersonal: item.isPersonal)
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            if let listId = listId {
+                                let accountKind: GoogleAuthManager.AccountKind = item.isPersonal ? .personal : .professional
+                                Task {
+                                    await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                                }
+                            }
+                        }) {
+                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .font(.body)
+                                .foregroundColor(task.isCompleted ? itemColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Text(task.title)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(task.isCompleted ? .secondary : .primary)
+                            .strikethrough(task.isCompleted)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(itemColor.opacity(0.1))
+                    .cornerRadius(8)
+                    .onTapGesture {
+                        if let listId = listId {
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedTaskAccount = item.isPersonal ? .personal : .professional
+                            showingTaskDetails = true
+                        }
+                    }
+                }
+            } else {
+                // Event
+                if let event = calendarVM.personalEvents.first(where: { $0.id == item.id }) ?? 
+                              calendarVM.professionalEvents.first(where: { $0.id == item.id }) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(itemColor)
+                            .frame(width: 8, height: 8)
+                        
+                        Text(item.title)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(itemColor.opacity(0.1))
+                    .cornerRadius(8)
+                    .onTapGesture {
+                        if let onEventTap = onEventTap {
+                            onEventTap(event)
+                        } else {
+                            selectedEvent = event
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func findTaskListId(for task: GoogleTask, isPersonal: Bool) -> String? {
+        let tasksDict = isPersonal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        for (listId, tasks) in tasksDict {
+            if tasks.contains(where: { $0.id == task.id }) {
+                return listId
+            }
+        }
+        return nil
     }
     
     // MARK: - Helper Functions
