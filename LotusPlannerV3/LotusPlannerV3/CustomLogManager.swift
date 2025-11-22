@@ -39,6 +39,7 @@ class CustomLogManager: ObservableObject {
     private let itemsKey = "customLogItems"
     private let entriesKey = "customLogEntries"
     private let lastSyncKey = "customLogLastSync"
+    private let cloudKitRecordID = "custom-log-data-singleton" // Fixed record ID for direct fetch
     
     private init() {
         self.privateDatabase = cloudKitContainer.privateCloudDatabase
@@ -285,8 +286,18 @@ class CustomLogManager: ObservableObject {
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(container)
             
-            // Create CloudKit record
-            let record = CKRecord(recordType: "CustomLogData")
+            // Save to CloudKit using fixed record ID
+            let recordID = CKRecord.ID(recordName: cloudKitRecordID)
+            let record: CKRecord
+            
+            // Try to fetch existing record first, or create new one
+            do {
+                record = try await privateDatabase.record(for: recordID)
+            } catch {
+                // Record doesn't exist, create new one with fixed ID
+                record = CKRecord(recordType: "CustomLogData", recordID: recordID)
+            }
+            
             record["data"] = data
             record["lastSyncDate"] = Date()
             
@@ -309,29 +320,26 @@ class CustomLogManager: ObservableObject {
     
     private func fetchFromiCloud() async {
         do {
-            let query = CKQuery(recordType: "CustomLogData", predicate: NSPredicate(value: true))
-            let results = try await privateDatabase.records(matching: query)
+            // Fetch directly by known record ID instead of querying
+            let recordID = CKRecord.ID(recordName: cloudKitRecordID)
+            let record = try await privateDatabase.record(for: recordID)
             
-            for (_, result) in results.matchResults {
-                switch result {
-                case .success(let record):
-                    if let data = record["data"] as? Data {
-                        let decoder = JSONDecoder()
-                        decoder.dateDecodingStrategy = .iso8601
-                        let container = try decoder.decode(CustomLogContainer.self, from: data)
-                        
-                        // Update local data if CloudKit data is newer
-                        if let cloudSyncDate = record["lastSyncDate"] as? Date,
-                           let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date,
-                           cloudSyncDate > localSyncDate {
-                            
-                            await updateCoreDataFromCloudKit(container: container)
-                        }
-                    }
-                case .failure(let error):
-                    print("Custom Log CloudKit fetch error: \(error)")
+            if let data = record["data"] as? Data {
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let container = try decoder.decode(CustomLogContainer.self, from: data)
+                
+                // Update local data if CloudKit data is newer
+                if let cloudSyncDate = record["lastSyncDate"] as? Date,
+                   let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date,
+                   cloudSyncDate > localSyncDate {
+                    
+                    await updateCoreDataFromCloudKit(container: container)
                 }
             }
+        } catch let error as CKError where error.code == .unknownItem {
+            // Record doesn't exist yet in CloudKit - this is fine, nothing to fetch
+            print("No custom log data in CloudKit yet (first sync pending)")
         } catch {
             print("Custom Log CloudKit fetch error: \(error)")
         }

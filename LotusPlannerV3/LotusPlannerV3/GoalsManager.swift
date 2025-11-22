@@ -43,6 +43,7 @@ class GoalsManager: ObservableObject {
     private let categoriesKey = "goalsCategories"
     private let goalsKey = "goals"
     private let lastSyncKey = "goalsLastSync"
+    private let cloudKitRecordID = "goals-data-singleton" // Fixed record ID for direct fetch
     
     private init() {
         self.privateDatabase = cloudKitContainer.privateCloudDatabase
@@ -451,8 +452,18 @@ class GoalsManager: ObservableObject {
             encoder.dateEncodingStrategy = .iso8601
             let data = try encoder.encode(container)
             
-            // Save to CloudKit
-            let record = CKRecord(recordType: "GoalsData")
+            // Save to CloudKit using fixed record ID
+            let recordID = CKRecord.ID(recordName: cloudKitRecordID)
+            let record: CKRecord
+            
+            // Try to fetch existing record first, or create new one
+            do {
+                record = try await privateDatabase.record(for: recordID)
+            } catch {
+                // Record doesn't exist, create new one with fixed ID
+                record = CKRecord(recordType: "GoalsData", recordID: recordID)
+            }
+            
             record["data"] = data
             record["lastSyncDate"] = Date()
             
@@ -470,43 +481,40 @@ class GoalsManager: ObservableObject {
     
     private func fetchFromiCloud() async {
         do {
-            let query = CKQuery(recordType: "GoalsData", predicate: NSPredicate(value: true))
-            let results = try await privateDatabase.records(matching: query)
+            // Fetch directly by known record ID instead of querying
+            let recordID = CKRecord.ID(recordName: cloudKitRecordID)
+            let record = try await privateDatabase.record(for: recordID)
             
-            for (_, result) in results.matchResults {
-                switch result {
-                case .success(let record):
-                    if let data = record["data"] as? Data {
-                        do {
-                            let decoder = JSONDecoder()
-                            decoder.dateDecodingStrategy = .iso8601
-                            let container = try decoder.decode(GoalsContainer.self, from: data)
-                            
-                            // Get sync dates for comparison
-                            let cloudSyncDate = record["lastSyncDate"] as? Date ?? Date()
-                            let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date
-                            
-                            // Update local data if CloudKit data is newer, or if we don't have a local sync date
-                            if let localSync = localSyncDate {
-                                // We have a local sync date, only update if CloudKit is newer
-                                guard cloudSyncDate > localSync else { continue }
-                            }
-                            // If no local sync date, or CloudKit is newer, update
-                            categories = container.categories
-                            goals = container.goals
-                            
-                            // Update Core Data
-                            await updateCoreDataFromCloudKit()
-                            
-                            UserDefaults.standard.set(cloudSyncDate, forKey: lastSyncKey)
-                        } catch {
-                            print("Error decoding goals data from CloudKit: \(error)")
-                        }
+            if let data = record["data"] as? Data {
+                do {
+                    let decoder = JSONDecoder()
+                    decoder.dateDecodingStrategy = .iso8601
+                    let container = try decoder.decode(GoalsContainer.self, from: data)
+                    
+                    // Get sync dates for comparison
+                    let cloudSyncDate = record["lastSyncDate"] as? Date ?? Date()
+                    let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date
+                    
+                    // Update local data if CloudKit data is newer, or if we don't have a local sync date
+                    if let localSync = localSyncDate {
+                        // We have a local sync date, only update if CloudKit is newer
+                        guard cloudSyncDate > localSync else { return }
                     }
-                case .failure(let error):
-                    print("Error fetching record: \(error)")
+                    // If no local sync date, or CloudKit is newer, update
+                    categories = container.categories
+                    goals = container.goals
+                    
+                    // Update Core Data
+                    await updateCoreDataFromCloudKit()
+                    
+                    UserDefaults.standard.set(cloudSyncDate, forKey: lastSyncKey)
+                } catch {
+                    print("Error decoding goals data from CloudKit: \(error)")
                 }
             }
+        } catch let error as CKError where error.code == .unknownItem {
+            // Record doesn't exist yet in CloudKit - this is fine, nothing to fetch
+            print("No goals data in CloudKit yet (first sync pending)")
         } catch {
             print("Error fetching from iCloud: \(error)")
         }
