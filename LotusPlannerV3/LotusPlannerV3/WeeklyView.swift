@@ -23,6 +23,7 @@ struct WeeklyView: View {
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedAccountKind: GoogleAuthManager.AccountKind?
+    @State private var weekDates: [Date] = []
     
     // MARK: - Expand/Collapse State (for vertical/column view only)
     @State private var eventsExpanded = true
@@ -189,6 +190,7 @@ struct WeeklyView: View {
         .task {
             // Initialize selectedDate from navigation manager if available
             selectedDate = navigationManager.currentDate
+            regenerateWeekDates(for: selectedDate)
             
             // Clear caches and load fresh data
             calendarViewModel.clearAllData()
@@ -200,6 +202,9 @@ struct WeeklyView: View {
                 calendarViewModel.objectWillChange.send()
                 tasksViewModel.objectWillChange.send()
             }
+        }
+        .onChange(of: selectedDate) { newValue in
+            regenerateWeekDates(for: newValue)
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
             selectedDate = newValue
@@ -329,11 +334,11 @@ extension WeeklyView {
     private func weekTasksContent(dayColumnWidth: CGFloat, fixedWidth: CGFloat) -> some View {
         // Determine whether there are any tasks to show this week for each account
         let personalHasAny = weekDates.contains { date in
-            let dict = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+            let dict = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
             return !dict.allSatisfy { $0.value.isEmpty }
         }
         let professionalHasAny = weekDates.contains { date in
-            let dict = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+            let dict = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
             return !dict.allSatisfy { $0.value.isEmpty }
         }
 
@@ -910,15 +915,11 @@ extension WeeklyView {
     }
     
     private func dayOfWeekAbbrev(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date).uppercased()
+        DateFormatter.standardDayOfWeek.string(from: date).uppercased()
     }
     
     private func formatDateShort(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M/d/yy"
-        return formatter.string(from: date)
+        DateFormatter.standardDate.string(from: date)
     }
     
     // MARK: - Individual Column Views for Horizontal Layout
@@ -938,7 +939,7 @@ extension WeeklyView {
     private func weekDayRowPersonalTasksColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 4) {
-                let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+                let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
                 if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                     TasksComponent(
                         taskLists: tasksViewModel.personalTaskLists,
@@ -978,7 +979,7 @@ extension WeeklyView {
     private func weekDayRowProfessionalTasksColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 4) {
-                let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+                let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
                 if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                     TasksComponent(
                         taskLists: tasksViewModel.professionalTaskLists,
@@ -1102,7 +1103,7 @@ extension WeeklyView {
             // Personal Tasks column
             if authManager.isLinked(kind: .personal) {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+                    let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
                     if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                         TasksComponent(
                             taskLists: tasksViewModel.personalTaskLists,
@@ -1144,7 +1145,7 @@ extension WeeklyView {
             // Professional Tasks column
             if authManager.isLinked(kind: .professional) {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+                    let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
                     if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                         TasksComponent(
                             taskLists: tasksViewModel.professionalTaskLists,
@@ -1279,7 +1280,7 @@ extension WeeklyView {
             if authManager.isLinked(kind: .personal) {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
-                        let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+                        let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
                         if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                             TasksComponent(
                                 taskLists: tasksViewModel.personalTaskLists,
@@ -1321,7 +1322,7 @@ extension WeeklyView {
             if authManager.isLinked(kind: .professional) {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
-                        let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+                        let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
                         if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                             TasksComponent(
                                 taskLists: tasksViewModel.professionalTaskLists,
@@ -1462,28 +1463,27 @@ extension WeeklyView {
         let calendar = Calendar.current
         if let newDate = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) {
             selectedDate = newDate
+            regenerateWeekDates(for: newDate)
             navigationManager.updateInterval(.week, date: newDate)
         }
     }
     
     // Calendar event functions removed - only tasks are displayed now
     
-    private var weekDates: [Date] {
+    private func regenerateWeekDates(for referenceDate: Date) {
         let calendar = Calendar.mondayFirst
-        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: selectedDate) else {
-            return []
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: referenceDate) else {
+            weekDates = []
+            return
         }
         
         var days: [Date] = []
         var date = weekInterval.start
-        
-        // Get Monday to Sunday (7 days)
         for _ in 0..<7 {
             days.append(date)
             date = calendar.date(byAdding: .day, value: 1, to: date) ?? date
         }
-        
-        return days
+        weekDates = days
     }
     
     // Calendar event helper functions removed since we only show tasks now
@@ -1708,78 +1708,23 @@ extension WeeklyView {
     }
     
     private func formatEventTimeShort(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        DateFormatter.shortTime.string(from: date)
     }
     
     private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
-        
-        return allEvents.filter { event in
-            guard let startTime = event.startTime else { return event.isAllDay }
-            
-            if event.isAllDay {
-                // For all-day events, check if the date falls within the event's date range
-                guard let endTime = event.endTime else { return false }
-                
-                // For all-day events, Google Calendar typically sets the end time to the start of the next day
-                // But for single-day events, end.date might equal start.date
-                // So we need to check if the date falls within [startTime, endTime)
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If endDay equals startDay (single-day event), check if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                // Otherwise, check if date is within [startDay, endDay)
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                // For timed events, check if the date falls within the event's date range
-                guard let endTime = event.endTime else {
-                    // If no end time, only show on start date
-                    return calendar.isDate(startTime, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If event is on the same day, show only if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                // Otherwise, show if date is within [startDay, endDay]
-                // Include both start and end days
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }.sorted { (a, b) in
-            let aDate = a.startTime ?? Date.distantPast
-            let bDate = b.startTime ?? Date.distantPast
-            return aDate < bDate
-        }
+        calendarViewModel.events(for: date)
     }
     
     private func getWeightLogsForDate(_ date: Date) -> [WeightLogEntry] {
-        return logsViewModel.weightEntries.filter { entry in
-            Calendar.current.isDate(entry.timestamp, inSameDayAs: date)
-        }.sorted { $0.timestamp > $1.timestamp }  // Newest first
+        logsViewModel.weightLogs(on: date)
     }
     
     private func getWorkoutLogsForDate(_ date: Date) -> [WorkoutLogEntry] {
-        return logsViewModel.workoutEntries.filter { entry in
-            Calendar.current.isDate(entry.date, inSameDayAs: date)
-        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
+        logsViewModel.workoutLogs(on: date)
     }
     
     private func getFoodLogsForDate(_ date: Date) -> [FoodLogEntry] {
-        return logsViewModel.foodEntries.filter { entry in
-            Calendar.current.isDate(entry.date, inSameDayAs: date)
-        }.sorted { $0.createdAt < $1.createdAt }  // Oldest first (newest at bottom)
+        logsViewModel.foodLogs(on: date)
     }
     
     private func weightLogCard(entry: WeightLogEntry) -> some View {
@@ -1806,9 +1751,7 @@ extension WeeklyView {
     }
     
     private func formatLogTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        DateFormatter.shortTime.string(from: date)
     }
     
     private func workoutLogCard(entry: WorkoutLogEntry) -> some View {
@@ -1952,7 +1895,7 @@ extension WeeklyView {
     private func weekTaskColumnPersonal(date: Date) -> some View {
         return VStack(alignment: .leading, spacing: 4) {
             // Personal Tasks using day view component
-            let personalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.personalTasks, date: date)
+            let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
             if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                 TasksComponent(
                     taskLists: tasksViewModel.personalTaskLists,
@@ -1993,7 +1936,7 @@ extension WeeklyView {
     private func weekTaskColumnProfessional(date: Date) -> some View {
         return VStack(alignment: .leading, spacing: 4) {
             // Professional Tasks using day view component
-            let professionalTasksForDate = getFilteredTasksForSpecificDate(tasksViewModel.professionalTasks, date: date)
+            let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
             if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
                 TasksComponent(
                     taskLists: tasksViewModel.professionalTaskLists,
@@ -2032,33 +1975,8 @@ extension WeeklyView {
     }
     
     // Helper function to get filtered tasks for a specific date (for weekly view)
-    private func getFilteredTasksForSpecificDate(_ tasks: [String: [GoogleTask]], date: Date) -> [String: [GoogleTask]] {
-        var filteredTasks: [String: [GoogleTask]] = [:]
-        
-        for (listId, taskList) in tasks {
-            let dateFilteredTasks = taskList.filter { task in
-                // For completed tasks, show them on their completion date
-                if task.isCompleted {
-                    guard let completionDate = task.completionDate else { return false }
-                    return Calendar.current.isDate(completionDate, inSameDayAs: date)
-                }
-                
-                // For incomplete tasks, only show tasks that have a due date AND it matches the specified date
-                guard let dueDate = task.dueDate else { 
-                    return false // Tasks without due dates are NOT shown
-                }
-                
-                // Check if the due date is the same day as the specified date
-                return Calendar.current.isDate(dueDate, inSameDayAs: date)
-            }
-            
-            // Only include the list if it has tasks after filtering
-            if !dateFilteredTasks.isEmpty {
-                filteredTasks[listId] = dateFilteredTasks
-            }
-        }
-        
-        return filteredTasks
+    private func getFilteredTasksForSpecificDate(date: Date, accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
+        tasksViewModel.tasksForDay(date, kind: accountKind)
     }
     
     private func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {

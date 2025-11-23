@@ -133,12 +133,18 @@ struct GoogleCalendarEventsResponse: Codable {
 class CalendarViewModel: ObservableObject {
     @Published var personalCalendars: [GoogleCalendar] = []
     @Published var professionalCalendars: [GoogleCalendar] = []
-    @Published var personalEvents: [GoogleCalendarEvent] = []
-    @Published var professionalEvents: [GoogleCalendarEvent] = []
+    @Published var personalEvents: [GoogleCalendarEvent] = [] {
+        didSet { personalEventsByDay = buildEventsByDay(from: personalEvents) }
+    }
+    @Published var professionalEvents: [GoogleCalendarEvent] = [] {
+        didSet { professionalEventsByDay = buildEventsByDay(from: professionalEvents) }
+    }
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showError = false
     private var errorCheckTask: Task<Void, Never>?
+    private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
+    private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     
     private func scheduleErrorCheck() {
         // Cancel any existing error check task
@@ -170,8 +176,80 @@ class CalendarViewModel: ObservableObject {
             await forceLoadCalendarDataForMonth(containing: navigationManager.currentDate)
         }
         
-        // Force a view update
-        objectWillChange.send()
+    }
+    
+    func events(for date: Date, account: GoogleAuthManager.AccountKind? = nil) -> [GoogleCalendarEvent] {
+        let key = normalizedDay(date)
+        switch account {
+        case .some(.personal):
+            return personalEventsByDay[key] ?? []
+        case .some(.professional):
+            return professionalEventsByDay[key] ?? []
+        case .none:
+            let personal = personalEventsByDay[key] ?? []
+            let professional = professionalEventsByDay[key] ?? []
+            if personal.isEmpty { return professional }
+            if professional.isEmpty { return personal }
+            return (personal + professional).sorted(by: eventSortComparator)
+        }
+    }
+    
+    private func normalizedDay(_ date: Date) -> Date {
+        Calendar.current.startOfDay(for: date)
+    }
+    
+    private func buildEventsByDay(from events: [GoogleCalendarEvent]) -> [Date: [GoogleCalendarEvent]] {
+        var map: [Date: [GoogleCalendarEvent]] = [:]
+        for event in events {
+            enumerateDays(for: event) { day in
+                map[day, default: []].append(event)
+            }
+        }
+        for key in map.keys {
+            map[key]?.sort(by: eventSortComparator)
+        }
+        return map
+    }
+    
+    private func enumerateDays(for event: GoogleCalendarEvent, handler: (Date) -> Void) {
+        let calendar = Calendar.mondayFirst
+        guard let startComponent = event.start.dateTime ?? event.start.date ?? event.startTime else {
+            return
+        }
+        let startDay = calendar.startOfDay(for: startComponent)
+        
+        if event.isAllDay {
+            let rawEnd = event.end.date ?? event.end.dateTime ?? event.endTime ?? startComponent
+            let endDay = calendar.startOfDay(for: rawEnd)
+            handler(startDay)
+            if endDay == startDay { return }
+            var current = startDay
+            while let next = calendar.date(byAdding: .day, value: 1, to: current), next < endDay {
+                handler(next)
+                current = next
+            }
+        } else {
+            let rawEnd = event.end.dateTime ?? event.end.date ?? event.endTime ?? startComponent
+            let endDay = calendar.startOfDay(for: rawEnd)
+            var current = startDay
+            while true {
+                handler(current)
+                if current >= endDay { break }
+                guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+                current = next
+            }
+        }
+    }
+    
+    private func eventSortComparator(_ lhs: GoogleCalendarEvent, _ rhs: GoogleCalendarEvent) -> Bool {
+        let lStart = lhs.startTime ?? lhs.start.date ?? Date.distantPast
+        let rStart = rhs.startTime ?? rhs.start.date ?? Date.distantPast
+        if lStart == rStart {
+            let lEnd = lhs.endTime ?? lhs.end.date ?? Date.distantFuture
+            let rEnd = rhs.endTime ?? rhs.end.date ?? Date.distantFuture
+            return lEnd < rEnd
+        }
+        return lStart < rStart
     }
     
     func forceLoadCalendarDataForMonth(containing date: Date) async {
@@ -3891,90 +3969,16 @@ struct CalendarView: View {
     }
     
     private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
-                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
-        
-        return allEvents.filter { event in
-            // Skip all-day events for now (they are shown in the header)
-            guard !event.isAllDay,
-                  let startTime = event.startTime else { return false }
-            
-            return calendar.isDate(startTime, inSameDayAs: date)
-        }
+        calendarViewModel.events(for: date).filter { !$0.isAllDay }
     }
     
     // New function that includes ALL events (both all-day and timed) for the TimelineComponent
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        // Match other day views: include both personal and professional events without gating here
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
-
-        let filteredEvents = allEvents.filter { event in
-            guard let startTime = event.startTime else { return event.isAllDay }
-            
-            if event.isAllDay {
-                // For all-day events, check if the date falls within the event's date range
-                guard let endTime = event.endTime else { return false }
-                
-                // For all-day events, Google Calendar sets the end time to the start of the next day
-                // So we need to check if the date falls within [startTime, endTime)
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // Handle single-day all-day events where end == start (provider quirk)
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                // For timed events, check if the date falls within the event's date range
-                guard let endTime = event.endTime else {
-                    // If no end time, only show on start date
-                    return calendar.isDate(startTime, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If event is on the same day, show only if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                // Otherwise, show if date is within [startDay, endDay]
-                // Include both start and end days
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }
-        
-        
-        return filteredEvents
+        calendarViewModel.events(for: date)
     }
     
     private func getAllDayEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
-                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
-        
-        return allEvents.filter { event in
-            guard event.isAllDay else { return false }
-            
-            // For all-day events, check if the date falls within the event's date range
-            guard let startTime = event.startTime,
-                  let endTime = event.endTime else { return false }
-            
-            // For all-day events, Google Calendar sets the end time to the start of the next day
-            // So we need to check if the date falls within [startTime, endTime)
-            let startDay = calendar.startOfDay(for: startTime)
-            let endDay = calendar.startOfDay(for: endTime)
-            let dateDay = calendar.startOfDay(for: date)
-            
-            return dateDay >= startDay && dateDay < endDay
-        }
+        calendarViewModel.events(for: date).filter { $0.isAllDay }
     }
     
     private func weekAllDayEventsSection(weekDates: [Date]) -> some View {

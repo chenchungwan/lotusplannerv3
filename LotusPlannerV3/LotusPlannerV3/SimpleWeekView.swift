@@ -19,48 +19,7 @@ struct SimpleWeekView: View {
     }
     
     private func getEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.mondayFirst
-        return (calendarViewModel.personalEvents + calendarViewModel.professionalEvents).filter { event in
-            guard let startTime = event.startTime else { return event.isAllDay }
-            
-            if event.isAllDay {
-                // For all-day events, check if the date falls within the event's date range
-                guard let endTime = event.endTime else { return false }
-                
-                // For all-day events, Google Calendar typically sets the end time to the start of the next day
-                // But for single-day events, end.date might equal start.date
-                // So we need to check if the date falls within [startTime, endTime)
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If endDay equals startDay (single-day event), check if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                // Otherwise, check if date is within [startDay, endDay)
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                // For timed events, check if the date falls within the event's date range
-                guard let endTime = event.endTime else {
-                    // If no end time, only show on start date
-                    return calendar.isDate(startTime, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If event is on the same day, show only if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                // Otherwise, show if date is within [startDay, endDay]
-                // Include both start and end days
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }
+        calendarViewModel.events(for: date)
     }
     
     private func isEventPersonal(_ event: GoogleCalendarEvent) -> Bool {

@@ -22,37 +22,34 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         return status == "completed"
     }
     
+    private static let dueDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        return formatter
+    }()
+    
+    private static let completionDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    
     var dueDate: Date? {
         guard let due = due else { return nil }
         
         // Extract just the date part from Google's response (ignore time completely)
         let dateOnly = String(due.prefix(10)) // Get "yyyy-MM-dd" part only
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current // Use local timezone for date-only parsing
-        let parsedDate = formatter.date(from: dateOnly)
-        return parsedDate
+        return GoogleTask.dueDateFormatter.date(from: dateOnly)
     }
     
     var completionDate: Date? {
         guard let completed = completed else { return nil }
         
         // Google Tasks completion dates: RFC 3339 format with full timestamp
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC") // Parse as UTC
-        
-        if let utcDate = formatter.date(from: completed) {
-            // Convert to local timezone for day comparison
-            let localFormatter = DateFormatter()
-            localFormatter.dateStyle = .full
-            localFormatter.timeZone = TimeZone.current
-            return utcDate
-        }
-        return nil
+        return GoogleTask.completionDateFormatter.date(from: completed)
     }
 }
 
@@ -70,8 +67,12 @@ struct GoogleTaskListsResponse: Codable {
 class TasksViewModel: ObservableObject {
     @Published var personalTaskLists: [GoogleTaskList] = []
     @Published var professionalTaskLists: [GoogleTaskList] = []
-    @Published var personalTasks: [String: [GoogleTask]] = [:] // taskListId: [tasks]
-    @Published var professionalTasks: [String: [GoogleTask]] = [:]
+    @Published var personalTasks: [String: [GoogleTask]] = [:] { // taskListId: [tasks]
+        didSet { rebuildTasksCache(for: .personal) }
+    }
+    @Published var professionalTasks: [String: [GoogleTask]] = [:] {
+        didSet { rebuildTasksCache(for: .professional) }
+    }
     @Published var isLoading = false
     @Published var errorMessage = ""
     
@@ -96,6 +97,18 @@ class TasksViewModel: ObservableObject {
         let hideCompleted: Bool   // hideCompletedTasks preference
     }
     private var filteredTasksCache: [FilterCacheKey: [String: [GoogleTask]]] = [:]
+    private var personalTasksByDay: [Date: [String: [GoogleTask]]] = [:]
+    private var professionalTasksByDay: [Date: [String: [GoogleTask]]] = [:]
+    
+    func tasksForDay(_ date: Date, kind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
+        let key = normalizedDay(date)
+        switch kind {
+        case .personal:
+            return personalTasksByDay[key] ?? [:]
+        case .professional:
+            return professionalTasksByDay[key] ?? [:]
+        }
+    }
     
     func loadTasks(forceClear: Bool = false) async {
         isLoading = true
@@ -302,6 +315,60 @@ class TasksViewModel: ObservableObject {
     
     private func clearAllFilteredCaches() {
         filteredTasksCache.removeAll()
+    }
+    
+    private func rebuildTasksCache(for kind: GoogleAuthManager.AccountKind) {
+        switch kind {
+        case .personal:
+            personalTasksByDay = buildDayCache(from: personalTasks)
+        case .professional:
+            professionalTasksByDay = buildDayCache(from: professionalTasks)
+        }
+    }
+    
+    private func buildDayCache(from tasksDict: [String: [GoogleTask]]) -> [Date: [String: [GoogleTask]]] {
+        var map: [Date: [String: [GoogleTask]]] = [:]
+        for (listId, tasks) in tasksDict {
+            for task in tasks {
+                guard let day = relevantDate(for: task) else { continue }
+                var lists = map[day] ?? [:]
+                var dayTasks = lists[listId] ?? []
+                dayTasks.append(task)
+                lists[listId] = dayTasks
+                map[day] = lists
+            }
+        }
+        for key in map.keys {
+            var lists = map[key] ?? [:]
+            for (listId, tasks) in lists {
+                lists[listId] = tasks.sorted(by: taskSortComparator)
+            }
+            map[key] = lists
+        }
+        return map
+    }
+    
+    private func taskSortComparator(_ lhs: GoogleTask, _ rhs: GoogleTask) -> Bool {
+        let lhsDate = lhs.dueDate ?? lhs.completionDate ?? Date.distantFuture
+        let rhsDate = rhs.dueDate ?? rhs.completionDate ?? Date.distantFuture
+        if lhsDate == rhsDate {
+            return (lhs.updated ?? "") > (rhs.updated ?? "")
+        }
+        return lhsDate < rhsDate
+    }
+    
+    private func relevantDate(for task: GoogleTask) -> Date? {
+        if task.isCompleted, let completion = task.completionDate {
+            return normalizedDay(completion)
+        }
+        if let due = task.dueDate {
+            return normalizedDay(due)
+        }
+        return nil
+    }
+    
+    private func normalizedDay(_ date: Date) -> Date {
+        Calendar.current.startOfDay(for: date)
     }
     
     

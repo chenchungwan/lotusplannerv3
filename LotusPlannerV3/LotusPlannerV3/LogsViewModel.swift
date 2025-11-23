@@ -47,30 +47,45 @@ class LogsViewModel: ObservableObject {
     private var originalFoodDate = Date()
     
     // Local data storage
-    @Published var weightEntries: [WeightLogEntry] = []
-    @Published var workoutEntries: [WorkoutLogEntry] = []
-    @Published var foodEntries: [FoodLogEntry] = []
+    @Published var weightEntries: [WeightLogEntry] = [] {
+        didSet { rebuildWeightCache() }
+    }
+    @Published var workoutEntries: [WorkoutLogEntry] = [] {
+        didSet { rebuildWorkoutCache() }
+    }
+    @Published var foodEntries: [FoodLogEntry] = [] {
+        didSet { rebuildFoodCache() }
+    }
     
     private let coreDataManager = CoreDataManager.shared
     private let authManager = GoogleAuthManager.shared
+    private var weightEntriesByDay: [Date: [WeightLogEntry]] = [:]
+    private var workoutEntriesByDay: [Date: [WorkoutLogEntry]] = [:]
+    private var foodEntriesByDay: [Date: [FoodLogEntry]] = [:]
     
     // MARK: - Computed Properties
     var filteredWeightEntries: [WeightLogEntry] {
-        return weightEntries.filter { entry in
-            Calendar.current.isDate(entry.timestamp, inSameDayAs: currentDate)
-        }.sorted { $0.timestamp > $1.timestamp }  // Newest first
+        weightLogs(on: currentDate)
     }
     
     var filteredWorkoutEntries: [WorkoutLogEntry] {
-        return workoutEntries.filter { entry in
-            Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
+        workoutLogs(on: currentDate)
     }
     
     var filteredFoodEntries: [FoodLogEntry] {
-        return foodEntries.filter { entry in
-            Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }.sorted { $0.createdAt < $1.createdAt }  // Oldest first (newest at bottom)
+        foodLogs(on: currentDate)
+    }
+    
+    func weightLogs(on date: Date) -> [WeightLogEntry] {
+        weightEntriesByDay[normalizedDay(date)] ?? []
+    }
+    
+    func workoutLogs(on date: Date) -> [WorkoutLogEntry] {
+        workoutEntriesByDay[normalizedDay(date)] ?? []
+    }
+    
+    func foodLogs(on date: Date) -> [FoodLogEntry] {
+        foodEntriesByDay[normalizedDay(date)] ?? []
     }
     
     var accentColor: Color {
@@ -108,6 +123,46 @@ class LogsViewModel: ObservableObject {
             // Reload data when CloudKit changes are received
             self?.loadLocalData()
         }
+    }
+    
+    private func rebuildWeightCache() {
+        var map: [Date: [WeightLogEntry]] = [:]
+        for entry in weightEntries {
+            let key = normalizedDay(entry.timestamp)
+            map[key, default: []].append(entry)
+        }
+        for key in map.keys {
+            map[key]?.sort { $0.timestamp > $1.timestamp }
+        }
+        weightEntriesByDay = map
+    }
+    
+    private func rebuildWorkoutCache() {
+        var map: [Date: [WorkoutLogEntry]] = [:]
+        for entry in workoutEntries {
+            let key = normalizedDay(entry.date)
+            map[key, default: []].append(entry)
+        }
+        for key in map.keys {
+            map[key]?.sort { $0.createdAt > $1.createdAt }
+        }
+        workoutEntriesByDay = map
+    }
+    
+    private func rebuildFoodCache() {
+        var map: [Date: [FoodLogEntry]] = [:]
+        for entry in foodEntries {
+            let key = normalizedDay(entry.date)
+            map[key, default: []].append(entry)
+        }
+        for key in map.keys {
+            map[key]?.sort { $0.createdAt < $1.createdAt }
+        }
+        foodEntriesByDay = map
+    }
+    
+    private func normalizedDay(_ date: Date) -> Date {
+        Calendar.current.startOfDay(for: date)
     }
     
     func loadLogsForCurrentDate() {
