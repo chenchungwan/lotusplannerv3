@@ -42,6 +42,7 @@ class CustomLogManager: ObservableObject {
     
     private init() {
         self.privateDatabase = cloudKitContainer.privateCloudDatabase
+        cleanupDuplicateCustomLogData()
         loadData()
         setupCloudKitSubscription()
         Task {
@@ -433,6 +434,7 @@ class CustomLogManager: ObservableObject {
     }
     
     func refreshData() {
+        cleanupDuplicateCustomLogData()
         loadData()
     }
     
@@ -475,6 +477,92 @@ class CustomLogManager: ObservableObject {
         // Enable custom logs if there are items, disable if no items
         if appPrefs.showCustomLogs != hasItems {
             appPrefs.updateShowCustomLogs(hasItems)
+        }
+    }
+
+    // MARK: - Duplicate Cleanup
+    func cleanupDuplicateCustomLogData() {
+        cleanupDuplicateItems()
+        cleanupDuplicateEntries()
+    }
+    
+    private func cleanupDuplicateItems() {
+        let request: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \CustomLogItem.updatedAt, ascending: false)]
+        
+        do {
+            let allItems = try context.fetch(request)
+            var uniqueKeys: [String: CustomLogItem] = [:]
+            var duplicates: [CustomLogItem] = []
+            
+            for item in allItems {
+                let normalizedTitle = (item.title ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                let key = "\(normalizedTitle)|\(item.displayOrder)"
+                
+                if let existing = uniqueKeys[key] {
+                    let existingUpdated = existing.updatedAt ?? existing.createdAt ?? .distantPast
+                    let itemUpdated = item.updatedAt ?? item.createdAt ?? .distantPast
+                    
+                    if itemUpdated > existingUpdated {
+                        duplicates.append(existing)
+                        uniqueKeys[key] = item
+                    } else {
+                        duplicates.append(item)
+                    }
+                } else {
+                    uniqueKeys[key] = item
+                }
+            }
+            
+            if !duplicates.isEmpty {
+                duplicates.forEach { context.delete($0) }
+                saveContext()
+                print("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log item(s)")
+            }
+        } catch {
+            print("❌ CustomLogManager: Failed to cleanup duplicate items: \(error)")
+        }
+    }
+    
+    private func cleanupDuplicateEntries() {
+        let request: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \CustomLogEntry.updatedAt, ascending: false)]
+        
+        do {
+            let allEntries = try context.fetch(request)
+            var uniqueKeys: [String: CustomLogEntry] = [:]
+            var duplicates: [CustomLogEntry] = []
+            
+            let calendar = Calendar.current
+            
+            for entry in allEntries {
+                let normalizedDate = entry.date.map { calendar.startOfDay(for: $0) } ?? .distantPast
+                let key = "\(entry.itemId ?? "")|\(normalizedDate.timeIntervalSince1970)"
+                
+                if let existing = uniqueKeys[key] {
+                    let existingUpdated = existing.updatedAt ?? existing.createdAt ?? .distantPast
+                    let entryUpdated = entry.updatedAt ?? entry.createdAt ?? .distantPast
+                    
+                    if entryUpdated > existingUpdated {
+                        duplicates.append(existing)
+                        uniqueKeys[key] = entry
+                    } else {
+                        duplicates.append(entry)
+                    }
+                } else {
+                    uniqueKeys[key] = entry
+                }
+            }
+            
+            if !duplicates.isEmpty {
+                duplicates.forEach { context.delete($0) }
+                saveContext()
+                print("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log entry/entries")
+            }
+        } catch {
+            print("❌ CustomLogManager: Failed to cleanup duplicate entries: \(error)")
         }
     }
 }

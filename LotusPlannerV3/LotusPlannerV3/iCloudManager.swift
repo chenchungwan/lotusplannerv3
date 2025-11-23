@@ -348,19 +348,19 @@ final class iCloudManager: ObservableObject {
                             
                             if afterCount != beforeCount {
                                 print("✅ iCloudManager: Data changed! \(beforeCount) → \(afterCount)")
-                            } else {
+                } else {
                                 print("ℹ️ iCloudManager: No data changes detected")
                             }
                             
-                            lastSyncDate = Date()
-                            syncStatus = .available
+                    lastSyncDate = Date()
+                    syncStatus = .available
                             print("✅ iCloudManager: Complete sync finished")
-                            
-                            // Provide haptic success feedback
-                            #if canImport(UIKit) && !targetEnvironment(macCatalyst)
-                            let successFeedback = UINotificationFeedbackGenerator()
-                            successFeedback.notificationOccurred(.success)
-                            #endif
+                    
+                    // Provide haptic success feedback
+                    #if canImport(UIKit) && !targetEnvironment(macCatalyst)
+                    let successFeedback = UINotificationFeedbackGenerator()
+                    successFeedback.notificationOccurred(.success)
+                    #endif
                             
                             NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
                         }
@@ -440,32 +440,50 @@ final class iCloudManager: ObservableObject {
         // Query CloudKit directly for CD_TaskTimeWindow records
         let database = container.privateCloudDatabase
         let query = CKQuery(recordType: "CD_TaskTimeWindow", predicate: NSPredicate(value: true))
-        query.sortDescriptors = [NSSortDescriptor(key: "modificationDate", ascending: false)]
         
         print("🔍 DIAGNOSTICS: Querying CloudKit for CD_TaskTimeWindow records...")
         
         do {
-            let (matchResults, _) = try await database.records(matching: query, resultsLimit: 10)
+            let (matchResults, _) = try await database.records(matching: query, resultsLimit: 25)
             
             print("🔍 DIAGNOSTICS: Found \(matchResults.count) TaskTimeWindow records in CloudKit")
             
-            for (index, (recordID, result)) in matchResults.enumerated() {
+            var successfulRecords: [(CKRecord.ID, CKRecord)] = []
+            var failedRecords: [(CKRecord.ID, Error)] = []
+            
+            for (recordID, result) in matchResults {
                 switch result {
                 case .success(let record):
-                    let taskId = record.value(forKey: "CD_taskId") as? String ?? "nil"
-                    let startTime = record.value(forKey: "CD_startTime") as? Date ?? Date()
-                    let endTime = record.value(forKey: "CD_endTime") as? Date ?? Date()
-                    let modDate = record.modificationDate ?? Date()
-                    
-                    print("🔍   Record \(index + 1):")
-                    print("      recordID: \(recordID.recordName)")
-                    print("      taskId: \(taskId)")
-                    print("      startTime: \(startTime)")
-                    print("      endTime: \(endTime)")
-                    print("      modified: \(modDate)")
+                    successfulRecords.append((recordID, record))
                 case .failure(let error):
-                    print("❌   Record \(index + 1) failed: \(error)")
+                    failedRecords.append((recordID, error))
                 }
+            }
+            
+            let sortedRecords = successfulRecords.sorted { lhs, rhs in
+                let lhsDate = lhs.1.modificationDate ?? .distantPast
+                let rhsDate = rhs.1.modificationDate ?? .distantPast
+                return lhsDate > rhsDate
+            }
+            
+            for (index, entry) in sortedRecords.prefix(10).enumerated() {
+                let recordID = entry.0
+                let record = entry.1
+                let taskId = record.value(forKey: "CD_taskId") as? String ?? "nil"
+                let startTime = record.value(forKey: "CD_startTime") as? Date ?? Date()
+                let endTime = record.value(forKey: "CD_endTime") as? Date ?? Date()
+                let modDate = record.modificationDate ?? Date()
+                
+                print("🔍   Record \(index + 1):")
+                print("      recordID: \(recordID.recordName)")
+                print("      taskId: \(taskId)")
+                print("      startTime: \(startTime)")
+                print("      endTime: \(endTime)")
+                print("      modified: \(modDate)")
+            }
+            
+            for (recordID, error) in failedRecords {
+                print("❌   Record \(recordID.recordName) failed: \(error)")
             }
             
             // Now check what's in local Core Data

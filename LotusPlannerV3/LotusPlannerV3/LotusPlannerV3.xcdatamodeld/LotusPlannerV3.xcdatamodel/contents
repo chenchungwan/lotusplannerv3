@@ -23,13 +23,6 @@
         <attribute name="userId" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
-    <entity name="WaterLog" representedClassName="WaterLog" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="YES" attributeType="String"/>
-        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="cupsFilled" optional="YES" attributeType="Binary"/>
-        <attribute name="userId" optional="YES" attributeType="String"/>
-        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
     <entity name="GoalCategory" representedClassName="GoalCategory" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="String"/>
         <attribute name="title" optional="YES" attributeType="String"/>
@@ -83,7 +76,6 @@
         <element name="WeightLog" positionX="-63" positionY="-18" width="128" height="118"/>
         <element name="WorkoutLog" positionX="144" positionY="-18" width="128" height="118"/>
         <element name="FoodLog" positionX="351" positionY="-18" width="128" height="118"/>
-        <element name="WaterLog" positionX="558" positionY="-18" width="128" height="118"/>
         <element name="GoalCategory" positionX="-63" positionY="120" width="128" height="118"/>
         <element name="Goal" positionX="144" positionY="120" width="128" height="118"/>
         <element name="CustomLogItem" positionX="351" positionY="120" width="128" height="118"/>

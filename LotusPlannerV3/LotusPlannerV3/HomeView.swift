@@ -60,15 +60,6 @@ struct ContentView: View {
         case .lists:
             ListsView()
         
-        case .goals:
-            if !appPrefs.hideGoals {
-                GoalsView()
-            } else {
-                // Fallback to calendar view when goals are hidden
-                CalendarView()
-                    .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
-            }
-
         case .journal:
                 JournalView(currentDate: .constant(Date()))
             case .journalDayViews:

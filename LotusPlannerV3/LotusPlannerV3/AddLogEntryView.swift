@@ -54,9 +54,6 @@ struct AddLogEntryView: View {
                              .workout where !appPrefs.showWorkoutLogs,
                              .food where !appPrefs.showFoodLogs:
                             viewModel.selectedLogType = getFirstAvailableLogType()
-                        case .water:
-                            // Water is tracked via cups, not through add form
-                            viewModel.selectedLogType = getFirstAvailableLogType()
                         default:
                             break
                         }

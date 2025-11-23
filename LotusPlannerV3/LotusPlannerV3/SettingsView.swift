@@ -1,6 +1,9 @@
 import SwiftUI
 import CoreData
 
+#Preview {
+    SettingsView()
+}
 extension DateFormatter {
     static let shortDateTime: DateFormatter = {
         let formatter = DateFormatter()
@@ -100,7 +103,6 @@ class NavigationManager: ObservableObject {
         case calendar
         case tasks
         case lists
-        case goals
         case journal
         case journalDayViews
         case weeklyView
@@ -141,25 +143,6 @@ class NavigationManager: ObservableObject {
     func switchToLists() {
         currentView = .lists
         showTasksView = false
-    }
-    
-    func switchToGoals() {
-        // Check if goals are hidden
-        if AppPreferences.shared.hideGoals {
-            // Redirect to calendar view if goals are hidden
-            switchToCalendar()
-            return
-        }
-        
-        currentView = .goals
-        showTasksView = false
-        
-        // Set appropriate time interval based on current view
-        if currentInterval == .day {
-            // If coming from day view, switch to week view (show current week's goals)
-            currentInterval = .week
-        }
-        // Otherwise keep the current interval (week, month, year)
     }
     
     func switchToJournal() {
@@ -316,13 +299,6 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Hide goals
-    @Published var hideGoals: Bool {
-        didSet {
-            UserDefaults.standard.set(hideGoals, forKey: "hideGoals")
-        }
-    }
-    
     // Use alternative row-based weekly view layout
     @Published var useRowBasedWeeklyView: Bool {
         didSet {
@@ -356,14 +332,8 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var showWaterLogs: Bool {
-        didSet {
-            UserDefaults.standard.set(showWaterLogs, forKey: "showWaterLogs")
-        }
-    }
-    
     var showAnyLogs: Bool {
-        showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs || showCustomLogs
+        showWeightLogs || showWorkoutLogs || showFoodLogs || showCustomLogs
     }
     
     
@@ -576,10 +546,8 @@ class AppPreferences: ObservableObject {
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
-        self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
-        self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? false
         
         
 
@@ -648,10 +616,6 @@ class AppPreferences: ObservableObject {
     
     func updateHideCompletedTasks(_ value: Bool) {
         hideCompletedTasks = value
-    }
-    
-    func updateHideGoals(_ value: Bool) {
-        hideGoals = value
     }
     
     func updateHideRecurringEventsInMonth(_ value: Bool) {
@@ -1041,23 +1005,6 @@ struct SettingsView: View {
                     }
                     
                     Toggle(isOn: Binding(
-                        get: { appPrefs.showWaterLogs },
-                        set: { appPrefs.showWaterLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "drop.fill")
-                                .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Water Logs")
-                                    .font(.body)
-                                Text("Show water intake tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    
-                    Toggle(isOn: Binding(
 get: { appPrefs.showFoodLogs },
                         set: { appPrefs.showFoodLogs = $0 }
                     )) {
@@ -1100,34 +1047,6 @@ get: { appPrefs.showFoodLogs },
                         .padding(.top, 8)
                     }
                 }
-                
-                // Goal Preferences section
-                Section("Goal Preferences") {
-                    Toggle(isOn: Binding(
-                        get: { !appPrefs.hideGoals },
-                        set: { appPrefs.updateHideGoals(!$0) }
-                    )) {
-                        HStack {
-                            Image(systemName: "target")
-                                .foregroundColor(appPrefs.hideGoals ? .secondary : .accentColor)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Enable Goals")
-                                    .font(.body)
-                                Text("Enable goal management features")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    
-                    // Goal Categories subsection
-                    if !appPrefs.hideGoals {
-                        GoalCategoriesInlineView()
-                            .padding(.leading, 20)
-                            .padding(.top, 8)
-                    }
-                }
-                
                 
                 Section("App Preferences") {
                     HStack {
@@ -1316,9 +1235,6 @@ get: { appPrefs.showFoodLogs },
         // Delete all Custom Logs data (Core Data + CloudKit)
         CustomLogManager.shared.deleteAllData()
         
-        // Delete all Goals data (Core Data + CloudKit)
-        GoalsManager.shared.deleteAllData()
-        
         // Delete all journal data (drawings, photos, background PDFs)
         JournalManager.shared.deleteAllJournalData()
         
@@ -1379,10 +1295,10 @@ get: { appPrefs.showFoodLogs },
             .buttonStyle(.borderedProminent)
             .disabled({
                 let isSyncing = {
-                    if case .syncing = iCloudManagerInstance.syncStatus {
-                        return true
-                    }
-                    return false
+                if case .syncing = iCloudManagerInstance.syncStatus {
+                    return true
+                }
+                return false
                 }()
                 
                 let isCloudUnavailable = !iCloudManagerInstance.iCloudAvailable
@@ -1493,10 +1409,6 @@ get: { appPrefs.showFoodLogs },
         print("🔄 MANUAL SYNC: Waiting 5 seconds for NSPersistentCloudKitContainer to sync...")
         try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds (increased from 2)
         
-        // Force goals sync
-        print("🔄 MANUAL SYNC: Syncing goals...")
-        await DataManager.shared.goalsManager.forceSync()
-        
         // Force custom log sync
         print("🔄 MANUAL SYNC: Syncing custom logs...")
         await DataManager.shared.customLogManager.forceSync()
@@ -1546,9 +1458,6 @@ get: { appPrefs.showFoodLogs },
         
         // Reload tasks with forced cache clear
         await DataManager.shared.tasksViewModel.loadTasks(forceClear: true)
-        
-        // Reload goals data
-        await DataManager.shared.goalsManager.forceSync()
         
         // Reload custom log data
         await DataManager.shared.customLogManager.forceSync()
@@ -1939,236 +1848,3 @@ struct EditCustomLogItemInlineView: View {
     }
 }
 
-// MARK: - Goal Categories Inline View
-struct GoalCategoriesInlineView: View {
-    @ObservedObject private var goalsManager = GoalsManager.shared
-    @State private var showingAddCategory = false
-    @State private var editingCategory: GoalCategoryData?
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header with title and + button
-            HStack {
-                Text("Goal Categories")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                // Show + button only if we can add more categories
-                if goalsManager.canAddCategory {
-                    Button {
-                        showingAddCategory = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text("Max \(GoalsManager.maxCategories)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            // Categories list
-            if goalsManager.categories.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "folder.badge.questionmark")
-                        .font(.system(size: 30))
-                        .foregroundColor(.secondary)
-                    
-                    Text("No goal categories")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Tap + to add your first category")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition })) { category in
-                        HStack {
-                            Image(systemName: "folder.fill")
-                                .foregroundColor(.accentColor)
-                                .font(.body)
-                            
-                            Text(category.title)
-                                .font(.body)
-                            
-                            Spacer()
-                            
-                            // Show goal count for this category
-                            let goalCount = goalsManager.getGoalsForCategory(category.id).count
-                            Text("\(goalCount)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color(.systemGray5))
-                                .cornerRadius(8)
-                            
-                            Button {
-                                editingCategory = category
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-        }
-        .sheet(isPresented: $showingAddCategory) {
-            AddGoalCategorySheet { title in
-                goalsManager.addCategory(title: title)
-            }
-        }
-        .sheet(item: $editingCategory) { category in
-            EditGoalCategorySheet(category: category) { updatedCategory in
-                goalsManager.updateCategory(updatedCategory)
-            } onDelete: {
-                goalsManager.deleteCategory(category.id)
-            }
-        }
-    }
-}
-
-// MARK: - Add Goal Category Sheet
-struct AddGoalCategorySheet: View {
-    let onSave: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    
-    private let maxLength = 50
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Category Name", text: $title)
-                        .onChange(of: title) { oldValue, newValue in
-                            if newValue.count > maxLength {
-                                title = String(newValue.prefix(maxLength))
-                            }
-                        }
-                    
-                    Text("\(title.count)/\(maxLength) characters")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("New Goal Category")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Create") {
-                        onSave(title)
-                        dismiss()
-                    }
-                    .disabled(title.isEmpty)
-                    .fontWeight(.semibold)
-                    .foregroundColor(!title.isEmpty ? .accentColor : .secondary)
-                    .opacity(!title.isEmpty ? 1.0 : 0.5)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Edit Goal Category Sheet
-struct EditGoalCategorySheet: View {
-    let category: GoalCategoryData
-    let onSave: (GoalCategoryData) -> Void
-    let onDelete: () -> Void
-    
-    @Environment(\.dismiss) private var dismiss
-    @State private var title: String
-    @State private var showingDeleteAlert = false
-    
-    private let maxLength = 50
-    
-    init(category: GoalCategoryData, onSave: @escaping (GoalCategoryData) -> Void, onDelete: @escaping () -> Void) {
-        self.category = category
-        self.onSave = onSave
-        self.onDelete = onDelete
-        self._title = State(initialValue: category.title)
-    }
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Category Name", text: $title)
-                        .onChange(of: title) { oldValue, newValue in
-                            if newValue.count > maxLength {
-                                title = String(newValue.prefix(maxLength))
-                            }
-                        }
-                    
-                    Text("\(title.count)/\(maxLength) characters")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Section {
-                    Button(role: .destructive) {
-                        showingDeleteAlert = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("Delete Category")
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Edit Goal Category")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        var updatedCategory = category
-                        updatedCategory.title = title
-                        updatedCategory.updatedAt = Date()
-                        onSave(updatedCategory)
-                        dismiss()
-                    }
-                    .disabled(title.isEmpty)
-                }
-            }
-            .alert("Delete Category?", isPresented: $showingDeleteAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) {
-                    onDelete()
-                    dismiss()
-                }
-            } message: {
-                Text("This will delete the category and all goals in it. This action cannot be undone.")
-            }
-        }
-    }
-}
-
-#Preview {
-    SettingsView()
-} 

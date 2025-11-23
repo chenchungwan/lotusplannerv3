@@ -53,14 +53,10 @@ struct LogsComponent: View {
                                     Spacer()
                                 }
                                 
-                                // Second row: Food and Water
+                                // Second row: Food
                                 HStack(alignment: .top, spacing: 16) {
                                     if appPrefs.showFoodLogs {
                                         foodSection
-                                    }
-                                    
-                                    if appPrefs.showWaterLogs {
-                                        waterSection
                                     }
                                     
                                     Spacer()
@@ -91,11 +87,6 @@ struct LogsComponent: View {
                             // Food Section
                             if appPrefs.showFoodLogs {
                                 foodSection
-                            }
-                            
-                            // Water Section
-                            if appPrefs.showWaterLogs {
-                                waterSection
                             }
                             
                             // Custom Log Section
@@ -317,58 +308,6 @@ extension LogsComponent {
         .cornerRadius(6)
     }
     
-    var waterSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "drop.fill")
-                    .foregroundColor(viewModel.accentColor)
-                Text("Water")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Spacer()
-            }
-            
-            // Water cups display in rows of 5
-            let entry = viewModel.getOrCreateWaterEntry(for: currentDate)
-            let cupCount = entry.cupsFilled.count
-            let totalItems = cupCount + 1 // cups + plus button
-            let rows = (totalItems + 4) / 5 // Calculate number of rows needed (ceiling division)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(0..<rows, id: \.self) { row in
-                    HStack(spacing: 8) {
-                        ForEach(0..<5, id: \.self) { col in
-                            let index = row * 5 + col
-                            if index < cupCount {
-                                // Show a cup
-                                waterCupButton(index: index, isFilled: entry.cupsFilled[index])
-                            } else if index == cupCount {
-                                // Show the plus button
-                                Button(action: {
-                                    viewModel.addWaterCup(for: currentDate)
-                                }) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.title2)
-                                        .foregroundColor(viewModel.accentColor)
-                                }
-                            }
-                        }
-                        Spacer()
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
-        .background(Color(.systemGray6).opacity(0.5))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-        )
-    }
-    
     var customLogSection: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
@@ -415,13 +354,4 @@ extension LogsComponent {
         )
     }
     
-    func waterCupButton(index: Int, isFilled: Bool) -> some View {
-        Button(action: {
-            viewModel.toggleWaterCup(at: index, for: currentDate)
-        }) {
-            Image(systemName: isFilled ? "drop.fill" : "drop")
-                .font(.title2)
-                .foregroundColor(isFilled ? .blue : .gray)
-        }
-    }
 }

@@ -5,14 +5,12 @@ enum LogType: String, CaseIterable, Codable {
     case weight = "weight"
     case workout = "workout"
     case food = "food"
-    case water = "water"
     
     var displayName: String {
         switch self {
         case .weight: return "Weight"
         case .workout: return "Workout"
         case .food: return "Food"
-        case .water: return "Water"
         }
     }
     
@@ -21,7 +19,6 @@ enum LogType: String, CaseIterable, Codable {
         case .weight: return "scalemass"
         case .workout: return "figure.run"
         case .food: return "fork.knife"
-        case .water: return "drop.fill"
         }
     }
 }
@@ -99,35 +96,6 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
     }
 }
 
-// MARK: - Water Log Entry
-struct WaterLogEntry: Identifiable, Codable, Hashable {
-    let id: String
-    let date: Date
-    var cupsFilled: [Bool] // Array of bools indicating which cups are filled
-    let userId: String
-    let createdAt: Date
-    
-    init(date: Date, cupsFilled: [Bool] = Array(repeating: false, count: 4), userId: String) {
-        self.id = UUID().uuidString
-        self.date = date
-        self.cupsFilled = cupsFilled
-        self.userId = userId
-        self.createdAt = Date()
-    }
-    
-    init(id: String, date: Date, cupsFilled: [Bool], userId: String, createdAt: Date) {
-        self.id = id
-        self.date = date
-        self.cupsFilled = cupsFilled
-        self.userId = userId
-        self.createdAt = createdAt
-    }
-    
-    var filledCount: Int {
-        cupsFilled.filter { $0 }.count
-    }
-}
-
 // MARK: - Scrapbook Entry
 struct ScrapbookEntry: Identifiable, Codable, Hashable {
     let id: String
@@ -162,5 +130,4 @@ extension WeightLogEntry: LogEntry {
 
 extension WorkoutLogEntry: LogEntry {}
 extension FoodLogEntry: LogEntry {}
-extension WaterLogEntry: LogEntry {}
 extension ScrapbookEntry: LogEntry {} 

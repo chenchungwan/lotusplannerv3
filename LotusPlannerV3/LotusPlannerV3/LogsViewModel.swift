@@ -50,7 +50,6 @@ class LogsViewModel: ObservableObject {
     @Published var weightEntries: [WeightLogEntry] = []
     @Published var workoutEntries: [WorkoutLogEntry] = []
     @Published var foodEntries: [FoodLogEntry] = []
-    @Published var waterEntries: [WaterLogEntry] = []
     
     private let coreDataManager = CoreDataManager.shared
     private let authManager = GoogleAuthManager.shared
@@ -74,12 +73,6 @@ class LogsViewModel: ObservableObject {
         }.sorted { $0.createdAt < $1.createdAt }  // Oldest first (newest at bottom)
     }
     
-    var filteredWaterEntries: [WaterLogEntry] {
-        return waterEntries.filter { entry in
-            Calendar.current.isDate(entry.date, inSameDayAs: currentDate)
-        }.sorted { $0.createdAt > $1.createdAt }  // Newest first
-    }
-    
     var accentColor: Color {
         return AppPreferences.shared.personalColor
     }
@@ -93,7 +86,6 @@ class LogsViewModel: ObservableObject {
         weightEntries = coreDataManager.loadWeightEntries()
         workoutEntries = coreDataManager.loadWorkoutEntries()
         foodEntries = coreDataManager.loadFoodEntries()
-        waterEntries = coreDataManager.loadWaterEntries()
     }
     
     private func setupiCloudSync() {
@@ -271,7 +263,6 @@ class LogsViewModel: ObservableObject {
         case .weight: return canAddWeight
         case .workout: return canAddWorkout
         case .food: return canAddFood
-        case .water: return true // Water is handled differently (cup toggling)
         }
     }
     
@@ -289,8 +280,6 @@ class LogsViewModel: ObservableObject {
         case .food:
             return foodName != originalFoodName ||
                    foodDate != originalFoodDate
-        case .water:
-            return false // Water is handled differently
         }
     }
     
@@ -303,7 +292,6 @@ class LogsViewModel: ObservableObject {
         case .weight: addWeightEntry()
         case .workout: addWorkoutEntry()
         case .food: addFoodEntry()
-        case .water: break // Water is handled differently (cup toggling)
         }
     }
     
@@ -362,8 +350,6 @@ class LogsViewModel: ObservableObject {
             updateWorkoutEntry()
         case .food:
             updateFoodEntry()
-        case .water:
-            break // Water is handled differently (cup toggling)
         }
     }
     
@@ -465,58 +451,4 @@ class LogsViewModel: ObservableObject {
         self.editingEntry = nil
     }
     
-    // MARK: - Water Entries
-    func getOrCreateWaterEntry(for date: Date) -> WaterLogEntry {
-        // Check if we already have a water entry for this date
-        if let existingEntry = waterEntries.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
-            return existingEntry
-        }
-        
-        // Create a new entry
-        let userId = getUserId()
-        let entry = WaterLogEntry(date: date, userId: userId)
-        coreDataManager.saveWaterEntry(entry)
-        waterEntries.append(entry)
-        return entry
-    }
-    
-    func toggleWaterCup(at index: Int, for date: Date) {
-        var entry = getOrCreateWaterEntry(for: date)
-        
-        // Ensure the array is large enough
-        while entry.cupsFilled.count <= index {
-            entry.cupsFilled.append(false)
-        }
-        
-        // Toggle the cup
-        entry.cupsFilled[index].toggle()
-        
-        // Update in Core Data and local array
-        updateWaterEntry(entry)
-    }
-    
-    func addWaterCup(for date: Date) {
-        var entry = getOrCreateWaterEntry(for: date)
-        entry.cupsFilled.append(false)
-        updateWaterEntry(entry)
-    }
-    
-    private func updateWaterEntry(_ entry: WaterLogEntry) {
-        // Find and update the entry
-        if let index = waterEntries.firstIndex(where: { $0.id == entry.id }) {
-            // Update in Core Data
-            coreDataManager.deleteWaterEntry(waterEntries[index])
-            coreDataManager.saveWaterEntry(entry)
-            
-            // Update local array
-            waterEntries[index] = entry
-        }
-    }
-    
-    func deleteWaterEntry(_ entry: WaterLogEntry) {
-        coreDataManager.deleteWaterEntry(entry)
-        if let index = waterEntries.firstIndex(where: { $0.id == entry.id }) {
-            waterEntries.remove(at: index)
-        }
-    }
 } 
