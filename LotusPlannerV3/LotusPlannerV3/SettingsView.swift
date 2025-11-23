@@ -1,5 +1,8 @@
 import SwiftUI
 import CoreData
+#if os(iOS)
+import UIKit
+#endif
 
 #Preview {
     SettingsView()
@@ -236,6 +239,14 @@ extension Color {
 class AppPreferences: ObservableObject {
     static let shared = AppPreferences()
     
+    private static var isRunningOniPhone: Bool {
+#if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .phone
+#else
+        return false
+#endif
+    }
+    
     @Published var isDarkMode: Bool {
         didSet {
             UserDefaults.standard.set(isDarkMode, forKey: "isDarkMode")
@@ -274,7 +285,9 @@ class AppPreferences: ObservableObject {
     
     // Available day view layout options based on screen width
     var availableDayViewLayouts: [DayViewLayoutOption] {
-        // Use a reasonable default - this will be updated when the view appears
+        if AppPreferences.isRunningOniPhone {
+            return [.mobile]
+        }
         return DayViewLayoutOption.allCases
     }
     
@@ -526,11 +539,13 @@ class AppPreferences: ObservableObject {
         
         // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-        let screenWidth = 800 // Use reasonable default
+#if os(iOS)
+        let screenWidth = UIScreen.main.bounds.width
+#else
+        let screenWidth: CGFloat = 1024
+#endif
         
-        // If screen width is less than iPad mini (768pt), force mobile layout
-        // iPad mini portrait width is 768pt, so anything smaller (iPhone, etc.) uses mobile view
-        if screenWidth < 768 {
+        if AppPreferences.isRunningOniPhone || screenWidth < 768 {
             self.dayViewLayout = .mobile
         } else if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
             // If no layout has been explicitly chosen (key doesn't exist), use Classic
@@ -635,7 +650,11 @@ class AppPreferences: ObservableObject {
     }
     
     func updateDayViewLayout(_ layout: DayViewLayoutOption) {
-        dayViewLayout = layout
+        if AppPreferences.isRunningOniPhone {
+            dayViewLayout = .mobile
+        } else {
+            dayViewLayout = layout
+        }
     }
     
     func updateShowEventsAsListInDay(_ value: Bool) {
