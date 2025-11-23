@@ -353,7 +353,7 @@ struct GlobalNavBar: View {
                                             navigationManager.switchToTimebox()
                                         }
                                     } label: {
-                                        Image(systemName: "7.circle")
+                                        Image(systemName: "t.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
@@ -397,7 +397,7 @@ struct GlobalNavBar: View {
                                             handleTimeIntervalChange(.week)
                                         }
                                     } label: {
-                                        Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "7.circle" : "w.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
@@ -576,7 +576,7 @@ struct GlobalNavBar: View {
                                             navigationManager.switchToTimebox()
                                         }
                                     } label: {
-                                        Image(systemName: "7.circle")
+                                        Image(systemName: "t.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
@@ -620,7 +620,7 @@ struct GlobalNavBar: View {
                                             handleTimeIntervalChange(.week)
                                         }
                                     } label: {
-                                        Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "7.circle" : "w.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
                                             .font(adaptiveIconSize)
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
