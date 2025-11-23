@@ -302,7 +302,8 @@ struct DayViewTimebox: View {
                             await tasksVM.updateTaskListOrder(newOrder, for: .personal)
                         }
                     },
-                    isSingleDayView: true
+                    isSingleDayView: true,
+                    showTaskStartTime: true
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
@@ -367,7 +368,8 @@ struct DayViewTimebox: View {
                             await tasksVM.updateTaskListOrder(newOrder, for: .professional)
                         }
                     },
-                    isSingleDayView: true
+                    isSingleDayView: true,
+                    showTaskStartTime: true
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else {

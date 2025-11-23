@@ -14,12 +14,13 @@ struct TasksComponent: View {
     let horizontalCards: Bool
     let isSingleDayView: Bool
     let showTitle: Bool
+    let showTaskStartTime: Bool
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
     
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true, showTaskStartTime: Bool = false) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -35,6 +36,7 @@ struct TasksComponent: View {
         self.horizontalCards = horizontalCards
         self.isSingleDayView = isSingleDayView
         self.showTitle = showTitle
+        self.showTaskStartTime = showTaskStartTime
         self._localTaskLists = State(initialValue: taskLists)
     }
     
@@ -134,7 +136,8 @@ extension TasksComponent {
                 hideDueDateTag: hideDueDateTag,
                 enableScroll: enableScroll,
                 maxTasksAreaHeight: maxHeight,
-                isSingleDayView: isSingleDayView
+                isSingleDayView: isSingleDayView,
+                showTaskStartTime: showTaskStartTime
             )
         }
     }
@@ -216,6 +219,7 @@ private struct TaskComponentListCard: View {
     let enableScroll: Bool
     let maxTasksAreaHeight: CGFloat?
     let isSingleDayView: Bool
+    let showTaskStartTime: Bool
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -247,7 +251,8 @@ private struct TaskComponentListCard: View {
         hideDueDateTag: Bool,
         enableScroll: Bool = false,
         maxTasksAreaHeight: CGFloat? = nil,
-        isSingleDayView: Bool = false
+        isSingleDayView: Bool = false,
+        showTaskStartTime: Bool = false
     ) {
         self.taskList = taskList
         self.tasks = tasks
@@ -259,6 +264,7 @@ private struct TaskComponentListCard: View {
         self.enableScroll = enableScroll
         self.maxTasksAreaHeight = maxTasksAreaHeight
         self.isSingleDayView = isSingleDayView
+        self.showTaskStartTime = showTaskStartTime
     }
     
     var body: some View {
@@ -357,7 +363,8 @@ private struct TaskComponentListCard: View {
                         onDetails: { task, listId in
                             onTaskDetails(task, listId) 
                         },
-                        isSingleDayView: isSingleDayView
+                        isSingleDayView: isSingleDayView,
+                        showTaskStartTime: showTaskStartTime
                     )
                     .environment(\.hideDueDate, hideDueDateTag)
                 }
@@ -379,7 +386,8 @@ private struct TaskComponentListCard: View {
                     onDetails: { task, listId in
                         onTaskDetails(task, listId) 
                     },
-                    isSingleDayView: isSingleDayView
+                    isSingleDayView: isSingleDayView,
+                    showTaskStartTime: showTaskStartTime
                 )
                 .environment(\.hideDueDate, hideDueDateTag)
             }
@@ -418,7 +426,15 @@ private struct TaskComponentRow: View {
     let onToggle: () -> Void
     let onDetails: (GoogleTask, String) -> Void
     let isSingleDayView: Bool
+    let showTaskStartTime: Bool
     @Environment(\.hideDueDate) private var hideDueDate: Bool
+    @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
+    
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }()
     
     var body: some View {
         HStack(spacing: 8) {
@@ -440,18 +456,33 @@ private struct TaskComponentRow: View {
 
                 Spacer()
                 
-                // Due date tags (only show if not hidden and tag is available) - aligned to the right
-                if !hideDueDate, let tagInfo = dueDateTag(for: task) {
-                    Text(tagInfo.text)
-                        .font(.caption)
-                        .foregroundColor(tagInfo.textColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(tagInfo.backgroundColor)
-                        )
-                        .fixedSize()
+                HStack(spacing: 4) {
+                    if showTaskStartTime, let startText = startTimeTagText(for: task) {
+                        Text(startText)
+                            .font(.caption)
+                            .foregroundColor(accentColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(accentColor.opacity(0.15))
+                            )
+                            .fixedSize()
+                    }
+                    
+                    // Due date tags (only show if not hidden and tag is available) - aligned to the right
+                    if !hideDueDate, let tagInfo = dueDateTag(for: task) {
+                        Text(tagInfo.text)
+                            .font(.caption)
+                            .foregroundColor(tagInfo.textColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(tagInfo.backgroundColor)
+                            )
+                            .fixedSize()
+                    }
                 }
             }
             .contentShape(Rectangle())
@@ -461,6 +492,18 @@ private struct TaskComponentRow: View {
         }
     }
     
+    private func startTimeTagText(for task: GoogleTask) -> String? {
+        if let window = timeWindowManager.getTimeWindow(for: task.id) {
+            if window.isAllDay {
+                return nil
+            }
+            return TaskComponentRow.timeFormatter.string(from: window.startTime)
+        }
+        
+        guard task.hasSpecificDueTime, let date = task.dueDateTime else { return nil }
+        return TaskComponentRow.timeFormatter.string(from: date)
+    }
+
     private func dueDateTag(for task: GoogleTask) -> (text: String, textColor: Color, backgroundColor: Color)? {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())

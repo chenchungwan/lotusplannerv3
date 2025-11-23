@@ -35,6 +35,18 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
+    private static let dueDateTimeFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let dueDateTimeFormatterNoFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     
     var dueDate: Date? {
         guard let due = due else { return nil }
@@ -50,6 +62,20 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         
         // Google Tasks completion dates: RFC 3339 format with full timestamp
         return GoogleTask.completionDateFormatter.date(from: completed)
+    }
+
+    var dueDateTime: Date? {
+        guard let due = due else { return nil }
+        if let date = GoogleTask.dueDateTimeFormatter.date(from: due) {
+            return date
+        }
+        return GoogleTask.dueDateTimeFormatterNoFraction.date(from: due)
+    }
+
+    var hasSpecificDueTime: Bool {
+        guard let date = dueDateTime else { return false }
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) != 0 || (components.minute ?? 0) != 0
     }
 }
 

@@ -292,6 +292,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Show Simple Week shortcut
+    @Published var showSimpleWeekView: Bool {
+        didSet {
+            UserDefaults.standard.set(showSimpleWeekView, forKey: "showSimpleWeekView")
+        }
+    }
+    
     // Hide completed tasks
     @Published var hideCompletedTasks: Bool {
         didSet {
@@ -547,6 +554,7 @@ class AppPreferences: ObservableObject {
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
+        self.showSimpleWeekView = UserDefaults.standard.object(forKey: "showSimpleWeekView") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         
         
@@ -612,6 +620,10 @@ class AppPreferences: ObservableObject {
     
     func updateShowCustomLogs(_ value: Bool) {
         showCustomLogs = value
+    }
+    
+    func updateShowSimpleWeekView(_ value: Bool) {
+        showSimpleWeekView = value
     }
     
     func updateHideCompletedTasks(_ value: Bool) {
@@ -1046,6 +1058,29 @@ get: { appPrefs.showFoodLogs },
                         .padding(.leading, 20)
                         .padding(.top, 8)
                     }
+                }
+                
+                Section("Simple Week View") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showSimpleWeekView },
+                        set: { appPrefs.updateShowSimpleWeekView($0) }
+                    )) {
+                        HStack {
+                            Image(systemName: "calendar.week.begin")
+                                .foregroundColor(appPrefs.showSimpleWeekView ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Enable Simple Week")
+                                    .font(.body)
+                                Text("Adds a Simple Week option to the menu")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    Text("When enabled, access the streamlined Simple Week view from the menu.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 2)
                 }
                 
                 Section("App Preferences") {
