@@ -1204,7 +1204,9 @@ class TasksViewModel: ObservableObject {
         for kind: GoogleAuthManager.AccountKind,
         startTime: Date? = nil,
         endTime: Date? = nil,
-        isAllDay: Bool = true
+        isAllDay: Bool = true,
+        status: String = "needsAction",
+        completed: String? = nil
     ) async {
         
         let dueDateString: String?
@@ -1221,9 +1223,9 @@ class TasksViewModel: ObservableObject {
             id: UUID().uuidString, // Temporary ID, will be overwritten by server
             title: title,
             notes: notes,
-            status: "needsAction",
+            status: status,
             due: dueDateString,
-            completed: nil,
+            completed: completed,
             updated: nil
         )
         
@@ -2798,6 +2800,7 @@ struct TaskDetailsView: View {
     @State private var startTime: Date = Date()
     @State private var endTime: Date = Date()
     @State private var isAllDay: Bool = true
+    @State private var isCompleted: Bool = false
     
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     
@@ -2808,10 +2811,17 @@ struct TaskDetailsView: View {
     private let originalIsAllDay: Bool
     private let originalStartTime: Date
     private let originalEndTime: Date
+    private let originalIsCompleted: Bool
+    private let originalCompletedTimestamp: String?
     
     private let dueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        return formatter
+    }()
+    private static let completionTimestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
     
@@ -2832,6 +2842,8 @@ struct TaskDetailsView: View {
         
         // Store original due date to detect changes properly
         self.originalDueDate = task.dueDate
+        self.originalIsCompleted = task.isCompleted
+        self.originalCompletedTimestamp = task.completed
         
         _editedTitle = State(initialValue: task.title)
         _editedNotes = State(initialValue: task.notes ?? "")
@@ -2839,6 +2851,7 @@ struct TaskDetailsView: View {
         _editedDueDate = State(initialValue: isNew ? Calendar.current.startOfDay(for: Date()) : task.dueDate)
         _selectedAccountKind = State(initialValue: accountKind)
         _selectedListId = State(initialValue: taskListId)
+        _isCompleted = State(initialValue: isNew ? false : task.isCompleted)
         
         // Initialize time window state and store original values
         let calendar = Calendar.current
@@ -2902,7 +2915,8 @@ struct TaskDetailsView: View {
         isCreatingNewList ||
         isAllDay != originalIsAllDay ||
         !areTimesEqual(startTime, originalStartTime) ||
-        !areTimesEqual(endTime, originalEndTime)
+        !areTimesEqual(endTime, originalEndTime) ||
+        isCompleted != originalIsCompleted
     }
     
     // Helper function to compare times (ignoring seconds and milliseconds)
@@ -3204,6 +3218,13 @@ struct TaskDetailsView: View {
                     .buttonStyle(PlainButtonStyle())
                 }
                     
+                    Toggle(isOn: $isCompleted) {
+                        Label(isCompleted ? "Marked complete" : "Mark as completed",
+                              systemImage: isCompleted ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(isCompleted ? .green : .primary)
+                    }
+                    .toggleStyle(SwitchToggleStyle(tint: currentAccentColor))
+                    
                     // Removed Task Status section per request
                 }
                 
@@ -3481,13 +3502,25 @@ struct TaskDetailsView: View {
                 dueDateString = nil
             }
             
+            let statusString = isCompleted ? "completed" : "needsAction"
+            let completionTimestamp: String?
+            if isCompleted {
+                if originalIsCompleted && !isNew {
+                    completionTimestamp = originalCompletedTimestamp
+                } else {
+                    completionTimestamp = TaskDetailsView.completionTimestampFormatter.string(from: Date())
+                }
+            } else {
+                completionTimestamp = nil
+            }
+            
             let updatedTask = GoogleTask(
                 id: task.id,
                 title: editedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
                 notes: editedNotes.isEmpty ? nil : editedNotes,
-                status: task.status,
+                status: statusString,
                 due: dueDateString,
-                completed: task.completed,
+                completed: completionTimestamp,
                 updated: task.updated
             )
             
@@ -3598,7 +3631,9 @@ struct TaskDetailsView: View {
                     for: selectedAccountKind,
                     startTime: finalStartTime,
                     endTime: finalEndTime,
-                    isAllDay: isAllDay
+                    isAllDay: isAllDay,
+                    status: statusString,
+                    completed: completionTimestamp
                 )
                 
                 await MainActor.run {

@@ -344,10 +344,12 @@ struct AllTaskListsColumn: View {
                         // Personal Lists
                         if isPersonalExpanded {
                             ForEach(personalLists) { taskList in
+                                let personalCounts = taskCounts(for: taskList.id, kind: .personal)
                                 TaskListRow(
                                     taskList: taskList,
                                     accentColor: personalColor,
-                                    taskCount: tasksVM.personalTasks[taskList.id]?.count ?? 0,
+                                    incompleteCount: personalCounts.incomplete,
+                                    totalCount: personalCounts.total,
                                     isSelected: selectedListId == taskList.id && selectedAccountKind == .personal,
                                     onTap: {
                                         selectedListId = taskList.id
@@ -388,10 +390,12 @@ struct AllTaskListsColumn: View {
                         // Professional Lists
                         if isProfessionalExpanded {
                             ForEach(professionalLists) { taskList in
+                                let professionalCounts = taskCounts(for: taskList.id, kind: .professional)
                                 TaskListRow(
                                     taskList: taskList,
                                     accentColor: professionalColor,
-                                    taskCount: tasksVM.professionalTasks[taskList.id]?.count ?? 0,
+                                    incompleteCount: professionalCounts.incomplete,
+                                    totalCount: professionalCounts.total,
                                     isSelected: selectedListId == taskList.id && selectedAccountKind == .professional,
                                     onTap: {
                                         selectedListId = taskList.id
@@ -422,6 +426,19 @@ struct AllTaskListsColumn: View {
         }
     }
     
+    private func taskCounts(for listId: String, kind: GoogleAuthManager.AccountKind) -> (incomplete: Int, total: Int) {
+        let tasks: [GoogleTask]
+        switch kind {
+        case .personal:
+            tasks = tasksVM.personalTasks[listId] ?? []
+        case .professional:
+            tasks = tasksVM.professionalTasks[listId] ?? []
+        }
+        let total = tasks.count
+        let incomplete = tasks.filter { !$0.isCompleted }.count
+        return (incomplete, total)
+    }
+
     private func createNewList() {
         // Determine which account to use
         let accountToUse: GoogleAuthManager.AccountKind?
@@ -482,18 +499,29 @@ struct TasksDetailColumn: View {
         horizontalSizeClass == .compact ? 8 : 12
     }
     
-    var tasks: [GoogleTask] {
+    private var rawTasks: [GoogleTask] {
         guard let listId = selectedListId, let accountKind = selectedAccountKind else {
             return []
         }
         
-        let allTasks: [GoogleTask]
         switch accountKind {
         case .personal:
-            allTasks = tasksVM.personalTasks[listId] ?? []
+            return tasksVM.personalTasks[listId] ?? []
         case .professional:
-            allTasks = tasksVM.professionalTasks[listId] ?? []
+            return tasksVM.professionalTasks[listId] ?? []
         }
+    }
+    
+    private var totalTaskCount: Int {
+        rawTasks.count
+    }
+    
+    private var incompleteTaskCount: Int {
+        rawTasks.filter { !$0.isCompleted }.count
+    }
+    
+    var tasks: [GoogleTask] {
+        let allTasks = rawTasks
         
         // Filter out completed tasks if hideCompletedTasks is enabled
         let filtered = appPrefs.hideCompletedTasks ? allTasks.filter { !$0.isCompleted } : allTasks
@@ -567,7 +595,7 @@ struct TasksDetailColumn: View {
                     
                     Spacer()
                     
-                    Text("\(tasks.count) \(tasks.count == 1 ? "Task" : "Tasks")")
+                    Text("\(incompleteTaskCount) | \(totalTaskCount)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -661,9 +689,6 @@ struct TasksDetailColumn: View {
                                     .foregroundColor(.secondary)
                                 Text("No Tasks")
                                     .font(.headline)
-                                    .foregroundColor(.secondary)
-                                Text("This list is empty")
-                                    .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity)
@@ -981,13 +1006,18 @@ struct SimpleTaskRow: View {
 struct TaskListRow: View {
     let taskList: GoogleTaskList
     let accentColor: Color
-    var taskCount: Int = 0
+    var incompleteCount: Int = 0
+    var totalCount: Int = 0
     var isSelected: Bool = false
     var onTap: () -> Void = {}
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     private var adaptivePadding: CGFloat {
         horizontalSizeClass == .compact ? 12 : 16
+    }
+    
+    private var incompleteTaskCountLabel: String {
+        "\(incompleteCount) | \(totalCount)"
     }
     
     var body: some View {
@@ -1002,9 +1032,16 @@ struct TaskListRow: View {
                 Spacer()
                 
                 // Task count
-                Text("(\(taskCount))")
+                Text(incompleteTaskCountLabel)
                     .font(.caption)
+                    .monospacedDigit()
                     .foregroundColor(.secondary)
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color(.systemGray5))
+                    )
                 
                 // Chevron
                 if isSelected {
