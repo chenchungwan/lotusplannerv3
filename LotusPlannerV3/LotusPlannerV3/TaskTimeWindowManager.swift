@@ -18,8 +18,12 @@ class TaskTimeWindowManager: ObservableObject {
     
     // MARK: - Load Time Windows
     func loadTimeWindows() {
-        let userId = getUserId()
-        timeWindows = coreDataManager.loadAllTaskTimeWindows(for: userId)
+        print("📖 TaskTimeWindowManager: loadTimeWindows() called")
+        // Don't filter by userId - CloudKit already scopes data to the iCloud account
+        // This ensures task times sync across all devices using the same iCloud account
+        print("📖 TaskTimeWindowManager: Loading ALL time windows (no userId filter)")
+        timeWindows = coreDataManager.loadAllTaskTimeWindows(for: nil)
+        print("📖 TaskTimeWindowManager: Loaded \(timeWindows.count) time windows")
     }
     
     // MARK: - Get Time Window
@@ -51,6 +55,8 @@ class TaskTimeWindowManager: ObservableObject {
     // MARK: - Save Time Window
     /// Save or update a time window for a task
     func saveTimeWindow(_ timeWindow: TaskTimeWindowData) {
+        print("📝 TaskTimeWindowManager: saveTimeWindow(TaskTimeWindowData) called")
+        
         // Create updated version with current timestamp
         let updatedWindow = TaskTimeWindowData(
             id: timeWindow.id,
@@ -63,14 +69,19 @@ class TaskTimeWindowManager: ObservableObject {
             updatedAt: Date()
         )
         
+        print("📝 TaskTimeWindowManager: Calling coreDataManager.saveTaskTimeWindow...")
         coreDataManager.saveTaskTimeWindow(updatedWindow)
         
         // Update local cache
         if let index = timeWindows.firstIndex(where: { $0.taskId == updatedWindow.taskId }) {
+            print("📝 TaskTimeWindowManager: Updating existing time window in cache")
             timeWindows[index] = updatedWindow
         } else {
+            print("📝 TaskTimeWindowManager: Adding new time window to cache")
             timeWindows.append(updatedWindow)
         }
+        
+        print("✅ TaskTimeWindowManager: Time window saved successfully")
     }
     
     /// Save time window from components
@@ -80,6 +91,12 @@ class TaskTimeWindowManager: ObservableObject {
         endTime: Date,
         isAllDay: Bool = false
     ) {
+        print("📝 TaskTimeWindowManager: saveTimeWindow called")
+        print("📝   taskId: \(taskId)")
+        print("📝   startTime: \(startTime)")
+        print("📝   endTime: \(endTime)")
+        print("📝   isAllDay: \(isAllDay)")
+        
         // Validate that start and end are on the same day
         let calendar = Calendar.current
         guard calendar.isDate(startTime, inSameDayAs: endTime) else {
@@ -98,6 +115,7 @@ class TaskTimeWindowManager: ObservableObject {
             updatedAt: Date()
         )
         
+        print("📝 TaskTimeWindowManager: Calling saveTimeWindow(timeWindow)...")
         saveTimeWindow(timeWindow)
     }
     
@@ -110,7 +128,10 @@ class TaskTimeWindowManager: ObservableObject {
     
     // MARK: - Helper Methods
     private func getUserId() -> String {
-        return authManager.getEmail(for: .personal) ?? "default_user"
+        // Use a fixed userId for TaskTimeWindows since CloudKit already scopes data to iCloud account
+        // This ensures all devices using the same iCloud account share the same task times
+        // regardless of which Google account they're logged into
+        return "icloud-user"
     }
     
     // MARK: - Query Methods

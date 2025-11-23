@@ -1031,7 +1031,40 @@ struct GlobalNavBar: View {
     
     // MARK: - Data Reload Functions
     private func reloadAllData() async {
+        print("🔄 NAV BAR SYNC: Starting sync from nav bar...")
+        
+        // FIRST: Force iCloud/CloudKit sync to push/pull changes
+        print("🔄 NAV BAR SYNC: Calling iCloudManager.forceCompleteSync()...")
+        iCloudManager.shared.forceCompleteSync()
+        
+        // Wait for CloudKit to sync
+        print("🔄 NAV BAR SYNC: Waiting 3 seconds for CloudKit sync...")
+        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        
         let currentDate = navigationManager.currentDate
+        
+        // Reload goals data
+        print("🔄 NAV BAR SYNC: Syncing goals...")
+        await DataManager.shared.goalsManager.forceSync()
+        
+        // Reload custom logs data
+        print("🔄 NAV BAR SYNC: Syncing custom logs...")
+        await DataManager.shared.customLogManager.forceSync()
+        
+        // Wait for CloudKit to propagate
+        print("🔄 NAV BAR SYNC: Waiting 1 second for CloudKit propagation...")
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        // NOW reload all data from Core Data
+        print("🔄 NAV BAR SYNC: Reloading data from Core Data...")
+        
+        // Reload task time windows
+        await MainActor.run {
+            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
+            TaskTimeWindowManager.shared.loadTimeWindows()
+            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
+            print("🔄 NAV BAR SYNC: Task time windows: \(beforeCount) → \(afterCount)")
+        }
         
         // Reload calendar events based on current interval
         switch navigationManager.currentInterval {
@@ -1049,20 +1082,58 @@ struct GlobalNavBar: View {
         // Reload tasks with forced cache clear
         await tasksVM.loadTasks(forceClear: true)
         
-        // Reload goals data
-        await DataManager.shared.goalsManager.forceSync()
-        
-        // Reload custom logs data
-        await DataManager.shared.customLogManager.forceSync()
-        
         // Reload logs data
         LogsViewModel.shared.reloadData()
         
+        // Refresh view context
+        await MainActor.run {
+            let context = PersistenceController.shared.container.viewContext
+            context.refreshAllObjects()
+        }
+        
         // Post notification to refresh journal content
         NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+        
+        // Update last sync time
+        iCloudManager.shared.lastSyncDate = Date()
+        
+        print("✅ NAV BAR SYNC: Completed successfully!")
     }
     
     private func reloadAllDataForDate(_ date: Date) async {
+        print("🔄 NAV BAR SYNC (for date): Starting sync from nav bar for date: \(date)...")
+        
+        // FIRST: Force iCloud/CloudKit sync to push/pull changes
+        print("🔄 NAV BAR SYNC (for date): Calling iCloudManager.forceCompleteSync()...")
+        iCloudManager.shared.forceCompleteSync()
+        
+        // Wait for CloudKit to sync
+        print("🔄 NAV BAR SYNC (for date): Waiting 3 seconds for CloudKit sync...")
+        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        
+        // Reload goals data
+        print("🔄 NAV BAR SYNC (for date): Syncing goals...")
+        await DataManager.shared.goalsManager.forceSync()
+        
+        // Reload custom logs data
+        print("🔄 NAV BAR SYNC (for date): Syncing custom logs...")
+        await DataManager.shared.customLogManager.forceSync()
+        
+        // Wait for CloudKit to propagate
+        print("🔄 NAV BAR SYNC (for date): Waiting 1 second for CloudKit propagation...")
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        // NOW reload all data from Core Data
+        print("🔄 NAV BAR SYNC (for date): Reloading data from Core Data...")
+        
+        // Reload task time windows
+        await MainActor.run {
+            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
+            TaskTimeWindowManager.shared.loadTimeWindows()
+            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
+            print("🔄 NAV BAR SYNC (for date): Task time windows: \(beforeCount) → \(afterCount)")
+        }
+        
         // Reload calendar events based on current interval
         switch navigationManager.currentInterval {
         case .day:
@@ -1079,17 +1150,22 @@ struct GlobalNavBar: View {
         // Reload tasks with forced cache clear
         await tasksVM.loadTasks(forceClear: true)
         
-        // Reload goals data
-        await DataManager.shared.goalsManager.forceSync()
-        
-        // Reload custom logs data
-        await DataManager.shared.customLogManager.forceSync()
-        
         // Reload logs data
         LogsViewModel.shared.reloadData()
         
+        // Refresh view context
+        await MainActor.run {
+            let context = PersistenceController.shared.container.viewContext
+            context.refreshAllObjects()
+        }
+        
         // Post notification to refresh journal content
         NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+        
+        // Update last sync time
+        iCloudManager.shared.lastSyncDate = Date()
+        
+        print("✅ NAV BAR SYNC (for date): Completed successfully!")
     }
     
 }

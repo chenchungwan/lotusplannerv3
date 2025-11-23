@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreData
 
 extension DateFormatter {
     static let shortDateTime: DateFormatter = {
@@ -1351,6 +1352,11 @@ get: { appPrefs.showFoodLogs },
                 
                 Spacer()
             }
+            .onAppear {
+                print("📱 iCloudSyncSection appeared")
+                print("📱 iCloudAvailable: \(iCloudManagerInstance.iCloudAvailable)")
+                print("📱 syncStatus: \(iCloudManagerInstance.syncStatus)")
+            }
             
             // Sync Progress (if syncing)
             if case .syncing = iCloudManagerInstance.syncStatus {
@@ -1360,6 +1366,7 @@ get: { appPrefs.showFoodLogs },
             
             // Manual Sync Button
             Button(action: {
+                print("🔵 SYNC BUTTON TAPPED!")
                 Task {
                     await performManualSync()
                 }
@@ -1371,15 +1378,23 @@ get: { appPrefs.showFoodLogs },
             }
             .buttonStyle(.borderedProminent)
             .disabled({
-                // Disable if syncing is in progress
-                if case .syncing = iCloudManagerInstance.syncStatus {
-                    return true
-                }
-                // Disable if iCloud is not available
-                if !iCloudManagerInstance.iCloudAvailable {
-                    return true
-                }
-                return false
+                let isSyncing = {
+                    if case .syncing = iCloudManagerInstance.syncStatus {
+                        return true
+                    }
+                    return false
+                }()
+                
+                let isCloudUnavailable = !iCloudManagerInstance.iCloudAvailable
+                
+                print("🔍 Sync button state check:")
+                print("   isSyncing: \(isSyncing)")
+                print("   isCloudUnavailable: \(isCloudUnavailable)")
+                print("   iCloudAvailable: \(iCloudManagerInstance.iCloudAvailable)")
+                print("   syncStatus: \(iCloudManagerInstance.syncStatus)")
+                print("   Button will be disabled: \(isSyncing || isCloudUnavailable)")
+                
+                return isSyncing || isCloudUnavailable
             }())
             
             // Last Sync Time
@@ -1388,21 +1403,130 @@ get: { appPrefs.showFoodLogs },
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+            
+            // Clean Up Duplicates Button (for debugging)
+            Button(action: {
+                print("🧹 USER: Cleaning up duplicate TaskTimeWindows...")
+                CoreDataManager.shared.cleanupDuplicateTaskTimeWindows()
+                
+                // Reload time windows after cleanup
+                TaskTimeWindowManager.shared.loadTimeWindows()
+            }) {
+                HStack {
+                    Image(systemName: "trash.circle")
+                    Text("Clean Up Duplicate Task Times")
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.borderless)
+            .foregroundColor(.orange)
+            
+            // Force Refresh Button (for debugging)
+            Button(action: {
+                print("🔄 USER: Force refreshing from CloudKit...")
+                
+                let context = PersistenceController.shared.container.viewContext
+                
+                // Save any pending changes first
+                if context.hasChanges {
+                    try? context.save()
+                }
+                
+                // Reset the context to clear all cached objects
+                context.reset()
+                
+                // Force the persistent store coordinator to re-read metadata from disk
+                if let coordinator = context.persistentStoreCoordinator,
+                   let store = coordinator.persistentStores.first {
+                    print("🔄 USER: Refreshing persistent store metadata...")
+                    do {
+                        try coordinator.setMetadata([:], for: store)
+                    } catch {
+                        print("❌ USER: Failed to refresh store: \(error)")
+                    }
+                }
+                
+                // Now reload everything with fresh fetches
+                print("🔄 USER: Reloading all data...")
+                TaskTimeWindowManager.shared.loadTimeWindows()
+                CustomLogManager.shared.refreshData()
+                LogsViewModel.shared.reloadData()
+                
+                print("✅ USER: Force refresh completed")
+            }) {
+                HStack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Text("Force Refresh from iCloud")
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.borderless)
+            .foregroundColor(.blue)
+            
+            // CloudKit Diagnostics Button (for debugging)
+            Button(action: {
+                print("🔍 USER: Running CloudKit diagnostics...")
+                Task {
+                    await iCloudManagerInstance.diagnoseCloudKitData()
+                }
+            }) {
+                HStack {
+                    Image(systemName: "magnifyingglass.circle")
+                    Text("Diagnose CloudKit Data")
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.borderless)
+            .foregroundColor(.purple)
         }
     }
     
     private func performManualSync() async {
+        print("🔄 MANUAL SYNC: Starting...")
+        print("🔄 MANUAL SYNC: Current task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
+        
         // Force iCloud sync
+        print("🔄 MANUAL SYNC: Calling iCloudManager.forceCompleteSync()...")
         iCloudManagerInstance.forceCompleteSync()
         
+        // Longer delay to let NSPersistentCloudKitContainer process
+        print("🔄 MANUAL SYNC: Waiting 5 seconds for NSPersistentCloudKitContainer to sync...")
+        try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds (increased from 2)
+        
         // Force goals sync
+        print("🔄 MANUAL SYNC: Syncing goals...")
         await DataManager.shared.goalsManager.forceSync()
         
         // Force custom log sync
+        print("🔄 MANUAL SYNC: Syncing custom logs...")
         await DataManager.shared.customLogManager.forceSync()
+        
+        // Another delay to let CloudKit propagate
+        print("🔄 MANUAL SYNC: Waiting 2 seconds for CloudKit propagation...")
+        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        
+        // Now reload everything from Core Data
+        print("🔄 MANUAL SYNC: Reloading data from Core Data...")
+        await MainActor.run {
+            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
+            
+            TaskTimeWindowManager.shared.loadTimeWindows()
+            CustomLogManager.shared.refreshData()
+            LogsViewModel.shared.reloadData()
+            
+            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
+            print("🔄 MANUAL SYNC: Task time windows: \(beforeCount) → \(afterCount) (change: \(afterCount - beforeCount))")
+            
+            // Force refresh the view context
+            let context = PersistenceController.shared.container.viewContext
+            context.refreshAllObjects()
+        }
         
         // Update last sync time
         iCloudManagerInstance.lastSyncDate = Date()
+        
+        print("✅ MANUAL SYNC: Completed successfully!")
+        print("✅ MANUAL SYNC: Final task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
     }
     
     private func refreshAllViewsAfterDelete() async {

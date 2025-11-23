@@ -42,11 +42,10 @@ final class iCloudManager: ObservableObject {
     }
     
     private init() {
-        #if DEBUG
-        debugPrint("🔄 Initializing iCloudManager...")
-        #endif
+        print("🔄 iCloudManager: Initializing...")
         checkiCloudAvailability()
         setupNotifications()
+        print("✅ iCloudManager: Initialization complete")
     }
     
     // MARK: - iCloud Availability Check
@@ -218,6 +217,8 @@ final class iCloudManager: ObservableObject {
     }
     
     func forceCompleteSync() {
+        print("🔄 iCloudManager: forceCompleteSync() called")
+        
         // Immediate UI feedback
         syncStatus = .syncing
         #if DEBUG
@@ -228,104 +229,147 @@ final class iCloudManager: ObservableObject {
         
         Task {
             // Check iCloud status first
+            print("🔄 iCloudManager: Checking iCloud account status...")
             do {
                 let status = try await container.accountStatus()
+                print("🔄 iCloudManager: iCloud status = \(status.rawValue)")
                 await MainActor.run {
                     switch status {
                     case .available:
                         self.iCloudAvailable = true
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("✅ iCloud account verified")
-        #endif
-                        #endif
+                        print("✅ iCloudManager: iCloud account verified")
                     default:
                         self.iCloudAvailable = false
                         self.syncStatus = .error("iCloud account not available")
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("❌ iCloud account not available")
-        #endif
-                        #endif
+                        print("❌ iCloudManager: iCloud account not available (status: \(status.rawValue))")
                         return
                     }
                 }
             } catch {
                 await MainActor.run {
                     self.syncStatus = .error("Account check failed: \(error.localizedDescription)")
-                    #if DEBUG
-        #if DEBUG
-                    debugPrint("❌ Account check failed: \(error.localizedDescription)")
-        #endif
-                    #endif
+                    print("❌ iCloudManager: Account check failed: \(error.localizedDescription)")
                 }
                 return
             }
             
             // Force a complete refresh and sync
+            print("🔄 iCloudManager: Starting Core Data refresh...")
             await MainActor.run {
                 let context = persistenceController.container.viewContext
                 
-                #if DEBUG
-        #if DEBUG
-                debugPrint("🔄 Refreshing Core Data objects...")
-        #endif
-                #endif
-                // Refresh all objects to get latest from CloudKit
-                context.refreshAllObjects()
-                
-                // Save any local changes
+                // STEP 1: Save any pending local changes to trigger export
                 if context.hasChanges {
                     do {
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("💾 Saving local changes to CloudKit...")
-        #endif
-                        #endif
+                        print("💾 iCloudManager: Saving pending changes to trigger export...")
+                        print("💾   Inserted: \(context.insertedObjects.count), Updated: \(context.updatedObjects.count), Deleted: \(context.deletedObjects.count)")
                         try context.save()
-                        lastSyncDate = Date()
-                        syncStatus = .available
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("✅ Complete sync finished with changes")
-        #endif
-                        #endif
-                        
-                        // Provide haptic success feedback
-                        #if canImport(UIKit) && !targetEnvironment(macCatalyst)
-                        let successFeedback = UINotificationFeedbackGenerator()
-                        successFeedback.notificationOccurred(.success)
-                        #endif
-                        
-                        NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                        print("✅ iCloudManager: Local changes saved, export should begin")
                     } catch {
-                        syncStatus = .error("Sync failed: \(error.localizedDescription)")
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("❌ Complete sync failed: \(error.localizedDescription)")
-        #endif
-                        #endif
+                        syncStatus = .error("Save failed: \(error.localizedDescription)")
+                        print("❌ iCloudManager: Failed to save pending changes: \(error.localizedDescription)")
                         
-                        // Provide haptic error feedback
                         #if canImport(UIKit) && !targetEnvironment(macCatalyst)
                         let errorFeedback = UINotificationFeedbackGenerator()
                         errorFeedback.notificationOccurred(.error)
                         #endif
+                        return
                     }
-                } else {
-                    lastSyncDate = Date()
-                    syncStatus = .available
-                    #if DEBUG
-        #if DEBUG
-                    debugPrint("✅ Complete sync finished (no local changes)")
-        #endif
-                    #endif
-                    
-                    // Provide haptic success feedback
-                    #if canImport(UIKit) && !targetEnvironment(macCatalyst)
-                    let successFeedback = UINotificationFeedbackGenerator()
-                    successFeedback.notificationOccurred(.success)
-                    #endif
+                }
+                
+                // STEP 2: Reset context to clear cache
+                print("🔄 iCloudManager: Resetting context to clear cached data...")
+                context.reset()
+            }
+            
+            // STEP 3: Wait for CloudKit export/import (NSPersistentCloudKitContainer syncs asynchronously)
+            print("⏳ iCloudManager: Waiting 10 seconds for CloudKit export/import...")
+            print("⏳   (NSPersistentCloudKitContainer needs time to export changes to CloudKit)")
+            try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds (increased from 5)
+            
+            // STEP 4: Create multiple background contexts to force import polling
+            // NSPersistentCloudKitContainer imports when new contexts are created
+            print("🔄 iCloudManager: Polling CloudKit for changes...")
+            
+            for i in 1...3 {
+                let pollingContext = persistenceController.container.newBackgroundContext()
+                pollingContext.automaticallyMergesChangesFromParent = true
+                pollingContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+                
+                do {
+                    try await pollingContext.perform {
+                        print("🔄 iCloudManager: Polling attempt \(i)...")
+                        let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+                        request.fetchLimit = 5
+                        let results = try pollingContext.fetch(request)
+                        print("🔄 iCloudManager: Poll \(i) found \(results.count) TaskTimeWindows")
+                    }
+                } catch {
+                    print("⚠️ iCloudManager: Poll \(i) failed: \(error)")
+                }
+                
+                // Small delay between polls
+                if i < 3 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                }
+            }
+            
+            // STEP 5: Final wait for imports to complete
+            print("⏳ iCloudManager: Waiting 3 more seconds for imports to merge...")
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            
+            await MainActor.run {
+                print("🔄 iCloudManager: Reloading all managers from Core Data...")
+                
+                // STEP 6: Create a final fresh context to ensure we get the latest data
+                let freshContext = persistenceController.container.newBackgroundContext()
+                freshContext.automaticallyMergesChangesFromParent = true
+                
+                // Perform a final fetch to ensure merge happens
+                Task {
+                    do {
+                        try await freshContext.perform {
+                            let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+                            let allWindows = try freshContext.fetch(request)
+                            print("🔄 iCloudManager: Final fetch found \(allWindows.count) TaskTimeWindows in Core Data")
+                        }
+                        
+                        await MainActor.run {
+                            // STEP 7: Now reload all managers with the fresh data
+                            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
+                            print("🔄 iCloudManager: Current count before reload: \(beforeCount)")
+                            
+                            TaskTimeWindowManager.shared.loadTimeWindows()
+                            CustomLogManager.shared.refreshData()
+                            LogsViewModel.shared.reloadData()
+                            
+                            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
+                            print("🔄 iCloudManager: Count after reload: \(afterCount)")
+                            
+                            if afterCount != beforeCount {
+                                print("✅ iCloudManager: Data changed! \(beforeCount) → \(afterCount)")
+                            } else {
+                                print("ℹ️ iCloudManager: No data changes detected")
+                            }
+                            
+                            lastSyncDate = Date()
+                            syncStatus = .available
+                            print("✅ iCloudManager: Complete sync finished")
+                            
+                            // Provide haptic success feedback
+                            #if canImport(UIKit) && !targetEnvironment(macCatalyst)
+                            let successFeedback = UINotificationFeedbackGenerator()
+                            successFeedback.notificationOccurred(.success)
+                            #endif
+                            
+                            NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                        }
+                    } catch {
+                        await MainActor.run {
+                            syncStatus = .error("Merge failed: \(error.localizedDescription)")
+                            print("❌ iCloudManager: Failed to merge CloudKit changes: \(error)")
+                        }
+                    }
                 }
             }
         }
@@ -373,6 +417,84 @@ final class iCloudManager: ObservableObject {
         #endif
                 }
             }
+        }
+    }
+    
+    // MARK: - CloudKit Direct Query Diagnostics
+    func diagnoseCloudKitData() async {
+        print("🔍 DIAGNOSTICS: Starting CloudKit data check...")
+        
+        // Check account status
+        do {
+            let status = try await container.accountStatus()
+            print("🔍 DIAGNOSTICS: Account status = \(status.rawValue)")
+            guard status == .available else {
+                print("❌ DIAGNOSTICS: iCloud account not available")
+                return
+            }
+        } catch {
+            print("❌ DIAGNOSTICS: Failed to check account: \(error)")
+            return
+        }
+        
+        // Query CloudKit directly for CD_TaskTimeWindow records
+        let database = container.privateCloudDatabase
+        let query = CKQuery(recordType: "CD_TaskTimeWindow", predicate: NSPredicate(value: true))
+        query.sortDescriptors = [NSSortDescriptor(key: "modificationDate", ascending: false)]
+        
+        print("🔍 DIAGNOSTICS: Querying CloudKit for CD_TaskTimeWindow records...")
+        
+        do {
+            let (matchResults, _) = try await database.records(matching: query, resultsLimit: 10)
+            
+            print("🔍 DIAGNOSTICS: Found \(matchResults.count) TaskTimeWindow records in CloudKit")
+            
+            for (index, (recordID, result)) in matchResults.enumerated() {
+                switch result {
+                case .success(let record):
+                    let taskId = record.value(forKey: "CD_taskId") as? String ?? "nil"
+                    let startTime = record.value(forKey: "CD_startTime") as? Date ?? Date()
+                    let endTime = record.value(forKey: "CD_endTime") as? Date ?? Date()
+                    let modDate = record.modificationDate ?? Date()
+                    
+                    print("🔍   Record \(index + 1):")
+                    print("      recordID: \(recordID.recordName)")
+                    print("      taskId: \(taskId)")
+                    print("      startTime: \(startTime)")
+                    print("      endTime: \(endTime)")
+                    print("      modified: \(modDate)")
+                case .failure(let error):
+                    print("❌   Record \(index + 1) failed: \(error)")
+                }
+            }
+            
+            // Now check what's in local Core Data
+            await MainActor.run {
+                let context = persistenceController.container.viewContext
+                let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+                request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
+                request.fetchLimit = 10
+                
+                do {
+                    let localWindows = try context.fetch(request)
+                    print("🔍 DIAGNOSTICS: Found \(localWindows.count) TaskTimeWindow records in local Core Data")
+                    
+                    for (index, window) in localWindows.enumerated() {
+                        print("🔍   Local \(index + 1):")
+                        print("      taskId: \(window.taskId ?? "nil")")
+                        print("      startTime: \(window.startTime ?? Date())")
+                        print("      endTime: \(window.endTime ?? Date())")
+                        print("      updatedAt: \(window.updatedAt ?? Date())")
+                    }
+                } catch {
+                    print("❌ DIAGNOSTICS: Failed to fetch local Core Data: \(error)")
+                }
+            }
+            
+            print("✅ DIAGNOSTICS: CloudKit check completed")
+            
+        } catch {
+            print("❌ DIAGNOSTICS: CloudKit query failed: \(error)")
         }
     }
     
@@ -451,17 +573,88 @@ final class iCloudManager: ObservableObject {
     
     // MARK: - Notifications Setup
     private func setupNotifications() {
+        print("🔔 iCloudManager: Setting up notification observers...")
+        
+        // Listen for app becoming active to trigger a sync check
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            print("📱 iCloudManager: App entering foreground, checking for CloudKit updates...")
+            
+            // Give CloudKit a moment to sync, then reload
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                print("🔄 iCloudManager: Reloading data after foreground...")
+                let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
+                
+                TaskTimeWindowManager.shared.loadTimeWindows()
+                CustomLogManager.shared.refreshData()
+                LogsViewModel.shared.reloadData()
+                
+                let afterCount = TaskTimeWindowManager.shared.timeWindows.count
+                if afterCount != beforeCount {
+                    print("✅ iCloudManager: Data changed after foreground! \(beforeCount) → \(afterCount)")
+                    self.lastSyncDate = Date()
+                    NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                } else {
+                    print("ℹ️ iCloudManager: No data changes detected")
+                }
+            }
+        }
+        
+        // Listen for CloudKit import completion from Persistence layer
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("cloudKitImportCompleted"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self else { return }
+            
+            print("☁️ iCloudManager: ✅ CloudKit import notification RECEIVED!")
+            print("☁️ iCloudManager: Notification timestamp: \(notification.userInfo?["timestamp"] ?? "unknown")")
+            print("☁️ iCloudManager: Current task time windows count: \(TaskTimeWindowManager.shared.timeWindows.count)")
+            
+            // Reload all managers when CloudKit imports new data
+            print("☁️ iCloudManager: Reloading TaskTimeWindowManager...")
+            TaskTimeWindowManager.shared.loadTimeWindows()
+            
+            print("☁️ iCloudManager: Reloading CustomLogManager...")
+            CustomLogManager.shared.refreshData()
+            
+            print("☁️ iCloudManager: Reloading LogsViewModel...")
+            LogsViewModel.shared.reloadData()
+            
+            print("☁️ iCloudManager: After reload - task time windows count: \(TaskTimeWindowManager.shared.timeWindows.count)")
+            
+            self.lastSyncDate = Date()
+            self.syncStatus = .available
+            
+            print("✅ iCloudManager: Data reloaded after CloudKit import")
+            
+            // Provide haptic feedback
+            #if canImport(UIKit) && !targetEnvironment(macCatalyst)
+            let feedback = UINotificationFeedbackGenerator()
+            feedback.notificationOccurred(.success)
+            #endif
+            
+            // Post notification for UI updates
+            NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+        }
+        
+        print("🔔 iCloudManager: Notification observer setup complete")
+        
         // Listen for CloudKit remote change notifications
         NotificationCenter.default.addObserver(
             forName: .NSPersistentStoreRemoteChange,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self = self else { return }
             
-            #if DEBUG
-            debugPrint("📡 CloudKit remote changes received")
-            #endif
+            print("📡 iCloudManager: CloudKit remote changes received!")
+            print("📡   Notification: \(notification)")
             
             // Update last sync date
             self.lastSyncDate = Date()
@@ -480,26 +673,42 @@ final class iCloudManager: ObservableObject {
                 do {
                     // Perform fetch in background
                     try await backgroundContext.perform {
-                        // Fetch all log types to ensure they're up to date
+                        print("📡 iCloudManager: Fetching updated data from Core Data...")
+                        
+                        // Fetch all data types to ensure they're up to date
                         let weightRequest: NSFetchRequest<WeightLog> = WeightLog.fetchRequest()
                         let workoutRequest: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
                         let foodRequest: NSFetchRequest<FoodLog> = FoodLog.fetchRequest()
+                        let taskTimeRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+                        let customLogEntryRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+                        let customLogItemRequest: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
                         
-                        let _ = try backgroundContext.fetch(weightRequest)
-                        let _ = try backgroundContext.fetch(workoutRequest)
-                        let _ = try backgroundContext.fetch(foodRequest)
+                        let weights = try backgroundContext.fetch(weightRequest)
+                        let workouts = try backgroundContext.fetch(workoutRequest)
+                        let foods = try backgroundContext.fetch(foodRequest)
+                        let taskTimes = try backgroundContext.fetch(taskTimeRequest)
+                        let customLogEntries = try backgroundContext.fetch(customLogEntryRequest)
+                        let customLogItems = try backgroundContext.fetch(customLogItemRequest)
+                        
+                        print("📡   Fetched: \(weights.count) weights, \(workouts.count) workouts, \(foods.count) foods")
+                        print("📡   Fetched: \(taskTimes.count) task times, \(customLogEntries.count) custom log entries, \(customLogItems.count) custom log items")
                         
                         // Save background context to ensure changes are merged
                         if backgroundContext.hasChanges {
                             try backgroundContext.save()
+                            print("📡   Background context saved changes")
                         }
                     }
                     
                     await MainActor.run {
                         self.syncStatus = .available
-                        #if DEBUG
-                        debugPrint("✅ CloudKit changes merged successfully")
-                        #endif
+                        print("✅ iCloudManager: CloudKit changes merged successfully")
+                        
+                        // Reload TaskTimeWindowManager after remote changes
+                        TaskTimeWindowManager.shared.loadTimeWindows()
+                        
+                        // Reload CustomLogManager
+                        CustomLogManager.shared.refreshData()
                         
                         // Post notification for UI updates
                         NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
