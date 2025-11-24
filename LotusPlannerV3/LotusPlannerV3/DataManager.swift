@@ -9,6 +9,7 @@ class DataManager: ObservableObject {
     // Shared ViewModels
     let calendarViewModel = CalendarViewModel()
     let tasksViewModel = TasksViewModel()
+    let goalsManager = GoalsManager.shared
     let customLogManager = CustomLogManager.shared
     
     // Global loading state

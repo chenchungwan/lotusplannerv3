@@ -62,6 +62,33 @@ struct GlobalNavBar: View {
             return "Task Lists"
         }
         
+        // Show filtered goals title when in Goals view
+        if navigationManager.currentView == .goals {
+            switch navigationManager.currentInterval {
+            case .day:
+                return "All Goals"
+            case .week:
+                guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
+                    return "Goals"
+                }
+                let start = weekInterval.start
+                let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
+                let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "M/d"
+                let startString = dateFormatter.string(from: start)
+                let endString = dateFormatter.string(from: end)
+                return "W\(weekNumber): \(startString) - \(endString)"
+            case .month:
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM yyyy"
+                return formatter.string(from: navigationManager.currentDate)
+            case .year:
+                let year = Calendar.current.component(.year, from: navigationManager.currentDate)
+                return "\(year)"
+            }
+        }
+        
         // Show "All Tasks" when in Tasks view and showing all tasks
         if navigationManager.showTasksView && navigationManager.showingAllTasks {
             return "All Tasks"
@@ -137,7 +164,9 @@ struct GlobalNavBar: View {
     }
     
     private func handleTimeIntervalChange(_ interval: TimelineInterval) {
-        if navigationManager.showTasksView {
+        if navigationManager.currentView == .goals {
+            navigationManager.updateInterval(interval, date: Date())
+        } else if navigationManager.showTasksView {
             // In Tasks view: filter to the interval
             navigationManager.showingAllTasks = false
             navigationManager.updateInterval(interval, date: Date())
@@ -269,6 +298,14 @@ struct GlobalNavBar: View {
                             }) {
                                 Label("Journals", systemImage: "book")
                             }
+                            
+                            if !appPrefs.hideGoals {
+                                Button(action: {
+                                    navigationManager.switchToGoals()
+                                }) {
+                                    Label("Goals", systemImage: "target")
+                                }
+                            }
                             Divider()
                             
                             Button("Settings") {
@@ -289,8 +326,8 @@ struct GlobalNavBar: View {
                         }
                         .buttonStyle(.borderless)
                         
-                        // Hide navigation arrows in Lists view
-                        if navigationManager.currentView != .lists {
+                        // Hide navigation arrows in Lists view and in Goals All Goals view
+                        if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                             Button { step(-1) } label: {
                                 Image(systemName: "chevron.left")
                                     .font(adaptiveIconSize)
@@ -299,8 +336,8 @@ struct GlobalNavBar: View {
                         }
                         
                         Button {
-                            // Only open date picker if not in Lists view
-                            if navigationManager.currentView != .lists {
+                            // Only open date picker if not in Lists view or Goals All Goals view
+                            if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                                 selectedDateForPicker = navigationManager.currentDate
                                 showingDatePicker = true
                             }
@@ -309,12 +346,12 @@ struct GlobalNavBar: View {
                                 .font(isCompact ? .headline : .title2)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
-                                .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
+                                .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
                         }
-                        .disabled(navigationManager.currentView == .lists)
+                        .disabled(navigationManager.currentView == .lists || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day))
                         
-                        // Hide navigation arrows in Lists view
-                        if navigationManager.currentView != .lists {
+                        // Hide navigation arrows in Lists view and in Goals All Goals view
+                        if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                             Button { step(1) } label: {
                                 Image(systemName: "chevron.right")
                                     .font(adaptiveIconSize)
@@ -331,13 +368,15 @@ struct GlobalNavBar: View {
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 // In Simple Week View or Timebox View, show all buttons but highlight appropriate circle
                                 if navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .timebox {
-                                    Button {
-                                        handleTimeIntervalChange(.day)
-                                    } label: {
-                                        Image(systemName: "d.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(.secondary)
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            handleTimeIntervalChange(.day)
+                                        } label: {
+                                            Image(systemName: "d.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                     Button {
                                         handleTimeIntervalChange(.week)
@@ -347,32 +386,36 @@ struct GlobalNavBar: View {
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(.secondary)
                                     }
-                                    Button {
-                                        if navigationManager.currentView == .timebox {
-                                            // Already in timebox, do nothing or stay
-                                        } else {
-                                            navigationManager.switchToTimebox()
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .timebox {
+                                                // Already in timebox, do nothing or stay
+                                            } else {
+                                                navigationManager.switchToTimebox()
+                                            }
+                                        } label: {
+                                            Image(systemName: "t.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
                                         }
-                                    } label: {
-                                        Image(systemName: "t.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
                                     }
                                 } else {
-                                    Button {
-                                        if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                            // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                            NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
-                                        } else {
-                                            // In other cases: use standard interval change
-                                            handleTimeIntervalChange(.day)
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
+                                            } else {
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.day)
+                                            }
+                                        } label: {
+                                            Image(systemName: "d.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                         }
-                                    } label: {
-                                        Image(systemName: "d.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                     }
                                     // Hide s.circle in Tasks view
                                     if navigationManager.currentView != .tasks {
@@ -380,28 +423,30 @@ struct GlobalNavBar: View {
                                             // In other views: handle week interval change
                                             handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView) ? "w.circle" : "s.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                                 .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
                                         }
                                     }
-                                    Button {
-                                        if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                            // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                            NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
-                                        } else if navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar {
-                                            // In Calendar or Yearly Calendar view: switch to timebox view
-                                            navigationManager.switchToTimebox()
-                                        } else {
-                                            // In other cases: use standard interval change
-                                            handleTimeIntervalChange(.week)
-                                        }
-                                    } label: {
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                                            } else if navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar {
+                                                // In Calendar or Yearly Calendar view: switch to timebox view
+                                                navigationManager.switchToTimebox()
+                                            } else {
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.week)
+                                            }
+                                        } label: {
                                             Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
+                                        }
                                     }
                                 }
                                 Button {
@@ -428,39 +473,50 @@ struct GlobalNavBar: View {
                             
                             // Hide ellipsis.circle in calendar views, lists view, journal day views, simple week view, and timebox view
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView && navigationManager.currentView != .timebox {
-                                Menu {
-                                    Button("All") {
-                                        // Switch to "All" tasks view
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                if navigationManager.currentView == .goals {
+                                    Button {
+                                        navigationManager.updateInterval(.day, date: Date())
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle")
+                                            .font(adaptiveIconSize)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
                                     }
-                                    Divider()
-                                    Button("Has Due Date") {
-                                        // Switch to All view with Has Due Date filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
+                                } else {
+                                    Menu {
+                                        Button("All") {
+                                            // Switch to "All" tasks view
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        }
+                                        Divider()
+                                        Button("Has Due Date") {
+                                            // Switch to All view with Has Due Date filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
+                                        }
+                                        Button("No Due Date") {
+                                            // Switch to All view with No Due Date filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
+                                        }
+                                        Button("Overdue") {
+                                            // Switch to All view with Past Due filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
+                                        }
+                                        Button("Complete") {
+                                            // Switch to All view with Complete filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                                            // Turn off hide completed setting to show completed tasks
+                                            appPrefs.updateHideCompletedTasks(false)
+                                        }
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle")
+                                            .font(adaptiveIconSize)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                            .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                     }
-                                    Button("No Due Date") {
-                                        // Switch to All view with No Due Date filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
-                                    }
-                                    Button("Overdue") {
-                                        // Switch to All view with Past Due filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
-                                    }
-                                    Button("Complete") {
-                                        // Switch to All view with Complete filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
-                                        // Turn off hide completed setting to show completed tasks
-                                        appPrefs.updateHideCompletedTasks(false)
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis.circle")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                 }
                             }
                             
@@ -520,6 +576,23 @@ struct GlobalNavBar: View {
                                     }
                                     Button("List") {
                                         showingAddList = true
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else if navigationManager.currentView == .goals {
+                                // In Goals view: menu with Event, Task, and Goal
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                    Button("Goal") {
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                     }
                                 } label: {
                                     Image(systemName: "plus")
@@ -554,13 +627,15 @@ struct GlobalNavBar: View {
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
                                 // In Simple Week View or Timebox View, show all buttons but highlight appropriate circle
                                 if navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .timebox {
-                                    Button {
-                                    handleTimeIntervalChange(.day)
-                                    } label: {
-                                        Image(systemName: "d.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(.secondary)
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                        handleTimeIntervalChange(.day)
+                                        } label: {
+                                            Image(systemName: "d.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                     Button {
                                         handleTimeIntervalChange(.week)
@@ -570,32 +645,36 @@ struct GlobalNavBar: View {
                                             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                             .foregroundColor(.secondary)
                                     }
-                                    Button {
-                                        if navigationManager.currentView == .timebox {
-                                            // Already in timebox, do nothing or stay
-                                        } else {
-                                            navigationManager.switchToTimebox()
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .timebox {
+                                                // Already in timebox, do nothing or stay
+                                            } else {
+                                                navigationManager.switchToTimebox()
+                                            }
+                                        } label: {
+                                            Image(systemName: "t.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
                                         }
-                                    } label: {
-                                        Image(systemName: "t.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
                                     }
                                 } else {
-                                    Button {
-                                        if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                            // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                            NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
-                                        } else {
-                                            // In other cases: use standard interval change
-                                            handleTimeIntervalChange(.day)
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
+                                            } else {
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.day)
+                                            }
+                                        } label: {
+                                            Image(systemName: "d.circle")
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                         }
-                                    } label: {
-                                        Image(systemName: "d.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
                                     }
                                     // Hide s.circle in Tasks view
                                     if navigationManager.currentView != .tasks {
@@ -603,28 +682,30 @@ struct GlobalNavBar: View {
                                             // In other views: handle week interval change
                                             handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView) ? "w.circle" : "s.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                                 .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
                                         }
                                     }
-                                    Button {
-                                        if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                            // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                            NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
-                                        } else if navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar {
-                                            // In Calendar or Yearly Calendar view: switch to timebox view
-                                            navigationManager.switchToTimebox()
-                                        } else {
-                                            // In other cases: use standard interval change
-                                            handleTimeIntervalChange(.week)
-                                        }
-                                    } label: {
+                                    if navigationManager.currentView != .goals {
+                                        Button {
+                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                                            } else if navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar {
+                                                // In Calendar or Yearly Calendar view: switch to timebox view
+                                                navigationManager.switchToTimebox()
+                                            } else {
+                                                // In other cases: use standard interval change
+                                                handleTimeIntervalChange(.week)
+                                            }
+                                        } label: {
                                             Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
+                                                .font(adaptiveIconSize)
+                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
+                                        }
                                     }
                                 }
                                 Button {
@@ -649,39 +730,50 @@ struct GlobalNavBar: View {
                             
                             // Hide ellipsis.circle in calendar views, lists view, journal day views, simple week view, and timebox view
                             if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView && navigationManager.currentView != .timebox {
-                                Menu {
-                                    Button("All") {
-                                        // Switch to "All" tasks view
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                if navigationManager.currentView == .goals {
+                                    Button {
+                                        navigationManager.updateInterval(.day, date: Date())
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle")
+                                            .font(adaptiveIconSize)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
                                     }
-                                    Divider()
-                                    Button("Has Due Date") {
-                                        // Switch to All view with Has Due Date filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
+                                } else {
+                                    Menu {
+                                        Button("All") {
+                                            // Switch to "All" tasks view
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                        }
+                                        Divider()
+                                        Button("Has Due Date") {
+                                            // Switch to All view with Has Due Date filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
+                                        }
+                                        Button("No Due Date") {
+                                            // Switch to All view with No Due Date filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
+                                        }
+                                        Button("Overdue") {
+                                            // Switch to All view with Past Due filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
+                                        }
+                                        Button("Complete") {
+                                            // Switch to All view with Complete filter
+                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                                            // Turn off hide completed setting to show completed tasks
+                                            appPrefs.updateHideCompletedTasks(false)
+                                        }
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle")
+                                            .font(adaptiveIconSize)
+                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                            .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                     }
-                                    Button("No Due Date") {
-                                        // Switch to All view with No Due Date filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
-                                    }
-                                    Button("Overdue") {
-                                        // Switch to All view with Past Due filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
-                                    }
-                                    Button("Complete") {
-                                        // Switch to All view with Complete filter
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
-                                        // Turn off hide completed setting to show completed tasks
-                                        appPrefs.updateHideCompletedTasks(false)
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis.circle")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                                 }
                             }
                             
@@ -741,6 +833,23 @@ struct GlobalNavBar: View {
                                     }
                                     Button("List") {
                                         showingAddList = true
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                }
+                            } else if navigationManager.currentView == .goals {
+                                // In Goals view: menu with Event, Task, and Goal
+                                Menu {
+                                    Button("Event") {
+                                        showingAddEvent = true
+                                    }
+                                    Button("Task") {
+                                        showingAddTask = true
+                                    }
+                                    Button("Goal") {
+                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                     }
                                 } label: {
                                     Image(systemName: "plus")
@@ -920,6 +1029,10 @@ struct GlobalNavBar: View {
         
         let currentDate = navigationManager.currentDate
         
+        // Reload goals data
+        print("🔄 NAV BAR SYNC: Syncing goals...")
+        await DataManager.shared.goalsManager.forceSync()
+        
         // Reload custom logs data
         print("🔄 NAV BAR SYNC: Syncing custom logs...")
         await DataManager.shared.customLogManager.forceSync()
@@ -983,6 +1096,10 @@ struct GlobalNavBar: View {
         // Wait for CloudKit to sync
         print("🔄 NAV BAR SYNC (for date): Waiting 3 seconds for CloudKit sync...")
         try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        
+        // Reload goals data
+        print("🔄 NAV BAR SYNC (for date): Syncing goals...")
+        await DataManager.shared.goalsManager.forceSync()
         
         // Reload custom logs data
         print("🔄 NAV BAR SYNC (for date): Syncing custom logs...")
