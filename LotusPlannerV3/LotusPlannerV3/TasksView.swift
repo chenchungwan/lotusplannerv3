@@ -3219,9 +3219,12 @@ struct TaskDetailsView: View {
                 }
                     
                     Toggle(isOn: $isCompleted) {
-                        Label(isCompleted ? "Marked complete" : "Mark as completed",
-                              systemImage: isCompleted ? "checkmark.circle.fill" : "circle")
-                            .foregroundColor(isCompleted ? .green : .primary)
+                        HStack(spacing: 8) {
+                            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(isCompleted ? currentAccentColor : .secondary)
+                            Text(isCompleted ? "Marked complete" : "Mark as completed")
+                                .foregroundColor(isCompleted ? currentAccentColor : .primary)
+                        }
                     }
                     .toggleStyle(SwitchToggleStyle(tint: currentAccentColor))
                     

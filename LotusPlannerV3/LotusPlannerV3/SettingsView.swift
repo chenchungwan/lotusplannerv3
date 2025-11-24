@@ -239,7 +239,7 @@ extension Color {
 class AppPreferences: ObservableObject {
     static let shared = AppPreferences()
     
-    private static var isRunningOniPhone: Bool {
+    static var isRunningOniPhone: Bool {
 #if os(iOS)
         return UIDevice.current.userInterfaceIdiom == .phone
 #else
@@ -305,13 +305,7 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Show Simple Week shortcut
-    @Published var showSimpleWeekView: Bool {
-        didSet {
-            UserDefaults.standard.set(showSimpleWeekView, forKey: "showSimpleWeekView")
-        }
-    }
-    
+
     // Hide completed tasks
     @Published var hideCompletedTasks: Bool {
         didSet {
@@ -569,7 +563,6 @@ class AppPreferences: ObservableObject {
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
-        self.showSimpleWeekView = UserDefaults.standard.object(forKey: "showSimpleWeekView") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         
         
@@ -637,10 +630,7 @@ class AppPreferences: ObservableObject {
         showCustomLogs = value
     }
     
-    func updateShowSimpleWeekView(_ value: Bool) {
-        showSimpleWeekView = value
-    }
-    
+
     func updateHideCompletedTasks(_ value: Bool) {
         hideCompletedTasks = value
     }
@@ -842,45 +832,47 @@ struct SettingsView: View {
                 
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
 
-                Section("Events View Preferences") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: !appPrefs.showEventsAsListInDay ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(!appPrefs.showEventsAsListInDay ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Events in a 24-hour timeline")
-                                    .font(.body)
-                                    .fontWeight(!appPrefs.showEventsAsListInDay ? .semibold : .regular)
+                if !AppPreferences.isRunningOniPhone {
+                    Section("Events View Preferences") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: !appPrefs.showEventsAsListInDay ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(!appPrefs.showEventsAsListInDay ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    
+                                    Text("Events in a 24-hour timeline")
+                                        .font(.body)
+                                        .fontWeight(!appPrefs.showEventsAsListInDay ? .semibold : .regular)
+                                }
                             }
+                            
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateShowEventsAsListInDay(false)
                         }
                         
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateShowEventsAsListInDay(false)
-                    }
-                    
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: appPrefs.showEventsAsListInDay ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(appPrefs.showEventsAsListInDay ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Events in a list")
-                                    .font(.body)
-                                    .fontWeight(appPrefs.showEventsAsListInDay ? .semibold : .regular)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: appPrefs.showEventsAsListInDay ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(appPrefs.showEventsAsListInDay ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    
+                                    Text("Events in a list")
+                                        .font(.body)
+                                        .fontWeight(appPrefs.showEventsAsListInDay ? .semibold : .regular)
+                                }
                             }
+                            
+                            Spacer()
                         }
-                        
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateShowEventsAsListInDay(true)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateShowEventsAsListInDay(true)
+                        }
                     }
                 }
 
@@ -1077,29 +1069,6 @@ get: { appPrefs.showFoodLogs },
                         .padding(.leading, 20)
                         .padding(.top, 8)
                     }
-                }
-                
-                Section("Simple Week View") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showSimpleWeekView },
-                        set: { appPrefs.updateShowSimpleWeekView($0) }
-                    )) {
-                        HStack {
-                            Image(systemName: "calendar.week.begin")
-                                .foregroundColor(appPrefs.showSimpleWeekView ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Enable Simple Week")
-                                    .font(.body)
-                                Text("Adds a Simple Week option to the menu")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    Text("When enabled, access the streamlined Simple Week view from the menu.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 2)
                 }
                 
                 Section("App Preferences") {

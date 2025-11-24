@@ -280,15 +280,7 @@ struct GlobalNavBar: View {
                             Button("Report Issue / Request Features") {
                                 showingReportIssues = true
                             }
-                            
-                            if appPrefs.showSimpleWeekView {
-                                Divider()
-                                Button(action: {
-                                    navigationManager.switchToSimpleWeekView()
-                                }) {
-                                    Label("Simple Week", systemImage: "calendar.week.begin")
-                                }
-                            }
+
                         } label: {
                             Image(systemName: "line.3.horizontal")
                                 .font(adaptiveIconSize)
