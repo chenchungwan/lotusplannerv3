@@ -338,6 +338,9 @@ struct GoalCategoryCard: View {
     @State private var editedTitle = ""
     @State private var showingCopyAlert = false
     @State private var showingNoGoalsAlert = false
+    @State private var isAddingQuickGoal = false
+    @State private var newGoalTitle = ""
+    @FocusState private var isQuickGoalFieldFocused: Bool
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
@@ -417,6 +420,9 @@ struct GoalCategoryCard: View {
             // Goals list
             ScrollView {
                 LazyVStack(spacing: adaptiveSpacing) {
+                    quickAddGoalRow
+                    Divider()
+                    
                     ForEach(goals) { goal in
                         GoalRow(
                             goal: goal,
@@ -457,6 +463,106 @@ struct GoalCategoryCard: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("There are no \(currentInterval.rawValue.lowercased()) goals in the previous period to copy.")
+        }
+    }
+    
+    @ViewBuilder
+    private var quickAddGoalRow: some View {
+        if isAddingQuickGoal {
+            HStack(spacing: 12) {
+                Image(systemName: "plus.circle")
+                    .font(.title2)
+                    .foregroundColor(.accentColor)
+                
+                TextField("New goal", text: $newGoalTitle)
+                    .font(.body)
+                    .focused($isQuickGoalFieldFocused)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        createQuickGoalInline()
+                    }
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            isQuickGoalFieldFocused = true
+                        }
+                    }
+                
+                Button {
+                    cancelQuickGoalInline()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel quick goal")
+            }
+            .padding(adaptivePadding)
+            .background(Color(.systemBackground))
+        } else {
+            Button {
+                isAddingQuickGoal = true
+                newGoalTitle = ""
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.circle")
+                        .font(.title2)
+                        .foregroundColor(.accentColor)
+                    
+                    Text("New goal")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                }
+                .padding(adaptivePadding)
+                .background(Color(.systemBackground))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add quick goal")
+        }
+    }
+    
+    private func cancelQuickGoalInline() {
+        isAddingQuickGoal = false
+        newGoalTitle = ""
+        isQuickGoalFieldFocused = false
+    }
+    
+    private func createQuickGoalInline() {
+        let trimmed = newGoalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            cancelQuickGoalInline()
+            return
+        }
+        
+        let timeframe = convertToGoalTimeframe(currentInterval)
+        let dueDate = quickGoalDueDate(for: timeframe)
+        
+        let newGoal = GoalData(
+            title: trimmed,
+            description: "",
+            successMetric: "",
+            categoryId: category.id,
+            targetTimeframe: timeframe,
+            dueDate: dueDate,
+            isCompleted: false,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        
+        goalsManager.addGoal(newGoal)
+        cancelQuickGoalInline()
+    }
+    
+    private func quickGoalDueDate(for timeframe: GoalTimeframe) -> Date {
+        switch timeframe {
+        case .week:
+            return GoalData.calculateDueDate(for: .week, from: currentDate)
+        case .month:
+            return GoalData.calculateDueDate(for: .month, from: currentDate)
+        case .year:
+            return GoalData.calculateDueDate(for: .year, from: currentDate)
         }
     }
     
