@@ -2068,7 +2068,7 @@ struct TasksView: View {
             if shouldUseStackedLayout {
                 // Mobile portrait: Full-width stacked layout
                 stackedTasksView(geometry: geometry)
-            } else if appPrefs.tasksLayoutHorizontal {
+            } else if appPrefs.tasksLayoutHorizontal && !AppPreferences.isRunningOniPhone {
                 // Horizontal cards layout
                 horizontalTasksView
             } else {

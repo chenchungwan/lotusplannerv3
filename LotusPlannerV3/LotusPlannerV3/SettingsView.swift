@@ -556,7 +556,12 @@ class AppPreferences: ObservableObject {
         self.useRowBasedWeeklyView = UserDefaults.standard.bool(forKey: "useRowBasedWeeklyView")
 
         // Load tasks layout preference (default false - vertical layout)
-        self.tasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
+        var storedTasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
+        if AppPreferences.isRunningOniPhone && storedTasksLayoutHorizontal {
+            storedTasksLayoutHorizontal = false
+            UserDefaults.standard.set(false, forKey: "tasksLayoutHorizontal")
+        }
+        self.tasksLayoutHorizontal = storedTasksLayoutHorizontal
 
         // Load logs visibility preferences (default all visible)
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
@@ -656,7 +661,11 @@ class AppPreferences: ObservableObject {
     }
     
     func updateTasksLayoutHorizontal(_ value: Bool) {
-        tasksLayoutHorizontal = value
+        if AppPreferences.isRunningOniPhone {
+            tasksLayoutHorizontal = false
+        } else {
+            tasksLayoutHorizontal = value
+        }
     }
     
     
@@ -971,24 +980,26 @@ struct SettingsView: View {
                         appPrefs.updateTasksLayoutHorizontal(false)
                     }
                     
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Horizontal stacks")
-                                    .font(.body)
-                                    .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                    if !AppPreferences.isRunningOniPhone {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: appPrefs.tasksLayoutHorizontal ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(appPrefs.tasksLayoutHorizontal ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    
+                                    Text("Horizontal stacks")
+                                        .font(.body)
+                                        .fontWeight(appPrefs.tasksLayoutHorizontal ? .semibold : .regular)
+                                }
                             }
+                            
+                            Spacer()
                         }
-                        
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateTasksLayoutHorizontal(true)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateTasksLayoutHorizontal(true)
+                        }
                     }
                 }
                 
