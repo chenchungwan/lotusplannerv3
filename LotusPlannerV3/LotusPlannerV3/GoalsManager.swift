@@ -75,7 +75,7 @@ class GoalsManager: ObservableObject {
         
         do {
             let coreDataCategories = try context.fetch(categoryRequest)
-            categories = coreDataCategories.map { entity in
+            let mappedCategories = coreDataCategories.map { entity in
                 GoalCategoryData(
                     id: UUID(uuidString: entity.id ?? "") ?? UUID(),
                     title: entity.title ?? "",
@@ -84,6 +84,7 @@ class GoalsManager: ObservableObject {
                     updatedAt: entity.updatedAt ?? Date()
                 )
             }
+            categories = deduplicatedCategories(from: mappedCategories)
         } catch {
             print("Error loading categories from Core Data: \(error)")
         }
@@ -94,7 +95,7 @@ class GoalsManager: ObservableObject {
         
         do {
             let coreDataGoals = try context.fetch(goalRequest)
-            goals = coreDataGoals.map { entity in
+            let mappedGoals = coreDataGoals.map { entity in
                 GoalData(
                     id: UUID(uuidString: entity.id ?? "") ?? UUID(),
                     title: entity.title ?? "",
@@ -108,6 +109,7 @@ class GoalsManager: ObservableObject {
                     updatedAt: entity.updatedAt ?? Date()
                 )
             }
+            goals = deduplicatedGoals(from: mappedGoals)
         } catch {
             print("Error loading goals from Core Data: \(error)")
         }
@@ -122,6 +124,12 @@ class GoalsManager: ObservableObject {
         // Check if we've reached the maximum number of categories
         guard canAddCategory else {
             print("Cannot add category: Maximum of \(GoalsManager.maxCategories) categories reached")
+            return
+        }
+        
+        let normalizedTitle = normalizeCategoryTitle(title)
+        guard !categories.contains(where: { normalizeCategoryTitle($0.title) == normalizedTitle }) else {
+            print("Cannot add category: A category with the same name already exists")
             return
         }
         
@@ -439,6 +447,9 @@ class GoalsManager: ObservableObject {
         syncStatus = .syncing
         
         do {
+            categories = deduplicatedCategories(from: categories)
+            goals = deduplicatedGoals(from: goals)
+            
             // Create container for sync
             let container = GoalsContainer(
                 categories: categories,
@@ -492,8 +503,8 @@ class GoalsManager: ObservableObject {
                                 guard cloudSyncDate > localSync else { continue }
                             }
                             // If no local sync date, or CloudKit is newer, update
-                            categories = container.categories
-                            goals = container.goals
+                            categories = deduplicatedCategories(from: container.categories)
+                            goals = deduplicatedGoals(from: container.goals)
                             
                             // Update Core Data
                             await updateCoreDataFromCloudKit()
@@ -611,5 +622,94 @@ class GoalsManager: ObservableObject {
     
     func refreshData() {
         loadData()
+    }
+    
+    // MARK: - Data Normalization Helpers
+    private func normalizeCategoryTitle(_ title: String) -> String {
+        title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+    
+    private func deduplicatedCategories(from categories: [GoalCategoryData]) -> [GoalCategoryData] {
+        var uniqueByTitle: [String: GoalCategoryData] = [:]
+        
+        for category in categories {
+            let key = normalizeCategoryTitle(category.title)
+            guard !key.isEmpty else { continue }
+            
+            if let existing = uniqueByTitle[key] {
+                if category.updatedAt > existing.updatedAt {
+                    uniqueByTitle[key] = category
+                }
+            } else {
+                uniqueByTitle[key] = category
+            }
+        }
+        
+        var deduped = Array(uniqueByTitle.values)
+            .sorted {
+                if $0.displayPosition == $1.displayPosition {
+                    return $0.updatedAt > $1.updatedAt
+                }
+                return $0.displayPosition < $1.displayPosition
+            }
+        
+        var usedPositions = Set<Int>()
+        for index in deduped.indices {
+            var category = deduped[index]
+            if usedPositions.contains(category.displayPosition) {
+                if let newPosition = (0..<GoalsManager.maxCategories).first(where: { !usedPositions.contains($0) }) {
+                    category.displayPosition = newPosition
+                    deduped[index] = category
+                    usedPositions.insert(newPosition)
+                }
+            } else {
+                usedPositions.insert(category.displayPosition)
+            }
+        }
+        
+        return Array(deduped.prefix(GoalsManager.maxCategories))
+    }
+    
+    private func normalizeGoalTitle(_ title: String) -> String {
+        normalizeCategoryTitle(title)
+    }
+    
+    private func deduplicatedGoals(from goals: [GoalData]) -> [GoalData] {
+        var uniqueByKey: [String: GoalData] = [:]
+        let calendar = Calendar.current
+        
+        for goal in goals {
+            let key = goalDeduplicationKey(for: goal, calendar: calendar)
+            guard !key.isEmpty else { continue }
+            
+            if let existing = uniqueByKey[key] {
+                if goal.updatedAt > existing.updatedAt {
+                    uniqueByKey[key] = goal
+                }
+            } else {
+                uniqueByKey[key] = goal
+            }
+        }
+        
+        return Array(uniqueByKey.values)
+            .sorted {
+                if $0.categoryId == $1.categoryId {
+                    if $0.dueDate == $1.dueDate {
+                        return $0.updatedAt > $1.updatedAt
+                    }
+                    return $0.dueDate < $1.dueDate
+                }
+                return $0.categoryId.uuidString < $1.categoryId.uuidString
+            }
+    }
+    
+    private func goalDeduplicationKey(for goal: GoalData, calendar: Calendar) -> String {
+        let normalizedTitle = normalizeGoalTitle(goal.title)
+        guard !normalizedTitle.isEmpty else { return "" }
+        
+        let dayStart = calendar.startOfDay(for: goal.dueDate).timeIntervalSince1970
+        return "\(goal.categoryId.uuidString)|\(goal.targetTimeframe.rawValue)|\(normalizedTitle)|\(dayStart)"
     }
 }
