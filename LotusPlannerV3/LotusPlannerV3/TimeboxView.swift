@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct TimeboxView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
@@ -12,6 +13,10 @@ struct TimeboxView: View {
     
     @State private var selectedEvent: GoogleCalendarEvent?
     @State private var taskSheetSelection: TimeboxTaskSelection?
+    @State private var weeklyEventsCache: [Date: [GoogleCalendarEvent]] = [:]
+    @State private var weeklyTasksCache: [Date: [String: [GoogleTask]]] = [:]
+    @State private var cachedMaxAllDayHeight: CGFloat = 20
+    @State private var cachedWeekStart: Date?
     
     struct TimeboxTaskSelection: Identifiable {
         let id: String
@@ -30,6 +35,30 @@ struct TimeboxView: View {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
     
+    private func refreshWeekCaches(force: Bool = false) {
+        guard !weekDates.isEmpty else { return }
+        guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
+            return
+        }
+        let normalizedWeekStart = weekInterval.start
+        if !force, let cachedStart = cachedWeekStart, Calendar.mondayFirst.isDate(cachedStart, inSameDayAs: normalizedWeekStart) {
+            return
+        }
+        cachedWeekStart = normalizedWeekStart
+        
+        var eventsCache: [Date: [GoogleCalendarEvent]] = [:]
+        var tasksCache: [Date: [String: [GoogleTask]]] = [:]
+        
+        for date in weekDates {
+            eventsCache[date] = getAllEventsForDate(date)
+            tasksCache[date] = getTasksForDate(date)
+        }
+        
+        weeklyEventsCache = eventsCache
+        weeklyTasksCache = tasksCache
+        cachedMaxAllDayHeight = calculateMaxAllDayHeight(eventsCache: eventsCache, tasksCache: tasksCache)
+    }
+    
     // MARK: - Adaptive Layout Properties
     private var isCompact: Bool {
         horizontalSizeClass == .compact
@@ -37,8 +66,9 @@ struct TimeboxView: View {
     
     private func visibleDaysCount(for geometry: GeometryProxy) -> Int {
         if isCompact {
-            // iPhone: Show 2 days at a time
-            return 2
+            // iPhone: 1 day in portrait, 2 in landscape
+            let isLandscape = geometry.size.width > geometry.size.height
+            return isLandscape ? 2 : 1
         } else {
             // For screens larger than iPad (laptops): Show all 7 days
             // iPad Pro 12.9" landscape is ~1024 points, laptops typically 1280+
@@ -246,12 +276,32 @@ struct TimeboxView: View {
         .task {
             // Load calendar data for the current week
             await calendarVM.loadCalendarDataForWeek(containing: navigationManager.currentDate)
+            refreshWeekCaches(force: true)
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
             Task {
                 // Load calendar data when the date changes
                 await calendarVM.loadCalendarDataForWeek(containing: newValue)
             }
+            refreshWeekCaches(force: true)
+        }
+        .onAppear {
+            refreshWeekCaches(force: true)
+        }
+        .onReceive(calendarVM.$personalEvents) { _ in
+            refreshWeekCaches(force: true)
+        }
+        .onReceive(calendarVM.$professionalEvents) { _ in
+            refreshWeekCaches(force: true)
+        }
+        .onReceive(tasksVM.$personalTasks) { _ in
+            refreshWeekCaches(force: true)
+        }
+        .onReceive(tasksVM.$professionalTasks) { _ in
+            refreshWeekCaches(force: true)
+        }
+        .onReceive(appPrefs.$hideCompletedTasks) { _ in
+            refreshWeekCaches(force: true)
         }
         .sheet(item: Binding<GoogleCalendarEvent?>(
             get: { selectedEvent },
@@ -337,35 +387,33 @@ struct TimeboxView: View {
     }
     
     // Calculate max all-day height across all days in the week
-    private func calculateMaxAllDayHeight() -> CGFloat {
-        let maxHeight = weekDates.map { date in
-            let eventsForDate = getAllEventsForDate(date)
-            let tasksForDate = getTasksForDate(date)
+    private func calculateMaxAllDayHeight(eventsCache: [Date: [GoogleCalendarEvent]], tasksCache: [Date: [String: [GoogleTask]]]) -> CGFloat {
+        guard !weekDates.isEmpty else { return 20 }
+        let lineHeight: CGFloat = 20 + 12 + 4 // approximate per-line height
+        let timeWindowManager = TaskTimeWindowManager.shared
+        
+        let maxHeight = weekDates.map { date -> CGFloat in
+            let eventsForDate = eventsCache[date] ?? []
+            let tasksForDate = tasksCache[date] ?? [:]
             
-            // Count all-day items
             let allDayEvents = eventsForDate.filter { $0.isAllDay }
             var allDayTasks = tasksForDate.values.flatMap { $0 }.filter { task in
-                if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
+                if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
                     return timeWindow.isAllDay
                 }
                 return true // If no time window, treat as all-day
             }
             
-            // Filter out completed tasks if hideCompletedTasks is enabled
             if appPrefs.hideCompletedTasks {
                 allDayTasks = allDayTasks.filter { !$0.isCompleted }
             }
             
-            // Calculate height for events row and tasks row separately (matching SimpleWeekView style)
-            // Events are displayed horizontally, so they take a single row height
-            let eventsRowHeight: CGFloat = allDayEvents.isEmpty ? 0 : 32 // Height for events row (text + padding)
-            // Tasks are stacked vertically, so calculate based on number of tasks
-            let taskItemHeight: CGFloat = 20 + 12 + 4 // text height + vertical padding (2*6) + spacing (4)
-            let tasksRowHeight: CGFloat = allDayTasks.isEmpty ? 0 : CGFloat(allDayTasks.count) * taskItemHeight + 4 // +4 for VStack padding
-            let spacing: CGFloat = 4 // Spacing between rows
+            let eventsRowHeight: CGFloat = allDayEvents.isEmpty ? 0 : CGFloat(allDayEvents.count) * lineHeight
+            let tasksRowHeight: CGFloat = allDayTasks.isEmpty ? 0 : CGFloat(allDayTasks.count) * lineHeight
+            let spacing: CGFloat = (allDayEvents.isEmpty || allDayTasks.isEmpty) ? 0 : 4
             
             let totalHeight = eventsRowHeight + tasksRowHeight + spacing
-            return max(totalHeight, 20) // Minimum height
+            return max(totalHeight, 20)
         }.max() ?? 20
         
         return maxHeight
@@ -374,10 +422,10 @@ struct TimeboxView: View {
     // MARK: - Helper Views
     @ViewBuilder
     private func timeboxColumn(for date: Date, index: Int, availableWidth: CGFloat, columnWidth: CGFloat) -> some View {
-        let eventsForDate = getAllEventsForDate(date)
-        let tasksForDate = getTasksForDate(date)
+        let eventsForDate = weeklyEventsCache[date] ?? getAllEventsForDate(date)
+        let tasksForDate = weeklyTasksCache[date] ?? getTasksForDate(date)
         let (personalTasksForDate, professionalTasksForDate) = splitTasksByAccount(tasksForDate)
-        let maxAllDayHeight = calculateMaxAllDayHeight()
+        let maxAllDayHeight = cachedMaxAllDayHeight > 0 ? cachedMaxAllDayHeight : calculateMaxAllDayHeight(eventsCache: weeklyEventsCache, tasksCache: weeklyTasksCache)
         
         VStack(spacing: 0) {
             // All-day section with fixed height
@@ -446,40 +494,40 @@ struct TimeboxView: View {
         // Filter out completed tasks if hideCompletedTasks is enabled
         let allDayTasks = appPrefs.hideCompletedTasks ? allDayTasksRaw.filter { !$0.isCompleted } : allDayTasksRaw
         
-        VStack(spacing: 2) {
-            // All-day events row (compact horizontal)
+        VStack(alignment: .leading, spacing: 6) {
+            // All-day events row (one event per line)
             if !allDayEvents.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(allDayEvents, id: \.id) { event in
-                            let isPersonal = calendarVM.personalEvents.contains { $0.id == event.id }
-                            let color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(allDayEvents, id: \.id) { event in
+                        let isPersonal = calendarVM.personalEvents.contains { $0.id == event.id }
+                        let color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+                        
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 8, height: 8)
                             
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(color)
-                                    .frame(width: 8, height: 8)
-                                
-                                Text(event.summary)
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.primary)
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(color.opacity(0.1))
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedEvent = event
-                            }
+                            Text(event.summary)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(color.opacity(0.1))
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedEvent = event
                         }
                     }
-                    .padding(.horizontal, 2)
                 }
+                .padding(.horizontal, 2)
             }
             
             // All-day tasks row (one task per line, vertical stacking)

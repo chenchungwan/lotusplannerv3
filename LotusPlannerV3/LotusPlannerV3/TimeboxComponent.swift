@@ -72,7 +72,7 @@ struct TimeboxComponent: View {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 0) {
                     // All-day items section (events and tasks) - only show if enabled
-                    if showAllDaySection && !allDayItems.isEmpty {
+                    if showAllDaySection && (hasAllDayEvents || hasAllDayTasks) {
                         allDayItemsSection
                             .padding(.bottom, 8)
                     }
@@ -139,143 +139,150 @@ struct TimeboxComponent: View {
     }
     
     // MARK: - All-Day Items
-    private var allDayItems: [(isEvent: Bool, isTask: Bool, id: String, title: String, isPersonal: Bool)] {
-        var items: [(isEvent: Bool, isTask: Bool, id: String, title: String, isPersonal: Bool)] = []
-        
-        // Add all-day events
-        let allDayEvents = events.filter { $0.isAllDay }
-        for event in allDayEvents {
-            let isPersonal = personalEvents.contains { $0.id == event.id }
-            items.append((isEvent: true, isTask: false, id: event.id, title: event.summary, isPersonal: isPersonal))
-        }
-        
-        // Add all-day tasks (tasks without time windows or with isAllDay=true)
-        let allDayTasks = getTasksForDate(date).filter { task in
+    private var allDayEventsData: [(event: GoogleCalendarEvent, isPersonal: Bool)] {
+        guard showAllDaySection else { return [] }
+        return events
+            .filter { $0.isAllDay }
+            .map { event in
+                let isPersonal = personalEvents.contains { $0.id == event.id }
+                return (event, isPersonal)
+            }
+    }
+    
+    private var allDayTasksData: [(task: GoogleTask, listId: String, isPersonal: Bool)] {
+        guard showAllDaySection else { return [] }
+        let allTasks = getTasksForDate(date).filter { task in
             if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
                 return timeWindow.isAllDay
             }
-            // If no time window exists, treat as all-day
             return true
         }
         
-        for task in allDayTasks {
+        return allTasks.map { task in
             let (listId, isPersonal) = findTaskListAndKind(for: task)
-            items.append((isEvent: false, isTask: true, id: task.id, title: task.title, isPersonal: isPersonal))
+            return (task, listId, isPersonal)
         }
-        
-        return items
     }
     
-    // Calculate height for all-day items section
-    private func calculateAllDayItemsHeight() -> CGFloat {
-        if allDayItems.isEmpty {
-            return 20 // Minimum height for empty state
-        }
-        // Each item takes: text height + vertical padding (2*6) + spacing (4)
-        let itemHeight: CGFloat = 20 + 12 + 4 // approximate height per item
-        let totalHeight = CGFloat(allDayItems.count) * itemHeight + 16 // +16 for VStack padding
-        return max(totalHeight, 20) // Minimum 20pt height
+    private var hasAllDayEvents: Bool {
+        showAllDaySection && !allDayEventsData.isEmpty
+    }
+    
+    private var hasAllDayTasks: Bool {
+        showAllDaySection && !allDayTasksData.isEmpty
     }
     
     private var allDayItemsSection: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: timeColumnWidth + 1)
-                
-                VStack(spacing: 4) {
-                    ForEach(allDayItems, id: \.id) { item in
-                        allDayItemBlock(item: item)
-                    }
-                }
-                .padding(.trailing, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if hasAllDayEvents {
+                allDayEventsRow
             }
-            .padding(.vertical, 8)
-            .frame(height: calculateAllDayItemsHeight())
             
-            Divider()
-                .background(Color(.systemGray4))
+            if hasAllDayTasks {
+                allDayTasksRow
+            }
+            
+            if hasAllDayEvents || hasAllDayTasks {
+                Divider()
+                    .background(Color(.systemGray4))
+            }
         }
     }
     
-    private func allDayItemBlock(item: (isEvent: Bool, isTask: Bool, id: String, title: String, isPersonal: Bool)) -> some View {
-        let itemColor = item.isPersonal ? personalColor : professionalColor
-        
-        if item.isTask {
-            // Task style matching TaskComponentRow
-            let tasks = getTasksForDate(date)
-            guard let task = tasks.first(where: { $0.id == item.id }) else {
-                return AnyView(EmptyView())
-            }
-            let (listId, _) = findTaskListAndKind(for: task)
+    private var allDayEventsRow: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: timeColumnWidth + 1)
             
-            return AnyView(
-                HStack(spacing: 8) {
-                    // Checkmark circle button - tappable to toggle completion
-                    Button(action: {
-                        onTaskToggle?(task, listId)
-                    }) {
-                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.body)
-                            .foregroundColor(task.isCompleted ? itemColor : .secondary)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    
-                    // Task title
-                    Text(task.title)
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(task.isCompleted ? .secondary : .primary)
-                        .strikethrough(task.isCompleted)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    
-                    Spacer()
+            VStack(spacing: 4) {
+                ForEach(allDayEventsData, id: \.event.id) { item in
+                    allDayEventBlock(event: item.event, isPersonal: item.isPersonal)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(itemColor.opacity(0.1))
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    onTaskTap?(task, listId)
-                }
-            )
-        } else {
-            // Event style (unchanged)
-            if let event = events.first(where: { $0.id == item.id }) {
-                return AnyView(
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(itemColor)
-                            .frame(width: 8, height: 8)
-                        
-                        Text(item.title)
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(itemColor.opacity(0.1))
-                    )
-                    .contentShape(Rectangle()) // Make entire area tappable
-                    .onTapGesture {
-                        onEventTap?(event)
-                    }
-                )
-            } else {
-                return AnyView(EmptyView())
             }
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+    }
+    
+    private var allDayTasksRow: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: timeColumnWidth + 1)
+            
+            VStack(spacing: 4) {
+                ForEach(allDayTasksData, id: \.task.id) { item in
+                    allDayTaskBlock(task: item.task, listId: item.listId, isPersonal: item.isPersonal)
+                }
+            }
+            .padding(.trailing, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+    }
+    
+    private func allDayEventBlock(event: GoogleCalendarEvent, isPersonal: Bool) -> some View {
+        let itemColor = isPersonal ? personalColor : professionalColor
+        
+        return HStack(spacing: 8) {
+            Circle()
+                .fill(itemColor)
+                .frame(width: 8, height: 8)
+            
+            Text(event.summary)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(itemColor.opacity(0.1))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onEventTap?(event)
+        }
+    }
+    
+    private func allDayTaskBlock(task: GoogleTask, listId: String, isPersonal: Bool) -> some View {
+        let itemColor = isPersonal ? personalColor : professionalColor
+        
+        return HStack(spacing: 8) {
+            Button(action: {
+                onTaskToggle?(task, listId)
+            }) {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.body)
+                    .foregroundColor(task.isCompleted ? itemColor : .secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+            
+            Text(task.title)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(task.isCompleted ? .secondary : .primary)
+                .strikethrough(task.isCompleted)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(itemColor.opacity(0.1))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTaskTap?(task, listId)
         }
     }
     
