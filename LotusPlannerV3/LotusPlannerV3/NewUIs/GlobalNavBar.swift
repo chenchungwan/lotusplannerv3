@@ -179,11 +179,11 @@ struct GlobalNavBar: View {
             } else {
                 // Update interval first, then force view change
                 navigationManager.updateInterval(interval, date: Date())
-                print("🔄 GlobalNavBar: Switching from yearly to \(interval) view")
+                devLog("🔄 GlobalNavBar: Switching from yearly to \(interval) view")
                 
                 // Use the existing switchToCalendar() function which should work properly
                 navigationManager.switchToCalendar()
-                print("🔄 GlobalNavBar: Current view is now \(navigationManager.currentView)")
+                devLog("🔄 GlobalNavBar: Current view is now \(navigationManager.currentView)")
             }
         } else {
             // In Calendar view: go to the interval
@@ -210,16 +210,16 @@ struct GlobalNavBar: View {
         
         // Handle journal day views navigation
         if navigationManager.currentView == .journalDayViews {
-            print("🔄 GlobalNavBar: Step called for journalDayViews, direction: \(direction)")
+            devLog("🔄 GlobalNavBar: Step called for journalDayViews, direction: \(direction)")
             let component = navigationManager.currentInterval.calendarComponent
             if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
-                print("🔄 GlobalNavBar: Updating date from \(navigationManager.currentDate) to \(newDate)")
+                devLog("🔄 GlobalNavBar: Updating date from \(navigationManager.currentDate) to \(newDate)")
                 // Update the navigation manager
                 navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
                 
                 // Post notification for journal content refresh
                 NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-                print("🔄 GlobalNavBar: Posted RefreshJournalContent notification")
+                devLog("🔄 GlobalNavBar: Posted RefreshJournalContent notification")
             }
             return
         }
@@ -1017,39 +1017,39 @@ struct GlobalNavBar: View {
     
     // MARK: - Data Reload Functions
     private func reloadAllData() async {
-        print("🔄 NAV BAR SYNC: Starting sync from nav bar...")
+        devLog("🔄 NAV BAR SYNC: Starting sync from nav bar...")
         
         // FIRST: Force iCloud/CloudKit sync to push/pull changes
-        print("🔄 NAV BAR SYNC: Calling iCloudManager.forceCompleteSync()...")
+        devLog("🔄 NAV BAR SYNC: Calling iCloudManager.forceCompleteSync()...")
         iCloudManager.shared.forceCompleteSync()
         
         // Wait for CloudKit to sync
-        print("🔄 NAV BAR SYNC: Waiting 3 seconds for CloudKit sync...")
+        devLog("🔄 NAV BAR SYNC: Waiting 3 seconds for CloudKit sync...")
         try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
         
         let currentDate = navigationManager.currentDate
         
         // Reload goals data
-        print("🔄 NAV BAR SYNC: Syncing goals...")
+        devLog("🔄 NAV BAR SYNC: Syncing goals...")
         await DataManager.shared.goalsManager.forceSync()
         
         // Reload custom logs data
-        print("🔄 NAV BAR SYNC: Syncing custom logs...")
+        devLog("🔄 NAV BAR SYNC: Syncing custom logs...")
         await DataManager.shared.customLogManager.forceSync()
         
         // Wait for CloudKit to propagate
-        print("🔄 NAV BAR SYNC: Waiting 1 second for CloudKit propagation...")
+        devLog("🔄 NAV BAR SYNC: Waiting 1 second for CloudKit propagation...")
         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
         
         // NOW reload all data from Core Data
-        print("🔄 NAV BAR SYNC: Reloading data from Core Data...")
+        devLog("🔄 NAV BAR SYNC: Reloading data from Core Data...")
         
         // Reload task time windows
         await MainActor.run {
             let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
             TaskTimeWindowManager.shared.loadTimeWindows()
             let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-            print("🔄 NAV BAR SYNC: Task time windows: \(beforeCount) → \(afterCount)")
+            devLog("🔄 NAV BAR SYNC: Task time windows: \(beforeCount) → \(afterCount)")
         }
         
         // Reload calendar events based on current interval
@@ -1083,41 +1083,41 @@ struct GlobalNavBar: View {
         // Update last sync time
         iCloudManager.shared.lastSyncDate = Date()
         
-        print("✅ NAV BAR SYNC: Completed successfully!")
+        devLog("✅ NAV BAR SYNC: Completed successfully!")
     }
     
     private func reloadAllDataForDate(_ date: Date) async {
-        print("🔄 NAV BAR SYNC (for date): Starting sync from nav bar for date: \(date)...")
+        devLog("🔄 NAV BAR SYNC (for date): Starting sync from nav bar for date: \(date)...")
         
         // FIRST: Force iCloud/CloudKit sync to push/pull changes
-        print("🔄 NAV BAR SYNC (for date): Calling iCloudManager.forceCompleteSync()...")
+        devLog("🔄 NAV BAR SYNC (for date): Calling iCloudManager.forceCompleteSync()...")
         iCloudManager.shared.forceCompleteSync()
         
         // Wait for CloudKit to sync
-        print("🔄 NAV BAR SYNC (for date): Waiting 3 seconds for CloudKit sync...")
+        devLog("🔄 NAV BAR SYNC (for date): Waiting 3 seconds for CloudKit sync...")
         try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
         
         // Reload goals data
-        print("🔄 NAV BAR SYNC (for date): Syncing goals...")
+        devLog("🔄 NAV BAR SYNC (for date): Syncing goals...")
         await DataManager.shared.goalsManager.forceSync()
         
         // Reload custom logs data
-        print("🔄 NAV BAR SYNC (for date): Syncing custom logs...")
+        devLog("🔄 NAV BAR SYNC (for date): Syncing custom logs...")
         await DataManager.shared.customLogManager.forceSync()
         
         // Wait for CloudKit to propagate
-        print("🔄 NAV BAR SYNC (for date): Waiting 1 second for CloudKit propagation...")
+        devLog("🔄 NAV BAR SYNC (for date): Waiting 1 second for CloudKit propagation...")
         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
         
         // NOW reload all data from Core Data
-        print("🔄 NAV BAR SYNC (for date): Reloading data from Core Data...")
+        devLog("🔄 NAV BAR SYNC (for date): Reloading data from Core Data...")
         
         // Reload task time windows
         await MainActor.run {
             let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
             TaskTimeWindowManager.shared.loadTimeWindows()
             let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-            print("🔄 NAV BAR SYNC (for date): Task time windows: \(beforeCount) → \(afterCount)")
+            devLog("🔄 NAV BAR SYNC (for date): Task time windows: \(beforeCount) → \(afterCount)")
         }
         
         // Reload calendar events based on current interval
@@ -1151,7 +1151,7 @@ struct GlobalNavBar: View {
         // Update last sync time
         iCloudManager.shared.lastSyncDate = Date()
         
-        print("✅ NAV BAR SYNC (for date): Completed successfully!")
+        devLog("✅ NAV BAR SYNC (for date): Completed successfully!")
     }
     
 }

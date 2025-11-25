@@ -94,37 +94,7 @@ struct TimeboxView: View {
     }
     
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.mondayFirst
-        let allEvents = calendarVM.personalEvents + calendarVM.professionalEvents
-        
-        return allEvents.filter { event in
-            guard let startTime = event.startTime else { return event.isAllDay }
-            
-            if event.isAllDay {
-                guard let endTime = event.endTime else { return false }
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                guard let endTime = event.endTime else {
-                    return calendar.isDate(startTime, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: startTime)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }
+        calendarVM.events(for: date)
     }
     
     private func getTasksForDate(_ date: Date) -> [String: [GoogleTask]] {

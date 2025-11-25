@@ -337,107 +337,15 @@ extension DayViewExpanded {
     }
 
     private func filteredEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        let all = calendarVM.personalEvents + calendarVM.professionalEvents
-        return all.filter { ev in
-            guard let start = ev.startTime else { return ev.isAllDay }
-            
-            if ev.isAllDay {
-                guard let endTime = ev.endTime else { return false }
-                let startDay = calendar.startOfDay(for: start)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                if endDay == startDay { return dateDay == startDay }
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                // For timed events, check if the date falls within the event's date range
-                guard let endTime = ev.endTime else {
-                    // If no end time, only show on start date
-                    return calendar.isDate(start, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: start)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If event is on the same day, show only if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                // Otherwise, show if date is within [startDay, endDay]
-                // Include both start and end days
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }
+        calendarVM.events(for: date)
     }
-
+    
     private func filteredPersonalEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        return calendarVM.personalEvents.filter { ev in
-            guard let start = ev.startTime else { return ev.isAllDay }
-            if ev.isAllDay {
-                guard let endTime = ev.endTime else { return false }
-                let startDay = calendar.startOfDay(for: start)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                if endDay == startDay { return dateDay == startDay }
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                // For timed events, check if the date falls within the event's date range
-                guard let endTime = ev.endTime else {
-                    // If no end time, only show on start date
-                    return calendar.isDate(start, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: start)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If event is on the same day, show only if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                // Otherwise, show if date is within [startDay, endDay]
-                // Include both start and end days
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }
+        calendarVM.events(for: date, account: .personal)
     }
-
+    
     private func filteredProfessionalEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
-        let calendar = Calendar.current
-        return calendarVM.professionalEvents.filter { ev in
-            guard let start = ev.startTime else { return ev.isAllDay }
-            if ev.isAllDay {
-                guard let endTime = ev.endTime else { return false }
-                let startDay = calendar.startOfDay(for: start)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                if endDay == startDay { return dateDay == startDay }
-                return dateDay >= startDay && dateDay < endDay
-            } else {
-                // For timed events, check if the date falls within the event's date range
-                guard let endTime = ev.endTime else {
-                    // If no end time, only show on start date
-                    return calendar.isDate(start, inSameDayAs: date)
-                }
-                
-                let startDay = calendar.startOfDay(for: start)
-                let endDay = calendar.startOfDay(for: endTime)
-                let dateDay = calendar.startOfDay(for: date)
-                
-                // If event is on the same day, show only if date matches
-                if endDay == startDay {
-                    return dateDay == startDay
-                }
-                
-                // Otherwise, show if date is within [startDay, endDay]
-                // Include both start and end days
-                return dateDay >= startDay && dateDay <= endDay
-            }
-        }
+        calendarVM.events(for: date, account: .professional)
     }
 
     private func filteredTasksDictForDay(_ dict: [String: [GoogleTask]], on date: Date) -> [String: [GoogleTask]] {

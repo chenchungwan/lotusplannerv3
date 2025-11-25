@@ -98,11 +98,11 @@ struct CalendarWeekView: View {
                 let endDay = calendar.startOfDay(for: endTime)
                 let dateDay = calendar.startOfDay(for: date)
                 
-                // If endDay equals startDay (single-day event), check if date matches
-                if endDay == startDay {
+                // If endDay is not after startDay, treat as single-day
+                if endDay <= startDay {
                     return dateDay == startDay
                 }
-                // Otherwise, check if date is within [startDay, endDay)
+                // Otherwise, include days within [startDay, endDay)
                 return dateDay >= startDay && dateDay < endDay
             } else {
                 // For timed events, check if the date falls within the event's date range

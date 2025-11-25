@@ -73,7 +73,7 @@ class CustomLogManager: ObservableObject {
                 )
             }
         } catch {
-            print("Error loading custom log items: \(error)")
+            devLog("Error loading custom log items: \(error)")
         }
     }
     
@@ -94,7 +94,7 @@ class CustomLogManager: ObservableObject {
                 )
             }
         } catch {
-            print("Error loading custom log entries: \(error)")
+            devLog("Error loading custom log entries: \(error)")
         }
     }
     
@@ -131,7 +131,7 @@ class CustomLogManager: ObservableObject {
                 syncToCloudKit()
             }
         } catch {
-            print("Error updating custom log item: \(error)")
+            devLog("Error updating custom log item: \(error)")
         }
     }
     
@@ -146,7 +146,7 @@ class CustomLogManager: ObservableObject {
                 context.delete(entity)
             }
         } catch {
-            print("Error deleting custom log item: \(error)")
+            devLog("Error deleting custom log item: \(error)")
         }
         
         // Delete all entries for this item
@@ -159,7 +159,7 @@ class CustomLogManager: ObservableObject {
                 context.delete(entity)
             }
         } catch {
-            print("Error deleting custom log entries: \(error)")
+            devLog("Error deleting custom log entries: \(error)")
         }
         
         saveContext()
@@ -202,7 +202,7 @@ class CustomLogManager: ObservableObject {
                     loadEntries()
                 }
             } catch {
-                print("Error updating entry: \(error)")
+                devLog("Error updating entry: \(error)")
             }
         } else {
             // Create new entry
@@ -253,7 +253,7 @@ class CustomLogManager: ObservableObject {
             do {
                 try context.save()
             } catch {
-                print("Error saving custom log context: \(error)")
+                devLog("Error saving custom log context: \(error)")
             }
         }
     }
@@ -300,7 +300,7 @@ class CustomLogManager: ObservableObject {
             syncStatus = .success
         } catch {
             syncStatus = .error(error.localizedDescription)
-            print("Custom Log CloudKit sync error: \(error)")
+            devLog("Custom Log CloudKit sync error: \(error)")
         }
     }
     
@@ -330,11 +330,11 @@ class CustomLogManager: ObservableObject {
                         }
                     }
                 case .failure(let error):
-                    print("Custom Log CloudKit fetch error: \(error)")
+                    devLog("Custom Log CloudKit fetch error: \(error)")
                 }
             }
         } catch {
-            print("Custom Log CloudKit fetch error: \(error)")
+            devLog("Custom Log CloudKit fetch error: \(error)")
         }
     }
     
@@ -364,7 +364,7 @@ class CustomLogManager: ObservableObject {
             entity.updatedAt = item.updatedAt
             entity.userId = "default" // Add default userId for CloudKit sync
         } catch {
-            print("Error saving item to Core Data: \(error)")
+            devLog("Error saving item to Core Data: \(error)")
         }
     }
     
@@ -394,7 +394,7 @@ class CustomLogManager: ObservableObject {
             entity.updatedAt = entry.updatedAt
             entity.userId = "default" // Add default userId for CloudKit sync
         } catch {
-            print("Error saving entry to Core Data: \(error)")
+            devLog("Error saving entry to Core Data: \(error)")
         }
     }
     
@@ -429,7 +429,7 @@ class CustomLogManager: ObservableObject {
             }
             
         } catch {
-            print("Error updating Core Data from CloudKit: \(error)")
+            devLog("Error updating Core Data from CloudKit: \(error)")
         }
     }
     
@@ -465,7 +465,7 @@ class CustomLogManager: ObservableObject {
             // Sync deletion to CloudKit
             syncToCloudKit()
         } catch {
-            print("Error deleting all custom log data: \(error)")
+            devLog("Error deleting all custom log data: \(error)")
         }
     }
     
@@ -519,10 +519,10 @@ class CustomLogManager: ObservableObject {
             if !duplicates.isEmpty {
                 duplicates.forEach { context.delete($0) }
                 saveContext()
-                print("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log item(s)")
+                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log item(s)")
             }
         } catch {
-            print("❌ CustomLogManager: Failed to cleanup duplicate items: \(error)")
+            devLog("❌ CustomLogManager: Failed to cleanup duplicate items: \(error)")
         }
     }
     
@@ -559,10 +559,10 @@ class CustomLogManager: ObservableObject {
             if !duplicates.isEmpty {
                 duplicates.forEach { context.delete($0) }
                 saveContext()
-                print("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log entry/entries")
+                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log entry/entries")
             }
         } catch {
-            print("❌ CustomLogManager: Failed to cleanup duplicate entries: \(error)")
+            devLog("❌ CustomLogManager: Failed to cleanup duplicate entries: \(error)")
         }
     }
 }

@@ -144,11 +144,11 @@ struct TimeboxComponent: View {
         return events
             .filter { $0.isAllDay }
             .map { event in
-                let isPersonal = personalEvents.contains { $0.id == event.id }
+            let isPersonal = personalEvents.contains { $0.id == event.id }
                 return (event, isPersonal)
             }
-    }
-    
+        }
+        
     private var allDayTasksData: [(task: GoogleTask, listId: String, isPersonal: Bool)] {
         guard showAllDaySection else { return [] }
         let allTasks = getTasksForDate(date).filter { task in
@@ -190,20 +190,20 @@ struct TimeboxComponent: View {
     }
     
     private var allDayEventsRow: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: timeColumnWidth + 1)
-            
-            VStack(spacing: 4) {
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: timeColumnWidth + 1)
+                
+                VStack(spacing: 4) {
                 ForEach(allDayEventsData, id: \.event.id) { item in
                     allDayEventBlock(event: item.event, isPersonal: item.isPersonal)
+                    }
                 }
+                .padding(.trailing, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.trailing, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 8)
+            .padding(.vertical, 8)
     }
     
     private var allDayTasksRow: some View {
@@ -255,34 +255,34 @@ struct TimeboxComponent: View {
         let itemColor = isPersonal ? personalColor : professionalColor
         
         return HStack(spacing: 8) {
-            Button(action: {
-                onTaskToggle?(task, listId)
-            }) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.body)
-                    .foregroundColor(task.isCompleted ? itemColor : .secondary)
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Text(task.title)
-                .font(.body)
-                .fontWeight(.medium)
-                .foregroundColor(task.isCompleted ? .secondary : .primary)
-                .strikethrough(task.isCompleted)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            
-            Spacer()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(itemColor.opacity(0.1))
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTaskTap?(task, listId)
+                    Button(action: {
+                        onTaskToggle?(task, listId)
+                    }) {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .font(.body)
+                            .foregroundColor(task.isCompleted ? itemColor : .secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    Text(task.title)
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(task.isCompleted ? .secondary : .primary)
+                        .strikethrough(task.isCompleted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(itemColor.opacity(0.1))
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTaskTap?(task, listId)
         }
     }
     

@@ -17,7 +17,7 @@ class JournalFilePresenter: NSObject, NSFilePresenter {
         do {
             try changeHandler(url)
         } catch {
-            print("📝 Error handling file change: \(error)")
+            devLog("📝 Error handling file change: \(error)")
         }
     }
     

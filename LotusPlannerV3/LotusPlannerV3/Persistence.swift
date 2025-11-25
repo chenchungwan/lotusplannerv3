@@ -10,7 +10,7 @@ import CloudKit
 
 // MARK: - Debug Helper (now enabled to diagnose persistence issues)
 private func debugPrint(_ message: String) {
-    print("🗄️ Persistence: \(message)")
+    devLog("🗄️ Persistence: \(message)")
 }
 
 struct PersistenceController {
@@ -46,7 +46,7 @@ struct PersistenceController {
     let container: NSPersistentCloudKitContainer
 
     init(inMemory: Bool = false) {
-        print("🗄️ Persistence: Initializing PersistenceController (inMemory: \(inMemory))")
+        devLog("🗄️ Persistence: Initializing PersistenceController (inMemory: \(inMemory))")
         container = NSPersistentCloudKitContainer(name: "LotusPlannerV3")
         
         // Enable automatic lightweight migration
@@ -56,14 +56,14 @@ struct PersistenceController {
 
         // Configure every store description **before** loading the stores.
         for description in container.persistentStoreDescriptions {
-            print("🗄️ Persistence: Configuring store at URL: \(description.url?.absoluteString ?? "nil")")
+            devLog("🗄️ Persistence: Configuring store at URL: \(description.url?.absoluteString ?? "nil")")
             
             // In-memory store for previews/tests.
             if inMemory {
-                print("🗄️ Persistence: Setting up IN-MEMORY store (data won't persist!)")
+                devLog("🗄️ Persistence: Setting up IN-MEMORY store (data won't persist!)")
                 description.url = URL(fileURLWithPath: "/dev/null")
             } else {
-                print("🗄️ Persistence: Using PERSISTENT store at: \(description.url?.path ?? "unknown")")
+                devLog("🗄️ Persistence: Using PERSISTENT store at: \(description.url?.path ?? "unknown")")
             }
 
             // Enable history tracking & remote notifications so viewContext
@@ -78,15 +78,15 @@ struct PersistenceController {
         }
         
         container.loadPersistentStores(completionHandler: { (storeDescription, error) in
-            print("🗄️ Persistence: loadPersistentStores completed")
-            print("🗄️ Persistence: Store URL: \(storeDescription.url?.path ?? "nil")")
-            print("🗄️ Persistence: Store type: \(storeDescription.type)")
+            devLog("🗄️ Persistence: loadPersistentStores completed")
+            devLog("🗄️ Persistence: Store URL: \(storeDescription.url?.path ?? "nil")")
+            devLog("🗄️ Persistence: Store type: \(storeDescription.type)")
             
             // Check if CloudKit is enabled
             if let cloudKitOptions = storeDescription.cloudKitContainerOptions {
-                print("☁️ Persistence: CloudKit container: \(cloudKitOptions.containerIdentifier)")
+                devLog("☁️ Persistence: CloudKit container: \(cloudKitOptions.containerIdentifier)")
             } else {
-                print("⚠️ Persistence: CloudKit is NOT enabled for this store!")
+                devLog("⚠️ Persistence: CloudKit is NOT enabled for this store!")
             }
             
             if let error = error as NSError? {
@@ -156,11 +156,11 @@ struct PersistenceController {
             queue: .main
         ) { notification in
             if let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event {
-                print("☁️ Persistence: CloudKit event: \(event.type) - \(event.succeeded ? "✅ Success" : "❌ Failed")")
+                devLog("☁️ Persistence: CloudKit event: \(event.type) - \(event.succeeded ? "✅ Success" : "❌ Failed")")
                 
                 if event.type == .import && event.succeeded {
-                    print("☁️ Persistence: CloudKit import completed! Posting notification...")
-                    print("☁️ Persistence: Posting to notification: .cloudKitImportCompleted")
+                    devLog("☁️ Persistence: CloudKit import completed! Posting notification...")
+                    devLog("☁️ Persistence: Posting to notification: .cloudKitImportCompleted")
                     
                     // Post custom notification for iCloudManager to handle data reload
                     DispatchQueue.main.async {
@@ -169,7 +169,7 @@ struct PersistenceController {
                             object: nil,
                             userInfo: ["timestamp": Date()]
                         )
-                        print("☁️ Persistence: Notification posted successfully at \(Date())")
+                        devLog("☁️ Persistence: Notification posted successfully at \(Date())")
                     }
                 }
             }

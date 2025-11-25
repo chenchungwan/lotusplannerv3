@@ -349,6 +349,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Developer logging preference
+    @Published var verboseLoggingEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(verboseLoggingEnabled, forKey: DevLogger.verboseLoggingDefaultsKey)
+        }
+    }
+    
     // Logs visibility preferences
     @Published var showWeightLogs: Bool {
         didSet {
@@ -592,6 +599,7 @@ class AppPreferences: ObservableObject {
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? false
+        self.verboseLoggingEnabled = UserDefaults.standard.object(forKey: DevLogger.verboseLoggingDefaultsKey) as? Bool ?? false
         
         
 
@@ -693,6 +701,10 @@ class AppPreferences: ObservableObject {
         } else {
             tasksLayoutHorizontal = value
         }
+    }
+    
+    func updateVerboseLogging(_ value: Bool) {
+        verboseLoggingEnabled = value
     }
     
     
@@ -836,6 +848,12 @@ struct SettingsView: View {
     @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
+    @State private var showingDeleteGoalsAlert = false
+    @State private var showingDeleteGoalsSuccessAlert = false
+    @State private var cachedSyncStatus: iCloudManager.SyncStatus = .unknown
+    @State private var cachedCloudAvailability = true
+    @State private var syncButtonDisabled = false
+    @State private var showingSyncProgress = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     
     // Check if device forces stacked layout (iPhone portrait)
@@ -1163,12 +1181,58 @@ get: { appPrefs.showFoodLogs },
                     iCloudSyncSection()
                 }
                 
+                Section("Diagnostics") {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.verboseLoggingEnabled },
+                        set: { appPrefs.updateVerboseLogging($0) }
+                    )) {
+                        HStack {
+                            Image(systemName: "terminal.fill")
+                                .foregroundColor(appPrefs.verboseLoggingEnabled ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Verbose Console Logging")
+                                    .font(.body)
+                                Text("Adds detailed console output for troubleshooting")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    Text("When disabled, only warnings and errors are logged.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 2)
+                }
+                
                 // Components Visibility section removed: Logs and Journal are always visible
                 
                 
                 
 
                 Section("Danger Zone") {
+                    Button(role: .destructive) {
+                        showingDeleteGoalsAlert = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundColor(.red)
+                            Text("Delete All Goals Data")
+                        }
+                    }
+                    .alert("Delete All Goals Data?", isPresented: $showingDeleteGoalsAlert) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Delete", role: .destructive) {
+                            handleDeleteAllGoalsData()
+                        }
+                    } message: {
+                        Text("This permanently removes every goal and goal category from local storage and iCloud. This cannot be undone.")
+                    }
+                    .alert("Goals Deleted Successfully", isPresented: $showingDeleteGoalsSuccessAlert) {
+                        Button("OK") {}
+                    } message: {
+                        Text("All goals data has been deleted. Goals screens will refresh to reflect the changes.")
+                    }
+                    
                     Button(role: .destructive) {
                         showingDeleteAllAlert = true
                     } label: {
@@ -1339,6 +1403,26 @@ get: { appPrefs.showFoodLogs },
         }
     }
     
+    private func handleDeleteAllGoalsData() {
+        DataManager.shared.goalsManager.deleteAllData()
+        
+        Task { @MainActor in
+            showingDeleteGoalsSuccessAlert = true
+        }
+    }
+    
+    private func updateSyncButtonState(status: iCloudManager.SyncStatus, available: Bool, logChange: Bool) {
+        let isSyncing = status == .syncing
+        let disabled = isSyncing || !available
+        
+        if logChange && (isSyncing != showingSyncProgress || disabled != syncButtonDisabled) {
+            devLog("🔍 Sync state update - syncing: \(isSyncing), available: \(available), disabled: \(disabled)")
+        }
+        
+        showingSyncProgress = isSyncing
+        syncButtonDisabled = disabled
+    }
+
     @ViewBuilder
     private func iCloudSyncSection() -> some View {
         VStack(spacing: 12) {
@@ -1359,20 +1443,20 @@ get: { appPrefs.showFoodLogs },
                 Spacer()
             }
             .onAppear {
-                print("📱 iCloudSyncSection appeared")
-                print("📱 iCloudAvailable: \(iCloudManagerInstance.iCloudAvailable)")
-                print("📱 syncStatus: \(iCloudManagerInstance.syncStatus)")
+                cachedSyncStatus = iCloudManagerInstance.syncStatus
+                cachedCloudAvailability = iCloudManagerInstance.iCloudAvailable
+                updateSyncButtonState(status: cachedSyncStatus, available: cachedCloudAvailability, logChange: false)
             }
             
-            // Sync Progress (if syncing)
-            if case .syncing = iCloudManagerInstance.syncStatus {
-                ProgressView()
-                    .progressViewStyle(LinearProgressViewStyle())
-            }
+            ProgressView()
+                .progressViewStyle(LinearProgressViewStyle())
+                .opacity(showingSyncProgress ? 1 : 0)
+                .frame(height: 4)
+                .animation(.easeInOut(duration: 0.25), value: showingSyncProgress)
             
             // Manual Sync Button
             Button(action: {
-                print("🔵 SYNC BUTTON TAPPED!")
+                devLog("🔵 SYNC BUTTON TAPPED!")
                 Task {
                     await performManualSync()
                 }
@@ -1383,25 +1467,7 @@ get: { appPrefs.showFoodLogs },
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled({
-                let isSyncing = {
-                if case .syncing = iCloudManagerInstance.syncStatus {
-                    return true
-                }
-                return false
-                }()
-                
-                let isCloudUnavailable = !iCloudManagerInstance.iCloudAvailable
-                
-                print("🔍 Sync button state check:")
-                print("   isSyncing: \(isSyncing)")
-                print("   isCloudUnavailable: \(isCloudUnavailable)")
-                print("   iCloudAvailable: \(iCloudManagerInstance.iCloudAvailable)")
-                print("   syncStatus: \(iCloudManagerInstance.syncStatus)")
-                print("   Button will be disabled: \(isSyncing || isCloudUnavailable)")
-                
-                return isSyncing || isCloudUnavailable
-            }())
+            .disabled(syncButtonDisabled)
             
             // Last Sync Time
             if let lastSync = iCloudManagerInstance.lastSyncDate {
@@ -1412,7 +1478,7 @@ get: { appPrefs.showFoodLogs },
             
             // Clean Up Duplicates Button (for debugging)
             Button(action: {
-                print("🧹 USER: Cleaning up duplicate TaskTimeWindows...")
+                devLog("🧹 USER: Cleaning up duplicate TaskTimeWindows...")
                 CoreDataManager.shared.cleanupDuplicateTaskTimeWindows()
                 
                 // Reload time windows after cleanup
@@ -1429,7 +1495,7 @@ get: { appPrefs.showFoodLogs },
             
             // Force Refresh Button (for debugging)
             Button(action: {
-                print("🔄 USER: Force refreshing from CloudKit...")
+                devLog("🔄 USER: Force refreshing from CloudKit...")
                 
                 let context = PersistenceController.shared.container.viewContext
                 
@@ -1444,21 +1510,21 @@ get: { appPrefs.showFoodLogs },
                 // Force the persistent store coordinator to re-read metadata from disk
                 if let coordinator = context.persistentStoreCoordinator,
                    let store = coordinator.persistentStores.first {
-                    print("🔄 USER: Refreshing persistent store metadata...")
+                    devLog("🔄 USER: Refreshing persistent store metadata...")
                     do {
                         try coordinator.setMetadata([:], for: store)
                     } catch {
-                        print("❌ USER: Failed to refresh store: \(error)")
+                        devLog("❌ USER: Failed to refresh store: \(error)")
                     }
                 }
                 
                 // Now reload everything with fresh fetches
-                print("🔄 USER: Reloading all data...")
+                devLog("🔄 USER: Reloading all data...")
                 TaskTimeWindowManager.shared.loadTimeWindows()
                 CustomLogManager.shared.refreshData()
                 LogsViewModel.shared.reloadData()
                 
-                print("✅ USER: Force refresh completed")
+                devLog("✅ USER: Force refresh completed")
             }) {
                 HStack {
                     Image(systemName: "arrow.triangle.2.circlepath")
@@ -1471,7 +1537,7 @@ get: { appPrefs.showFoodLogs },
             
             // CloudKit Diagnostics Button (for debugging)
             Button(action: {
-                print("🔍 USER: Running CloudKit diagnostics...")
+                devLog("🔍 USER: Running CloudKit diagnostics...")
                 Task {
                     await iCloudManagerInstance.diagnoseCloudKitData()
                 }
@@ -1485,34 +1551,42 @@ get: { appPrefs.showFoodLogs },
             .buttonStyle(.borderless)
             .foregroundColor(.purple)
         }
+        .onReceive(iCloudManagerInstance.$syncStatus) { status in
+            cachedSyncStatus = status
+            updateSyncButtonState(status: status, available: cachedCloudAvailability, logChange: true)
+        }
+        .onReceive(iCloudManagerInstance.$iCloudAvailable) { available in
+            cachedCloudAvailability = available
+            updateSyncButtonState(status: cachedSyncStatus, available: available, logChange: true)
+        }
     }
     
     private func performManualSync() async {
-        print("🔄 MANUAL SYNC: Starting...")
-        print("🔄 MANUAL SYNC: Current task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
+        devLog("🔄 MANUAL SYNC: Starting...")
+        devLog("🔄 MANUAL SYNC: Current task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
         
         // Force iCloud sync
-        print("🔄 MANUAL SYNC: Calling iCloudManager.forceCompleteSync()...")
+        devLog("🔄 MANUAL SYNC: Calling iCloudManager.forceCompleteSync()...")
         iCloudManagerInstance.forceCompleteSync()
         
         // Longer delay to let NSPersistentCloudKitContainer process
-        print("🔄 MANUAL SYNC: Waiting 5 seconds for NSPersistentCloudKitContainer to sync...")
+        devLog("🔄 MANUAL SYNC: Waiting 5 seconds for NSPersistentCloudKitContainer to sync...")
         try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds (increased from 2)
         
         // Force goals sync
-        print("🔄 MANUAL SYNC: Syncing goals...")
+        devLog("🔄 MANUAL SYNC: Syncing goals...")
         await DataManager.shared.goalsManager.forceSync()
         
         // Force custom log sync
-        print("🔄 MANUAL SYNC: Syncing custom logs...")
+        devLog("🔄 MANUAL SYNC: Syncing custom logs...")
         await DataManager.shared.customLogManager.forceSync()
         
         // Another delay to let CloudKit propagate
-        print("🔄 MANUAL SYNC: Waiting 2 seconds for CloudKit propagation...")
+        devLog("🔄 MANUAL SYNC: Waiting 2 seconds for CloudKit propagation...")
         try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
         
         // Now reload everything from Core Data
-        print("🔄 MANUAL SYNC: Reloading data from Core Data...")
+        devLog("🔄 MANUAL SYNC: Reloading data from Core Data...")
         await MainActor.run {
             let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
             
@@ -1521,7 +1595,7 @@ get: { appPrefs.showFoodLogs },
             LogsViewModel.shared.reloadData()
             
             let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-            print("🔄 MANUAL SYNC: Task time windows: \(beforeCount) → \(afterCount) (change: \(afterCount - beforeCount))")
+            devLog("🔄 MANUAL SYNC: Task time windows: \(beforeCount) → \(afterCount) (change: \(afterCount - beforeCount))")
             
             // Force refresh the view context
             let context = PersistenceController.shared.container.viewContext
@@ -1531,8 +1605,8 @@ get: { appPrefs.showFoodLogs },
         // Update last sync time
         iCloudManagerInstance.lastSyncDate = Date()
         
-        print("✅ MANUAL SYNC: Completed successfully!")
-        print("✅ MANUAL SYNC: Final task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
+        devLog("✅ MANUAL SYNC: Completed successfully!")
+        devLog("✅ MANUAL SYNC: Final task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
     }
     
     private func refreshAllViewsAfterDelete() async {

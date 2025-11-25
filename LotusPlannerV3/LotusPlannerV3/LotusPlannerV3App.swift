@@ -18,7 +18,7 @@ struct LotusPlannerV3App: App {
     @StateObject private var appPrefs = AppPreferences.shared
 
     init() {
-        print("🚀 App: Initializing LotusPlannerV3...")
+        devLog("🚀 App: Initializing LotusPlannerV3...")
         
         // Validate configuration on app launch
         let configManager = ConfigurationManager.shared
@@ -33,7 +33,7 @@ struct LotusPlannerV3App: App {
         // Force iCloudManager to initialize (this will set up notification observers)
         _ = iCloudManager.shared
         
-        print("✅ App: Initialization complete")
+        devLog("✅ App: Initialization complete")
     }
 
     var body: some Scene {

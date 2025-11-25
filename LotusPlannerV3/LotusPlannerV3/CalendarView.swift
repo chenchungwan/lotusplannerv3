@@ -145,6 +145,7 @@ class CalendarViewModel: ObservableObject {
     private var errorCheckTask: Task<Void, Never>?
     private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
+    private let appPrefs = AppPreferences.shared
     
     private func scheduleErrorCheck() {
         // Cancel any existing error check task
@@ -180,18 +181,36 @@ class CalendarViewModel: ObservableObject {
     
     func events(for date: Date, account: GoogleAuthManager.AccountKind? = nil) -> [GoogleCalendarEvent] {
         let key = normalizedDay(date)
+        let result: [GoogleCalendarEvent]
         switch account {
         case .some(.personal):
-            return personalEventsByDay[key] ?? []
+            result = personalEventsByDay[key] ?? []
         case .some(.professional):
-            return professionalEventsByDay[key] ?? []
+            result = professionalEventsByDay[key] ?? []
         case .none:
             let personal = personalEventsByDay[key] ?? []
             let professional = professionalEventsByDay[key] ?? []
-            if personal.isEmpty { return professional }
-            if professional.isEmpty { return personal }
-            return (personal + professional).sorted(by: eventSortComparator)
+            if personal.isEmpty {
+                result = professional
+            } else if professional.isEmpty {
+                result = personal
+            } else {
+                result = (personal + professional).sorted(by: eventSortComparator)
+            }
         }
+        
+        if appPrefs.verboseLoggingEnabled {
+            let formatter = ISO8601DateFormatter()
+            let keyString = formatter.string(from: key)
+            let summaries = result.filter { $0.isAllDay }.map { $0.summary }.joined(separator: ", ")
+            devLog(
+                "📅 events(for:) \(keyString) account=\(account?.rawValue ?? "both") count=\(result.count) allDay=[\(summaries)]",
+                level: .info,
+                category: .calendar
+            )
+        }
+        
+        return result
     }
     
     private func normalizedDay(_ date: Date) -> Date {
@@ -220,12 +239,30 @@ class CalendarViewModel: ObservableObject {
         
         if event.isAllDay {
             let rawEnd = event.end.date ?? event.end.dateTime ?? event.endTime ?? startComponent
-            let endDay = calendar.startOfDay(for: rawEnd)
-            handler(startDay)
-            if endDay == startDay { return }
+            let exclusiveEndDay = calendar.startOfDay(for: rawEnd)
+            let lastInclusiveDay: Date
+            if exclusiveEndDay > startDay {
+                lastInclusiveDay = calendar.date(byAdding: .day, value: -1, to: exclusiveEndDay) ?? startDay
+            } else {
+                lastInclusiveDay = startDay
+            }
+            if appPrefs.verboseLoggingEnabled {
+                let formatter = ISO8601DateFormatter()
+                devLog(
+                    "📅 enumerateDays all-day",
+                    event.summary,
+                    "start:", formatter.string(from: startDay),
+                    "rawEnd:", formatter.string(from: rawEnd),
+                    "exclusiveEnd:", formatter.string(from: exclusiveEndDay),
+                    "lastInclusive:", formatter.string(from: lastInclusiveDay),
+                    level: .info,
+                    category: .calendar
+                )
+            }
             var current = startDay
-            while let next = calendar.date(byAdding: .day, value: 1, to: current), next < endDay {
-                handler(next)
+            while current <= lastInclusiveDay {
+                handler(current)
+                guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
                 current = next
             }
         } else {
@@ -926,16 +963,19 @@ class CalendarViewModel: ObservableObject {
         }
     }
     
+    private let dayFetchPaddingDays = 7
+    
     private func fetchEventsForDate(_ date: Date, calendars: [GoogleCalendar], for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleCalendarEvent] {
         let accessToken = try await authManager.getAccessToken(for: kind)
         
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        let baseStartOfDay = calendar.startOfDay(for: date)
+        let paddedStart = calendar.date(byAdding: .day, value: -dayFetchPaddingDays, to: baseStartOfDay) ?? baseStartOfDay
+        let paddedEnd = calendar.date(byAdding: .day, value: dayFetchPaddingDays + 1, to: baseStartOfDay) ?? calendar.date(byAdding: .day, value: 1, to: baseStartOfDay)!
         
         let formatter = ISO8601DateFormatter()
-        let timeMin = formatter.string(from: startOfDay)
-        let timeMax = formatter.string(from: endOfDay)
+        let timeMin = formatter.string(from: paddedStart)
+        let timeMax = formatter.string(from: paddedEnd)
         
         var allEvents: [GoogleCalendarEvent] = []
         
@@ -1691,17 +1731,17 @@ struct CalendarView: View {
             if navigationManager.currentInterval == .year {
                 yearView
                     .onAppear {
-                        print("📅 CalendarView: Rendering YEAR view")
+                        devLog("📅 CalendarView: Rendering YEAR view")
                     }
             } else if navigationManager.currentInterval == .month {
                 monthView
                     .onAppear {
-                        print("📅 CalendarView: Rendering MONTH view")
+                        devLog("📅 CalendarView: Rendering MONTH view")
                     }
             } else if navigationManager.currentInterval == .day {
                 AnyView(setupDayView())
                     .onAppear {
-                        print("📅 CalendarView: Rendering DAY view")
+                        devLog("📅 CalendarView: Rendering DAY view")
                     }
             } else {
                 Text("Calendar View")
@@ -1709,7 +1749,7 @@ struct CalendarView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemBackground))
                     .onAppear {
-                        print("📅 CalendarView: Rendering DEFAULT/OTHER view")
+                        devLog("📅 CalendarView: Rendering DEFAULT/OTHER view")
                     }
             }
         }
@@ -3823,11 +3863,11 @@ struct CalendarView: View {
                     let endDay = calendar.startOfDay(for: endTime)
                     let dateDay = calendar.startOfDay(for: date)
                     
-                    // If endDay equals startDay (single-day event), check if date matches
-                    if endDay == startDay {
+                    // For properly formed all-day events, endDay should be exclusive (start + n days)
+                    if endDay <= startDay {
                         return dateDay == startDay
                     }
-                    // Otherwise, check if date is within [startDay, endDay)
+                    // Otherwise, include dates in [startDay, endDay)
                     return dateDay >= startDay && dateDay < endDay
                 } else {
                     // For timed events, check if the date falls within the event's date range
@@ -5198,15 +5238,22 @@ struct AddItemView: View {
             _itemNotes = State(initialValue: ev.description ?? "")
             _selectedAccountKind = State(initialValue: accountKind)
             let initStart = ev.startTime ?? Date()
-            let initEnd = ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800)
+            let rawEnd = ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800)
+            let calendar = Calendar.current
+            let adjustedEnd: Date
+            if ev.isAllDay {
+                adjustedEnd = calendar.date(byAdding: .day, value: -1, to: rawEnd) ?? initStart
+            } else {
+                adjustedEnd = rawEnd
+            }
             _eventStart = State(initialValue: initStart)
-            _eventEnd   = State(initialValue: initEnd)
+            _eventEnd   = State(initialValue: max(initStart, adjustedEnd))
             _isAllDay = State(initialValue: ev.isAllDay)
             
             // Store original values to preserve them
             self.originalIsAllDay = ev.isAllDay
             self.originalEventStart = initStart
-            self.originalEventEnd = initEnd
+            self.originalEventEnd = max(initStart, adjustedEnd)
         } else {
             let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
             let initEnd = cal.date(byAdding: .minute, value: 30, to: rounded)!
@@ -5493,10 +5540,10 @@ struct AddItemView: View {
                     if oldValue != newValue {
                         let cal = Calendar.current
                         if newValue {
-                            // Converting to all-day: use start of day
+                            // Converting to all-day: clamp to start of day and default to same-day duration
                             let startDate = cal.startOfDay(for: eventStart)
                             eventStart = startDate
-                            eventEnd = cal.date(byAdding: .day, value: 1, to: startDate) ?? startDate.addingTimeInterval(24*3600)
+                            eventEnd = startDate
                         } else {
                             // Only set default times if the event was previously all-day
                             // If it was already timed, preserve the existing times
@@ -5644,14 +5691,14 @@ struct AddItemView: View {
 
                 var startDict: [String: String] = [:]
                 var endDict: [String: String] = [:]
-                if isAllDay {
-                    let startDate = Calendar.current.startOfDay(for: eventStart)
-                    let endDate = Calendar.current.startOfDay(for: eventEnd)
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "yyyy-MM-dd"
-                    startDict["date"] = dateFormatter.string(from: startDate)
-                    endDict["date"] = dateFormatter.string(from: endDate)
-                } else {
+        if isAllDay {
+            let calendar = Calendar.current
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let (startDate, exclusiveEndDate) = normalizedAllDayDateRange(using: calendar)
+            startDict["date"] = dateFormatter.string(from: startDate)
+            endDict["date"] = dateFormatter.string(from: exclusiveEndDate)
+        } else {
                     startDict["dateTime"] = isoFormatter.string(from: eventStart)
                     endDict["dateTime"] = isoFormatter.string(from: eventEnd)
                     // Provide explicit timeZone to satisfy Google Calendar API
@@ -5677,16 +5724,16 @@ struct AddItemView: View {
                 
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   - ❌ Error response: \(responseString)")
+                devLog("   - ❌ Error response: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
         
         // Log successful creation
         if let responseString = String(data: data, encoding: .utf8) {
-            print("   - ✅ Success! Response: \(responseString.prefix(500))")
+            devLog("   - ✅ Success! Response: \(responseString.prefix(500))")
         }
-        print("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
+        devLog("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
 
         // Refresh the current view to reflect changes
         Task {
@@ -5698,6 +5745,13 @@ struct AddItemView: View {
                 await MainActor.run { isCreating = false }
             }
         }
+    }
+    
+    private func normalizedAllDayDateRange(using calendar: Calendar) -> (start: Date, exclusiveEnd: Date) {
+        let normalizedStart = calendar.startOfDay(for: eventStart)
+        let normalizedEnd = calendar.startOfDay(for: max(eventStart, eventEnd))
+        let exclusiveEnd = calendar.date(byAdding: .day, value: 1, to: normalizedEnd) ?? normalizedEnd.addingTimeInterval(24 * 3600)
+        return (normalizedStart, exclusiveEnd)
     }
     
     // MARK: - Update existing event
@@ -5718,14 +5772,14 @@ struct AddItemView: View {
         dateFormatter.dateStyle = .short
         dateFormatter.timeStyle = .short
         
-        print("📅 EVENT UPDATE - Existing Event Details:")
-        print("   - Event ID: \(ev.id)")
-        print("   - Title: \(ev.summary)")
-        print("   - isAllDay: \(ev.isAllDay)")
-        print("   - Start Time: \(dateFormatter.string(from: existingStartTime)) (\(existingStartHour):\(String(format: "%02d", existingStartMinute)))")
-        print("   - End Time: \(dateFormatter.string(from: existingEndTime)) (\(existingEndHour):\(String(format: "%02d", existingEndMinute)))")
-        print("   - Original Account: \(originalAccountKind)")
-        print("   - Target Account: \(targetAccountKind)")
+        devLog("📅 EVENT UPDATE - Existing Event Details:")
+        devLog("   - Event ID: \(ev.id)")
+        devLog("   - Title: \(ev.summary)")
+        devLog("   - isAllDay: \(ev.isAllDay)")
+        devLog("   - Start Time: \(dateFormatter.string(from: existingStartTime)) (\(existingStartHour):\(String(format: "%02d", existingStartMinute)))")
+        devLog("   - End Time: \(dateFormatter.string(from: existingEndTime)) (\(existingEndHour):\(String(format: "%02d", existingEndMinute)))")
+        devLog("   - Original Account: \(originalAccountKind)")
+        devLog("   - Target Account: \(targetAccountKind)")
         
         // Log current state values
         let currentStartHour = calendar.component(.hour, from: eventStart)
@@ -5733,13 +5787,13 @@ struct AddItemView: View {
         let currentEndHour = calendar.component(.hour, from: eventEnd)
         let currentEndMinute = calendar.component(.minute, from: eventEnd)
         
-        print("📅 EVENT UPDATE - Current State Values:")
-        print("   - isAllDay: \(isAllDay)")
-        print("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(currentStartHour):\(String(format: "%02d", currentStartMinute)))")
-        print("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(currentEndHour):\(String(format: "%02d", currentEndMinute)))")
-        print("   - originalIsAllDay: \(originalIsAllDay)")
-        print("   - originalEventStart: \(dateFormatter.string(from: originalEventStart))")
-        print("   - originalEventEnd: \(dateFormatter.string(from: originalEventEnd))")
+        devLog("📅 EVENT UPDATE - Current State Values:")
+        devLog("   - isAllDay: \(isAllDay)")
+        devLog("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(currentStartHour):\(String(format: "%02d", currentStartMinute)))")
+        devLog("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(currentEndHour):\(String(format: "%02d", currentEndMinute)))")
+        devLog("   - originalIsAllDay: \(originalIsAllDay)")
+        devLog("   - originalEventStart: \(dateFormatter.string(from: originalEventStart))")
+        devLog("   - originalEventEnd: \(dateFormatter.string(from: originalEventEnd))")
         
         isCreating = true
 
@@ -5747,7 +5801,7 @@ struct AddItemView: View {
             do {
                 // Check if we're moving between accounts
                 if originalAccountKind != targetAccountKind {
-                    print("📅 EVENT UPDATE - Moving between accounts")
+                    devLog("📅 EVENT UPDATE - Moving between accounts")
                     
                     // First create the event in the new account
                     try await createEventInAccount(targetAccountKind)
@@ -5756,7 +5810,7 @@ struct AddItemView: View {
                     try await deleteEventFromAccount(ev, from: originalAccountKind, viewModel: calendarViewModel)
                     
                 } else {
-                    print("📅 EVENT UPDATE - Updating in same account")
+                    devLog("📅 EVENT UPDATE - Updating in same account")
                     // Same account - just update the existing event
                     try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
@@ -5785,11 +5839,11 @@ struct AddItemView: View {
         let endHour = calendar.component(.hour, from: eventEnd)
         let endMinute = calendar.component(.minute, from: eventEnd)
         
-        print("📅 CREATE EVENT IN ACCOUNT - Sending to API:")
-        print("   - Account: \(accountKind)")
-        print("   - isAllDay: \(isAllDay)")
-        print("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
-        print("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
+        devLog("📅 CREATE EVENT IN ACCOUNT - Sending to API:")
+        devLog("   - Account: \(accountKind)")
+        devLog("   - isAllDay: \(isAllDay)")
+        devLog("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
+        devLog("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
@@ -5804,21 +5858,21 @@ struct AddItemView: View {
         var startDict: [String: String] = [:]
         var endDict: [String: String] = [:]
         if isAllDay {
-            let startDate = Calendar.current.startOfDay(for: eventStart)
-            let endDate = Calendar.current.startOfDay(for: eventEnd)
+            let calendar = Calendar.current
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
+            let (startDate, exclusiveEndDate) = normalizedAllDayDateRange(using: calendar)
             startDict["date"] = dateFormatter.string(from: startDate)
-            endDict["date"] = dateFormatter.string(from: endDate)
-            print("   - Start dict (all-day): \(startDict)")
-            print("   - End dict (all-day): \(endDict)")
+            endDict["date"] = dateFormatter.string(from: exclusiveEndDate)
+            devLog("   - Start dict (all-day): \(startDict)")
+            devLog("   - End dict (all-day): \(endDict)")
         } else {
             startDict["dateTime"] = isoFormatter.string(from: eventStart)
             endDict["dateTime"] = isoFormatter.string(from: eventEnd)
             startDict["timeZone"] = TimeZone.current.identifier
             endDict["timeZone"] = TimeZone.current.identifier
-            print("   - Start dict (timed): \(startDict)")
-            print("   - End dict (timed): \(endDict)")
+            devLog("   - Start dict (timed): \(startDict)")
+            devLog("   - End dict (timed): \(endDict)")
         }
 
         var body: [String: Any] = [
@@ -5828,9 +5882,9 @@ struct AddItemView: View {
         ]
         if !itemNotes.isEmpty { body["description"] = itemNotes }
         
-        print("   - Start dict: \(startDict)")
-        print("   - End dict: \(endDict)")
-        print("   - Body being sent: \(body)")
+        devLog("   - Start dict: \(startDict)")
+        devLog("   - End dict: \(endDict)")
+        devLog("   - Body being sent: \(body)")
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -5842,7 +5896,7 @@ struct AddItemView: View {
         
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   - ❌ Error response: \(responseString)")
+                devLog("   - ❌ Error response: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
@@ -5852,14 +5906,14 @@ struct AddItemView: View {
            let responseData = responseString.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
             
-            print("   - ✅ Success! Response received")
+            devLog("   - ✅ Success! Response received")
             
             // Parse response to see what was saved
             if let startDict = json["start"] as? [String: Any] {
-                print("   - Response start: \(startDict)")
+                devLog("   - Response start: \(startDict)")
             }
             if let endDict = json["end"] as? [String: Any] {
-                print("   - Response end: \(endDict)")
+                devLog("   - Response end: \(endDict)")
             }
             
             // Extract dates from response
@@ -5872,7 +5926,7 @@ struct AddItemView: View {
                     savedFormatter.timeStyle = .short
                     let savedStartHour = calendar.component(.hour, from: savedStartTime)
                     let savedStartMinute = calendar.component(.minute, from: savedStartTime)
-                    print("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
+                    devLog("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
                 }
             }
             if let endDict = json["end"] as? [String: Any],
@@ -5884,11 +5938,11 @@ struct AddItemView: View {
                     savedFormatter.timeStyle = .short
                     let savedEndHour = calendar.component(.hour, from: savedEndTime)
                     let savedEndMinute = calendar.component(.minute, from: savedEndTime)
-                    print("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
+                    devLog("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
                 }
             }
         }
-        print("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
+        devLog("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
         
     }
     
@@ -5930,12 +5984,12 @@ struct AddItemView: View {
         let endHour = calendar.component(.hour, from: eventEnd)
         let endMinute = calendar.component(.minute, from: eventEnd)
         
-        print("📅 UPDATE EVENT IN SAME ACCOUNT - Sending to API:")
-        print("   - Event ID: \(event.id)")
-        print("   - Account: \(accountKind)")
-        print("   - isAllDay: \(isAllDay)")
-        print("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
-        print("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
+        devLog("📅 UPDATE EVENT IN SAME ACCOUNT - Sending to API:")
+        devLog("   - Event ID: \(event.id)")
+        devLog("   - Account: \(accountKind)")
+        devLog("   - isAllDay: \(isAllDay)")
+        devLog("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
+        devLog("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
         
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
@@ -5955,13 +6009,13 @@ struct AddItemView: View {
         var startDict: [String: Any] = [:]
         var endDict: [String: Any] = [:]
         if isAllDay {
-            // Converting to all-day event
-            let startDate = Calendar.current.startOfDay(for: eventStart)
-            let endDate = Calendar.current.startOfDay(for: eventEnd)
+            // Converting to all-day event (Google expects exclusive end)
+            let calendar = Calendar.current
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
+            let (startDate, exclusiveEndDate) = normalizedAllDayDateRange(using: calendar)
             startDict["date"] = dateFormatter.string(from: startDate)
-            endDict["date"] = dateFormatter.string(from: endDate)
+            endDict["date"] = dateFormatter.string(from: exclusiveEndDate)
             // Explicitly remove dateTime and timeZone fields
             startDict["dateTime"] = NSNull()
             startDict["timeZone"] = NSNull()
@@ -5986,9 +6040,9 @@ struct AddItemView: View {
             "description": itemNotes
         ]
         
-        print("   - Start dict: \(startDict)")
-        print("   - End dict: \(endDict)")
-        print("   - Body being sent: \(body)")
+        devLog("   - Start dict: \(startDict)")
+        devLog("   - End dict: \(endDict)")
+        devLog("   - Body being sent: \(body)")
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -6000,7 +6054,7 @@ struct AddItemView: View {
         
         guard httpResponse.statusCode == 200 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("   - ❌ Error response: \(responseString)")
+                devLog("   - ❌ Error response: \(responseString)")
             }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
@@ -6010,14 +6064,14 @@ struct AddItemView: View {
            let responseData = responseString.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
             
-            print("   - ✅ Success! Response received")
+            devLog("   - ✅ Success! Response received")
             
             // Parse response to see what was saved
             if let startDict = json["start"] as? [String: Any] {
-                print("   - Response start: \(startDict)")
+                devLog("   - Response start: \(startDict)")
             }
             if let endDict = json["end"] as? [String: Any] {
-                print("   - Response end: \(endDict)")
+                devLog("   - Response end: \(endDict)")
             }
             
             // Extract dates from response
@@ -6030,7 +6084,7 @@ struct AddItemView: View {
                     savedFormatter.timeStyle = .short
                     let savedStartHour = calendar.component(.hour, from: savedStartTime)
                     let savedStartMinute = calendar.component(.minute, from: savedStartTime)
-                    print("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
+                    devLog("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
                 }
             }
             if let endDict = json["end"] as? [String: Any],
@@ -6042,11 +6096,11 @@ struct AddItemView: View {
                     savedFormatter.timeStyle = .short
                     let savedEndHour = calendar.component(.hour, from: savedEndTime)
                     let savedEndMinute = calendar.component(.minute, from: savedEndTime)
-                    print("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
+                    devLog("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
                 }
             }
         }
-        print("📅 UPDATE EVENT IN SAME ACCOUNT - Update completed")
+        devLog("📅 UPDATE EVENT IN SAME ACCOUNT - Update completed")
         
     }
     

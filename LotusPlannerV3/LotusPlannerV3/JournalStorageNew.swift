@@ -104,20 +104,20 @@ class JournalStorageNew {
         
         // Print save information
         let operation = fileExists ? "OVERWRITE" : "CREATE"
-        print("💾 JOURNAL SAVE - \(operation) drawing file:")
-        print("   📍 Location: \(url.path)")
-        print("   📅 Date: \(formatDate(date))")
-        print("   ☁️ Storage: \(isInCloud ? "iCloud" : "Local")")
-        print("   ✏️ Strokes: \(drawing.strokes.count)")
-        print("   📏 New size: \(data.count) bytes (\(String(format: "%.2f", Double(data.count) / 1024.0)) KB)")
+        devLog("💾 JOURNAL SAVE - \(operation) drawing file:")
+        devLog("   📍 Location: \(url.path)")
+        devLog("   📅 Date: \(formatDate(date))")
+        devLog("   ☁️ Storage: \(isInCloud ? "iCloud" : "Local")")
+        devLog("   ✏️ Strokes: \(drawing.strokes.count)")
+        devLog("   📏 New size: \(data.count) bytes (\(String(format: "%.2f", Double(data.count) / 1024.0)) KB)")
         if fileExists {
-            print("   ⚠️ Previous size: \(existingSize) bytes (\(String(format: "%.2f", Double(existingSize) / 1024.0)) KB)")
-            print("   🔄 File overwritten (previous data replaced)")
+            devLog("   ⚠️ Previous size: \(existingSize) bytes (\(String(format: "%.2f", Double(existingSize) / 1024.0)) KB)")
+            devLog("   🔄 File overwritten (previous data replaced)")
             if isInCloud {
-                print("   ☁️ Waiting for iCloud upload to complete...")
+                devLog("   ☁️ Waiting for iCloud upload to complete...")
             }
         } else {
-            print("   ✨ New file created")
+            devLog("   ✨ New file created")
         }
         
         // Cache it
@@ -180,16 +180,16 @@ class JournalStorageNew {
                 // Print raw iCloud data information
                 let fileSize = data.count
                 let storageType = isInCloud ? "iCloud" : "Local"
-                print("📦 JOURNAL RAW DATA - Drawing file:")
-                print("   📍 Location: \(url.path)")
-                print("   ☁️ Storage: \(storageType)")
-                print("   📏 File size: \(fileSize) bytes (\(String(format: "%.2f", Double(fileSize) / 1024.0)) KB)")
-                print("   📅 Date: \(formatDate(date))")
+                devLog("📦 JOURNAL RAW DATA - Drawing file:")
+                devLog("   📍 Location: \(url.path)")
+                devLog("   ☁️ Storage: \(storageType)")
+                devLog("   📏 File size: \(fileSize) bytes (\(String(format: "%.2f", Double(fileSize) / 1024.0)) KB)")
+                devLog("   📅 Date: \(formatDate(date))")
                 if let modDate = modDate {
                     let formatter = DateFormatter()
                     formatter.dateStyle = .medium
                     formatter.timeStyle = .medium
-                    print("   🕐 Modified: \(formatter.string(from: modDate))")
+                    devLog("   🕐 Modified: \(formatter.string(from: modDate))")
                 }
                 
                 let drawing = try PKDrawing(data: data)
@@ -198,7 +198,7 @@ class JournalStorageNew {
                 // Cache it
                 setCache(drawing, for: date)
                 
-                print("   ✏️ Strokes: \(drawing.strokes.count)")
+                devLog("   ✏️ Strokes: \(drawing.strokes.count)")
                 
                 return drawing
                 
@@ -256,7 +256,7 @@ class JournalStorageNew {
     private func ensureFileUploaded(url: URL) async {
         // Verify file exists locally (required for upload to start)
         guard FileManager.default.fileExists(atPath: url.path) else {
-            print("   ⚠️ File doesn't exist locally, upload may not start")
+            devLog("   ⚠️ File doesn't exist locally, upload may not start")
             return
         }
         
@@ -268,9 +268,9 @@ class JournalStorageNew {
         
         // Check file attributes to verify it's been saved
         if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) {
-            print("   ✅ File saved locally, iCloud upload queued")
+            devLog("   ✅ File saved locally, iCloud upload queued")
         } else {
-            print("   ⚠️ Could not verify file save")
+            devLog("   ⚠️ Could not verify file save")
         }
     }
     

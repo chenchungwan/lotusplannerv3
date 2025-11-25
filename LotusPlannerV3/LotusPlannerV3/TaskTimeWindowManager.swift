@@ -18,12 +18,12 @@ class TaskTimeWindowManager: ObservableObject {
     
     // MARK: - Load Time Windows
     func loadTimeWindows() {
-        print("📖 TaskTimeWindowManager: loadTimeWindows() called")
+        devLog("📖 TaskTimeWindowManager: loadTimeWindows() called")
         // Don't filter by userId - CloudKit already scopes data to the iCloud account
         // This ensures task times sync across all devices using the same iCloud account
-        print("📖 TaskTimeWindowManager: Loading ALL time windows (no userId filter)")
+        devLog("📖 TaskTimeWindowManager: Loading ALL time windows (no userId filter)")
         timeWindows = coreDataManager.loadAllTaskTimeWindows(for: nil)
-        print("📖 TaskTimeWindowManager: Loaded \(timeWindows.count) time windows")
+        devLog("📖 TaskTimeWindowManager: Loaded \(timeWindows.count) time windows")
     }
     
     // MARK: - Get Time Window
@@ -55,7 +55,7 @@ class TaskTimeWindowManager: ObservableObject {
     // MARK: - Save Time Window
     /// Save or update a time window for a task
     func saveTimeWindow(_ timeWindow: TaskTimeWindowData) {
-        print("📝 TaskTimeWindowManager: saveTimeWindow(TaskTimeWindowData) called")
+        devLog("📝 TaskTimeWindowManager: saveTimeWindow(TaskTimeWindowData) called")
         
         // Create updated version with current timestamp
         let updatedWindow = TaskTimeWindowData(
@@ -69,19 +69,19 @@ class TaskTimeWindowManager: ObservableObject {
             updatedAt: Date()
         )
         
-        print("📝 TaskTimeWindowManager: Calling coreDataManager.saveTaskTimeWindow...")
+        devLog("📝 TaskTimeWindowManager: Calling coreDataManager.saveTaskTimeWindow...")
         coreDataManager.saveTaskTimeWindow(updatedWindow)
         
         // Update local cache
         if let index = timeWindows.firstIndex(where: { $0.taskId == updatedWindow.taskId }) {
-            print("📝 TaskTimeWindowManager: Updating existing time window in cache")
+            devLog("📝 TaskTimeWindowManager: Updating existing time window in cache")
             timeWindows[index] = updatedWindow
         } else {
-            print("📝 TaskTimeWindowManager: Adding new time window to cache")
+            devLog("📝 TaskTimeWindowManager: Adding new time window to cache")
             timeWindows.append(updatedWindow)
         }
         
-        print("✅ TaskTimeWindowManager: Time window saved successfully")
+        devLog("✅ TaskTimeWindowManager: Time window saved successfully")
     }
     
     /// Save time window from components
@@ -91,16 +91,16 @@ class TaskTimeWindowManager: ObservableObject {
         endTime: Date,
         isAllDay: Bool = false
     ) {
-        print("📝 TaskTimeWindowManager: saveTimeWindow called")
-        print("📝   taskId: \(taskId)")
-        print("📝   startTime: \(startTime)")
-        print("📝   endTime: \(endTime)")
-        print("📝   isAllDay: \(isAllDay)")
+        devLog("📝 TaskTimeWindowManager: saveTimeWindow called")
+        devLog("📝   taskId: \(taskId)")
+        devLog("📝   startTime: \(startTime)")
+        devLog("📝   endTime: \(endTime)")
+        devLog("📝   isAllDay: \(isAllDay)")
         
         // Validate that start and end are on the same day
         let calendar = Calendar.current
         guard calendar.isDate(startTime, inSameDayAs: endTime) else {
-            print("⚠️ TaskTimeWindowManager: Start and end times must be on the same day")
+            devLog("⚠️ TaskTimeWindowManager: Start and end times must be on the same day")
             return
         }
         
@@ -115,7 +115,7 @@ class TaskTimeWindowManager: ObservableObject {
             updatedAt: Date()
         )
         
-        print("📝 TaskTimeWindowManager: Calling saveTimeWindow(timeWindow)...")
+        devLog("📝 TaskTimeWindowManager: Calling saveTimeWindow(timeWindow)...")
         saveTimeWindow(timeWindow)
     }
     

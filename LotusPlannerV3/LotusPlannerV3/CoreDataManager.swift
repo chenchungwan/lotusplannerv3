@@ -26,31 +26,31 @@ class CoreDataManager: ObservableObject {
     private func save() {
         if context.hasChanges {
             do {
-                print("💾 CoreDataManager: Saving \(context.insertedObjects.count) new, \(context.updatedObjects.count) updated, \(context.deletedObjects.count) deleted objects")
+                devLog("💾 CoreDataManager: Saving \(context.insertedObjects.count) new, \(context.updatedObjects.count) updated, \(context.deletedObjects.count) deleted objects")
                 try context.save()
-                print("✅ CoreDataManager: Context save successful")
+                devLog("✅ CoreDataManager: Context save successful")
                 
                 // Force the parent context (if any) to save as well
                 if let parentContext = context.parent {
-                    print("💾 CoreDataManager: Saving parent context...")
+                    devLog("💾 CoreDataManager: Saving parent context...")
                     try parentContext.save()
-                    print("✅ CoreDataManager: Parent context saved")
+                    devLog("✅ CoreDataManager: Parent context saved")
                 }
                 
             } catch {
-                print("❌ CoreDataManager: SAVE FAILED: \(error)")
-                print("❌ CoreDataManager: Error details: \(error.localizedDescription)")
+                devLog("❌ CoreDataManager: SAVE FAILED: \(error)")
+                devLog("❌ CoreDataManager: Error details: \(error.localizedDescription)")
                 if let nsError = error as NSError? {
-                    print("❌ CoreDataManager: Domain: \(nsError.domain), Code: \(nsError.code)")
+                    devLog("❌ CoreDataManager: Domain: \(nsError.domain), Code: \(nsError.code)")
                     if let detailedErrors = nsError.userInfo[NSDetailedErrorsKey] as? [NSError] {
                         for detailedError in detailedErrors {
-                            print("❌ CoreDataManager: Detailed error: \(detailedError)")
+                            devLog("❌ CoreDataManager: Detailed error: \(detailedError)")
                         }
                     }
                 }
             }
         } else {
-            print("💾 CoreDataManager: No changes to save")
+            devLog("💾 CoreDataManager: No changes to save")
         }
     }
     
@@ -268,22 +268,22 @@ class CoreDataManager: ObservableObject {
     
     // MARK: - Task Time Windows
     func saveTaskTimeWindow(_ timeWindow: TaskTimeWindowData) {
-        print("💾 CoreDataManager: saveTaskTimeWindow called for taskId: \(timeWindow.taskId)")
-        print("💾   startTime: \(timeWindow.startTime), endTime: \(timeWindow.endTime), isAllDay: \(timeWindow.isAllDay)")
+        devLog("💾 CoreDataManager: saveTaskTimeWindow called for taskId: \(timeWindow.taskId)")
+        devLog("💾   startTime: \(timeWindow.startTime), endTime: \(timeWindow.endTime), isAllDay: \(timeWindow.isAllDay)")
         
         // Check if a time window already exists for this task ID
         let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
         request.predicate = NSPredicate(format: "taskId == %@", timeWindow.taskId)
         
-        print("💾   Searching for existing TaskTimeWindow with taskId: \(timeWindow.taskId)")
+        devLog("💾   Searching for existing TaskTimeWindow with taskId: \(timeWindow.taskId)")
         
         let existingWindow: TaskTimeWindow
         do {
             let results = try context.fetch(request)
-            print("💾   Found \(results.count) existing TaskTimeWindow(s) for this taskId")
+            devLog("💾   Found \(results.count) existing TaskTimeWindow(s) for this taskId")
             
             if let existing = results.first {
-                print("💾   Updating existing TaskTimeWindow (id: \(existing.id ?? "nil"))")
+                devLog("💾   Updating existing TaskTimeWindow (id: \(existing.id ?? "nil"))")
             existingWindow = existing
             // Update existing
             existingWindow.taskId = timeWindow.taskId
@@ -295,14 +295,14 @@ class CoreDataManager: ObservableObject {
                 
                 // Delete any duplicate entries (keep only the one we're updating)
                 if results.count > 1 {
-                    print("⚠️   Found \(results.count - 1) duplicate(s)! Deleting them...")
+                    devLog("⚠️   Found \(results.count - 1) duplicate(s)! Deleting them...")
                     for duplicate in results.dropFirst() {
                         context.delete(duplicate)
-                        print("💾   Deleted duplicate with id: \(duplicate.id ?? "nil")")
+                        devLog("💾   Deleted duplicate with id: \(duplicate.id ?? "nil")")
                     }
                 }
         } else {
-                print("💾   Creating new TaskTimeWindow...")
+                devLog("💾   Creating new TaskTimeWindow...")
             // Create new
                 existingWindow = TaskTimeWindow(context: context)
                 existingWindow.id = timeWindow.id
@@ -315,9 +315,9 @@ class CoreDataManager: ObservableObject {
                 existingWindow.updatedAt = timeWindow.updatedAt
             }
         } catch {
-            print("❌ CoreDataManager: Failed to fetch existing TaskTimeWindow: \(error)")
+            devLog("❌ CoreDataManager: Failed to fetch existing TaskTimeWindow: \(error)")
             // Fallback to creating new
-            print("💾   Creating new TaskTimeWindow as fallback...")
+            devLog("💾   Creating new TaskTimeWindow as fallback...")
             existingWindow = TaskTimeWindow(context: context)
             existingWindow.id = timeWindow.id
             existingWindow.taskId = timeWindow.taskId
@@ -329,7 +329,7 @@ class CoreDataManager: ObservableObject {
             existingWindow.updatedAt = timeWindow.updatedAt
         }
         
-        print("💾   Calling save()...")
+        devLog("💾   Calling save()...")
         save()
     }
     
@@ -367,7 +367,7 @@ class CoreDataManager: ObservableObject {
     }
     
     func loadAllTaskTimeWindows(for userId: String? = nil) -> [TaskTimeWindowData] {
-        print("📖 CoreDataManager: loadAllTaskTimeWindows called for userId: \(userId ?? "nil")")
+        devLog("📖 CoreDataManager: loadAllTaskTimeWindows called for userId: \(userId ?? "nil")")
         
         let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \TaskTimeWindow.createdAt, ascending: false)]
@@ -378,7 +378,7 @@ class CoreDataManager: ObservableObject {
         
         do {
             let windows = try context.fetch(request)
-            print("📖 CoreDataManager: Fetched \(windows.count) TaskTimeWindow objects from Core Data")
+            devLog("📖 CoreDataManager: Fetched \(windows.count) TaskTimeWindow objects from Core Data")
             
             let result: [TaskTimeWindowData] = windows.compactMap { window in
                 guard let id = window.id,
@@ -388,11 +388,11 @@ class CoreDataManager: ObservableObject {
                       let userId = window.userId,
                       let createdAt = window.createdAt,
                       let updatedAt = window.updatedAt else {
-                    print("⚠️ CoreDataManager: Skipping invalid TaskTimeWindow (missing required fields)")
+                    devLog("⚠️ CoreDataManager: Skipping invalid TaskTimeWindow (missing required fields)")
                     return nil
                 }
                 
-                print("📖   - TaskTimeWindow: taskId=\(taskId), startTime=\(startTime), endTime=\(endTime)")
+                devLog("📖   - TaskTimeWindow: taskId=\(taskId), startTime=\(startTime), endTime=\(endTime)")
                 
                 return TaskTimeWindowData(
                     id: id,
@@ -406,10 +406,10 @@ class CoreDataManager: ObservableObject {
                 )
             }
             
-            print("📖 CoreDataManager: Returning \(result.count) valid TaskTimeWindow objects")
+            devLog("📖 CoreDataManager: Returning \(result.count) valid TaskTimeWindow objects")
             return result
         } catch {
-            print("❌ CoreDataManager: Failed to fetch TaskTimeWindow objects: \(error)")
+            devLog("❌ CoreDataManager: Failed to fetch TaskTimeWindow objects: \(error)")
             return []
         }
     }
@@ -429,14 +429,14 @@ class CoreDataManager: ObservableObject {
     // MARK: - Cleanup Duplicates
     /// Remove duplicate TaskTimeWindow entries, keeping only the most recently updated one for each taskId
     func cleanupDuplicateTaskTimeWindows() {
-        print("🧹 CoreDataManager: Starting duplicate TaskTimeWindow cleanup...")
+        devLog("🧹 CoreDataManager: Starting duplicate TaskTimeWindow cleanup...")
         
         let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \TaskTimeWindow.taskId, ascending: true)]
         
         do {
             let allWindows = try context.fetch(request)
-            print("🧹   Total TaskTimeWindow entries: \(allWindows.count)")
+            devLog("🧹   Total TaskTimeWindow entries: \(allWindows.count)")
             
             // Group by taskId
             var taskIdToWindows: [String: [TaskTimeWindow]] = [:]
@@ -451,7 +451,7 @@ class CoreDataManager: ObservableObject {
             // For each taskId, keep only the most recent and delete the rest
             for (taskId, windows) in taskIdToWindows {
                 if windows.count > 1 {
-                    print("🧹   Found \(windows.count) duplicates for taskId: \(taskId)")
+                    devLog("🧹   Found \(windows.count) duplicates for taskId: \(taskId)")
                     
                     // Sort by updatedAt, most recent first
                     let sorted = windows.sorted { w1, w2 in
@@ -468,7 +468,7 @@ class CoreDataManager: ObservableObject {
                     
                     // Delete the rest
                     for duplicate in sorted.dropFirst() {
-                        print("🧹     Deleting duplicate: startTime=\(duplicate.startTime ?? Date())")
+                        devLog("🧹     Deleting duplicate: startTime=\(duplicate.startTime ?? Date())")
                         context.delete(duplicate)
                         duplicatesDeleted += 1
                     }
@@ -480,16 +480,16 @@ class CoreDataManager: ObservableObject {
             }
             
             if duplicatesDeleted > 0 || migratedCount > 0 {
-                print("🧹   Deleted \(duplicatesDeleted) duplicate entries")
-                print("🧹   Migrated \(migratedCount) entries to unified userId")
+                devLog("🧹   Deleted \(duplicatesDeleted) duplicate entries")
+                devLog("🧹   Migrated \(migratedCount) entries to unified userId")
                 save()
-                print("✅ CoreDataManager: Duplicate cleanup and migration completed!")
+                devLog("✅ CoreDataManager: Duplicate cleanup and migration completed!")
             } else {
-                print("✅ CoreDataManager: No duplicates found, database is clean!")
+                devLog("✅ CoreDataManager: No duplicates found, database is clean!")
             }
             
         } catch {
-            print("❌ CoreDataManager: Failed to cleanup duplicates: \(error)")
+            devLog("❌ CoreDataManager: Failed to cleanup duplicates: \(error)")
         }
     }
     

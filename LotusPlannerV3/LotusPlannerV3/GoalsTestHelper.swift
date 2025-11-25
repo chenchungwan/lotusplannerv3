@@ -73,45 +73,45 @@ extension GoalsManager {
     
     /// Print current data for debugging
     func printCurrentData() {
-        print("=== GOALS DATA ===")
-        print("Categories (\(categories.count)):")
+        devLog("=== GOALS DATA ===")
+        devLog("Categories (\(categories.count)):")
         for category in categories.sorted(by: { $0.displayPosition < $1.displayPosition }) {
-            print("  [\(category.displayPosition)] \(category.title)")
+            devLog("  [\(category.displayPosition)] \(category.title)")
         }
         
-        print("\nGoals (\(goals.count)):")
+        devLog("\nGoals (\(goals.count)):")
         for goal in goals {
             let categoryName = getCategoryById(goal.categoryId)?.title ?? "Unknown"
             let status = goal.isCompleted ? "✅" : "⭕"
             let timeframe = goal.targetTimeframe.displayName
-            print("  \(status) \(goal.title) (\(categoryName), \(timeframe))")
+            devLog("  \(status) \(goal.title) (\(categoryName), \(timeframe))")
             if !goal.description.isEmpty {
-                print("    Description: \(goal.description)")
+                devLog("    Description: \(goal.description)")
             }
             if !goal.successMetric.isEmpty {
-                print("    Success Metric: \(goal.successMetric)")
+                devLog("    Success Metric: \(goal.successMetric)")
             }
-            print("    Due: \(goal.dueDate.formatted(date: .abbreviated, time: .omitted))")
+            devLog("    Due: \(goal.dueDate.formatted(date: .abbreviated, time: .omitted))")
             if goal.isOverdue {
-                print("    ⚠️ OVERDUE")
+                devLog("    ⚠️ OVERDUE")
             } else if goal.daysRemaining > 0 {
-                print("    Days remaining: \(goal.daysRemaining)")
+                devLog("    Days remaining: \(goal.daysRemaining)")
             }
         }
-        print("==================")
+        devLog("==================")
     }
     
     /// Test data model functionality
     func runTests() {
-        print("🧪 Running Goals Data Model Tests...")
+        devLog("🧪 Running Goals Data Model Tests...")
         
         // Test 1: Create sample data
-        print("\n1. Creating sample data...")
+        devLog("\n1. Creating sample data...")
         createSampleData()
         printCurrentData()
         
         // Test 2: Update a goal
-        print("\n2. Updating a goal...")
+        devLog("\n2. Updating a goal...")
         if let firstGoal = goals.first {
             var updatedGoal = firstGoal
             updatedGoal.isCompleted = true
@@ -119,7 +119,7 @@ extension GoalsManager {
         }
         
         // Test 3: Add a new goal
-        print("\n3. Adding a new goal...")
+        devLog("\n3. Adding a new goal...")
         if let healthCategory = categories.first(where: { $0.title == "Health & Fitness" }) {
             let newGoal = GoalData(
                 title: "Drink 8 Glasses of Water Daily",
@@ -133,13 +133,13 @@ extension GoalsManager {
         }
         
         // Test 4: Reorder categories
-        print("\n4. Reordering categories...")
+        devLog("\n4. Reordering categories...")
         categories = categories.shuffled()
         reorderCategories()
         
         printCurrentData()
         
-        print("\n✅ Tests completed!")
+        devLog("\n✅ Tests completed!")
     }
 }
 

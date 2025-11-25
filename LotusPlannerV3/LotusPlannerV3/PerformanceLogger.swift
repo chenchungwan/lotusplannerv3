@@ -7,7 +7,7 @@ import os.log
 class PerformanceLogger {
     static let shared = PerformanceLogger()
     
-    // Use os_log for better performance than print()
+    // Use os_log for better performance than devLog()
     private let logger = Logger(subsystem: "com.chenchungwan.LotusPlannerV3", category: "Performance")
     
     // Only enable logging in DEBUG builds

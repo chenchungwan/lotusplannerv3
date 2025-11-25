@@ -86,7 +86,7 @@ class GoalsManager: ObservableObject {
             }
             categories = deduplicatedCategories(from: mappedCategories)
         } catch {
-            print("Error loading categories from Core Data: \(error)")
+            devLog("Error loading categories from Core Data: \(error)")
         }
         
         // Load goals
@@ -111,7 +111,7 @@ class GoalsManager: ObservableObject {
             }
             goals = deduplicatedGoals(from: mappedGoals)
         } catch {
-            print("Error loading goals from Core Data: \(error)")
+            devLog("Error loading goals from Core Data: \(error)")
         }
     }
     
@@ -123,13 +123,13 @@ class GoalsManager: ObservableObject {
     func addCategory(title: String, displayPosition: Int? = nil) {
         // Check if we've reached the maximum number of categories
         guard canAddCategory else {
-            print("Cannot add category: Maximum of \(GoalsManager.maxCategories) categories reached")
+            devLog("Cannot add category: Maximum of \(GoalsManager.maxCategories) categories reached")
             return
         }
         
         let normalizedTitle = normalizeCategoryTitle(title)
         guard !categories.contains(where: { normalizeCategoryTitle($0.title) == normalizedTitle }) else {
-            print("Cannot add category: A category with the same name already exists")
+            devLog("Cannot add category: A category with the same name already exists")
             return
         }
         
@@ -278,7 +278,7 @@ class GoalsManager: ObservableObject {
             
             saveContext()
         } catch {
-            print("Error saving category to Core Data: \(error)")
+            devLog("Error saving category to Core Data: \(error)")
         }
     }
     
@@ -295,7 +295,7 @@ class GoalsManager: ObservableObject {
                 saveContext()
             }
         } catch {
-            print("Error updating category in Core Data: \(error)")
+            devLog("Error updating category in Core Data: \(error)")
         }
     }
     
@@ -310,7 +310,7 @@ class GoalsManager: ObservableObject {
             }
             saveContext()
         } catch {
-            print("Error deleting category from Core Data: \(error)")
+            devLog("Error deleting category from Core Data: \(error)")
         }
     }
     
@@ -346,7 +346,7 @@ class GoalsManager: ObservableObject {
             
             saveContext()
         } catch {
-            print("Error saving goal to Core Data: \(error)")
+            devLog("Error saving goal to Core Data: \(error)")
         }
     }
     
@@ -368,7 +368,7 @@ class GoalsManager: ObservableObject {
                 saveContext()
             }
         } catch {
-            print("Error updating goal in Core Data: \(error)")
+            devLog("Error updating goal in Core Data: \(error)")
         }
     }
     
@@ -383,7 +383,7 @@ class GoalsManager: ObservableObject {
             }
             saveContext()
         } catch {
-            print("Error deleting goal from Core Data: \(error)")
+            devLog("Error deleting goal from Core Data: \(error)")
         }
     }
     
@@ -398,7 +398,7 @@ class GoalsManager: ObservableObject {
             }
             saveContext()
         } catch {
-            print("Error deleting goals from Core Data: \(error)")
+            devLog("Error deleting goals from Core Data: \(error)")
         }
     }
     
@@ -407,7 +407,7 @@ class GoalsManager: ObservableObject {
             do {
                 try context.save()
             } catch {
-                print("Error saving context: \(error)")
+                devLog("Error saving context: \(error)")
             }
         }
     }
@@ -433,12 +433,12 @@ class GoalsManager: ObservableObject {
             // Clear UserDefaults
             UserDefaults.standard.removeObject(forKey: lastSyncKey)
             
-            // Sync deletion to CloudKit
+            // Remove everything from CloudKit as well
             Task {
-                await syncWithiCloud()
+                await deleteAllGoalsFromCloudKit()
             }
         } catch {
-            print("Error deleting all goals data: \(error)")
+            devLog("Error deleting all goals data: \(error)")
         }
     }
     
@@ -475,7 +475,7 @@ class GoalsManager: ObservableObject {
             syncStatus = .success
         } catch {
             syncStatus = .error(error.localizedDescription)
-            print("Error syncing with iCloud: \(error)")
+            devLog("Error syncing with iCloud: \(error)")
         }
     }
     
@@ -511,15 +511,15 @@ class GoalsManager: ObservableObject {
                             
                             UserDefaults.standard.set(cloudSyncDate, forKey: lastSyncKey)
                         } catch {
-                            print("Error decoding goals data from CloudKit: \(error)")
+                            devLog("Error decoding goals data from CloudKit: \(error)")
                         }
                     }
                 case .failure(let error):
-                    print("Error fetching record: \(error)")
+                    devLog("Error fetching record: \(error)")
                 }
             }
         } catch {
-            print("Error fetching from iCloud: \(error)")
+            devLog("Error fetching from iCloud: \(error)")
         }
     }
     
@@ -544,7 +544,7 @@ class GoalsManager: ObservableObject {
                 saveGoalToCoreData(goal)
             }
         } catch {
-            print("Error updating Core Data from CloudKit: \(error)")
+            devLog("Error updating Core Data from CloudKit: \(error)")
         }
     }
     
@@ -565,7 +565,37 @@ class GoalsManager: ObservableObject {
             do {
                 try await privateDatabase.save(subscription)
             } catch {
-                print("Error setting up CloudKit subscription: \(error)")
+                devLog("Error setting up CloudKit subscription: \(error)")
+            }
+        }
+    }
+    
+    private func deleteAllGoalsFromCloudKit() async {
+        do {
+            let query = CKQuery(recordType: "GoalsData", predicate: NSPredicate(value: true))
+            var queryResult = try await privateDatabase.records(matching: query)
+            await deleteRecords(queryResult.matchResults)
+            
+            while let nextCursor = queryResult.queryCursor {
+                queryResult = try await privateDatabase.records(continuingMatchFrom: nextCursor)
+                await deleteRecords(queryResult.matchResults)
+            }
+        } catch {
+            devLog("Error deleting goals from CloudKit: \(error)")
+        }
+    }
+    
+    private func deleteRecords(_ matchResults: [(CKRecord.ID, Result<CKRecord, Error>)]) async {
+        for (recordID, result) in matchResults {
+            switch result {
+            case .success:
+                do {
+                    _ = try await privateDatabase.deleteRecord(withID: recordID)
+                } catch {
+                    devLog("Error deleting CloudKit record \(recordID): \(error)")
+                }
+            case .failure(let error):
+                devLog("Error fetching record for deletion: \(error)")
             }
         }
     }
