@@ -152,7 +152,8 @@ struct GoalsView: View {
                                 },
                                 showTags: navigationManager.currentInterval == .day,
                                 currentInterval: navigationManager.currentInterval,
-                                currentDate: navigationManager.currentDate
+                                currentDate: navigationManager.currentDate,
+                                showQuickAdd: navigationManager.currentInterval != .day
                             )
                             .frame(minHeight: adaptiveMinCardHeight)
                         }
@@ -332,6 +333,7 @@ struct GoalCategoryCard: View {
     let showTags: Bool
     let currentInterval: TimelineInterval
     let currentDate: Date
+    let showQuickAdd: Bool
     
     @ObservedObject private var goalsManager = GoalsManager.shared
     @State private var isEditingTitle = false
@@ -420,9 +422,6 @@ struct GoalCategoryCard: View {
             // Goals list
             ScrollView {
                 LazyVStack(spacing: adaptiveSpacing) {
-                    quickAddGoalRow
-                    Divider()
-                    
                     ForEach(goals) { goal in
                         GoalRow(
                             goal: goal,
@@ -443,14 +442,27 @@ struct GoalCategoryCard: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, 20)
                     }
+                    
+                    if showQuickAdd {
+                        quickAddGoalRow
+                    }
                 }
                 .padding(.horizontal, adaptivePadding / 2)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.secondarySystemBackground))
+        .background(Color(.systemBackground))
         .cornerRadius(12)
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.separator), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+        .onChange(of: showQuickAdd) { value in
+            if !value {
+                cancelQuickGoalInline()
+            }
+        }
         .alert("Copy Goals from Previous Period?", isPresented: $showingCopyAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Copy", role: .none) {
@@ -498,7 +510,6 @@ struct GoalCategoryCard: View {
                 .accessibilityLabel("Cancel quick goal")
             }
             .padding(adaptivePadding)
-            .background(Color(.systemBackground))
         } else {
             Button {
                 isAddingQuickGoal = true
@@ -516,7 +527,6 @@ struct GoalCategoryCard: View {
                     Spacer()
                 }
                 .padding(adaptivePadding)
-                .background(Color(.systemBackground))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Add quick goal")

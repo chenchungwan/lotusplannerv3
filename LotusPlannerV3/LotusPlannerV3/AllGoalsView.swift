@@ -381,7 +381,8 @@ struct TimeframeColumnView: View {
                                 onCategoryDelete: onCategoryDelete,
                                 showTags: false,
                                 currentInterval: convertToTimelineInterval(timeframe.type),
-                                currentDate: timeframe.startDate
+                                currentDate: timeframe.startDate,
+                                showQuickAdd: false
                             )
                             .frame(height: calculateCardHeight())
                         }
