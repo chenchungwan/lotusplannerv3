@@ -36,33 +36,24 @@ class GoalsManager: ObservableObject {
     private var context: NSManagedObjectContext {
         persistenceController.container.viewContext
     }
-    
-    private let cloudKitContainer = CKContainer.default()
-    private let privateDatabase: CKDatabase
-    
-    private let categoriesKey = "goalsCategories"
-    private let goalsKey = "goals"
-    private let lastSyncKey = "goalsLastSync"
-    
+
+    // NOTE: CloudKit sync is handled automatically by NSPersistentCloudKitContainer
+    // Manual CloudKit sync code removed to prevent conflicts with automatic sync
+
     private init() {
-        self.privateDatabase = cloudKitContainer.privateCloudDatabase
         loadData()
-        setupCloudKitSubscription()
         setupiCloudSync()
     }
     
     // MARK: - Data Loading
     func loadData() {
         isLoading = true
-        
+
         // Load from Core Data first
         loadFromCoreData()
-        
-        // Then sync with iCloud
-        Task {
-            await syncWithiCloud()
-            isLoading = false
-        }
+
+        // Note: Manual iCloud sync removed - NSPersistentCloudKitContainer handles sync automatically
+        isLoading = false
     }
     
     private func loadFromCoreData() {
@@ -141,10 +132,8 @@ class GoalsManager: ObservableObject {
         
         categories.append(newCategory)
         saveCategoryToCoreData(newCategory)
-        
-        Task {
-            await syncWithiCloud()
-        }
+
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func updateCategory(_ category: GoalCategoryData) {
@@ -152,9 +141,7 @@ class GoalsManager: ObservableObject {
             categories[index] = category
             updateCategoryInCoreData(category)
             
-            Task {
-                await syncWithiCloud()
-            }
+            // CloudKit sync handled automatically by NSPersistentCloudKitContainer
         }
     }
     
@@ -169,9 +156,7 @@ class GoalsManager: ObservableObject {
         deleteCategoryFromCoreData(categoryId)
         deleteGoalsFromCoreData(categoryId: categoryId)
         
-        Task {
-            await syncWithiCloud()
-        }
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func reorderCategories() {
@@ -183,9 +168,7 @@ class GoalsManager: ObservableObject {
             updateCategoryInCoreData(updatedCategory)
         }
         
-        Task {
-            await syncWithiCloud()
-        }
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     // MARK: - Goal Management
@@ -193,9 +176,7 @@ class GoalsManager: ObservableObject {
         goals.append(goal)
         saveGoalToCoreData(goal)
         
-        Task {
-            await syncWithiCloud()
-        }
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func updateGoal(_ goal: GoalData) {
@@ -203,9 +184,7 @@ class GoalsManager: ObservableObject {
             goals[index] = goal
             updateGoalInCoreData(goal)
             
-            Task {
-                await syncWithiCloud()
-            }
+            // CloudKit sync handled automatically by NSPersistentCloudKitContainer
         }
     }
     
@@ -213,9 +192,7 @@ class GoalsManager: ObservableObject {
         goals.removeAll { $0.id == goalId }
         deleteGoalFromCoreData(goalId)
         
-        Task {
-            await syncWithiCloud()
-        }
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func toggleGoalCompletion(_ goalId: UUID) {
@@ -224,9 +201,7 @@ class GoalsManager: ObservableObject {
             goals[index].updatedAt = Date()
             updateGoalInCoreData(goals[index])
             
-            Task {
-                await syncWithiCloud()
-            }
+            // CloudKit sync handled automatically by NSPersistentCloudKitContainer
         }
     }
     
@@ -417,32 +392,43 @@ class GoalsManager: ObservableObject {
         // Clear local arrays
         categories.removeAll()
         goals.removeAll()
-        
-        // Delete all from Core Data
-        let categoryRequest: NSFetchRequest<NSFetchRequestResult> = GoalCategory.fetchRequest()
-        let deleteCategoryRequest = NSBatchDeleteRequest(fetchRequest: categoryRequest)
-        
-        let goalRequest: NSFetchRequest<NSFetchRequestResult> = Goal.fetchRequest()
-        let deleteGoalRequest = NSBatchDeleteRequest(fetchRequest: goalRequest)
-        
+
+        // Delete all from Core Data using individual deletes (NOT batch delete)
+        // This ensures CloudKit sync gets triggered properly
+        let categoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
+        let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
+
         do {
-            try context.execute(deleteCategoryRequest)
-            try context.execute(deleteGoalRequest)
-            try context.save()
-            
-            // Clear UserDefaults
-            UserDefaults.standard.removeObject(forKey: lastSyncKey)
-            
-            // Remove everything from CloudKit as well
-            Task {
-                await deleteAllGoalsFromCloudKit()
+            // Fetch all entities
+            let allCategories = try context.fetch(categoryRequest)
+            let allGoals = try context.fetch(goalRequest)
+
+            // Delete them individually so CloudKit sync is triggered
+            for category in allCategories {
+                context.delete(category)
             }
+
+            for goal in allGoals {
+                context.delete(goal)
+            }
+
+            // Save to trigger CloudKit export of deletions
+            try context.save()
+
+            devLog("✅ GoalsManager: Deleted \(allCategories.count) categories and \(allGoals.count) goals from Core Data")
+            devLog("☁️ GoalsManager: CloudKit will automatically sync deletions via NSPersistentCloudKitContainer")
+
+            // Note: Manual CloudKit deletion removed - NSPersistentCloudKitContainer handles this automatically
+            // The manual CloudKit records (GoalsData) will be handled separately if needed
+
         } catch {
-            devLog("Error deleting all goals data: \(error)")
+            devLog("❌ GoalsManager: Error deleting all goals data: \(error)")
         }
     }
     
     // MARK: - iCloud Sync
+    // NOTE: All manual CloudKit sync code below is disabled - NSPersistentCloudKitContainer handles sync automatically
+    /* DISABLED - Manual CloudKit Sync
     private func syncWithiCloud() async {
         syncStatus = .syncing
         
@@ -600,6 +586,8 @@ class GoalsManager: ObservableObject {
         }
     }
     
+    */ // END DISABLED - Manual CloudKit Sync
+
     // MARK: - iCloud Sync Notifications
     private func setupiCloudSync() {
         // Listen for iCloud data change notifications
@@ -611,11 +599,9 @@ class GoalsManager: ObservableObject {
             // Reload data when iCloud sync completes
             Task { @MainActor in
                 self?.loadFromCoreData()
-                // Also fetch from CloudKit to ensure we have the latest
-                await self?.fetchFromiCloud()
             }
         }
-        
+
         // Listen for Core Data remote change notifications
         NotificationCenter.default.addObserver(
             forName: .NSPersistentStoreRemoteChange,
@@ -625,11 +611,9 @@ class GoalsManager: ObservableObject {
             // Reload data when CloudKit changes are received
             Task { @MainActor in
                 self?.loadFromCoreData()
-                // Also fetch from CloudKit to ensure we have the latest
-                await self?.fetchFromiCloud()
             }
         }
-        
+
         // Fetch from iCloud when app becomes active
         #if canImport(UIKit)
         NotificationCenter.default.addObserver(
@@ -638,18 +622,15 @@ class GoalsManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                await self?.fetchFromiCloud()
                 self?.loadFromCoreData()
             }
         }
         #endif
     }
-    
+
     // MARK: - Public Sync Methods
-    func forceSync() async {
-        await syncWithiCloud()
-    }
-    
+    // NOTE: forceSync() removed - NSPersistentCloudKitContainer handles all sync automatically
+
     func refreshData() {
         loadData()
     }

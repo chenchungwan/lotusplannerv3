@@ -214,13 +214,17 @@ struct TimelineComponent: View {
         // debug border removed
     }
     
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "ha"
+        return formatter
+    }()
+
     private func formatHour(_ hour: Int) -> String {
         if hour == endHour { return "12a" }
         let normalizedHour = ((hour % 24) + 24) % 24
-        let formatter = DateFormatter()
-        formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
-        var timeString = formatter.string(from: date).lowercased()
+        var timeString = Self.hourFormatter.string(from: date).lowercased()
         // Remove the "m" from "am/pm" to show "6a" instead of "6am"
         timeString = timeString.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
         return timeString

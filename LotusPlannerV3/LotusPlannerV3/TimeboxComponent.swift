@@ -306,12 +306,22 @@ struct TimeboxComponent: View {
             return ("Overdue", .white, .red)
         } else {
             // Future date
-            let formatter = DateFormatter()
-            formatter.dateFormat = "M/d/yy"
-            return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
+            return (Self.dueDateFormatter.string(from: dueDate), .primary, Color(.systemGray5))
         }
     }
-    
+
+    private static let dueDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d/yy"
+        return formatter
+    }()
+
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "ha"
+        return formatter
+    }()
+
     // MARK: - Timeline Views
     private func timeSlot(hour: Int) -> some View {
         HStack(spacing: 0) {
@@ -345,10 +355,8 @@ struct TimeboxComponent: View {
     private func formatHour(_ hour: Int) -> String {
         if hour == endHour { return "12a" }
         let normalizedHour = ((hour % 24) + 24) % 24
-        let formatter = DateFormatter()
-        formatter.dateFormat = "ha"
         let date = Calendar.current.date(bySettingHour: normalizedHour, minute: 0, second: 0, of: Date()) ?? Date()
-        let timeString = formatter.string(from: date).lowercased()
+        let timeString = Self.hourFormatter.string(from: date).lowercased()
         // Remove "m" from "am" and "pm"
         return timeString.replacingOccurrences(of: "am", with: "a").replacingOccurrences(of: "pm", with: "p")
     }

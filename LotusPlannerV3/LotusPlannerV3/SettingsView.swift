@@ -1475,81 +1475,6 @@ get: { appPrefs.showFoodLogs },
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
-            // Clean Up Duplicates Button (for debugging)
-            Button(action: {
-                devLog("🧹 USER: Cleaning up duplicate TaskTimeWindows...")
-                CoreDataManager.shared.cleanupDuplicateTaskTimeWindows()
-                
-                // Reload time windows after cleanup
-                TaskTimeWindowManager.shared.loadTimeWindows()
-            }) {
-                HStack {
-                    Image(systemName: "trash.circle")
-                    Text("Clean Up Duplicate Task Times")
-                        .font(.caption)
-                }
-            }
-            .buttonStyle(.borderless)
-            .foregroundColor(.orange)
-            
-            // Force Refresh Button (for debugging)
-            Button(action: {
-                devLog("🔄 USER: Force refreshing from CloudKit...")
-                
-                let context = PersistenceController.shared.container.viewContext
-                
-                // Save any pending changes first
-                if context.hasChanges {
-                    try? context.save()
-                }
-                
-                // Reset the context to clear all cached objects
-                context.reset()
-                
-                // Force the persistent store coordinator to re-read metadata from disk
-                if let coordinator = context.persistentStoreCoordinator,
-                   let store = coordinator.persistentStores.first {
-                    devLog("🔄 USER: Refreshing persistent store metadata...")
-                    do {
-                        try coordinator.setMetadata([:], for: store)
-                    } catch {
-                        devLog("❌ USER: Failed to refresh store: \(error)")
-                    }
-                }
-                
-                // Now reload everything with fresh fetches
-                devLog("🔄 USER: Reloading all data...")
-                TaskTimeWindowManager.shared.loadTimeWindows()
-                CustomLogManager.shared.refreshData()
-                LogsViewModel.shared.reloadData()
-                
-                devLog("✅ USER: Force refresh completed")
-            }) {
-                HStack {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                    Text("Force Refresh from iCloud")
-                        .font(.caption)
-                }
-            }
-            .buttonStyle(.borderless)
-            .foregroundColor(.blue)
-            
-            // CloudKit Diagnostics Button (for debugging)
-            Button(action: {
-                devLog("🔍 USER: Running CloudKit diagnostics...")
-                Task {
-                    await iCloudManagerInstance.diagnoseCloudKitData()
-                }
-            }) {
-                HStack {
-                    Image(systemName: "magnifyingglass.circle")
-                    Text("Diagnose CloudKit Data")
-                        .font(.caption)
-                }
-            }
-            .buttonStyle(.borderless)
-            .foregroundColor(.purple)
         }
         .onReceive(iCloudManagerInstance.$syncStatus) { status in
             cachedSyncStatus = status
@@ -1562,51 +1487,35 @@ get: { appPrefs.showFoodLogs },
     }
     
     private func performManualSync() async {
-        devLog("🔄 MANUAL SYNC: Starting...")
-        devLog("🔄 MANUAL SYNC: Current task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
-        
         // Force iCloud sync
-        devLog("🔄 MANUAL SYNC: Calling iCloudManager.forceCompleteSync()...")
         iCloudManagerInstance.forceCompleteSync()
-        
+
         // Longer delay to let NSPersistentCloudKitContainer process
-        devLog("🔄 MANUAL SYNC: Waiting 5 seconds for NSPersistentCloudKitContainer to sync...")
-        try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds (increased from 2)
-        
-        // Force goals sync
-        devLog("🔄 MANUAL SYNC: Syncing goals...")
-        await DataManager.shared.goalsManager.forceSync()
-        
-        // Force custom log sync
-        devLog("🔄 MANUAL SYNC: Syncing custom logs...")
-        await DataManager.shared.customLogManager.forceSync()
-        
+        try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+
         // Another delay to let CloudKit propagate
-        devLog("🔄 MANUAL SYNC: Waiting 2 seconds for CloudKit propagation...")
         try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-        
+
         // Now reload everything from Core Data
-        devLog("🔄 MANUAL SYNC: Reloading data from Core Data...")
         await MainActor.run {
             let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
-            
+
             TaskTimeWindowManager.shared.loadTimeWindows()
             CustomLogManager.shared.refreshData()
             LogsViewModel.shared.reloadData()
-            
+
             let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-            devLog("🔄 MANUAL SYNC: Task time windows: \(beforeCount) → \(afterCount) (change: \(afterCount - beforeCount))")
-            
+            if afterCount != beforeCount {
+                devLog("✅ SettingsView: Manual sync completed - task time windows changed (\(beforeCount) → \(afterCount))")
+            }
+
             // Force refresh the view context
             let context = PersistenceController.shared.container.viewContext
             context.refreshAllObjects()
         }
-        
+
         // Update last sync time
         iCloudManagerInstance.lastSyncDate = Date()
-        
-        devLog("✅ MANUAL SYNC: Completed successfully!")
-        devLog("✅ MANUAL SYNC: Final task time windows: \(TaskTimeWindowManager.shared.timeWindows.count)")
     }
     
     private func refreshAllViewsAfterDelete() async {
@@ -1626,13 +1535,13 @@ get: { appPrefs.showFoodLogs },
         
         // Reload tasks with forced cache clear
         await DataManager.shared.tasksViewModel.loadTasks(forceClear: true)
-        
-        // Reload goals data
-        await DataManager.shared.goalsManager.forceSync()
-        
-        // Reload custom log data
-        await DataManager.shared.customLogManager.forceSync()
-        
+
+        // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
+        DataManager.shared.goalsManager.refreshData()
+
+        // Reload custom log data (forceSync removed - NSPersistentCloudKitContainer handles sync)
+        DataManager.shared.customLogManager.refreshData()
+
         // Reload logs data
         LogsViewModel.shared.reloadData()
         LogsViewModel.shared.loadLogsForCurrentDate()

@@ -33,21 +33,12 @@ class CustomLogManager: ObservableObject {
         persistenceController.container.viewContext
     }
     
-    private let cloudKitContainer = CKContainer.default()
-    private let privateDatabase: CKDatabase
-    
-    private let itemsKey = "customLogItems"
-    private let entriesKey = "customLogEntries"
-    private let lastSyncKey = "customLogLastSync"
-    
+    // NOTE: CloudKit sync is handled automatically by NSPersistentCloudKitContainer
+    // Manual CloudKit sync code removed to prevent conflicts with automatic sync
+
     private init() {
-        self.privateDatabase = cloudKitContainer.privateCloudDatabase
         cleanupDuplicateCustomLogData()
         loadData()
-        setupCloudKitSubscription()
-        Task {
-            await fetchFromiCloud()
-        }
     }
     
     // MARK: - Data Loading
@@ -111,7 +102,7 @@ class CustomLogManager: ObservableObject {
         saveContext()
         loadItems()
         updateCustomLogVisibility()
-        syncToCloudKit()
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func updateItem(_ item: CustomLogItemData) {
@@ -128,7 +119,7 @@ class CustomLogManager: ObservableObject {
                 
                 saveContext()
                 loadItems()
-                syncToCloudKit()
+                // CloudKit sync handled automatically by NSPersistentCloudKitContainer
             }
         } catch {
             devLog("Error updating custom log item: \(error)")
@@ -165,7 +156,7 @@ class CustomLogManager: ObservableObject {
         saveContext()
         loadData()
         updateCustomLogVisibility()
-        syncToCloudKit()
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func reorderItems(_ newOrder: [UUID]) {
@@ -223,8 +214,8 @@ class CustomLogManager: ObservableObject {
             saveContext()
             loadEntries()
         }
-        
-        syncToCloudKit()
+
+        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
     
     func getEntriesForDate(_ date: Date) -> [CustomLogEntryData] {
@@ -259,179 +250,8 @@ class CustomLogManager: ObservableObject {
     }
     
     // MARK: - CloudKit Sync
-    private func setupCloudKitSubscription() {
-        // Setup CloudKit subscription for real-time updates
-        // Implementation similar to other managers
-    }
-    
-    func syncToCloudKit() {
-        Task {
-            await performCloudKitSync()
-        }
-    }
-    
-    private func performCloudKitSync() async {
-        syncStatus = .syncing
-        
-        do {
-            // Create container for sync
-            let container = CustomLogContainer(
-                items: items,
-                entries: entries,
-                lastSyncDate: Date()
-            )
-            
-            // Encode to JSON
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(container)
-            
-            // Create CloudKit record
-            let record = CKRecord(recordType: "CustomLogData")
-            record["data"] = data
-            record["lastSyncDate"] = Date()
-            
-            // Save to CloudKit
-            _ = try await privateDatabase.save(record)
-            
-            // Update local sync date
-            UserDefaults.standard.set(Date(), forKey: lastSyncKey)
-            
-            syncStatus = .success
-        } catch {
-            syncStatus = .error(error.localizedDescription)
-            devLog("Custom Log CloudKit sync error: \(error)")
-        }
-    }
-    
-    func forceSync() async {
-        await performCloudKitSync()
-    }
-    
-    private func fetchFromiCloud() async {
-        do {
-            let query = CKQuery(recordType: "CustomLogData", predicate: NSPredicate(value: true))
-            let results = try await privateDatabase.records(matching: query)
-            
-            for (_, result) in results.matchResults {
-                switch result {
-                case .success(let record):
-                    if let data = record["data"] as? Data {
-                        let decoder = JSONDecoder()
-                        decoder.dateDecodingStrategy = .iso8601
-                        let container = try decoder.decode(CustomLogContainer.self, from: data)
-                        
-                        // Update local data if CloudKit data is newer
-                        if let cloudSyncDate = record["lastSyncDate"] as? Date,
-                           let localSyncDate = UserDefaults.standard.object(forKey: lastSyncKey) as? Date,
-                           cloudSyncDate > localSyncDate {
-                            
-                            await updateCoreDataFromCloudKit(container: container)
-                        }
-                    }
-                case .failure(let error):
-                    devLog("Custom Log CloudKit fetch error: \(error)")
-                }
-            }
-        } catch {
-            devLog("Custom Log CloudKit fetch error: \(error)")
-        }
-    }
-    
-    private func saveItemToCoreData(_ item: CustomLogItemData) {
-        // Check if item already exists
-        let request: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", item.id.uuidString)
-        
-        do {
-            let existingEntities = try context.fetch(request)
-            let entity: CustomLogItem
-            
-            if let existing = existingEntities.first {
-                // Update existing item
-                entity = existing
-            } else {
-                // Create new item
-                entity = CustomLogItem(context: context)
-                entity.id = item.id.uuidString
-                entity.createdAt = item.createdAt
-            }
-            
-            // Set/update properties
-            entity.title = item.title
-            entity.isEnabled = item.isEnabled
-            entity.displayOrder = Int16(item.displayOrder)
-            entity.updatedAt = item.updatedAt
-            entity.userId = "default" // Add default userId for CloudKit sync
-        } catch {
-            devLog("Error saving item to Core Data: \(error)")
-        }
-    }
-    
-    private func saveEntryToCoreData(_ entry: CustomLogEntryData) {
-        // Check if entry already exists
-        let request: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", entry.id.uuidString)
-        
-        do {
-            let existingEntities = try context.fetch(request)
-            let entity: CustomLogEntry
-            
-            if let existing = existingEntities.first {
-                // Update existing entry
-                entity = existing
-            } else {
-                // Create new entry
-                entity = CustomLogEntry(context: context)
-                entity.id = entry.id.uuidString
-                entity.createdAt = entry.createdAt
-            }
-            
-            // Set/update properties
-            entity.itemId = entry.itemId.uuidString
-            entity.date = entry.date
-            entity.isCompleted = entry.isCompleted
-            entity.updatedAt = entry.updatedAt
-            entity.userId = "default" // Add default userId for CloudKit sync
-        } catch {
-            devLog("Error saving entry to Core Data: \(error)")
-        }
-    }
-    
-    private func updateCoreDataFromCloudKit(container: CustomLogContainer) async {
-        // Clear existing data
-        let itemRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogItem.fetchRequest()
-        let deleteItemRequest = NSBatchDeleteRequest(fetchRequest: itemRequest)
-        
-        let entryRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogEntry.fetchRequest()
-        let deleteEntryRequest = NSBatchDeleteRequest(fetchRequest: entryRequest)
-        
-        do {
-            try context.execute(deleteItemRequest)
-            try context.execute(deleteEntryRequest)
-            
-            // Save new data
-            for item in container.items {
-                saveItemToCoreData(item)
-            }
-            
-            for entry in container.entries {
-                saveEntryToCoreData(entry)
-            }
-            
-            try context.save()
-            
-            // Update local arrays
-            await MainActor.run {
-                items = container.items
-                entries = container.entries
-                updateCustomLogVisibility()
-            }
-            
-        } catch {
-            devLog("Error updating Core Data from CloudKit: \(error)")
-        }
-    }
+    // NOTE: All CloudKit sync is now handled automatically by NSPersistentCloudKitContainer
+    // Manual CloudKit sync functions removed to prevent conflicts
     
     func refreshData() {
         cleanupDuplicateCustomLogData()
@@ -443,29 +263,37 @@ class CustomLogManager: ObservableObject {
         // Clear local arrays
         items.removeAll()
         entries.removeAll()
-        
-        // Delete all from Core Data
-        let itemRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogItem.fetchRequest()
-        let deleteItemRequest = NSBatchDeleteRequest(fetchRequest: itemRequest)
-        
-        let entryRequest: NSFetchRequest<NSFetchRequestResult> = CustomLogEntry.fetchRequest()
-        let deleteEntryRequest = NSBatchDeleteRequest(fetchRequest: entryRequest)
-        
+
+        // Delete all from Core Data using individual deletes (NOT batch delete)
+        // This ensures CloudKit sync gets triggered properly
+        let itemRequest: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
+        let entryRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+
         do {
-            try context.execute(deleteItemRequest)
-            try context.execute(deleteEntryRequest)
+            // Fetch all entities
+            let allItems = try context.fetch(itemRequest)
+            let allEntries = try context.fetch(entryRequest)
+
+            // Delete them individually so CloudKit sync is triggered
+            for item in allItems {
+                context.delete(item)
+            }
+
+            for entry in allEntries {
+                context.delete(entry)
+            }
+
+            // Save to trigger CloudKit export of deletions
             try context.save()
-            
-            // Clear UserDefaults
-            UserDefaults.standard.removeObject(forKey: lastSyncKey)
-            
+
+            devLog("✅ CustomLogManager: Deleted \(allItems.count) items and \(allEntries.count) entries from Core Data")
+            devLog("☁️ CustomLogManager: CloudKit will automatically sync deletions via NSPersistentCloudKitContainer")
+
             // Update visibility
             updateCustomLogVisibility()
-            
-            // Sync deletion to CloudKit
-            syncToCloudKit()
+
         } catch {
-            devLog("Error deleting all custom log data: \(error)")
+            devLog("❌ CustomLogManager: Error deleting all custom log data: \(error)")
         }
     }
     
@@ -489,37 +317,40 @@ class CustomLogManager: ObservableObject {
     private func cleanupDuplicateItems() {
         let request: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \CustomLogItem.updatedAt, ascending: false)]
-        
+
         do {
             let allItems = try context.fetch(request)
-            var uniqueKeys: [String: CustomLogItem] = [:]
+            var uniqueIds: [String: CustomLogItem] = [:]
             var duplicates: [CustomLogItem] = []
-            
+
             for item in allItems {
-                let normalizedTitle = (item.title ?? "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .lowercased()
-                let key = "\(normalizedTitle)|\(item.displayOrder)"
-                
-                if let existing = uniqueKeys[key] {
+                // Use UUID id as the unique key (not title)
+                guard let itemId = item.id else {
+                    devLog("⚠️ CustomLogManager: Found item with nil id, deleting...")
+                    duplicates.append(item)
+                    continue
+                }
+
+                if let existing = uniqueIds[itemId] {
+                    // Found duplicate UUID - keep the more recently updated one
                     let existingUpdated = existing.updatedAt ?? existing.createdAt ?? .distantPast
                     let itemUpdated = item.updatedAt ?? item.createdAt ?? .distantPast
-                    
+
                     if itemUpdated > existingUpdated {
                         duplicates.append(existing)
-                        uniqueKeys[key] = item
+                        uniqueIds[itemId] = item
                     } else {
                         duplicates.append(item)
                     }
                 } else {
-                    uniqueKeys[key] = item
+                    uniqueIds[itemId] = item
                 }
             }
-            
+
             if !duplicates.isEmpty {
                 duplicates.forEach { context.delete($0) }
                 saveContext()
-                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log item(s)")
+                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log item(s) with same UUID")
             }
         } catch {
             devLog("❌ CustomLogManager: Failed to cleanup duplicate items: \(error)")
@@ -529,37 +360,40 @@ class CustomLogManager: ObservableObject {
     private func cleanupDuplicateEntries() {
         let request: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \CustomLogEntry.updatedAt, ascending: false)]
-        
+
         do {
             let allEntries = try context.fetch(request)
-            var uniqueKeys: [String: CustomLogEntry] = [:]
+            var uniqueIds: [String: CustomLogEntry] = [:]
             var duplicates: [CustomLogEntry] = []
-            
-            let calendar = Calendar.current
-            
+
             for entry in allEntries {
-                let normalizedDate = entry.date.map { calendar.startOfDay(for: $0) } ?? .distantPast
-                let key = "\(entry.itemId ?? "")|\(normalizedDate.timeIntervalSince1970)"
-                
-                if let existing = uniqueKeys[key] {
+                // Use UUID id as the unique key (not itemId+date)
+                guard let entryId = entry.id else {
+                    devLog("⚠️ CustomLogManager: Found entry with nil id, deleting...")
+                    duplicates.append(entry)
+                    continue
+                }
+
+                if let existing = uniqueIds[entryId] {
+                    // Found duplicate UUID - keep the more recently updated one
                     let existingUpdated = existing.updatedAt ?? existing.createdAt ?? .distantPast
                     let entryUpdated = entry.updatedAt ?? entry.createdAt ?? .distantPast
-                    
+
                     if entryUpdated > existingUpdated {
                         duplicates.append(existing)
-                        uniqueKeys[key] = entry
+                        uniqueIds[entryId] = entry
                     } else {
                         duplicates.append(entry)
                     }
                 } else {
-                    uniqueKeys[key] = entry
+                    uniqueIds[entryId] = entry
                 }
             }
-            
+
             if !duplicates.isEmpty {
                 duplicates.forEach { context.delete($0) }
                 saveContext()
-                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log entry/entries")
+                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log entry/entries with same UUID")
             }
         } catch {
             devLog("❌ CustomLogManager: Failed to cleanup duplicate entries: \(error)")

@@ -159,6 +159,7 @@ extension TasksComponent {
     private var verticalCardsView: some View {
         if isSingleDayView {
             // In single day view, no ScrollView - flexible height
+            // Note: Not using LazyVStack here as content is typically visible
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(localTaskLists, id: \.id) { list in
                     card(for: list, enableScroll: false, maxHeight: nil)
@@ -174,10 +175,10 @@ extension TasksComponent {
             }
             .frame(maxHeight: .infinity, alignment: .top)
         } else {
-            // In other views, use ScrollView with background styling
+            // In other views, use ScrollView with LazyVStack for better performance
             VStack(alignment: .leading, spacing: 3) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 3) {
+                    LazyVStack(alignment: .leading, spacing: 3) {
                         ForEach(localTaskLists, id: \.id) { list in
                             card(for: list, enableScroll: false, maxHeight: nil)
                         }
