@@ -2930,9 +2930,19 @@ struct TaskDetailsView: View {
     }
     
     var canSave: Bool {
-        !editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        ((!isCreatingNewList && !selectedListId.isEmpty) || 
-         (isCreatingNewList && !newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+        let hasValidTitle = !editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasValidList = (!isCreatingNewList && !selectedListId.isEmpty) ||
+                          (isCreatingNewList && !newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+        // For timed tasks, ensure end time is after start time
+        let hasValidTimes: Bool
+        if !isAllDay && editedDueDate != nil {
+            hasValidTimes = endTime > startTime
+        } else {
+            hasValidTimes = true
+        }
+
+        return hasValidTitle && hasValidList && hasValidTimes
     }
     
     var body: some View {
@@ -3202,6 +3212,13 @@ struct TaskDetailsView: View {
                                     }
                                 }
                             }
+
+                        // Validation message for invalid time range
+                        if endTime <= startTime {
+                            Text("End time must be after start time")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
                     }
                 } else {
                     // Show placeholder button
