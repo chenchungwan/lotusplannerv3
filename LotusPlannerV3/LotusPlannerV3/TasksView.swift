@@ -1736,12 +1736,12 @@ struct TasksView: View {
                 // Personal Tasks Section
                 if authManager.isLinked(kind: .personal) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Personal")
+                        Text("Personal Tasks")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(appPrefs.personalColor)
                             .padding(.horizontal, adaptivePadding)
-                        
+
                         TasksComponent(
                             taskLists: viewModel.personalTaskLists,
                             tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
@@ -1766,7 +1766,8 @@ struct TasksView: View {
                                 }
                             },
                             horizontalCards: false,
-                            isSingleDayView: selectedFilter == .day
+                            isSingleDayView: selectedFilter == .day,
+                            showTitle: false
                         )
                     }
                 }
@@ -1774,12 +1775,12 @@ struct TasksView: View {
                 // Professional Tasks Section
                 if authManager.isLinked(kind: .professional) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Professional")
+                        Text("Professional Tasks")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(appPrefs.professionalColor)
                             .padding(.horizontal, adaptivePadding)
-                        
+
                         TasksComponent(
                             taskLists: viewModel.professionalTaskLists,
                             tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
@@ -1804,7 +1805,8 @@ struct TasksView: View {
                                 }
                             },
                             horizontalCards: false,
-                            isSingleDayView: selectedFilter == .day
+                            isSingleDayView: selectedFilter == .day,
+                            showTitle: false
                         )
                     }
                 }
