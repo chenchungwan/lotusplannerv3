@@ -14,6 +14,26 @@ class TaskTimeWindowManager: ObservableObject {
     
     private init() {
         loadTimeWindows()
+        cleanupInvalidTimeWindows()
+    }
+
+    // MARK: - Cleanup Invalid Data
+    /// Remove time windows marked as all-day (these should not exist)
+    /// This is a one-time cleanup for data created before the fix
+    private func cleanupInvalidTimeWindows() {
+        devLog("🧹 TaskTimeWindowManager: Cleaning up invalid time windows...")
+        let invalidWindows = timeWindows.filter { $0.isAllDay }
+
+        if !invalidWindows.isEmpty {
+            devLog("🧹 Found \(invalidWindows.count) time windows marked as all-day (these should not exist)")
+            for window in invalidWindows {
+                devLog("🧹 Deleting time window for task \(window.taskId) (isAllDay=true)")
+                deleteTimeWindow(for: window.taskId)
+            }
+            devLog("✅ TaskTimeWindowManager: Cleanup complete")
+        } else {
+            devLog("✅ TaskTimeWindowManager: No invalid time windows found")
+        }
     }
     
     // MARK: - Load Time Windows

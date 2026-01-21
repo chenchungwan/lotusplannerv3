@@ -545,6 +545,10 @@ struct TimeboxComponent: View {
         // Get timed tasks (tasks with time windows that are not all-day)
         let tasks = getTasksForDate(date)
         let timedTasks = tasks.filter { task in
+            // First check: task must have a specific due time (not all-day format)
+            guard task.hasSpecificDueTime else { return false }
+
+            // Second check: task must have a time window that's not marked as all-day
             if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
                 return !timeWindow.isAllDay
             }
