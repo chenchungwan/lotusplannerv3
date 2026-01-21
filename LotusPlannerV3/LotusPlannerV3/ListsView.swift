@@ -1254,8 +1254,8 @@ struct TasksDetailColumn: View {
         }
         
         let trimmedTitle = newTaskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let currentDate = Date() // Current date as due date
-        
+        let currentDate = Calendar.current.startOfDay(for: Date()) // Use start of day for all-day task
+
         // Clear the text field immediately for better UX
         newTaskTitle = ""
         
