@@ -1419,9 +1419,21 @@ struct TasksDetailColumn: View {
 
     private func undoBulkComplete(data: UndoData) {
         Task {
+            // Get the current tasks from the list to find the completed versions
+            let currentTasks: [GoogleTask]
+            switch data.accountKind {
+            case .personal:
+                currentTasks = tasksVM.personalTasks[data.listId] ?? []
+            case .professional:
+                currentTasks = tasksVM.professionalTasks[data.listId] ?? []
+            }
+
             // Toggle completion back to incomplete for each task
-            for task in data.tasks {
-                await tasksVM.toggleTaskCompletion(task, in: data.listId, for: data.accountKind)
+            for originalTask in data.tasks {
+                // Find the current version of the task (which should be completed)
+                if let completedTask = currentTasks.first(where: { $0.id == originalTask.id }) {
+                    await tasksVM.toggleTaskCompletion(completedTask, in: data.listId, for: data.accountKind)
+                }
             }
         }
     }
