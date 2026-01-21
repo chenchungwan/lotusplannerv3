@@ -3790,13 +3790,20 @@ struct TaskDetailsView: View {
                                 }
                             }
                             
-                            TaskTimeWindowManager.shared.saveTimeWindow(
-                                taskId: newTaskId,
-                                startTime: finalStartTime,
-                                endTime: finalEndTime,
-                                isAllDay: isAllDay
-                            )
-                            devLog("   - ✅ Time window saved for new task: \(finalStartTime) - \(finalEndTime)")
+                            // Only save time window for timed tasks (not all-day)
+                            if !isAllDay {
+                                TaskTimeWindowManager.shared.saveTimeWindow(
+                                    taskId: newTaskId,
+                                    startTime: finalStartTime,
+                                    endTime: finalEndTime,
+                                    isAllDay: false
+                                )
+                                devLog("   - ✅ Time window saved for new task: \(finalStartTime) - \(finalEndTime)")
+                            } else {
+                                // Delete time window for all-day tasks
+                                TaskTimeWindowManager.shared.deleteTimeWindow(for: newTaskId)
+                                devLog("   - ✅ Time window deleted for all-day task")
+                            }
                         } else {
                             // Remove time window if due date is removed
                             TaskTimeWindowManager.shared.deleteTimeWindow(for: newTaskId)
@@ -3901,13 +3908,20 @@ struct TaskDetailsView: View {
                                 }
                             }
                             
-                            TaskTimeWindowManager.shared.saveTimeWindow(
-                                taskId: newTaskId,
-                                startTime: finalStartTime,
-                                endTime: finalEndTime,
-                                isAllDay: isAllDay
-                            )
-                            devLog("   - ✅ Time window saved for new task: \(finalStartTime) - \(finalEndTime)")
+                            // Only save time window for timed tasks (not all-day)
+                            if !isAllDay {
+                                TaskTimeWindowManager.shared.saveTimeWindow(
+                                    taskId: newTaskId,
+                                    startTime: finalStartTime,
+                                    endTime: finalEndTime,
+                                    isAllDay: false
+                                )
+                                devLog("   - ✅ Time window saved for new task: \(finalStartTime) - \(finalEndTime)")
+                            } else {
+                                // Delete time window for all-day tasks
+                                TaskTimeWindowManager.shared.deleteTimeWindow(for: newTaskId)
+                                devLog("   - ✅ Time window deleted for all-day task")
+                            }
                         } else {
                             // Remove time window if due date is removed
                             TaskTimeWindowManager.shared.deleteTimeWindow(for: newTaskId)
@@ -4003,12 +4017,18 @@ struct TaskDetailsView: View {
                         }
                     }
                     
-                    TaskTimeWindowManager.shared.saveTimeWindow(
-                        taskId: task.id,
-                        startTime: finalStartTime,
-                        endTime: finalEndTime,
-                        isAllDay: isAllDay
-                    )
+                    // Only save time window for timed tasks (not all-day)
+                    if !isAllDay {
+                        TaskTimeWindowManager.shared.saveTimeWindow(
+                            taskId: task.id,
+                            startTime: finalStartTime,
+                            endTime: finalEndTime,
+                            isAllDay: false
+                        )
+                    } else {
+                        // Delete time window for all-day tasks
+                        TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                    }
                 } else {
                     // Remove time window if due date is removed
                     TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
