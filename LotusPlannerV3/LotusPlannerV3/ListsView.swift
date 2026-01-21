@@ -1028,7 +1028,7 @@ struct SimpleTaskRow: View {
                 Button(action: onToggle) {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                         .font(.title2) // Slightly larger for better tap target
-                        .foregroundColor(task.isCompleted ? accentColor : .secondary)
+                        .foregroundColor(task.isCompleted ? (isBulkEditMode ? .secondary : accentColor) : .secondary)
                 }
                 .buttonStyle(.plain)
             }
