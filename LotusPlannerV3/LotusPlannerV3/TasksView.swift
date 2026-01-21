@@ -26,7 +26,7 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone(identifier: "UTC")
         return formatter
     }()
     
@@ -73,9 +73,10 @@ struct GoogleTask: Identifiable, Codable, Equatable {
     }
 
     var hasSpecificDueTime: Bool {
-        guard let date = dueDateTime else { return false }
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) != 0 || (components.minute ?? 0) != 0
+        guard let due = due else { return false }
+        // All-day tasks have format "yyyy-MM-dd" (10 chars)
+        // Timed tasks have format "yyyy-MM-ddTHH:mm:ss.SSSZ" (24+ chars)
+        return due.count > 10
     }
 }
 
@@ -1214,7 +1215,7 @@ class TasksViewModel: ObservableObject {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone.current
+            formatter.timeZone = TimeZone(identifier: "UTC")
             dueDateString = formatter.string(from: dueDate)
 
         } else {
