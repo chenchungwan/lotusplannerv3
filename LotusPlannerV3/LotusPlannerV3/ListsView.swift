@@ -130,6 +130,7 @@ struct ListsView: View {
                         selectedAccountKind: selectedAccountKind,
                         tasksVM: tasksVM,
                         appPrefs: appPrefs,
+                        auth: auth,
                         onListDeleted: {
                             selectedListId = nil
                             selectedAccountKind = nil
@@ -176,6 +177,7 @@ struct ListsView: View {
                 selectedAccountKind: selectedAccountKind,
                 tasksVM: tasksVM,
                 appPrefs: appPrefs,
+                auth: auth,
                 onListDeleted: {
                     selectedListId = nil
                     selectedAccountKind = nil
@@ -474,6 +476,7 @@ struct TasksDetailColumn: View {
     let selectedAccountKind: GoogleAuthManager.AccountKind?
     @ObservedObject var tasksVM: TasksViewModel
     @ObservedObject var appPrefs: AppPreferences
+    @ObservedObject var auth: GoogleAuthManager
     @State private var selectedTask: GoogleTask?
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
@@ -497,6 +500,7 @@ struct TasksDetailColumn: View {
     @State private var selectedTaskIds = Set<String>()
     @State private var showingBulkCompleteConfirmation = false
     @State private var showingBulkDeleteConfirmation = false
+    @State private var showingMoveDestinationPicker = false
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
@@ -700,7 +704,7 @@ struct TasksDetailColumn: View {
 
                                     // Move button (disabled if no selections)
                                     Button {
-                                        // TODO: Implement move
+                                        showingMoveDestinationPicker = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "arrow.right.square")
@@ -897,6 +901,29 @@ struct TasksDetailColumn: View {
                 )
             }
         }
+        .sheet(isPresented: $showingMoveDestinationPicker) {
+            if let sourceListId = selectedListId,
+               let sourceAccountKind = selectedAccountKind {
+                MoveTasksDestinationPicker(
+                    tasksVM: tasksVM,
+                    sourceListId: sourceListId,
+                    sourceAccountKind: sourceAccountKind,
+                    selectedTaskIds: selectedTaskIds,
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    hasPersonal: auth.isLinked(kind: .personal),
+                    hasProfessional: auth.isLinked(kind: .professional),
+                    onMove: { destinationListId, destinationAccountKind in
+                        bulkMoveTasks(
+                            sourceListId: sourceListId,
+                            sourceAccountKind: sourceAccountKind,
+                            destinationListId: destinationListId,
+                            destinationAccountKind: destinationAccountKind
+                        )
+                    }
+                )
+            }
+        }
         .alert("Delete List", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -1021,6 +1048,35 @@ struct TasksDetailColumn: View {
             await MainActor.run {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
+            }
+        }
+    }
+
+    private func bulkMoveTasks(sourceListId: String, sourceAccountKind: GoogleAuthManager.AccountKind, destinationListId: String, destinationAccountKind: GoogleAuthManager.AccountKind) {
+        // Get the selected tasks to move
+        let tasksToMove = tasks.filter { selectedTaskIds.contains($0.id) }
+
+        Task {
+            // Move each selected task
+            for task in tasksToMove {
+                // Delete from source list
+                await tasksVM.deleteTask(task, from: sourceListId, for: sourceAccountKind)
+
+                // Create in destination list
+                await tasksVM.createTask(
+                    title: task.title,
+                    notes: task.notes,
+                    dueDate: task.dueDate,
+                    in: destinationListId,
+                    for: destinationAccountKind
+                )
+            }
+
+            // Exit bulk edit mode and clear selections
+            await MainActor.run {
+                isBulkEditMode = false
+                selectedTaskIds.removeAll()
+                showingMoveDestinationPicker = false
             }
         }
     }
@@ -1443,6 +1499,99 @@ struct RenameListSheet: View {
             }
             .onAppear {
                 isTextFieldFocused = true
+            }
+        }
+    }
+}
+
+// MARK: - Move Tasks Destination Picker
+struct MoveTasksDestinationPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var tasksVM: TasksViewModel
+    let sourceListId: String
+    let sourceAccountKind: GoogleAuthManager.AccountKind
+    let selectedTaskIds: Set<String>
+    let personalColor: Color
+    let professionalColor: Color
+    let hasPersonal: Bool
+    let hasProfessional: Bool
+    let onMove: (String, GoogleAuthManager.AccountKind) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // Personal Account Lists
+                if hasPersonal && !tasksVM.personalTaskLists.isEmpty {
+                    Section {
+                        ForEach(tasksVM.personalTaskLists) { list in
+                            // Don't show the source list
+                            if !(list.id == sourceListId && sourceAccountKind == .personal) {
+                                Button {
+                                    onMove(list.id, .personal)
+                                    dismiss()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "person.circle.fill")
+                                            .foregroundColor(personalColor)
+                                        Text(list.title)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Image(systemName: "person.circle.fill")
+                                .foregroundColor(personalColor)
+                            Text("Personal")
+                        }
+                    }
+                }
+
+                // Professional Account Lists
+                if hasProfessional && !tasksVM.professionalTaskLists.isEmpty {
+                    Section {
+                        ForEach(tasksVM.professionalTaskLists) { list in
+                            // Don't show the source list
+                            if !(list.id == sourceListId && sourceAccountKind == .professional) {
+                                Button {
+                                    onMove(list.id, .professional)
+                                    dismiss()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "briefcase.circle.fill")
+                                            .foregroundColor(professionalColor)
+                                        Text(list.title)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Image(systemName: "briefcase.circle.fill")
+                                .foregroundColor(professionalColor)
+                            Text("Professional")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Move \(selectedTaskIds.count) Task\(selectedTaskIds.count == 1 ? "" : "s")")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
             }
         }
     }
