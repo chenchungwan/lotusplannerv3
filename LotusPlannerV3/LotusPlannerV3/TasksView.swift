@@ -1213,8 +1213,10 @@ class TasksViewModel: ObservableObject {
         if let dueDate = dueDate {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone.current
             dueDateString = formatter.string(from: dueDate)
-            
+
         } else {
             dueDateString = nil
         }
