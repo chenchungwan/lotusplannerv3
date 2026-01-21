@@ -3092,19 +3092,26 @@ struct TaskDetailsView: View {
                                 let startOfDay = calendar.startOfDay(for: dueDate)
                                 
                                 // Calculate next nearest half hour
-                                let now = Date()
+                                // For newly created all-day tasks, always default to 9:00 AM regardless of current time
                                 let hour: Int
                                 let minute: Int
-                                
-                                if calendar.isDate(dueDate, inSameDayAs: now) {
-                                    // If due date is today, use current time
-                                    let components = calendar.dateComponents([.hour, .minute], from: now)
-                                    hour = components.hour ?? 9
-                                    minute = components.minute ?? 0
-                                } else {
-                                    // If due date is in the future, default to 9:00 AM
+
+                                if isNew {
+                                    // For new tasks, always default to 9:00 AM
                                     hour = 9
                                     minute = 0
+                                } else {
+                                    let now = Date()
+                                    if calendar.isDate(dueDate, inSameDayAs: now) {
+                                        // If due date is today, use current time
+                                        let components = calendar.dateComponents([.hour, .minute], from: now)
+                                        hour = components.hour ?? 9
+                                        minute = components.minute ?? 0
+                                    } else {
+                                        // If due date is in the future, default to 9:00 AM
+                                        hour = 9
+                                        minute = 0
+                                    }
                                 }
                                 
                                 // Calculate next half hour
