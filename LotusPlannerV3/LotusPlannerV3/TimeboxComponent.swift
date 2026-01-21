@@ -544,39 +544,16 @@ struct TimeboxComponent: View {
         
         // Get timed tasks (tasks with time windows that are not all-day)
         let tasks = getTasksForDate(date)
-
-        // COMPREHENSIVE LOGGING for debugging
-        devLog("📊 TimeboxComponent: Rendering timeline for date \(date)")
-        devLog("📊 Total tasks for date: \(tasks.count)")
-
         let timedTasks = tasks.filter { task in
-            devLog("📊 Checking task: '\(task.title)'")
-            devLog("   - Task ID: \(task.id)")
-            devLog("   - Due field: \(task.due ?? "nil")")
-            devLog("   - Due field length: \(task.due?.count ?? 0)")
-            devLog("   - hasSpecificDueTime: \(task.hasSpecificDueTime)")
-
             // First check: task must have a specific due time (not all-day format)
-            guard task.hasSpecificDueTime else {
-                devLog("   - ❌ FILTERED OUT: No specific due time (all-day format)")
-                return false
-            }
+            guard task.hasSpecificDueTime else { return false }
 
             // Second check: task must have a time window that's not marked as all-day
             if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
-                devLog("   - Time window found: \(timeWindow.startTime) to \(timeWindow.endTime)")
-                devLog("   - Time window isAllDay: \(timeWindow.isAllDay)")
-                let include = !timeWindow.isAllDay
-                devLog("   - \(include ? "✅ INCLUDED" : "❌ FILTERED OUT"): isAllDay=\(timeWindow.isAllDay)")
-                return include
-            } else {
-                devLog("   - ❌ FILTERED OUT: No time window exists")
-                return false
+                return !timeWindow.isAllDay
             }
+            return false // No time window means it's all-day, so don't include here
         }
-
-        devLog("📊 Final timed tasks count: \(timedTasks.count)")
-        devLog("📊 Timed tasks: \(timedTasks.map { $0.title }.joined(separator: ", "))")
         
         // Combine events and tasks into a unified array
         var allItems: [(isTask: Bool, item: Any, startTime: Date, endTime: Date, isPersonal: Bool)] = []

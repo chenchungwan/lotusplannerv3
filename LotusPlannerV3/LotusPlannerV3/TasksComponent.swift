@@ -494,15 +494,17 @@ private struct TaskComponentRow: View {
     }
     
     private func startTimeTagText(for task: GoogleTask) -> String? {
-        if let window = timeWindowManager.getTimeWindow(for: task.id) {
-            if window.isAllDay {
-                return nil
-            }
-            return TaskComponentRow.timeFormatter.string(from: window.startTime)
+        // Only show time if task has a time window (and it's not all-day)
+        guard let window = timeWindowManager.getTimeWindow(for: task.id) else {
+            return nil
         }
-        
-        guard task.hasSpecificDueTime, let date = task.dueDateTime else { return nil }
-        return TaskComponentRow.timeFormatter.string(from: date)
+
+        // Don't show time for all-day tasks
+        if window.isAllDay {
+            return nil
+        }
+
+        return TaskComponentRow.timeFormatter.string(from: window.startTime)
     }
 
     private func dueDateTag(for task: GoogleTask) -> (text: String, textColor: Color, backgroundColor: Color)? {
