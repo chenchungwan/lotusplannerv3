@@ -184,13 +184,9 @@ class BulkEditManager: ObservableObject {
             let dueDateString: String?
             if let dueDate = dueDate {
                 let formatter = DateFormatter()
-                if isAllDay {
-                    formatter.dateFormat = "yyyy-MM-dd"
-                } else {
-                    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-                    formatter.timeZone = TimeZone(identifier: "UTC")
-                }
+                formatter.dateFormat = "yyyy-MM-dd"
                 formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
                 dueDateString = formatter.string(from: dueDate)
             } else {
                 dueDateString = nil
@@ -212,13 +208,15 @@ class BulkEditManager: ObservableObject {
 
                 // Save or delete time window
                 if let dueDate = dueDate, !isAllDay, let start = startTime, let end = endTime {
+                    // Save time window for timed tasks
                     TaskTimeWindowManager.shared.saveTimeWindow(
                         taskId: task.id,
                         startTime: start,
                         endTime: end,
                         isAllDay: false
                     )
-                } else if isAllDay {
+                } else {
+                    // Delete time window if all-day or no due date
                     TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
                 }
             }

@@ -14,14 +14,27 @@ struct BulkUpdateDueDatePicker: View {
     let selectedTaskIds: Set<String>
     let onSave: (Date?, Bool, Date?, Date?) -> Void
 
-    @State private var selectedDate = Date()
+    @State private var selectedDate: Date?
     @State private var isAllDay = true
     @State private var startTime = Date()
     @State private var endTime: Date
+    @State private var showingDatePicker = false
+    @State private var tempSelectedDate = Date()
+
+    private static let dueDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
 
     init(selectedTaskIds: Set<String>, onSave: @escaping (Date?, Bool, Date?, Date?) -> Void) {
         self.selectedTaskIds = selectedTaskIds
         self.onSave = onSave
+
+        // Initialize with today's date
+        _selectedDate = State(initialValue: Date())
+        _tempSelectedDate = State(initialValue: Date())
 
         // Initialize times to nearest half hour (consistent with individual task editing)
         let calendar = Calendar.current
@@ -54,17 +67,58 @@ struct BulkUpdateDueDatePicker: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    DatePicker("Due Date", selection: $selectedDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                }
+                // Due Date Section
+                Section("Due Date") {
+                    if let dueDate = selectedDate {
+                        // Show date with calendar icon and trash can
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundColor(.blue)
 
-                Section {
-                    Toggle("All-Day", isOn: $isAllDay)
+                            Button(action: {
+                                tempSelectedDate = dueDate
+                                showingDatePicker = true
+                            }) {
+                                Text(BulkUpdateDueDatePicker.dueDateFormatter.string(from: dueDate))
+                                    .foregroundColor(.primary)
+                            }
+                            .buttonStyle(PlainButtonStyle())
 
-                    if !isAllDay {
-                        DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
-                        DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                            Spacer()
+
+                            Button(action: {
+                                selectedDate = nil
+                                // Reset to all-day when due date is removed
+                                isAllDay = true
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+
+                        // All-day toggle
+                        Toggle("All-day task", isOn: $isAllDay)
+
+                        // Show time pickers only if not all-day
+                        if !isAllDay {
+                            DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+                            DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                        }
+                    } else {
+                        // No due date set - show button to add one
+                        Button(action: {
+                            selectedDate = Date()
+                            tempSelectedDate = Date()
+                        }) {
+                            HStack {
+                                Image(systemName: "calendar.badge.plus")
+                                    .foregroundColor(.blue)
+                                Text("Add Due Date")
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
 
@@ -84,43 +138,73 @@ struct BulkUpdateDueDatePicker: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let finalDate: Date
+                        let finalDate: Date?
                         var finalStartTime: Date?
                         var finalEndTime: Date?
 
-                        if isAllDay {
-                            // Use just the date for all-day events
-                            finalDate = selectedDate
+                        if let date = selectedDate {
+                            if isAllDay {
+                                // Use just the date for all-day events
+                                finalDate = date
+                            } else {
+                                // Combine date with start time for the due date
+                                let calendar = Calendar.current
+                                let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+                                let timeComponents = calendar.dateComponents([.hour, .minute], from: startTime)
+                                var combined = DateComponents()
+                                combined.year = dateComponents.year
+                                combined.month = dateComponents.month
+                                combined.day = dateComponents.day
+                                combined.hour = timeComponents.hour
+                                combined.minute = timeComponents.minute
+                                finalDate = calendar.date(from: combined) ?? date
+
+                                // Also combine date with start and end times for the time window
+                                finalStartTime = calendar.date(from: combined)
+
+                                let endTimeComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                                var endCombined = DateComponents()
+                                endCombined.year = dateComponents.year
+                                endCombined.month = dateComponents.month
+                                endCombined.day = dateComponents.day
+                                endCombined.hour = endTimeComponents.hour
+                                endCombined.minute = endTimeComponents.minute
+                                finalEndTime = calendar.date(from: endCombined)
+                            }
                         } else {
-                            // Combine date with start time for the due date
-                            let calendar = Calendar.current
-                            let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
-                            let timeComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-                            var combined = DateComponents()
-                            combined.year = dateComponents.year
-                            combined.month = dateComponents.month
-                            combined.day = dateComponents.day
-                            combined.hour = timeComponents.hour
-                            combined.minute = timeComponents.minute
-                            finalDate = calendar.date(from: combined) ?? selectedDate
-
-                            // Also combine date with start and end times for the time window
-                            finalStartTime = calendar.date(from: combined)
-
-                            let endTimeComponents = calendar.dateComponents([.hour, .minute], from: endTime)
-                            var endCombined = DateComponents()
-                            endCombined.year = dateComponents.year
-                            endCombined.month = dateComponents.month
-                            endCombined.day = dateComponents.day
-                            endCombined.hour = endTimeComponents.hour
-                            endCombined.minute = endTimeComponents.minute
-                            finalEndTime = calendar.date(from: endCombined)
+                            // No date selected - clear due date
+                            finalDate = nil
                         }
+
                         onSave(finalDate, isAllDay, finalStartTime, finalEndTime)
                         dismiss()
                     }
                     .fontWeight(.semibold)
                 }
+            }
+            .sheet(isPresented: $showingDatePicker) {
+                NavigationStack {
+                    DatePicker("", selection: $tempSelectedDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding()
+                        .navigationTitle("Due Date")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Cancel") {
+                                    showingDatePicker = false
+                                }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") {
+                                    selectedDate = tempSelectedDate
+                                    showingDatePicker = false
+                                }
+                                .fontWeight(.semibold)
+                            }
+                        }
+                }
+                .presentationDetents([.medium])
             }
         }
         .presentationDetents([.medium, .large])
