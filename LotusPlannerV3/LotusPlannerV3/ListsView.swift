@@ -496,6 +496,7 @@ struct TasksDetailColumn: View {
     @State private var isBulkEditMode = false
     @State private var selectedTaskIds = Set<String>()
     @State private var showingBulkCompleteConfirmation = false
+    @State private var showingBulkDeleteConfirmation = false
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
@@ -713,7 +714,7 @@ struct TasksDetailColumn: View {
 
                                     // Delete button (disabled if no selections)
                                     Button {
-                                        // TODO: Implement delete
+                                        showingBulkDeleteConfirmation = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "trash")
@@ -930,6 +931,17 @@ struct TasksDetailColumn: View {
         } message: {
             Text("Mark \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s") as complete?")
         }
+        .alert("Delete Tasks", isPresented: $showingBulkDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let listId = selectedListId,
+                   let accountKind = selectedAccountKind {
+                    bulkDeleteTasks(listId: listId, accountKind: accountKind)
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s")? This action cannot be undone.")
+        }
         .onChange(of: selectedListId) { _ in
             // Reset inline task creation when list changes
             isCreatingNewTask = false
@@ -984,6 +996,24 @@ struct TasksDetailColumn: View {
             // Mark each selected task as complete
             for task in tasksToComplete {
                 await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+            }
+
+            // Exit bulk edit mode and clear selections
+            await MainActor.run {
+                isBulkEditMode = false
+                selectedTaskIds.removeAll()
+            }
+        }
+    }
+
+    private func bulkDeleteTasks(listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        // Get the selected tasks to delete
+        let tasksToDelete = tasks.filter { selectedTaskIds.contains($0.id) }
+
+        Task {
+            // Delete each selected task
+            for task in tasksToDelete {
+                await tasksVM.deleteTask(task, from: listId, for: accountKind)
             }
 
             // Exit bulk edit mode and clear selections
