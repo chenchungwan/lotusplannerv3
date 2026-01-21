@@ -531,7 +531,9 @@ struct TasksDetailColumn: View {
     @State private var showingMoveDestinationPicker = false
     @State private var showingDueDatePicker = false
     @State private var showingBulkMoveConfirmation = false
+    @State private var showingBulkUpdateDueDateConfirmation = false
     @State private var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
+    @State private var pendingDueDate: Date?
 
     // State for undo toast
     @State private var showingUndoToast = false
@@ -667,7 +669,7 @@ struct TasksDetailColumn: View {
                                 selectedTaskIds.removeAll()
                             }
                         } label: {
-                            Label(isBulkEditMode ? "Cancel Bulk Edit" : "Bulk Edit", systemImage: "checklist")
+                            Label(isBulkEditMode ? "Cancel Bulk Edit" : "Bulk Edit", systemImage: "checkmark.rectangle.stack")
                         }
 
                         Divider()
@@ -972,15 +974,13 @@ struct TasksDetailColumn: View {
             }
         }
         .sheet(isPresented: $showingDueDatePicker) {
-            if let listId = selectedListId,
-               let accountKind = selectedAccountKind {
-                BulkUpdateDueDatePicker(
-                    selectedTaskIds: selectedTaskIds,
-                    onSave: { dueDate in
-                        bulkUpdateDueDate(listId: listId, accountKind: accountKind, dueDate: dueDate)
-                    }
-                )
-            }
+            BulkUpdateDueDatePicker(
+                selectedTaskIds: selectedTaskIds,
+                onSave: { dueDate in
+                    pendingDueDate = dueDate
+                    showingBulkUpdateDueDateConfirmation = true
+                }
+            )
         }
         .alert("Delete List", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -1049,6 +1049,19 @@ struct TasksDetailColumn: View {
                 let destinationListName = getListName(for: destination.listId, accountKind: destination.accountKind) ?? "selected list"
                 Text("Move \(selectedTaskIds.count) task\(selectedTaskIds.count == 1 ? "" : "s") to '\(destinationListName)'?")
             }
+        }
+        .alert("Update Due Date", isPresented: $showingBulkUpdateDueDateConfirmation) {
+            Button("Cancel", role: .cancel) {
+                pendingDueDate = nil
+            }
+            Button("Update") {
+                if let listId = selectedListId,
+                   let accountKind = selectedAccountKind {
+                    bulkUpdateDueDate(listId: listId, accountKind: accountKind, dueDate: pendingDueDate)
+                }
+            }
+        } message: {
+            Text("Update due date for \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s")?")
         }
         .onChange(of: selectedListId) { _ in
             // Reset inline task creation when list changes
@@ -1320,6 +1333,8 @@ struct TasksDetailColumn: View {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
                 showingDueDatePicker = false
+                showingBulkUpdateDueDateConfirmation = false
+                pendingDueDate = nil
 
                 // Show undo toast
                 undoAction = .updateDueDate
@@ -1882,8 +1897,20 @@ struct BulkUpdateDueDatePicker: View {
     let onSave: (Date?) -> Void
 
     @State private var selectedDate = Date()
-    @State private var includeTime = false
-    @State private var selectedTime = Date()
+    @State private var isAllDay = true
+    @State private var startTime = Date()
+    @State private var endTime: Date
+
+    init(selectedTaskIds: Set<String>, onSave: @escaping (Date?) -> Void) {
+        self.selectedTaskIds = selectedTaskIds
+        self.onSave = onSave
+
+        // Initialize end time to be 1 hour after start time
+        let calendar = Calendar.current
+        let now = Date()
+        _startTime = State(initialValue: now)
+        _endTime = State(initialValue: calendar.date(byAdding: .hour, value: 1, to: now) ?? now)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1894,10 +1921,11 @@ struct BulkUpdateDueDatePicker: View {
                 }
 
                 Section {
-                    Toggle("Include Time", isOn: $includeTime)
+                    Toggle("All-Day", isOn: $isAllDay)
 
-                    if includeTime {
-                        DatePicker("Time", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                    if !isAllDay {
+                        DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+                        DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
                     }
                 }
 
@@ -1918,11 +1946,14 @@ struct BulkUpdateDueDatePicker: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         let finalDate: Date
-                        if includeTime {
-                            // Combine date and time
+                        if isAllDay {
+                            // Use just the date for all-day events
+                            finalDate = selectedDate
+                        } else {
+                            // Combine date with start time
                             let calendar = Calendar.current
                             let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
-                            let timeComponents = calendar.dateComponents([.hour, .minute], from: selectedTime)
+                            let timeComponents = calendar.dateComponents([.hour, .minute], from: startTime)
                             var combined = DateComponents()
                             combined.year = dateComponents.year
                             combined.month = dateComponents.month
@@ -1930,8 +1961,6 @@ struct BulkUpdateDueDatePicker: View {
                             combined.hour = timeComponents.hour
                             combined.minute = timeComponents.minute
                             finalDate = calendar.date(from: combined) ?? selectedDate
-                        } else {
-                            finalDate = selectedDate
                         }
                         onSave(finalDate)
                         dismiss()
