@@ -495,6 +495,7 @@ struct TasksDetailColumn: View {
     // State for bulk edit mode
     @State private var isBulkEditMode = false
     @State private var selectedTaskIds = Set<String>()
+    @State private var showingBulkCompleteConfirmation = false
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
@@ -644,19 +645,30 @@ struct TasksDetailColumn: View {
                 // Tasks list
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        // Bulk Edit Menu (shown when tasks are selected)
-                        if isBulkEditMode && !selectedTaskIds.isEmpty {
+                        // Bulk Edit Menu (shown when in bulk edit mode)
+                        if isBulkEditMode {
                             VStack(spacing: 0) {
                                 HStack(spacing: 20) {
+                                    // Exit bulk edit button
+                                    Button {
+                                        isBulkEditMode = false
+                                        selectedTaskIds.removeAll()
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+
                                     Text("\(selectedTaskIds.count) selected")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
 
                                     Spacer()
 
-                                    // Mark as Complete button
+                                    // Mark as Complete button (disabled if no selections)
                                     Button {
-                                        // TODO: Implement mark as complete
+                                        showingBulkCompleteConfirmation = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "checkmark.circle")
@@ -664,11 +676,12 @@ struct TasksDetailColumn: View {
                                             Text("Complete")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(accentColor)
+                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : accentColor)
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(selectedTaskIds.isEmpty)
 
-                                    // Update Due Date button
+                                    // Update Due Date button (disabled if no selections)
                                     Button {
                                         // TODO: Implement update due date
                                     } label: {
@@ -678,11 +691,12 @@ struct TasksDetailColumn: View {
                                             Text("Due Date")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(accentColor)
+                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : accentColor)
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(selectedTaskIds.isEmpty)
 
-                                    // Move button
+                                    // Move button (disabled if no selections)
                                     Button {
                                         // TODO: Implement move
                                     } label: {
@@ -692,11 +706,12 @@ struct TasksDetailColumn: View {
                                             Text("Move")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(accentColor)
+                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : accentColor)
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(selectedTaskIds.isEmpty)
 
-                                    // Delete button
+                                    // Delete button (disabled if no selections)
                                     Button {
                                         // TODO: Implement delete
                                     } label: {
@@ -706,9 +721,10 @@ struct TasksDetailColumn: View {
                                             Text("Delete")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(.red)
+                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : .red)
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(selectedTaskIds.isEmpty)
                                 }
                                 .padding(adaptivePadding)
                                 .background(accentColor.opacity(0.15))
@@ -903,6 +919,17 @@ struct TasksDetailColumn: View {
         } message: {
             Text("Are you sure you want to delete all completed tasks from this list? This action cannot be undone.")
         }
+        .alert("Mark as Complete", isPresented: $showingBulkCompleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Complete") {
+                if let listId = selectedListId,
+                   let accountKind = selectedAccountKind {
+                    bulkCompleteTasks(listId: listId, accountKind: accountKind)
+                }
+            }
+        } message: {
+            Text("Mark \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s") as complete?")
+        }
         .onChange(of: selectedListId) { _ in
             // Reset inline task creation when list changes
             isCreatingNewTask = false
@@ -936,7 +963,7 @@ struct TasksDetailColumn: View {
     
     private func deleteCompletedTasks(listId: String, accountKind: GoogleAuthManager.AccountKind) {
         let completedTasks = tasks.filter { $0.isCompleted }
-        
+
         Task {
             // Delete each completed task
             for task in completedTasks {
@@ -944,7 +971,25 @@ struct TasksDetailColumn: View {
             }
         }
     }
-    
+
+    private func bulkCompleteTasks(listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        // Get the selected tasks
+        let tasksToComplete = tasks.filter { selectedTaskIds.contains($0.id) && !$0.isCompleted }
+
+        Task {
+            // Mark each selected task as complete
+            for task in tasksToComplete {
+                await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+            }
+
+            // Exit bulk edit mode and clear selections
+            await MainActor.run {
+                isBulkEditMode = false
+                selectedTaskIds.removeAll()
+            }
+        }
+    }
+
     private func toggleTask(_ task: GoogleTask) {
         guard let listId = selectedListId, let accountKind = selectedAccountKind else { return }
         Task {
