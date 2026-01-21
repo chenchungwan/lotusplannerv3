@@ -26,7 +26,7 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
         return formatter
     }()
     
@@ -73,9 +73,10 @@ struct GoogleTask: Identifiable, Codable, Equatable {
     }
 
     var hasSpecificDueTime: Bool {
-        guard let date = dueDateTime else { return false }
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) != 0 || (components.minute ?? 0) != 0
+        guard let due = due else { return false }
+        // All-day tasks have format "yyyy-MM-dd" (10 chars)
+        // Timed tasks have format "yyyy-MM-ddTHH:mm:ss.SSSZ" (24+ chars)
+        return due.count > 10
     }
 }
 
@@ -1213,8 +1214,10 @@ class TasksViewModel: ObservableObject {
         if let dueDate = dueDate {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
             dueDateString = formatter.string(from: dueDate)
-            
+
         } else {
             dueDateString = nil
         }
@@ -3092,19 +3095,26 @@ struct TaskDetailsView: View {
                                 let startOfDay = calendar.startOfDay(for: dueDate)
                                 
                                 // Calculate next nearest half hour
-                                let now = Date()
+                                // For newly created all-day tasks, always default to 9:00 AM regardless of current time
                                 let hour: Int
                                 let minute: Int
-                                
-                                if calendar.isDate(dueDate, inSameDayAs: now) {
-                                    // If due date is today, use current time
-                                    let components = calendar.dateComponents([.hour, .minute], from: now)
-                                    hour = components.hour ?? 9
-                                    minute = components.minute ?? 0
-                                } else {
-                                    // If due date is in the future, default to 9:00 AM
+
+                                if isNew {
+                                    // For new tasks, always default to 9:00 AM
                                     hour = 9
                                     minute = 0
+                                } else {
+                                    let now = Date()
+                                    if calendar.isDate(dueDate, inSameDayAs: now) {
+                                        // If due date is today, use current time
+                                        let components = calendar.dateComponents([.hour, .minute], from: now)
+                                        hour = components.hour ?? 9
+                                        minute = components.minute ?? 0
+                                    } else {
+                                        // If due date is in the future, default to 9:00 AM
+                                        hour = 9
+                                        minute = 0
+                                    }
                                 }
                                 
                                 // Calculate next half hour
