@@ -480,6 +480,24 @@ struct AllTaskListsColumn: View {
     }
 }
 
+// MARK: - Undo Action Types
+enum UndoAction {
+    case complete
+    case delete
+    case move
+    case updateDueDate
+}
+
+struct UndoData {
+    let tasks: [GoogleTask]
+    let listId: String
+    let accountKind: GoogleAuthManager.AccountKind
+    let destinationListId: String?
+    let destinationAccountKind: GoogleAuthManager.AccountKind?
+    let originalDueDates: [String: String?]?
+    let count: Int
+}
+
 // MARK: - Tasks Detail Column (Right Side)
 struct TasksDetailColumn: View {
     let selectedListId: String?
@@ -514,6 +532,11 @@ struct TasksDetailColumn: View {
     @State private var showingDueDatePicker = false
     @State private var showingBulkMoveConfirmation = false
     @State private var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
+
+    // State for undo toast
+    @State private var showingUndoToast = false
+    @State private var undoAction: UndoAction?
+    @State private var undoData: UndoData?
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
@@ -1037,6 +1060,27 @@ struct TasksDetailColumn: View {
             isBulkEditMode = false
             selectedTaskIds.removeAll()
         }
+        .overlay(alignment: .bottom) {
+            // Undo Toast
+            if showingUndoToast, let action = undoAction, let data = undoData {
+                UndoToast(
+                    action: action,
+                    count: data.count,
+                    accentColor: accentColor,
+                    onUndo: {
+                        performUndo()
+                    },
+                    onDismiss: {
+                        showingUndoToast = false
+                        undoAction = nil
+                        undoData = nil
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: showingUndoToast)
+                .padding(.bottom, 16)
+            }
+        }
     }
     
     private func renameList(listId: String, accountKind: GoogleAuthManager.AccountKind) {
@@ -1077,16 +1121,42 @@ struct TasksDetailColumn: View {
         // Get the selected tasks
         let tasksToComplete = tasks.filter { selectedTaskIds.contains($0.id) && !$0.isCompleted }
 
+        // Store pre-action state for undo
+        let undoTaskData = UndoData(
+            tasks: tasksToComplete,
+            listId: listId,
+            accountKind: accountKind,
+            destinationListId: nil,
+            destinationAccountKind: nil,
+            originalDueDates: nil,
+            count: tasksToComplete.count
+        )
+
         Task {
             // Mark each selected task as complete
             for task in tasksToComplete {
                 await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
             }
 
-            // Exit bulk edit mode and clear selections
+            // Exit bulk edit mode, clear selections, and show undo toast
             await MainActor.run {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
+
+                // Show undo toast
+                undoAction = .complete
+                undoData = undoTaskData
+                showingUndoToast = true
+
+                // Auto-dismiss after 5 seconds
+                Task {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await MainActor.run {
+                        if undoAction == .complete && undoData?.count == undoTaskData.count {
+                            showingUndoToast = false
+                        }
+                    }
+                }
             }
         }
     }
@@ -1095,16 +1165,42 @@ struct TasksDetailColumn: View {
         // Get the selected tasks to delete
         let tasksToDelete = tasks.filter { selectedTaskIds.contains($0.id) }
 
+        // Store pre-action state for undo
+        let undoTaskData = UndoData(
+            tasks: tasksToDelete,
+            listId: listId,
+            accountKind: accountKind,
+            destinationListId: nil,
+            destinationAccountKind: nil,
+            originalDueDates: nil,
+            count: tasksToDelete.count
+        )
+
         Task {
             // Delete each selected task
             for task in tasksToDelete {
                 await tasksVM.deleteTask(task, from: listId, for: accountKind)
             }
 
-            // Exit bulk edit mode and clear selections
+            // Exit bulk edit mode, clear selections, and show undo toast
             await MainActor.run {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
+
+                // Show undo toast
+                undoAction = .delete
+                undoData = undoTaskData
+                showingUndoToast = true
+
+                // Auto-dismiss after 5 seconds
+                Task {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await MainActor.run {
+                        if undoAction == .delete && undoData?.count == undoTaskData.count {
+                            showingUndoToast = false
+                        }
+                    }
+                }
             }
         }
     }
@@ -1112,6 +1208,17 @@ struct TasksDetailColumn: View {
     private func bulkMoveTasks(sourceListId: String, sourceAccountKind: GoogleAuthManager.AccountKind, destinationListId: String, destinationAccountKind: GoogleAuthManager.AccountKind) {
         // Get the selected tasks to move
         let tasksToMove = tasks.filter { selectedTaskIds.contains($0.id) }
+
+        // Store pre-action state for undo
+        let undoTaskData = UndoData(
+            tasks: tasksToMove,
+            listId: sourceListId,
+            accountKind: sourceAccountKind,
+            destinationListId: destinationListId,
+            destinationAccountKind: destinationAccountKind,
+            originalDueDates: nil,
+            count: tasksToMove.count
+        )
 
         Task {
             // Move each selected task
@@ -1129,7 +1236,7 @@ struct TasksDetailColumn: View {
                 )
             }
 
-            // Exit bulk edit mode, clear selections, and navigate to destination list
+            // Exit bulk edit mode, clear selections, navigate to destination list, and show undo toast
             await MainActor.run {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
@@ -1138,6 +1245,21 @@ struct TasksDetailColumn: View {
 
                 // Navigate to the destination list
                 onNavigateToList(destinationListId, destinationAccountKind)
+
+                // Show undo toast
+                undoAction = .move
+                undoData = undoTaskData
+                showingUndoToast = true
+
+                // Auto-dismiss after 5 seconds
+                Task {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await MainActor.run {
+                        if undoAction == .move && undoData?.count == undoTaskData.count {
+                            showingUndoToast = false
+                        }
+                    }
+                }
             }
         }
     }
@@ -1145,6 +1267,23 @@ struct TasksDetailColumn: View {
     private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?) {
         // Get the selected tasks to update
         let tasksToUpdate = tasks.filter { selectedTaskIds.contains($0.id) }
+
+        // Store original due dates for undo
+        var originalDueDates: [String: String?] = [:]
+        for task in tasksToUpdate {
+            originalDueDates[task.id] = task.due
+        }
+
+        // Store pre-action state for undo
+        let undoTaskData = UndoData(
+            tasks: tasksToUpdate,
+            listId: listId,
+            accountKind: accountKind,
+            destinationListId: nil,
+            destinationAccountKind: nil,
+            originalDueDates: originalDueDates,
+            count: tasksToUpdate.count
+        )
 
         Task {
             // Format the due date string
@@ -1176,11 +1315,139 @@ struct TasksDetailColumn: View {
                 await tasksVM.updateTask(updatedTask, in: listId, for: accountKind)
             }
 
-            // Exit bulk edit mode and clear selections
+            // Exit bulk edit mode, clear selections, and show undo toast
             await MainActor.run {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
                 showingDueDatePicker = false
+
+                // Show undo toast
+                undoAction = .updateDueDate
+                undoData = undoTaskData
+                showingUndoToast = true
+
+                // Auto-dismiss after 5 seconds
+                Task {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await MainActor.run {
+                        if undoAction == .updateDueDate && undoData?.count == undoTaskData.count {
+                            showingUndoToast = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Undo Functions
+
+    private func performUndo() {
+        guard let action = undoAction, let data = undoData else { return }
+
+        // Hide the toast immediately
+        showingUndoToast = false
+
+        switch action {
+        case .complete:
+            undoBulkComplete(data: data)
+        case .delete:
+            undoBulkDelete(data: data)
+        case .move:
+            undoBulkMove(data: data)
+        case .updateDueDate:
+            undoBulkUpdateDueDate(data: data)
+        }
+
+        // Clear undo state
+        undoAction = nil
+        undoData = nil
+    }
+
+    private func undoBulkComplete(data: UndoData) {
+        Task {
+            // Toggle completion back to incomplete for each task
+            for task in data.tasks {
+                await tasksVM.toggleTaskCompletion(task, in: data.listId, for: data.accountKind)
+            }
+        }
+    }
+
+    private func undoBulkDelete(data: UndoData) {
+        Task {
+            // Recreate each deleted task
+            for task in data.tasks {
+                await tasksVM.createTask(
+                    title: task.title,
+                    notes: task.notes,
+                    dueDate: task.dueDate,
+                    in: data.listId,
+                    for: data.accountKind
+                )
+            }
+        }
+    }
+
+    private func undoBulkMove(data: UndoData) {
+        guard let destinationListId = data.destinationListId,
+              let destinationAccountKind = data.destinationAccountKind else {
+            return
+        }
+
+        Task {
+            // Move tasks back to source list
+            for task in data.tasks {
+                // Delete from destination list (need to find the newly created tasks)
+                // This is approximate - we'll delete by title match
+                let destinationTasks: [GoogleTask]
+                switch destinationAccountKind {
+                case .personal:
+                    destinationTasks = tasksVM.personalTasks[destinationListId] ?? []
+                case .professional:
+                    destinationTasks = tasksVM.professionalTasks[destinationListId] ?? []
+                }
+
+                if let movedTask = destinationTasks.first(where: { $0.title == task.title }) {
+                    await tasksVM.deleteTask(movedTask, from: destinationListId, for: destinationAccountKind)
+                }
+
+                // Recreate in source list
+                await tasksVM.createTask(
+                    title: task.title,
+                    notes: task.notes,
+                    dueDate: task.dueDate,
+                    in: data.listId,
+                    for: data.accountKind
+                )
+            }
+
+            // Navigate back to source list
+            await MainActor.run {
+                onNavigateToList(data.listId, data.accountKind)
+            }
+        }
+    }
+
+    private func undoBulkUpdateDueDate(data: UndoData) {
+        guard let originalDueDates = data.originalDueDates else { return }
+
+        Task {
+            // Restore original due dates for each task
+            for task in data.tasks {
+                guard let originalDue = originalDueDates[task.id] else { continue }
+
+                // Create an updated task with the original due date
+                let restoredTask = GoogleTask(
+                    id: task.id,
+                    title: task.title,
+                    notes: task.notes,
+                    status: task.status,
+                    due: originalDue,
+                    completed: task.completed,
+                    updated: task.updated
+                )
+
+                // Update the task via the API
+                await tasksVM.updateTask(restoredTask, in: data.listId, for: data.accountKind)
             }
         }
     }
@@ -1767,6 +2034,67 @@ struct MoveTasksDestinationPicker: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Undo Toast Component
+struct UndoToast: View {
+    let action: UndoAction
+    let count: Int
+    let accentColor: Color
+    let onUndo: () -> Void
+    let onDismiss: () -> Void
+
+    private var message: String {
+        let taskWord = count == 1 ? "task" : "tasks"
+        switch action {
+        case .complete:
+            return "\(count) \(taskWord) completed"
+        case .delete:
+            return "\(count) \(taskWord) deleted"
+        case .move:
+            return "\(count) \(taskWord) moved"
+        case .updateDueDate:
+            return "\(count) \(taskWord) updated"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(message)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            Button {
+                onUndo()
+            } label: {
+                Text("Undo")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(accentColor)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+        )
+        .padding(.horizontal, 16)
     }
 }
 
