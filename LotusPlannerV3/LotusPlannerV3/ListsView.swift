@@ -139,6 +139,11 @@ struct ListsView: View {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 showingDetailView = false
                             }
+                        },
+                        onNavigateToList: { listId, accountKind in
+                            selectedListId = listId
+                            selectedAccountKind = accountKind
+                            saveLastSelection(listId: listId, accountKind: accountKind)
                         }
                     )
                 }
@@ -182,6 +187,11 @@ struct ListsView: View {
                     selectedListId = nil
                     selectedAccountKind = nil
                     clearLastSelection()
+                },
+                onNavigateToList: { listId, accountKind in
+                    selectedListId = listId
+                    selectedAccountKind = accountKind
+                    saveLastSelection(listId: listId, accountKind: accountKind)
                 }
             )
             .frame(width: geometry.size.width * 0.65)
@@ -502,10 +512,15 @@ struct TasksDetailColumn: View {
     @State private var showingBulkDeleteConfirmation = false
     @State private var showingMoveDestinationPicker = false
     @State private var showingDueDatePicker = false
+    @State private var showingBulkMoveConfirmation = false
+    @State private var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
-    
+
+    // Callback to navigate to a different list
+    var onNavigateToList: (String, GoogleAuthManager.AccountKind) -> Void = { _, _ in }
+
     private var adaptivePadding: CGFloat {
         horizontalSizeClass == .compact ? 8 : 12
     }
@@ -587,7 +602,18 @@ struct TasksDetailColumn: View {
         }
         return accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
     }
-    
+
+    func getListName(for listId: String, accountKind: GoogleAuthManager.AccountKind) -> String? {
+        let lists: [GoogleTaskList]
+        switch accountKind {
+        case .personal:
+            lists = tasksVM.personalTaskLists
+        case .professional:
+            lists = tasksVM.professionalTaskLists
+        }
+        return lists.first { $0.id == listId }?.title
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let listTitle = selectedListTitle {
@@ -915,12 +941,9 @@ struct TasksDetailColumn: View {
                     hasPersonal: auth.isLinked(kind: .personal),
                     hasProfessional: auth.isLinked(kind: .professional),
                     onMove: { destinationListId, destinationAccountKind in
-                        bulkMoveTasks(
-                            sourceListId: sourceListId,
-                            sourceAccountKind: sourceAccountKind,
-                            destinationListId: destinationListId,
-                            destinationAccountKind: destinationAccountKind
-                        )
+                        // Store the pending destination and show confirmation
+                        pendingMoveDestination = (destinationListId, destinationAccountKind)
+                        showingBulkMoveConfirmation = true
                     }
                 )
             }
@@ -981,6 +1004,28 @@ struct TasksDetailColumn: View {
             }
         } message: {
             Text("Are you sure you want to delete \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s")? This action cannot be undone.")
+        }
+        .alert("Move Tasks", isPresented: $showingBulkMoveConfirmation) {
+            Button("Cancel", role: .cancel) {
+                pendingMoveDestination = nil
+            }
+            Button("Move") {
+                if let sourceListId = selectedListId,
+                   let sourceAccountKind = selectedAccountKind,
+                   let destination = pendingMoveDestination {
+                    bulkMoveTasks(
+                        sourceListId: sourceListId,
+                        sourceAccountKind: sourceAccountKind,
+                        destinationListId: destination.listId,
+                        destinationAccountKind: destination.accountKind
+                    )
+                }
+            }
+        } message: {
+            if let destination = pendingMoveDestination {
+                let destinationListName = getListName(for: destination.listId, accountKind: destination.accountKind) ?? "selected list"
+                Text("Move \(selectedTaskIds.count) task\(selectedTaskIds.count == 1 ? "" : "s") to '\(destinationListName)'?")
+            }
         }
         .onChange(of: selectedListId) { _ in
             // Reset inline task creation when list changes
@@ -1084,11 +1129,15 @@ struct TasksDetailColumn: View {
                 )
             }
 
-            // Exit bulk edit mode and clear selections
+            // Exit bulk edit mode, clear selections, and navigate to destination list
             await MainActor.run {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
                 showingMoveDestinationPicker = false
+                pendingMoveDestination = nil
+
+                // Navigate to the destination list
+                onNavigateToList(destinationListId, destinationAccountKind)
             }
         }
     }
