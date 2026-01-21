@@ -26,7 +26,7 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
         return formatter
     }()
     
@@ -1215,7 +1215,7 @@ class TasksViewModel: ObservableObject {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(identifier: "UTC")
+            formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
             dueDateString = formatter.string(from: dueDate)
 
         } else {
