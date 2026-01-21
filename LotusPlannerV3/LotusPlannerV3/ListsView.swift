@@ -480,24 +480,6 @@ struct AllTaskListsColumn: View {
     }
 }
 
-// MARK: - Undo Action Types
-enum UndoAction {
-    case complete
-    case delete
-    case move
-    case updateDueDate
-}
-
-struct UndoData {
-    let tasks: [GoogleTask]
-    let listId: String
-    let accountKind: GoogleAuthManager.AccountKind
-    let destinationListId: String?
-    let destinationAccountKind: GoogleAuthManager.AccountKind?
-    let originalDueDates: [String: String?]?
-    let count: Int
-}
-
 // MARK: - Tasks Detail Column (Right Side)
 struct TasksDetailColumn: View {
     let selectedListId: String?
@@ -507,41 +489,24 @@ struct TasksDetailColumn: View {
     @ObservedObject var auth: GoogleAuthManager
     @State private var selectedTask: GoogleTask?
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    
+
     // State for renaming list
     @State private var showingRenameSheet = false
     @State private var renameText = ""
-    
+
     // State for deleting list
     @State private var showingDeleteConfirmation = false
-    
+
     // State for deleting completed tasks
     @State private var showingDeleteCompletedConfirmation = false
-    
+
     // State for inline task creation
     @State private var isCreatingNewTask = false
     @State private var newTaskTitle = ""
     @FocusState private var isNewTaskFieldFocused: Bool
 
-    // State for bulk edit mode
-    @State private var isBulkEditMode = false
-    @State private var selectedTaskIds = Set<String>()
-    @State private var showingBulkCompleteConfirmation = false
-    @State private var showingBulkDeleteConfirmation = false
-    @State private var showingMoveDestinationPicker = false
-    @State private var showingDueDatePicker = false
-    @State private var showingBulkMoveConfirmation = false
-    @State private var showingBulkUpdateDueDateConfirmation = false
-    @State private var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
-    @State private var pendingDueDate: Date?
-    @State private var pendingIsAllDay = true
-    @State private var pendingStartTime: Date?
-    @State private var pendingEndTime: Date?
-
-    // State for undo toast
-    @State private var showingUndoToast = false
-    @State private var undoAction: UndoAction?
-    @State private var undoData: UndoData?
+    // Bulk edit manager
+    @StateObject private var bulkEditManager = BulkEditManager()
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
@@ -666,13 +631,13 @@ struct TasksDetailColumn: View {
                     
                     Menu {
                         Button {
-                            isBulkEditMode.toggle()
-                            if !isBulkEditMode {
+                            bulkEditManager.state.isActive.toggle()
+                            if !bulkEditManager.state.isActive {
                                 // Exit bulk edit mode - clear selections
-                                selectedTaskIds.removeAll()
+                                bulkEditManager.state.selectedTaskIds.removeAll()
                             }
                         } label: {
-                            Label(isBulkEditMode ? "Cancel Bulk Edit" : "Bulk Edit", systemImage: "checkmark.rectangle.stack")
+                            Label(bulkEditManager.state.isActive ? "Cancel Bulk Edit" : "Bulk Edit", systemImage: "checkmark.rectangle.stack")
                         }
 
                         Divider()
@@ -706,13 +671,13 @@ struct TasksDetailColumn: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         // Bulk Edit Menu (shown when in bulk edit mode)
-                        if isBulkEditMode {
+                        if bulkEditManager.state.isActive {
                             VStack(spacing: 0) {
                                 HStack(spacing: 20) {
                                     // Exit bulk edit button
                                     Button {
-                                        isBulkEditMode = false
-                                        selectedTaskIds.removeAll()
+                                        bulkEditManager.state.isActive = false
+                                        bulkEditManager.state.selectedTaskIds.removeAll()
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
                                             .font(.title2)
@@ -720,7 +685,7 @@ struct TasksDetailColumn: View {
                                     }
                                     .buttonStyle(.plain)
 
-                                    Text("\(selectedTaskIds.count) selected")
+                                    Text("\(bulkEditManager.state.selectedTaskIds.count) selected")
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
@@ -729,7 +694,7 @@ struct TasksDetailColumn: View {
 
                                     // Mark as Complete button (disabled if no selections)
                                     Button {
-                                        showingBulkCompleteConfirmation = true
+                                        bulkEditManager.state.showingCompleteConfirmation = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "checkmark.circle")
@@ -737,14 +702,14 @@ struct TasksDetailColumn: View {
                                             Text("Complete")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : accentColor)
+                                        .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : accentColor)
                                     }
                                     .buttonStyle(.plain)
-                                    .disabled(selectedTaskIds.isEmpty)
+                                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
 
                                     // Update Due Date button (disabled if no selections)
                                     Button {
-                                        showingDueDatePicker = true
+                                        bulkEditManager.state.showingDueDatePicker = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "calendar")
@@ -752,14 +717,14 @@ struct TasksDetailColumn: View {
                                             Text("Due Date")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : accentColor)
+                                        .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : accentColor)
                                     }
                                     .buttonStyle(.plain)
-                                    .disabled(selectedTaskIds.isEmpty)
+                                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
 
                                     // Move button (disabled if no selections)
                                     Button {
-                                        showingMoveDestinationPicker = true
+                                        bulkEditManager.state.showingMoveDestinationPicker = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "arrow.right.square")
@@ -767,14 +732,14 @@ struct TasksDetailColumn: View {
                                             Text("Move")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : accentColor)
+                                        .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : accentColor)
                                     }
                                     .buttonStyle(.plain)
-                                    .disabled(selectedTaskIds.isEmpty)
+                                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
 
                                     // Delete button (disabled if no selections)
                                     Button {
-                                        showingBulkDeleteConfirmation = true
+                                        bulkEditManager.state.showingDeleteConfirmation = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "trash")
@@ -782,10 +747,10 @@ struct TasksDetailColumn: View {
                                             Text("Delete")
                                                 .font(.caption)
                                         }
-                                        .foregroundColor(selectedTaskIds.isEmpty ? .secondary : .red)
+                                        .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .red)
                                     }
                                     .buttonStyle(.plain)
-                                    .disabled(selectedTaskIds.isEmpty)
+                                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
                                 }
                                 .padding(adaptivePadding)
                                 .background(accentColor.opacity(0.15))
@@ -864,8 +829,8 @@ struct TasksDetailColumn: View {
                                 SimpleTaskRow(
                                     task: task,
                                     accentColor: accentColor,
-                                    isBulkEditMode: isBulkEditMode,
-                                    isSelected: selectedTaskIds.contains(task.id),
+                                    bulkEditManager.state.isActive: bulkEditManager.state.isActive,
+                                    isSelected: bulkEditManager.state.selectedTaskIds.contains(task.id),
                                     onToggle: {
                                         toggleTask(task)
                                     },
@@ -873,10 +838,10 @@ struct TasksDetailColumn: View {
                                         selectedTask = task
                                     },
                                     onSelectionToggle: {
-                                        if selectedTaskIds.contains(task.id) {
-                                            selectedTaskIds.remove(task.id)
+                                        if bulkEditManager.state.selectedTaskIds.contains(task.id) {
+                                            bulkEditManager.state.selectedTaskIds.remove(task.id)
                                         } else {
-                                            selectedTaskIds.insert(task.id)
+                                            bulkEditManager.state.selectedTaskIds.insert(task.id)
                                         }
                                     }
                                 )
@@ -956,35 +921,35 @@ struct TasksDetailColumn: View {
                 )
             }
         }
-        .sheet(isPresented: $showingMoveDestinationPicker) {
+        .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
             if let sourceListId = selectedListId,
                let sourceAccountKind = selectedAccountKind {
                 MoveTasksDestinationPicker(
                     tasksVM: tasksVM,
                     sourceListId: sourceListId,
                     sourceAccountKind: sourceAccountKind,
-                    selectedTaskIds: selectedTaskIds,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
                     personalColor: appPrefs.personalColor,
                     professionalColor: appPrefs.professionalColor,
                     hasPersonal: auth.isLinked(kind: .personal),
                     hasProfessional: auth.isLinked(kind: .professional),
                     onMove: { destinationListId, destinationAccountKind in
                         // Store the pending destination and show confirmation
-                        pendingMoveDestination = (destinationListId, destinationAccountKind)
-                        showingBulkMoveConfirmation = true
+                        bulkEditManager.state.pendingMoveDestination = (destinationListId, destinationAccountKind)
+                        bulkEditManager.state.showingMoveConfirmation = true
                     }
                 )
             }
         }
-        .sheet(isPresented: $showingDueDatePicker) {
+        .sheet(isPresented: $bulkEditManager.state.showingDueDatePicker) {
             BulkUpdateDueDatePicker(
-                selectedTaskIds: selectedTaskIds,
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
                 onSave: { dueDate, isAllDay, startTime, endTime in
-                    pendingDueDate = dueDate
-                    pendingIsAllDay = isAllDay
-                    pendingStartTime = startTime
-                    pendingEndTime = endTime
-                    showingBulkUpdateDueDateConfirmation = true
+                    bulkEditManager.state.pendingDueDate = dueDate
+                    bulkEditManager.state.pendingIsAllDay = isAllDay
+                    bulkEditManager.state.pendingStartTime = startTime
+                    bulkEditManager.state.pendingEndTime = endTime
+                    bulkEditManager.state.showingUpdateDueDateConfirmation = true
                 }
             )
         }
@@ -1012,7 +977,7 @@ struct TasksDetailColumn: View {
         } message: {
             Text("Are you sure you want to delete all completed tasks from this list? This action cannot be undone.")
         }
-        .alert("Mark as Complete", isPresented: $showingBulkCompleteConfirmation) {
+        .alert("Mark as Complete", isPresented: $bulkEditManager.state.showingCompleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Complete") {
                 if let listId = selectedListId,
@@ -1021,9 +986,9 @@ struct TasksDetailColumn: View {
                 }
             }
         } message: {
-            Text("Mark \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s") as complete?")
+            Text("Mark \(bulkEditManager.state.selectedTaskIds.count) selected task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s") as complete?")
         }
-        .alert("Delete Tasks", isPresented: $showingBulkDeleteConfirmation) {
+        .alert("Delete Tasks", isPresented: $bulkEditManager.state.showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
                 if let listId = selectedListId,
@@ -1032,16 +997,16 @@ struct TasksDetailColumn: View {
                 }
             }
         } message: {
-            Text("Are you sure you want to delete \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s")? This action cannot be undone.")
+            Text("Are you sure you want to delete \(bulkEditManager.state.selectedTaskIds.count) selected task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")? This action cannot be undone.")
         }
-        .alert("Move Tasks", isPresented: $showingBulkMoveConfirmation) {
+        .alert("Move Tasks", isPresented: $bulkEditManager.state.showingMoveConfirmation) {
             Button("Cancel", role: .cancel) {
-                pendingMoveDestination = nil
+                bulkEditManager.state.pendingMoveDestination = nil
             }
             Button("Move") {
                 if let sourceListId = selectedListId,
                    let sourceAccountKind = selectedAccountKind,
-                   let destination = pendingMoveDestination {
+                   let destination = bulkEditManager.state.pendingMoveDestination {
                     bulkMoveTasks(
                         sourceListId: sourceListId,
                         sourceAccountKind: sourceAccountKind,
@@ -1051,17 +1016,17 @@ struct TasksDetailColumn: View {
                 }
             }
         } message: {
-            if let destination = pendingMoveDestination {
+            if let destination = bulkEditManager.state.pendingMoveDestination {
                 let destinationListName = getListName(for: destination.listId, accountKind: destination.accountKind) ?? "selected list"
-                Text("Move \(selectedTaskIds.count) task\(selectedTaskIds.count == 1 ? "" : "s") to '\(destinationListName)'?")
+                Text("Move \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s") to '\(destinationListName)'?")
             }
         }
-        .alert("Update Due Date", isPresented: $showingBulkUpdateDueDateConfirmation) {
+        .alert("Update Due Date", isPresented: $bulkEditManager.state.showingUpdateDueDateConfirmation) {
             Button("Cancel", role: .cancel) {
-                pendingDueDate = nil
-                pendingIsAllDay = true
-                pendingStartTime = nil
-                pendingEndTime = nil
+                bulkEditManager.state.pendingDueDate = nil
+                bulkEditManager.state.pendingIsAllDay = true
+                bulkEditManager.state.pendingStartTime = nil
+                bulkEditManager.state.pendingEndTime = nil
             }
             Button("Update") {
                 if let listId = selectedListId,
@@ -1069,15 +1034,15 @@ struct TasksDetailColumn: View {
                     bulkUpdateDueDate(
                         listId: listId,
                         accountKind: accountKind,
-                        dueDate: pendingDueDate,
-                        isAllDay: pendingIsAllDay,
-                        startTime: pendingStartTime,
-                        endTime: pendingEndTime
+                        dueDate: bulkEditManager.state.pendingDueDate,
+                        isAllDay: bulkEditManager.state.pendingIsAllDay,
+                        startTime: bulkEditManager.state.pendingStartTime,
+                        endTime: bulkEditManager.state.pendingEndTime
                     )
                 }
             }
         } message: {
-            Text("Update due date for \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s")?")
+            Text("Update due date for \(bulkEditManager.state.selectedTaskIds.count) selected task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")?")
         }
         .onChange(of: selectedListId) { _ in
             // Reset inline task creation when list changes
@@ -1086,12 +1051,12 @@ struct TasksDetailColumn: View {
             isNewTaskFieldFocused = false
 
             // Exit bulk edit mode when switching lists
-            isBulkEditMode = false
-            selectedTaskIds.removeAll()
+            bulkEditManager.state.isActive = false
+            bulkEditManager.state.selectedTaskIds.removeAll()
         }
         .overlay(alignment: .bottom) {
             // Undo Toast
-            if showingUndoToast, let action = undoAction, let data = undoData {
+            if bulkEditManager.state.showingUndoToast, let action = bulkEditManager.state.undoAction, let data = bulkEditManager.state.undoData {
                 UndoToast(
                     action: action,
                     count: data.count,
@@ -1100,13 +1065,13 @@ struct TasksDetailColumn: View {
                         performUndo()
                     },
                     onDismiss: {
-                        showingUndoToast = false
-                        undoAction = nil
-                        undoData = nil
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.easeInOut(duration: 0.3), value: showingUndoToast)
+                .animation(.easeInOut(duration: 0.3), value: bulkEditManager.state.showingUndoToast)
                 .padding(.bottom, 16)
             }
         }
@@ -1147,43 +1112,18 @@ struct TasksDetailColumn: View {
     }
 
     private func bulkCompleteTasks(listId: String, accountKind: GoogleAuthManager.AccountKind) {
-        // Get the selected tasks
-        let tasksToComplete = tasks.filter { selectedTaskIds.contains($0.id) && !$0.isCompleted }
+        bulkEditManager.bulkComplete(tasks: tasks, in: listId, for: accountKind, tasksVM: tasksVM) { undoTaskData in
+            // Show undo toast
+            bulkEditManager.state.undoAction = .complete
+            bulkEditManager.state.undoData = undoTaskData
+            bulkEditManager.state.showingUndoToast = true
 
-        // Store pre-action state for undo
-        let undoTaskData = UndoData(
-            tasks: tasksToComplete,
-            listId: listId,
-            accountKind: accountKind,
-            destinationListId: nil,
-            destinationAccountKind: nil,
-            originalDueDates: nil,
-            count: tasksToComplete.count
-        )
-
-        Task {
-            // Mark each selected task as complete
-            for task in tasksToComplete {
-                await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
-            }
-
-            // Exit bulk edit mode, clear selections, and show undo toast
-            await MainActor.run {
-                isBulkEditMode = false
-                selectedTaskIds.removeAll()
-
-                // Show undo toast
-                undoAction = .complete
-                undoData = undoTaskData
-                showingUndoToast = true
-
-                // Auto-dismiss after 5 seconds
-                Task {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    await MainActor.run {
-                        if undoAction == .complete && undoData?.count == undoTaskData.count {
-                            showingUndoToast = false
-                        }
+            // Auto-dismiss after 5 seconds
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await MainActor.run {
+                    if bulkEditManager.state.undoAction == .complete && bulkEditManager.state.undoData?.count == undoTaskData.count {
+                        bulkEditManager.state.showingUndoToast = false
                     }
                 }
             }
@@ -1191,43 +1131,18 @@ struct TasksDetailColumn: View {
     }
 
     private func bulkDeleteTasks(listId: String, accountKind: GoogleAuthManager.AccountKind) {
-        // Get the selected tasks to delete
-        let tasksToDelete = tasks.filter { selectedTaskIds.contains($0.id) }
+        bulkEditManager.bulkDelete(tasks: tasks, in: listId, for: accountKind, tasksVM: tasksVM) { undoTaskData in
+            // Show undo toast
+            bulkEditManager.state.undoAction = .delete
+            bulkEditManager.state.undoData = undoTaskData
+            bulkEditManager.state.showingUndoToast = true
 
-        // Store pre-action state for undo
-        let undoTaskData = UndoData(
-            tasks: tasksToDelete,
-            listId: listId,
-            accountKind: accountKind,
-            destinationListId: nil,
-            destinationAccountKind: nil,
-            originalDueDates: nil,
-            count: tasksToDelete.count
-        )
-
-        Task {
-            // Delete each selected task
-            for task in tasksToDelete {
-                await tasksVM.deleteTask(task, from: listId, for: accountKind)
-            }
-
-            // Exit bulk edit mode, clear selections, and show undo toast
-            await MainActor.run {
-                isBulkEditMode = false
-                selectedTaskIds.removeAll()
-
-                // Show undo toast
-                undoAction = .delete
-                undoData = undoTaskData
-                showingUndoToast = true
-
-                // Auto-dismiss after 5 seconds
-                Task {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    await MainActor.run {
-                        if undoAction == .delete && undoData?.count == undoTaskData.count {
-                            showingUndoToast = false
-                        }
+            // Auto-dismiss after 5 seconds
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await MainActor.run {
+                    if bulkEditManager.state.undoAction == .delete && bulkEditManager.state.undoData?.count == undoTaskData.count {
+                        bulkEditManager.state.showingUndoToast = false
                     }
                 }
             }
@@ -1235,58 +1150,28 @@ struct TasksDetailColumn: View {
     }
 
     private func bulkMoveTasks(sourceListId: String, sourceAccountKind: GoogleAuthManager.AccountKind, destinationListId: String, destinationAccountKind: GoogleAuthManager.AccountKind) {
-        // Get the selected tasks to move
-        let tasksToMove = tasks.filter { selectedTaskIds.contains($0.id) }
-
-        // Store pre-action state for undo
-        let undoTaskData = UndoData(
-            tasks: tasksToMove,
-            listId: sourceListId,
-            accountKind: sourceAccountKind,
-            destinationListId: destinationListId,
+        bulkEditManager.bulkMove(
+            tasks: tasks,
+            from: sourceListId,
+            sourceAccountKind: sourceAccountKind,
+            to: destinationListId,
             destinationAccountKind: destinationAccountKind,
-            originalDueDates: nil,
-            count: tasksToMove.count
-        )
+            tasksVM: tasksVM
+        ) { undoTaskData in
+            // Navigate to the destination list
+            onNavigateToList(destinationListId, destinationAccountKind)
 
-        Task {
-            // Move each selected task
-            for task in tasksToMove {
-                // Delete from source list
-                await tasksVM.deleteTask(task, from: sourceListId, for: sourceAccountKind)
+            // Show undo toast
+            bulkEditManager.state.undoAction = .move
+            bulkEditManager.state.undoData = undoTaskData
+            bulkEditManager.state.showingUndoToast = true
 
-                // Create in destination list
-                await tasksVM.createTask(
-                    title: task.title,
-                    notes: task.notes,
-                    dueDate: task.dueDate,
-                    in: destinationListId,
-                    for: destinationAccountKind
-                )
-            }
-
-            // Exit bulk edit mode, clear selections, navigate to destination list, and show undo toast
-            await MainActor.run {
-                isBulkEditMode = false
-                selectedTaskIds.removeAll()
-                showingMoveDestinationPicker = false
-                pendingMoveDestination = nil
-
-                // Navigate to the destination list
-                onNavigateToList(destinationListId, destinationAccountKind)
-
-                // Show undo toast
-                undoAction = .move
-                undoData = undoTaskData
-                showingUndoToast = true
-
-                // Auto-dismiss after 5 seconds
-                Task {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    await MainActor.run {
-                        if undoAction == .move && undoData?.count == undoTaskData.count {
-                            showingUndoToast = false
-                        }
+            // Auto-dismiss after 5 seconds
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await MainActor.run {
+                    if bulkEditManager.state.undoAction == .move && bulkEditManager.state.undoData?.count == undoTaskData.count {
+                        bulkEditManager.state.showingUndoToast = false
                     }
                 }
             }
@@ -1294,99 +1179,27 @@ struct TasksDetailColumn: View {
     }
 
     private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?, isAllDay: Bool = true, startTime: Date? = nil, endTime: Date? = nil) {
-        // Get the selected tasks to update
-        let tasksToUpdate = tasks.filter { selectedTaskIds.contains($0.id) }
+        bulkEditManager.bulkUpdateDueDate(
+            tasks: tasks,
+            in: listId,
+            for: accountKind,
+            dueDate: dueDate,
+            isAllDay: isAllDay,
+            startTime: startTime,
+            endTime: endTime,
+            tasksVM: tasksVM
+        ) { undoTaskData in
+            // Show undo toast
+            bulkEditManager.state.undoAction = .updateDueDate
+            bulkEditManager.state.undoData = undoTaskData
+            bulkEditManager.state.showingUndoToast = true
 
-        // Store original due dates for undo
-        var originalDueDates: [String: String?] = [:]
-        for task in tasksToUpdate {
-            originalDueDates[task.id] = task.due
-        }
-
-        // Store pre-action state for undo
-        let undoTaskData = UndoData(
-            tasks: tasksToUpdate,
-            listId: listId,
-            accountKind: accountKind,
-            destinationListId: nil,
-            destinationAccountKind: nil,
-            originalDueDates: originalDueDates,
-            count: tasksToUpdate.count
-        )
-
-        Task {
-            // Format the due date string based on whether it's all-day or timed
-            let dueDateString: String?
-            if let dueDate = dueDate {
-                let formatter = DateFormatter()
-                if isAllDay {
-                    // For all-day tasks, use just the date (yyyy-MM-dd)
-                    formatter.dateFormat = "yyyy-MM-dd"
-                } else {
-                    // For timed tasks, use full RFC 3339 format with UTC
-                    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
-                    formatter.timeZone = TimeZone(identifier: "UTC")
-                }
-                formatter.locale = Locale(identifier: "en_US_POSIX")
-                dueDateString = formatter.string(from: dueDate)
-            } else {
-                dueDateString = nil
-            }
-
-            // Update due date for each selected task
-            for task in tasksToUpdate {
-                // Create an updated task with the new due date
-                let updatedTask = GoogleTask(
-                    id: task.id,
-                    title: task.title,
-                    notes: task.notes,
-                    status: task.status,
-                    due: dueDateString,
-                    completed: task.completed,
-                    updated: task.updated
-                )
-
-                // Update the task via the API
-                await tasksVM.updateTask(updatedTask, in: listId, for: accountKind)
-
-                // Save or delete time window based on whether it's a timed task
-                if let dueDate = dueDate, !isAllDay, let start = startTime, let end = endTime {
-                    // Save time window for timed tasks
-                    TaskTimeWindowManager.shared.saveTimeWindow(
-                        taskId: task.id,
-                        startTime: start,
-                        endTime: end,
-                        isAllDay: false
-                    )
-                } else if isAllDay {
-                    // For all-day tasks, delete any existing time window
-                    TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
-                }
-            }
-
-            // Exit bulk edit mode, clear selections, and show undo toast
-            await MainActor.run {
-                isBulkEditMode = false
-                selectedTaskIds.removeAll()
-                showingDueDatePicker = false
-                showingBulkUpdateDueDateConfirmation = false
-                pendingDueDate = nil
-                pendingIsAllDay = true
-                pendingStartTime = nil
-                pendingEndTime = nil
-
-                // Show undo toast
-                undoAction = .updateDueDate
-                undoData = undoTaskData
-                showingUndoToast = true
-
-                // Auto-dismiss after 5 seconds
-                Task {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    await MainActor.run {
-                        if undoAction == .updateDueDate && undoData?.count == undoTaskData.count {
-                            showingUndoToast = false
-                        }
+            // Auto-dismiss after 5 seconds
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await MainActor.run {
+                    if bulkEditManager.state.undoAction == .updateDueDate && bulkEditManager.state.undoData?.count == undoTaskData.count {
+                        bulkEditManager.state.showingUndoToast = false
                     }
                 }
             }
@@ -1396,126 +1209,27 @@ struct TasksDetailColumn: View {
     // MARK: - Undo Functions
 
     private func performUndo() {
-        guard let action = undoAction, let data = undoData else { return }
+        guard let action = bulkEditManager.state.undoAction, let data = bulkEditManager.state.undoData else { return }
 
         // Hide the toast immediately
-        showingUndoToast = false
+        bulkEditManager.state.showingUndoToast = false
 
         switch action {
         case .complete:
-            undoBulkComplete(data: data)
+            bulkEditManager.undoComplete(data: data, tasksVM: tasksVM)
         case .delete:
-            undoBulkDelete(data: data)
+            bulkEditManager.undoDelete(data: data, tasksVM: tasksVM)
         case .move:
-            undoBulkMove(data: data)
+            bulkEditManager.undoMove(data: data, tasksVM: tasksVM)
+            // Navigate back to source list after undo move
+            onNavigateToList(data.listId, data.accountKind)
         case .updateDueDate:
-            undoBulkUpdateDueDate(data: data)
+            bulkEditManager.undoUpdateDueDate(data: data, tasksVM: tasksVM)
         }
 
         // Clear undo state
-        undoAction = nil
-        undoData = nil
-    }
-
-    private func undoBulkComplete(data: UndoData) {
-        Task {
-            // Get the current tasks from the list to find the completed versions
-            let currentTasks: [GoogleTask]
-            switch data.accountKind {
-            case .personal:
-                currentTasks = tasksVM.personalTasks[data.listId] ?? []
-            case .professional:
-                currentTasks = tasksVM.professionalTasks[data.listId] ?? []
-            }
-
-            // Toggle completion back to incomplete for each task
-            for originalTask in data.tasks {
-                // Find the current version of the task (which should be completed)
-                if let completedTask = currentTasks.first(where: { $0.id == originalTask.id }) {
-                    await tasksVM.toggleTaskCompletion(completedTask, in: data.listId, for: data.accountKind)
-                }
-            }
-        }
-    }
-
-    private func undoBulkDelete(data: UndoData) {
-        Task {
-            // Recreate each deleted task
-            for task in data.tasks {
-                await tasksVM.createTask(
-                    title: task.title,
-                    notes: task.notes,
-                    dueDate: task.dueDate,
-                    in: data.listId,
-                    for: data.accountKind
-                )
-            }
-        }
-    }
-
-    private func undoBulkMove(data: UndoData) {
-        guard let destinationListId = data.destinationListId,
-              let destinationAccountKind = data.destinationAccountKind else {
-            return
-        }
-
-        Task {
-            // Move tasks back to source list
-            for task in data.tasks {
-                // Delete from destination list (need to find the newly created tasks)
-                // This is approximate - we'll delete by title match
-                let destinationTasks: [GoogleTask]
-                switch destinationAccountKind {
-                case .personal:
-                    destinationTasks = tasksVM.personalTasks[destinationListId] ?? []
-                case .professional:
-                    destinationTasks = tasksVM.professionalTasks[destinationListId] ?? []
-                }
-
-                if let movedTask = destinationTasks.first(where: { $0.title == task.title }) {
-                    await tasksVM.deleteTask(movedTask, from: destinationListId, for: destinationAccountKind)
-                }
-
-                // Recreate in source list
-                await tasksVM.createTask(
-                    title: task.title,
-                    notes: task.notes,
-                    dueDate: task.dueDate,
-                    in: data.listId,
-                    for: data.accountKind
-                )
-            }
-
-            // Navigate back to source list
-            await MainActor.run {
-                onNavigateToList(data.listId, data.accountKind)
-            }
-        }
-    }
-
-    private func undoBulkUpdateDueDate(data: UndoData) {
-        guard let originalDueDates = data.originalDueDates else { return }
-
-        Task {
-            // Restore original due dates for each task
-            for task in data.tasks {
-                guard let originalDue = originalDueDates[task.id] else { continue }
-
-                // Create an updated task with the original due date
-                let restoredTask = GoogleTask(
-                    id: task.id,
-                    title: task.title,
-                    notes: task.notes,
-                    status: task.status,
-                    due: originalDue,
-                    completed: task.completed,
-                    updated: task.updated
-                )
-
-                // Update the task via the API
-                await tasksVM.updateTask(restoredTask, in: data.listId, for: data.accountKind)
-            }
-        }
+        bulkEditManager.state.undoAction = nil
+        bulkEditManager.state.undoData = nil
     }
 
     private func toggleTask(_ task: GoogleTask) {
@@ -1570,7 +1284,7 @@ struct TasksDetailColumn: View {
 struct SimpleTaskRow: View {
     let task: GoogleTask
     let accentColor: Color
-    let isBulkEditMode: Bool
+    let bulkEditManager.state.isActive: Bool
     let isSelected: Bool
     let onToggle: () -> Void
     let onTap: () -> Void
@@ -1588,7 +1302,7 @@ struct SimpleTaskRow: View {
     var body: some View {
         HStack(spacing: adaptiveSpacing) {
             // Checkbox or Selection box
-            if isBulkEditMode && !task.isCompleted {
+            if bulkEditManager.state.isActive && !task.isCompleted {
                 // Square selection checkbox for incomplete tasks in bulk edit mode
                 Button(action: onSelectionToggle) {
                     Image(systemName: isSelected ? "checkmark.square.fill" : "square")
@@ -1601,7 +1315,7 @@ struct SimpleTaskRow: View {
                 Button(action: onToggle) {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                         .font(.title2) // Slightly larger for better tap target
-                        .foregroundColor(task.isCompleted ? (isBulkEditMode ? .secondary : accentColor) : .secondary)
+                        .foregroundColor(task.isCompleted ? (bulkEditManager.state.isActive ? .secondary : accentColor) : .secondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -1941,125 +1655,6 @@ struct RenameListSheet: View {
     }
 }
 
-// MARK: - Bulk Update Due Date Picker
-struct BulkUpdateDueDatePicker: View {
-    @Environment(\.dismiss) private var dismiss
-    let selectedTaskIds: Set<String>
-    let onSave: (Date?, Bool, Date?, Date?) -> Void
-
-    @State private var selectedDate = Date()
-    @State private var isAllDay = true
-    @State private var startTime = Date()
-    @State private var endTime: Date
-
-    init(selectedTaskIds: Set<String>, onSave: @escaping (Date?, Bool, Date?, Date?) -> Void) {
-        self.selectedTaskIds = selectedTaskIds
-        self.onSave = onSave
-
-        // Initialize times to nearest half hour (consistent with individual task editing)
-        let calendar = Calendar.current
-        let now = Date()
-        let components = calendar.dateComponents([.hour, .minute], from: now)
-        let hour = components.hour ?? 9
-        let minute = components.minute ?? 0
-
-        // Calculate next half hour
-        var nextHour = hour
-        var nextMinute: Int
-
-        if minute < 30 {
-            // Next half hour is :30 of current hour
-            nextMinute = 30
-        } else {
-            // Next half hour is :00 of next hour
-            nextMinute = 0
-            nextHour = (hour + 1) % 24
-        }
-
-        // Set start time to next half hour
-        let roundedStart = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: now) ?? now
-        _startTime = State(initialValue: roundedStart)
-
-        // Set end time to 30 minutes after start time
-        _endTime = State(initialValue: calendar.date(byAdding: .minute, value: 30, to: roundedStart) ?? now)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    DatePicker("Due Date", selection: $selectedDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                }
-
-                Section {
-                    Toggle("All-Day", isOn: $isAllDay)
-
-                    if !isAllDay {
-                        DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
-                        DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
-                    }
-                }
-
-                Section {
-                    Text("This will update the due date for \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s").")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("Set Due Date")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let finalDate: Date
-                        var finalStartTime: Date?
-                        var finalEndTime: Date?
-
-                        if isAllDay {
-                            // Use just the date for all-day events
-                            finalDate = selectedDate
-                        } else {
-                            // Combine date with start time for the due date
-                            let calendar = Calendar.current
-                            let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
-                            let timeComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-                            var combined = DateComponents()
-                            combined.year = dateComponents.year
-                            combined.month = dateComponents.month
-                            combined.day = dateComponents.day
-                            combined.hour = timeComponents.hour
-                            combined.minute = timeComponents.minute
-                            finalDate = calendar.date(from: combined) ?? selectedDate
-
-                            // Also combine date with start and end times for the time window
-                            finalStartTime = calendar.date(from: combined)
-
-                            let endTimeComponents = calendar.dateComponents([.hour, .minute], from: endTime)
-                            var endCombined = DateComponents()
-                            endCombined.year = dateComponents.year
-                            endCombined.month = dateComponents.month
-                            endCombined.day = dateComponents.day
-                            endCombined.hour = endTimeComponents.hour
-                            endCombined.minute = endTimeComponents.minute
-                            finalEndTime = calendar.date(from: endCombined)
-                        }
-                        onSave(finalDate, isAllDay, finalStartTime, finalEndTime)
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
 // MARK: - Move Tasks Destination Picker
 struct MoveTasksDestinationPicker: View {
     @Environment(\.dismiss) private var dismiss
@@ -2150,67 +1745,6 @@ struct MoveTasksDestinationPicker: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Undo Toast Component
-struct UndoToast: View {
-    let action: UndoAction
-    let count: Int
-    let accentColor: Color
-    let onUndo: () -> Void
-    let onDismiss: () -> Void
-
-    private var message: String {
-        let taskWord = count == 1 ? "task" : "tasks"
-        switch action {
-        case .complete:
-            return "\(count) \(taskWord) completed"
-        case .delete:
-            return "\(count) \(taskWord) deleted"
-        case .move:
-            return "\(count) \(taskWord) moved"
-        case .updateDueDate:
-            return "\(count) \(taskWord) updated"
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text(message)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.primary)
-
-            Spacer()
-
-            Button {
-                onUndo()
-            } label: {
-                Text("Undo")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(accentColor)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                onDismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        )
-        .padding(.horizontal, 16)
     }
 }
 
