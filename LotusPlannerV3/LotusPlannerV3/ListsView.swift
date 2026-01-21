@@ -491,7 +491,11 @@ struct TasksDetailColumn: View {
     @State private var isCreatingNewTask = false
     @State private var newTaskTitle = ""
     @FocusState private var isNewTaskFieldFocused: Bool
-    
+
+    // State for bulk edit mode
+    @State private var isBulkEditMode = false
+    @State private var selectedTaskIds = Set<String>()
+
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
     
@@ -600,14 +604,26 @@ struct TasksDetailColumn: View {
                         .foregroundColor(.secondary)
                     
                     Menu {
+                        Button {
+                            isBulkEditMode.toggle()
+                            if !isBulkEditMode {
+                                // Exit bulk edit mode - clear selections
+                                selectedTaskIds.removeAll()
+                            }
+                        } label: {
+                            Label(isBulkEditMode ? "Cancel Bulk Edit" : "Bulk Edit", systemImage: "checklist")
+                        }
+
+                        Divider()
+
                         Button(role: .destructive) {
                             showingDeleteCompletedConfirmation = true
                         } label: {
                             Label("Delete Completed Tasks", systemImage: "checkmark.circle")
                         }
-                        
+
                         Divider()
-                        
+
                         Button(role: .destructive) {
                             showingDeleteConfirmation = true
                         } label: {
@@ -628,6 +644,79 @@ struct TasksDetailColumn: View {
                 // Tasks list
                 ScrollView {
                     LazyVStack(spacing: 0) {
+                        // Bulk Edit Menu (shown when tasks are selected)
+                        if isBulkEditMode && !selectedTaskIds.isEmpty {
+                            VStack(spacing: 0) {
+                                HStack(spacing: 20) {
+                                    Text("\(selectedTaskIds.count) selected")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+
+                                    Spacer()
+
+                                    // Mark as Complete button
+                                    Button {
+                                        // TODO: Implement mark as complete
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Image(systemName: "checkmark.circle")
+                                                .font(.title3)
+                                            Text("Complete")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    // Update Due Date button
+                                    Button {
+                                        // TODO: Implement update due date
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Image(systemName: "calendar")
+                                                .font(.title3)
+                                            Text("Due Date")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    // Move button
+                                    Button {
+                                        // TODO: Implement move
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Image(systemName: "arrow.right.square")
+                                                .font(.title3)
+                                            Text("Move")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(accentColor)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    // Delete button
+                                    Button {
+                                        // TODO: Implement delete
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Image(systemName: "trash")
+                                                .font(.title3)
+                                            Text("Delete")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(adaptivePadding)
+                                .background(accentColor.opacity(0.15))
+
+                                Divider()
+                            }
+                        }
+
                         // Inline "New Task" row at the top
                         if isCreatingNewTask {
                             // TextField mode - user is typing
@@ -698,11 +787,20 @@ struct TasksDetailColumn: View {
                                 SimpleTaskRow(
                                     task: task,
                                     accentColor: accentColor,
+                                    isBulkEditMode: isBulkEditMode,
+                                    isSelected: selectedTaskIds.contains(task.id),
                                     onToggle: {
                                         toggleTask(task)
                                     },
                                     onTap: {
                                         selectedTask = task
+                                    },
+                                    onSelectionToggle: {
+                                        if selectedTaskIds.contains(task.id) {
+                                            selectedTaskIds.remove(task.id)
+                                        } else {
+                                            selectedTaskIds.insert(task.id)
+                                        }
                                     }
                                 )
                                 Divider()
@@ -899,27 +997,41 @@ struct TasksDetailColumn: View {
 struct SimpleTaskRow: View {
     let task: GoogleTask
     let accentColor: Color
+    let isBulkEditMode: Bool
+    let isSelected: Bool
     let onToggle: () -> Void
     let onTap: () -> Void
+    let onSelectionToggle: () -> Void
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    
+
     private var adaptivePadding: CGFloat {
         horizontalSizeClass == .compact ? 12 : 16
     }
-    
+
     private var adaptiveSpacing: CGFloat {
         horizontalSizeClass == .compact ? 10 : 12
     }
-    
+
     var body: some View {
         HStack(spacing: adaptiveSpacing) {
-            // Checkbox - tappable to toggle completion
-            Button(action: onToggle) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title2) // Slightly larger for better tap target
-                    .foregroundColor(task.isCompleted ? accentColor : .secondary)
+            // Checkbox or Selection box
+            if isBulkEditMode && !task.isCompleted {
+                // Square selection checkbox for incomplete tasks in bulk edit mode
+                Button(action: onSelectionToggle) {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.title2)
+                        .foregroundColor(isSelected ? accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+            } else {
+                // Regular circular checkbox - tappable to toggle completion
+                Button(action: onToggle) {
+                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title2) // Slightly larger for better tap target
+                        .foregroundColor(task.isCompleted ? accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             
             // Task details - tappable to open edit sheet
             VStack(alignment: .leading, spacing: 4) {
