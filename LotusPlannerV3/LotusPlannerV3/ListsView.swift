@@ -535,6 +535,8 @@ struct TasksDetailColumn: View {
     @State private var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
     @State private var pendingDueDate: Date?
     @State private var pendingIsAllDay = true
+    @State private var pendingStartTime: Date?
+    @State private var pendingEndTime: Date?
 
     // State for undo toast
     @State private var showingUndoToast = false
@@ -977,9 +979,11 @@ struct TasksDetailColumn: View {
         .sheet(isPresented: $showingDueDatePicker) {
             BulkUpdateDueDatePicker(
                 selectedTaskIds: selectedTaskIds,
-                onSave: { dueDate, isAllDay in
+                onSave: { dueDate, isAllDay, startTime, endTime in
                     pendingDueDate = dueDate
                     pendingIsAllDay = isAllDay
+                    pendingStartTime = startTime
+                    pendingEndTime = endTime
                     showingBulkUpdateDueDateConfirmation = true
                 }
             )
@@ -1056,11 +1060,20 @@ struct TasksDetailColumn: View {
             Button("Cancel", role: .cancel) {
                 pendingDueDate = nil
                 pendingIsAllDay = true
+                pendingStartTime = nil
+                pendingEndTime = nil
             }
             Button("Update") {
                 if let listId = selectedListId,
                    let accountKind = selectedAccountKind {
-                    bulkUpdateDueDate(listId: listId, accountKind: accountKind, dueDate: pendingDueDate, isAllDay: pendingIsAllDay)
+                    bulkUpdateDueDate(
+                        listId: listId,
+                        accountKind: accountKind,
+                        dueDate: pendingDueDate,
+                        isAllDay: pendingIsAllDay,
+                        startTime: pendingStartTime,
+                        endTime: pendingEndTime
+                    )
                 }
             }
         } message: {
@@ -1280,7 +1293,7 @@ struct TasksDetailColumn: View {
         }
     }
 
-    private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?, isAllDay: Bool = true) {
+    private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?, isAllDay: Bool = true, startTime: Date? = nil, endTime: Date? = nil) {
         // Get the selected tasks to update
         let tasksToUpdate = tasks.filter { selectedTaskIds.contains($0.id) }
 
@@ -1335,6 +1348,20 @@ struct TasksDetailColumn: View {
 
                 // Update the task via the API
                 await tasksVM.updateTask(updatedTask, in: listId, for: accountKind)
+
+                // Save or delete time window based on whether it's a timed task
+                if let dueDate = dueDate, !isAllDay, let start = startTime, let end = endTime {
+                    // Save time window for timed tasks
+                    TaskTimeWindowManager.shared.saveTimeWindow(
+                        taskId: task.id,
+                        startTime: start,
+                        endTime: end,
+                        isAllDay: false
+                    )
+                } else if isAllDay {
+                    // For all-day tasks, delete any existing time window
+                    TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                }
             }
 
             // Exit bulk edit mode, clear selections, and show undo toast
@@ -1345,6 +1372,8 @@ struct TasksDetailColumn: View {
                 showingBulkUpdateDueDateConfirmation = false
                 pendingDueDate = nil
                 pendingIsAllDay = true
+                pendingStartTime = nil
+                pendingEndTime = nil
 
                 // Show undo toast
                 undoAction = .updateDueDate
@@ -1904,14 +1933,14 @@ struct RenameListSheet: View {
 struct BulkUpdateDueDatePicker: View {
     @Environment(\.dismiss) private var dismiss
     let selectedTaskIds: Set<String>
-    let onSave: (Date?, Bool) -> Void
+    let onSave: (Date?, Bool, Date?, Date?) -> Void
 
     @State private var selectedDate = Date()
     @State private var isAllDay = true
     @State private var startTime = Date()
     @State private var endTime: Date
 
-    init(selectedTaskIds: Set<String>, onSave: @escaping (Date?, Bool) -> Void) {
+    init(selectedTaskIds: Set<String>, onSave: @escaping (Date?, Bool, Date?, Date?) -> Void) {
         self.selectedTaskIds = selectedTaskIds
         self.onSave = onSave
 
@@ -1977,11 +2006,14 @@ struct BulkUpdateDueDatePicker: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         let finalDate: Date
+                        var finalStartTime: Date?
+                        var finalEndTime: Date?
+
                         if isAllDay {
                             // Use just the date for all-day events
                             finalDate = selectedDate
                         } else {
-                            // Combine date with start time
+                            // Combine date with start time for the due date
                             let calendar = Calendar.current
                             let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
                             let timeComponents = calendar.dateComponents([.hour, .minute], from: startTime)
@@ -1992,8 +2024,20 @@ struct BulkUpdateDueDatePicker: View {
                             combined.hour = timeComponents.hour
                             combined.minute = timeComponents.minute
                             finalDate = calendar.date(from: combined) ?? selectedDate
+
+                            // Also combine date with start and end times for the time window
+                            finalStartTime = calendar.date(from: combined)
+
+                            let endTimeComponents = calendar.dateComponents([.hour, .minute], from: endTime)
+                            var endCombined = DateComponents()
+                            endCombined.year = dateComponents.year
+                            endCombined.month = dateComponents.month
+                            endCombined.day = dateComponents.day
+                            endCombined.hour = endTimeComponents.hour
+                            endCombined.minute = endTimeComponents.minute
+                            finalEndTime = calendar.date(from: endCombined)
                         }
-                        onSave(finalDate, isAllDay)
+                        onSave(finalDate, isAllDay, finalStartTime, finalEndTime)
                         dismiss()
                     }
                     .fontWeight(.semibold)
