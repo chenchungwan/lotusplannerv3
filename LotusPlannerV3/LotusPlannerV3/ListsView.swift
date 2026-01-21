@@ -935,6 +935,10 @@ struct TasksDetailColumn: View {
             isCreatingNewTask = false
             newTaskTitle = ""
             isNewTaskFieldFocused = false
+
+            // Exit bulk edit mode when switching lists
+            isBulkEditMode = false
+            selectedTaskIds.removeAll()
         }
     }
     
