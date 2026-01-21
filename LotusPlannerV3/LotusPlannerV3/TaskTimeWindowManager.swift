@@ -35,6 +35,31 @@ class TaskTimeWindowManager: ObservableObject {
             devLog("✅ TaskTimeWindowManager: No invalid time windows found")
         }
     }
+
+    /// Clean up time windows for tasks that are all-day (based on task data)
+    /// Call this after tasks are loaded to remove time windows for all-day tasks
+    func cleanupTimeWindowsForAllDayTasks(tasks: [GoogleTask]) {
+        devLog("🧹 TaskTimeWindowManager: Checking for time windows on all-day tasks...")
+        var deletedCount = 0
+
+        for task in tasks {
+            // Check if task has all-day format (10 characters: yyyy-MM-dd)
+            if let due = task.due, due.count == 10 {
+                // This is an all-day task - it should not have a time window
+                if getTimeWindow(for: task.id) != nil {
+                    devLog("🧹 Deleting time window for all-day task: \(task.id) (due: \(due))")
+                    deleteTimeWindow(for: task.id)
+                    deletedCount += 1
+                }
+            }
+        }
+
+        if deletedCount > 0 {
+            devLog("✅ TaskTimeWindowManager: Deleted \(deletedCount) time windows from all-day tasks")
+        } else {
+            devLog("✅ TaskTimeWindowManager: No time windows found on all-day tasks")
+        }
+    }
     
     // MARK: - Load Time Windows
     func loadTimeWindows() {

@@ -263,7 +263,18 @@ class TasksViewModel: ObservableObject {
                     }
                 }
             }
-            
+
+            // Clean up time windows for all-day tasks after loading
+            await MainActor.run {
+                let allTasks: [GoogleTask] = taskLists.flatMap { taskList in
+                    switch kind {
+                    case .personal: return self.personalTasks[taskList.id] ?? []
+                    case .professional: return self.professionalTasks[taskList.id] ?? []
+                    }
+                }
+                TaskTimeWindowManager.shared.cleanupTimeWindowsForAllDayTasks(tasks: allTasks)
+            }
+
         } catch {
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) tasks: \(error.localizedDescription)"
