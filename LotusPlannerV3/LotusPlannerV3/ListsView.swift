@@ -534,6 +534,7 @@ struct TasksDetailColumn: View {
     @State private var showingBulkUpdateDueDateConfirmation = false
     @State private var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
     @State private var pendingDueDate: Date?
+    @State private var pendingIsAllDay = true
 
     // State for undo toast
     @State private var showingUndoToast = false
@@ -976,8 +977,9 @@ struct TasksDetailColumn: View {
         .sheet(isPresented: $showingDueDatePicker) {
             BulkUpdateDueDatePicker(
                 selectedTaskIds: selectedTaskIds,
-                onSave: { dueDate in
+                onSave: { dueDate, isAllDay in
                     pendingDueDate = dueDate
+                    pendingIsAllDay = isAllDay
                     showingBulkUpdateDueDateConfirmation = true
                 }
             )
@@ -1053,11 +1055,12 @@ struct TasksDetailColumn: View {
         .alert("Update Due Date", isPresented: $showingBulkUpdateDueDateConfirmation) {
             Button("Cancel", role: .cancel) {
                 pendingDueDate = nil
+                pendingIsAllDay = true
             }
             Button("Update") {
                 if let listId = selectedListId,
                    let accountKind = selectedAccountKind {
-                    bulkUpdateDueDate(listId: listId, accountKind: accountKind, dueDate: pendingDueDate)
+                    bulkUpdateDueDate(listId: listId, accountKind: accountKind, dueDate: pendingDueDate, isAllDay: pendingIsAllDay)
                 }
             }
         } message: {
@@ -1277,7 +1280,7 @@ struct TasksDetailColumn: View {
         }
     }
 
-    private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?) {
+    private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?, isAllDay: Bool = true) {
         // Get the selected tasks to update
         let tasksToUpdate = tasks.filter { selectedTaskIds.contains($0.id) }
 
@@ -1299,13 +1302,19 @@ struct TasksDetailColumn: View {
         )
 
         Task {
-            // Format the due date string
+            // Format the due date string based on whether it's all-day or timed
             let dueDateString: String?
             if let dueDate = dueDate {
                 let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+                if isAllDay {
+                    // For all-day tasks, use just the date (yyyy-MM-dd)
+                    formatter.dateFormat = "yyyy-MM-dd"
+                } else {
+                    // For timed tasks, use full RFC 3339 format with UTC
+                    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+                    formatter.timeZone = TimeZone(identifier: "UTC")
+                }
                 formatter.locale = Locale(identifier: "en_US_POSIX")
-                formatter.timeZone = TimeZone(identifier: "UTC")
                 dueDateString = formatter.string(from: dueDate)
             } else {
                 dueDateString = nil
@@ -1335,6 +1344,7 @@ struct TasksDetailColumn: View {
                 showingDueDatePicker = false
                 showingBulkUpdateDueDateConfirmation = false
                 pendingDueDate = nil
+                pendingIsAllDay = true
 
                 // Show undo toast
                 undoAction = .updateDueDate
@@ -1894,22 +1904,43 @@ struct RenameListSheet: View {
 struct BulkUpdateDueDatePicker: View {
     @Environment(\.dismiss) private var dismiss
     let selectedTaskIds: Set<String>
-    let onSave: (Date?) -> Void
+    let onSave: (Date?, Bool) -> Void
 
     @State private var selectedDate = Date()
     @State private var isAllDay = true
     @State private var startTime = Date()
     @State private var endTime: Date
 
-    init(selectedTaskIds: Set<String>, onSave: @escaping (Date?) -> Void) {
+    init(selectedTaskIds: Set<String>, onSave: @escaping (Date?, Bool) -> Void) {
         self.selectedTaskIds = selectedTaskIds
         self.onSave = onSave
 
-        // Initialize end time to be 1 hour after start time
+        // Initialize times to nearest half hour (consistent with individual task editing)
         let calendar = Calendar.current
         let now = Date()
-        _startTime = State(initialValue: now)
-        _endTime = State(initialValue: calendar.date(byAdding: .hour, value: 1, to: now) ?? now)
+        let components = calendar.dateComponents([.hour, .minute], from: now)
+        let hour = components.hour ?? 9
+        let minute = components.minute ?? 0
+
+        // Calculate next half hour
+        var nextHour = hour
+        var nextMinute: Int
+
+        if minute < 30 {
+            // Next half hour is :30 of current hour
+            nextMinute = 30
+        } else {
+            // Next half hour is :00 of next hour
+            nextMinute = 0
+            nextHour = (hour + 1) % 24
+        }
+
+        // Set start time to next half hour
+        let roundedStart = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: now) ?? now
+        _startTime = State(initialValue: roundedStart)
+
+        // Set end time to 30 minutes after start time
+        _endTime = State(initialValue: calendar.date(byAdding: .minute, value: 30, to: roundedStart) ?? now)
     }
 
     var body: some View {
@@ -1962,7 +1993,7 @@ struct BulkUpdateDueDatePicker: View {
                             combined.minute = timeComponents.minute
                             finalDate = calendar.date(from: combined) ?? selectedDate
                         }
-                        onSave(finalDate)
+                        onSave(finalDate, isAllDay)
                         dismiss()
                     }
                     .fontWeight(.semibold)
