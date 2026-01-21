@@ -57,14 +57,10 @@ class BulkEditManager: ObservableObject {
         let tasksToDelete = tasks.filter { state.selectedTaskIds.contains($0.id) }
 
         // Store pre-action state for undo (including time windows)
-        var originalTimeWindows: [String: TaskTimeWindowData?] = [:]
+        var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
         for task in tasksToDelete {
             if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                originalTimeWindows[task.id] = TaskTimeWindowData(
-                    startTime: timeWindow.startTime,
-                    endTime: timeWindow.endTime,
-                    isAllDay: timeWindow.isAllDay
-                )
+                originalTimeWindows[task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
             } else {
                 originalTimeWindows[task.id] = nil
             }
@@ -105,14 +101,10 @@ class BulkEditManager: ObservableObject {
         let tasksToMove = tasks.filter { state.selectedTaskIds.contains($0.id) }
 
         // Store pre-action state for undo (including time windows)
-        var originalTimeWindows: [String: TaskTimeWindowData?] = [:]
+        var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
         for task in tasksToMove {
             if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                originalTimeWindows[task.id] = TaskTimeWindowData(
-                    startTime: timeWindow.startTime,
-                    endTime: timeWindow.endTime,
-                    isAllDay: timeWindow.isAllDay
-                )
+                originalTimeWindows[task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
             } else {
                 originalTimeWindows[task.id] = nil
             }
@@ -166,15 +158,11 @@ class BulkEditManager: ObservableObject {
 
         // Store original due dates and time windows for undo
         var originalDueDates: [String: String?] = [:]
-        var originalTimeWindows: [String: TaskTimeWindowData?] = [:]
+        var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
         for task in tasksToUpdate {
             originalDueDates[task.id] = task.due
             if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                originalTimeWindows[task.id] = TaskTimeWindowData(
-                    startTime: timeWindow.startTime,
-                    endTime: timeWindow.endTime,
-                    isAllDay: timeWindow.isAllDay
-                )
+                originalTimeWindows[task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
             } else {
                 originalTimeWindows[task.id] = nil
             }

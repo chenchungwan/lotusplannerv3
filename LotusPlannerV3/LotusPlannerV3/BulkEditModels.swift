@@ -80,14 +80,6 @@ struct BulkEditUndoData {
     let destinationListId: String?
     let destinationAccountKind: GoogleAuthManager.AccountKind?
     let originalDueDates: [String: String?]?
-    let originalTimeWindows: [String: TaskTimeWindowData?]?
+    let originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?]?
     let count: Int
-}
-
-// MARK: - Task Time Window Data
-
-struct TaskTimeWindowData {
-    let startTime: Date
-    let endTime: Date
-    let isAllDay: Bool
 }

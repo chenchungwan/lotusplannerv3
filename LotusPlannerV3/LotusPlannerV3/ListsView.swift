@@ -829,7 +829,7 @@ struct TasksDetailColumn: View {
                                 SimpleTaskRow(
                                     task: task,
                                     accentColor: accentColor,
-                                    bulkEditManager.state.isActive: bulkEditManager.state.isActive,
+                                    isBulkEditMode: bulkEditManager.state.isActive,
                                     isSelected: bulkEditManager.state.selectedTaskIds.contains(task.id),
                                     onToggle: {
                                         toggleTask(task)
@@ -1284,7 +1284,7 @@ struct TasksDetailColumn: View {
 struct SimpleTaskRow: View {
     let task: GoogleTask
     let accentColor: Color
-    let bulkEditManager.state.isActive: Bool
+    let isBulkEditMode: Bool
     let isSelected: Bool
     let onToggle: () -> Void
     let onTap: () -> Void
@@ -1302,7 +1302,7 @@ struct SimpleTaskRow: View {
     var body: some View {
         HStack(spacing: adaptiveSpacing) {
             // Checkbox or Selection box
-            if bulkEditManager.state.isActive && !task.isCompleted {
+            if isBulkEditMode && !task.isCompleted {
                 // Square selection checkbox for incomplete tasks in bulk edit mode
                 Button(action: onSelectionToggle) {
                     Image(systemName: isSelected ? "checkmark.square.fill" : "square")
@@ -1315,7 +1315,7 @@ struct SimpleTaskRow: View {
                 Button(action: onToggle) {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                         .font(.title2) // Slightly larger for better tap target
-                        .foregroundColor(task.isCompleted ? (bulkEditManager.state.isActive ? .secondary : accentColor) : .secondary)
+                        .foregroundColor(task.isCompleted ? (isBulkEditMode ? .secondary : accentColor) : .secondary)
                 }
                 .buttonStyle(.plain)
             }
