@@ -501,6 +501,7 @@ struct TasksDetailColumn: View {
     @State private var showingBulkCompleteConfirmation = false
     @State private var showingBulkDeleteConfirmation = false
     @State private var showingMoveDestinationPicker = false
+    @State private var showingDueDatePicker = false
 
     // Callback to clear selection when list is deleted
     var onListDeleted: () -> Void = {}
@@ -689,7 +690,7 @@ struct TasksDetailColumn: View {
 
                                     // Update Due Date button (disabled if no selections)
                                     Button {
-                                        // TODO: Implement update due date
+                                        showingDueDatePicker = true
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "calendar")
@@ -924,6 +925,17 @@ struct TasksDetailColumn: View {
                 )
             }
         }
+        .sheet(isPresented: $showingDueDatePicker) {
+            if let listId = selectedListId,
+               let accountKind = selectedAccountKind {
+                BulkUpdateDueDatePicker(
+                    selectedTaskIds: selectedTaskIds,
+                    onSave: { dueDate in
+                        bulkUpdateDueDate(listId: listId, accountKind: accountKind, dueDate: dueDate)
+                    }
+                )
+            }
+        }
         .alert("Delete List", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -1077,6 +1089,49 @@ struct TasksDetailColumn: View {
                 isBulkEditMode = false
                 selectedTaskIds.removeAll()
                 showingMoveDestinationPicker = false
+            }
+        }
+    }
+
+    private func bulkUpdateDueDate(listId: String, accountKind: GoogleAuthManager.AccountKind, dueDate: Date?) {
+        // Get the selected tasks to update
+        let tasksToUpdate = tasks.filter { selectedTaskIds.contains($0.id) }
+
+        Task {
+            // Format the due date string
+            let dueDateString: String?
+            if let dueDate = dueDate {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone(identifier: "UTC")
+                dueDateString = formatter.string(from: dueDate)
+            } else {
+                dueDateString = nil
+            }
+
+            // Update due date for each selected task
+            for task in tasksToUpdate {
+                // Create an updated task with the new due date
+                let updatedTask = GoogleTask(
+                    id: task.id,
+                    title: task.title,
+                    notes: task.notes,
+                    status: task.status,
+                    due: dueDateString,
+                    completed: task.completed,
+                    updated: task.updated
+                )
+
+                // Update the task via the API
+                await tasksVM.updateTask(updatedTask, in: listId, for: accountKind)
+            }
+
+            // Exit bulk edit mode and clear selections
+            await MainActor.run {
+                isBulkEditMode = false
+                selectedTaskIds.removeAll()
+                showingDueDatePicker = false
             }
         }
     }
@@ -1501,6 +1556,75 @@ struct RenameListSheet: View {
                 isTextFieldFocused = true
             }
         }
+    }
+}
+
+// MARK: - Bulk Update Due Date Picker
+struct BulkUpdateDueDatePicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let selectedTaskIds: Set<String>
+    let onSave: (Date?) -> Void
+
+    @State private var selectedDate = Date()
+    @State private var includeTime = false
+    @State private var selectedTime = Date()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    DatePicker("Due Date", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                }
+
+                Section {
+                    Toggle("Include Time", isOn: $includeTime)
+
+                    if includeTime {
+                        DatePicker("Time", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                    }
+                }
+
+                Section {
+                    Text("This will update the due date for \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s").")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Set Due Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let finalDate: Date
+                        if includeTime {
+                            // Combine date and time
+                            let calendar = Calendar.current
+                            let dateComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
+                            let timeComponents = calendar.dateComponents([.hour, .minute], from: selectedTime)
+                            var combined = DateComponents()
+                            combined.year = dateComponents.year
+                            combined.month = dateComponents.month
+                            combined.day = dateComponents.day
+                            combined.hour = timeComponents.hour
+                            combined.minute = timeComponents.minute
+                            finalDate = calendar.date(from: combined) ?? selectedDate
+                        } else {
+                            finalDate = selectedDate
+                        }
+                        onSave(finalDate)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
