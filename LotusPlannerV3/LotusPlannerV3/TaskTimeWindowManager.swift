@@ -40,6 +40,8 @@ class TaskTimeWindowManager: ObservableObject {
     /// Call this after tasks are loaded to remove time windows for all-day tasks
     func cleanupTimeWindowsForAllDayTasks(tasks: [GoogleTask]) {
         devLog("🧹 TaskTimeWindowManager: Checking for time windows on all-day tasks...")
+        devLog("🧹 Total tasks to check: \(tasks.count)")
+        devLog("🧹 Current time windows count: \(timeWindows.count)")
         var deletedCount = 0
 
         for task in tasks {
@@ -47,7 +49,7 @@ class TaskTimeWindowManager: ObservableObject {
             if let due = task.due, due.count == 10 {
                 // This is an all-day task - it should not have a time window
                 if getTimeWindow(for: task.id) != nil {
-                    devLog("🧹 Deleting time window for all-day task: \(task.id) (due: \(due))")
+                    devLog("🧹 Deleting time window for all-day task: \(task.id) (due: \(due), title: \(task.title))")
                     deleteTimeWindow(for: task.id)
                     deletedCount += 1
                 }
@@ -56,6 +58,9 @@ class TaskTimeWindowManager: ObservableObject {
 
         if deletedCount > 0 {
             devLog("✅ TaskTimeWindowManager: Deleted \(deletedCount) time windows from all-day tasks")
+            devLog("✅ Remaining time windows count: \(timeWindows.count)")
+            // Force UI update by triggering objectWillChange
+            objectWillChange.send()
         } else {
             devLog("✅ TaskTimeWindowManager: No time windows found on all-day tasks")
         }
