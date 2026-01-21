@@ -657,13 +657,14 @@ struct TasksDetailColumn: View {
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
                                             .font(.title2)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.primary)
                                     }
                                     .buttonStyle(.plain)
 
                                     Text("\(selectedTaskIds.count) selected")
                                         .font(.subheadline)
-                                        .foregroundColor(.secondary)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
 
                                     Spacer()
 
