@@ -141,25 +141,34 @@ class TaskTimeWindowManager: ObservableObject {
         devLog("📝   startTime: \(startTime)")
         devLog("📝   endTime: \(endTime)")
         devLog("📝   isAllDay: \(isAllDay)")
-        
+
+        // CRITICAL: Never save time windows for all-day tasks
+        if isAllDay {
+            devLog("⚠️ TaskTimeWindowManager: Refusing to save time window with isAllDay=true for task \(taskId)")
+            devLog("⚠️ TaskTimeWindowManager: Time windows should only exist for timed tasks")
+            // Delete any existing time window instead
+            deleteTimeWindow(for: taskId)
+            return
+        }
+
         // Validate that start and end are on the same day
         let calendar = Calendar.current
         guard calendar.isDate(startTime, inSameDayAs: endTime) else {
             devLog("⚠️ TaskTimeWindowManager: Start and end times must be on the same day")
             return
         }
-        
+
         let existing = getTimeWindow(for: taskId)
         let timeWindow = TaskTimeWindowData(
             taskId: taskId,
             startTime: startTime,
             endTime: endTime,
-            isAllDay: isAllDay,
+            isAllDay: false,  // Always false since we validated above
             userId: getUserId(),
             createdAt: existing?.createdAt ?? Date(),
             updatedAt: Date()
         )
-        
+
         devLog("📝 TaskTimeWindowManager: Calling saveTimeWindow(timeWindow)...")
         saveTimeWindow(timeWindow)
     }
