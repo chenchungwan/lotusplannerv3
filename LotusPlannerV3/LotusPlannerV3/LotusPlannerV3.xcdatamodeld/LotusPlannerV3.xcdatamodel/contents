@@ -72,10 +72,20 @@
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="SleepLog" representedClassName="SleepLog" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="wakeUpTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="bedTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="userId" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
     <elements>
         <element name="WeightLog" positionX="-63" positionY="-18" width="128" height="118"/>
         <element name="WorkoutLog" positionX="144" positionY="-18" width="128" height="118"/>
         <element name="FoodLog" positionX="351" positionY="-18" width="128" height="118"/>
+        <element name="SleepLog" positionX="558" positionY="-18" width="128" height="118"/>
         <element name="GoalCategory" positionX="-63" positionY="120" width="128" height="118"/>
         <element name="Goal" positionX="144" positionY="120" width="128" height="118"/>
         <element name="CustomLogItem" positionX="351" positionY="120" width="128" height="118"/>

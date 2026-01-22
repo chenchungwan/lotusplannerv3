@@ -14,6 +14,50 @@ class BulkEditManager: ObservableObject {
 
     // MARK: - Bulk Operations
 
+    // MARK: - Multi-list/account bulk operations (for TasksView)
+
+    func bulkComplete(
+        tasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)],
+        tasksVM: TasksViewModel,
+        completion: @escaping (BulkEditUndoData) -> Void
+    ) {
+        let tasksToComplete = tasks.filter { state.selectedTaskIds.contains($0.task.id) && !$0.task.isCompleted }
+
+        // Store pre-action state for undo (use first task's list/account for undo data)
+        guard let firstTask = tasksToComplete.first else { return }
+
+        // Create mapping of task IDs to their list/account
+        var taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)] = [:]
+        for taskInfo in tasksToComplete {
+            taskListMapping[taskInfo.task.id] = (listId: taskInfo.listId, accountKind: taskInfo.accountKind)
+        }
+
+        let undoData = BulkEditUndoData(
+            tasks: tasksToComplete.map { $0.task },
+            listId: firstTask.listId,
+            accountKind: firstTask.accountKind,
+            destinationListId: nil,
+            destinationAccountKind: nil,
+            originalDueDates: nil,
+            originalTimeWindows: nil,
+            taskListMapping: taskListMapping,
+            count: tasksToComplete.count
+        )
+
+        Task {
+            for taskInfo in tasksToComplete {
+                await tasksVM.toggleTaskCompletion(taskInfo.task, in: taskInfo.listId, for: taskInfo.accountKind)
+            }
+
+            await MainActor.run {
+                state.reset()
+                completion(undoData)
+            }
+        }
+    }
+
+    // MARK: - Single-list/account bulk operations (for ListsView)
+
     func bulkComplete(
         tasks: [GoogleTask],
         in listId: String,
@@ -21,23 +65,46 @@ class BulkEditManager: ObservableObject {
         tasksVM: TasksViewModel,
         completion: @escaping (BulkEditUndoData) -> Void
     ) {
-        let tasksToComplete = tasks.filter { state.selectedTaskIds.contains($0.id) && !$0.isCompleted }
+        // For single-list operations, all tasks are from the same list, so taskListMapping is not needed
+        let tasksWithInfo = tasks.map { (task: $0, listId: listId, accountKind: accountKind) }
+        bulkComplete(tasks: tasksWithInfo, tasksVM: tasksVM, completion: completion)
+    }
 
-        // Store pre-action state for undo
+    func bulkDelete(
+        tasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)],
+        tasksVM: TasksViewModel,
+        completion: @escaping (BulkEditUndoData) -> Void
+    ) {
+        let tasksToDelete = tasks.filter { state.selectedTaskIds.contains($0.task.id) }
+
+        // Store pre-action state for undo (including time windows)
+        var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
+        var taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)] = [:]
+        for taskInfo in tasksToDelete {
+            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: taskInfo.task.id) {
+                originalTimeWindows[taskInfo.task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
+            } else {
+                originalTimeWindows[taskInfo.task.id] = nil
+            }
+            taskListMapping[taskInfo.task.id] = (listId: taskInfo.listId, accountKind: taskInfo.accountKind)
+        }
+
+        guard let firstTask = tasksToDelete.first else { return }
         let undoData = BulkEditUndoData(
-            tasks: tasksToComplete,
-            listId: listId,
-            accountKind: accountKind,
+            tasks: tasksToDelete.map { $0.task },
+            listId: firstTask.listId,
+            accountKind: firstTask.accountKind,
             destinationListId: nil,
             destinationAccountKind: nil,
             originalDueDates: nil,
-            originalTimeWindows: nil,
-            count: tasksToComplete.count
+            originalTimeWindows: originalTimeWindows,
+            taskListMapping: taskListMapping,
+            count: tasksToDelete.count
         )
 
         Task {
-            for task in tasksToComplete {
-                await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+            for taskInfo in tasksToDelete {
+                await tasksVM.deleteTask(taskInfo.task, from: taskInfo.listId, for: taskInfo.accountKind)
             }
 
             await MainActor.run {
@@ -54,32 +121,57 @@ class BulkEditManager: ObservableObject {
         tasksVM: TasksViewModel,
         completion: @escaping (BulkEditUndoData) -> Void
     ) {
-        let tasksToDelete = tasks.filter { state.selectedTaskIds.contains($0.id) }
+        let tasksWithInfo = tasks.map { (task: $0, listId: listId, accountKind: accountKind) }
+        bulkDelete(tasks: tasksWithInfo, tasksVM: tasksVM, completion: completion)
+    }
+
+    func bulkMove(
+        tasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)],
+        to destinationListId: String,
+        destinationAccountKind: GoogleAuthManager.AccountKind,
+        tasksVM: TasksViewModel,
+        completion: @escaping (BulkEditUndoData) -> Void
+    ) {
+        let tasksToMove = tasks.filter { state.selectedTaskIds.contains($0.task.id) }
 
         // Store pre-action state for undo (including time windows)
         var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
-        for task in tasksToDelete {
-            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                originalTimeWindows[task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
+        var taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)] = [:]
+        for taskInfo in tasksToMove {
+            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: taskInfo.task.id) {
+                originalTimeWindows[taskInfo.task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
             } else {
-                originalTimeWindows[task.id] = nil
+                originalTimeWindows[taskInfo.task.id] = nil
             }
+            taskListMapping[taskInfo.task.id] = (listId: taskInfo.listId, accountKind: taskInfo.accountKind)
         }
 
+        guard let firstTask = tasksToMove.first else { return }
         let undoData = BulkEditUndoData(
-            tasks: tasksToDelete,
-            listId: listId,
-            accountKind: accountKind,
-            destinationListId: nil,
-            destinationAccountKind: nil,
+            tasks: tasksToMove.map { $0.task },
+            listId: firstTask.listId,
+            accountKind: firstTask.accountKind,
+            destinationListId: destinationListId,
+            destinationAccountKind: destinationAccountKind,
             originalDueDates: nil,
             originalTimeWindows: originalTimeWindows,
-            count: tasksToDelete.count
+            taskListMapping: taskListMapping,
+            count: tasksToMove.count
         )
 
         Task {
-            for task in tasksToDelete {
-                await tasksVM.deleteTask(task, from: listId, for: accountKind)
+            for taskInfo in tasksToMove {
+                // Delete from source list (using each task's original list/account)
+                await tasksVM.deleteTask(taskInfo.task, from: taskInfo.listId, for: taskInfo.accountKind)
+
+                // Create in destination list
+                await tasksVM.createTask(
+                    title: taskInfo.task.title,
+                    notes: taskInfo.task.notes,
+                    dueDate: taskInfo.task.dueDate,
+                    in: destinationListId,
+                    for: destinationAccountKind
+                )
             }
 
             await MainActor.run {
@@ -98,42 +190,88 @@ class BulkEditManager: ObservableObject {
         tasksVM: TasksViewModel,
         completion: @escaping (BulkEditUndoData) -> Void
     ) {
-        let tasksToMove = tasks.filter { state.selectedTaskIds.contains($0.id) }
+        let tasksWithInfo = tasks.map { (task: $0, listId: sourceListId, accountKind: sourceAccountKind) }
+        bulkMove(tasks: tasksWithInfo, to: destinationListId, destinationAccountKind: destinationAccountKind, tasksVM: tasksVM, completion: completion)
+    }
 
-        // Store pre-action state for undo (including time windows)
+    func bulkUpdateDueDate(
+        tasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)],
+        dueDate: Date?,
+        isAllDay: Bool,
+        startTime: Date?,
+        endTime: Date?,
+        tasksVM: TasksViewModel,
+        completion: @escaping (BulkEditUndoData) -> Void
+    ) {
+        let tasksToUpdate = tasks.filter { state.selectedTaskIds.contains($0.task.id) }
+
+        // Store original due dates and time windows for undo
+        var originalDueDates: [String: String?] = [:]
         var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
-        for task in tasksToMove {
-            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                originalTimeWindows[task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
+        var taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)] = [:]
+        for taskInfo in tasksToUpdate {
+            originalDueDates[taskInfo.task.id] = taskInfo.task.due
+            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: taskInfo.task.id) {
+                originalTimeWindows[taskInfo.task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
             } else {
-                originalTimeWindows[task.id] = nil
+                originalTimeWindows[taskInfo.task.id] = nil
             }
+            taskListMapping[taskInfo.task.id] = (listId: taskInfo.listId, accountKind: taskInfo.accountKind)
         }
 
+        guard let firstTask = tasksToUpdate.first else { return }
         let undoData = BulkEditUndoData(
-            tasks: tasksToMove,
-            listId: sourceListId,
-            accountKind: sourceAccountKind,
-            destinationListId: destinationListId,
-            destinationAccountKind: destinationAccountKind,
-            originalDueDates: nil,
+            tasks: tasksToUpdate.map { $0.task },
+            listId: firstTask.listId,
+            accountKind: firstTask.accountKind,
+            destinationListId: nil,
+            destinationAccountKind: nil,
+            originalDueDates: originalDueDates,
             originalTimeWindows: originalTimeWindows,
-            count: tasksToMove.count
+            taskListMapping: taskListMapping,
+            count: tasksToUpdate.count
         )
 
         Task {
-            for task in tasksToMove {
-                // Delete from source list
-                await tasksVM.deleteTask(task, from: sourceListId, for: sourceAccountKind)
+            // Format the due date string
+            let dueDateString: String?
+            if let dueDate = dueDate {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
+                dueDateString = formatter.string(from: dueDate)
+            } else {
+                dueDateString = nil
+            }
 
-                // Create in destination list
-                await tasksVM.createTask(
-                    title: task.title,
-                    notes: task.notes,
-                    dueDate: task.dueDate,
-                    in: destinationListId,
-                    for: destinationAccountKind
+            // Update each task (using each task's own list/account)
+            for taskInfo in tasksToUpdate {
+                let updatedTask = GoogleTask(
+                    id: taskInfo.task.id,
+                    title: taskInfo.task.title,
+                    notes: taskInfo.task.notes,
+                    status: taskInfo.task.status,
+                    due: dueDateString,
+                    completed: taskInfo.task.completed,
+                    updated: taskInfo.task.updated
                 )
+
+                await tasksVM.updateTask(updatedTask, in: taskInfo.listId, for: taskInfo.accountKind)
+
+                // Save or delete time window
+                if let dueDate = dueDate, !isAllDay, let start = startTime, let end = endTime {
+                    // Save time window for timed tasks
+                    TaskTimeWindowManager.shared.saveTimeWindow(
+                        taskId: taskInfo.task.id,
+                        startTime: start,
+                        endTime: end,
+                        isAllDay: false
+                    )
+                } else {
+                    // Delete time window if all-day or no due date
+                    TaskTimeWindowManager.shared.deleteTimeWindow(for: taskInfo.task.id)
+                }
             }
 
             await MainActor.run {
@@ -154,98 +292,41 @@ class BulkEditManager: ObservableObject {
         tasksVM: TasksViewModel,
         completion: @escaping (BulkEditUndoData) -> Void
     ) {
-        let tasksToUpdate = tasks.filter { state.selectedTaskIds.contains($0.id) }
-
-        // Store original due dates and time windows for undo
-        var originalDueDates: [String: String?] = [:]
-        var originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?] = [:]
-        for task in tasksToUpdate {
-            originalDueDates[task.id] = task.due
-            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                originalTimeWindows[task.id] = (startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAllDay: timeWindow.isAllDay)
-            } else {
-                originalTimeWindows[task.id] = nil
-            }
-        }
-
-        let undoData = BulkEditUndoData(
-            tasks: tasksToUpdate,
-            listId: listId,
-            accountKind: accountKind,
-            destinationListId: nil,
-            destinationAccountKind: nil,
-            originalDueDates: originalDueDates,
-            originalTimeWindows: originalTimeWindows,
-            count: tasksToUpdate.count
-        )
-
-        Task {
-            // Format the due date string
-            let dueDateString: String?
-            if let dueDate = dueDate {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                formatter.locale = Locale(identifier: "en_US_POSIX")
-                formatter.timeZone = TimeZone.current  // Use local timezone for all-day dates
-                dueDateString = formatter.string(from: dueDate)
-            } else {
-                dueDateString = nil
-            }
-
-            // Update each task
-            for task in tasksToUpdate {
-                let updatedTask = GoogleTask(
-                    id: task.id,
-                    title: task.title,
-                    notes: task.notes,
-                    status: task.status,
-                    due: dueDateString,
-                    completed: task.completed,
-                    updated: task.updated
-                )
-
-                await tasksVM.updateTask(updatedTask, in: listId, for: accountKind)
-
-                // Save or delete time window
-                if let dueDate = dueDate, !isAllDay, let start = startTime, let end = endTime {
-                    // Save time window for timed tasks
-                    TaskTimeWindowManager.shared.saveTimeWindow(
-                        taskId: task.id,
-                        startTime: start,
-                        endTime: end,
-                        isAllDay: false
-                    )
-                } else {
-                    // Delete time window if all-day or no due date
-                    TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
-                }
-            }
-
-            await MainActor.run {
-                state.reset()
-                completion(undoData)
-            }
-        }
+        let tasksWithInfo = tasks.map { (task: $0, listId: listId, accountKind: accountKind) }
+        bulkUpdateDueDate(tasks: tasksWithInfo, dueDate: dueDate, isAllDay: isAllDay, startTime: startTime, endTime: endTime, tasksVM: tasksVM, completion: completion)
     }
 
     // MARK: - Undo Operations
 
     func undoComplete(data: BulkEditUndoData, tasksVM: TasksViewModel) {
         Task {
-            // Get the current tasks from the list to find the completed versions
-            let currentTasks: [GoogleTask]
-            switch data.accountKind {
-            case .personal:
-                currentTasks = tasksVM.personalTasks[data.listId] ?? []
-            case .professional:
-                currentTasks = tasksVM.professionalTasks[data.listId] ?? []
-            }
-
             // Toggle completion back to incomplete for each task
             for originalTask in data.tasks {
+                // Get the list/account for this specific task
+                let listId: String
+                let accountKind: GoogleAuthManager.AccountKind
+
+                if let mapping = data.taskListMapping?[originalTask.id] {
+                    listId = mapping.listId
+                    accountKind = mapping.accountKind
+                } else {
+                    // Fallback to primary list/account for backward compatibility
+                    listId = data.listId
+                    accountKind = data.accountKind
+                }
+
+                // Get the current tasks from the appropriate list
+                let currentTasks: [GoogleTask]
+                switch accountKind {
+                case .personal:
+                    currentTasks = tasksVM.personalTasks[listId] ?? []
+                case .professional:
+                    currentTasks = tasksVM.professionalTasks[listId] ?? []
+                }
+
                 // Find the current version of the task (which should be completed)
                 if let completedTask = currentTasks.first(where: { $0.id == originalTask.id }) {
-                    await tasksVM.toggleTaskCompletion(completedTask, in: data.listId, for: data.accountKind)
+                    await tasksVM.toggleTaskCompletion(completedTask, in: listId, for: accountKind)
                 }
             }
         }
@@ -254,12 +335,25 @@ class BulkEditManager: ObservableObject {
     func undoDelete(data: BulkEditUndoData, tasksVM: TasksViewModel) {
         Task {
             for task in data.tasks {
+                // Get the list/account for this specific task
+                let listId: String
+                let accountKind: GoogleAuthManager.AccountKind
+
+                if let mapping = data.taskListMapping?[task.id] {
+                    listId = mapping.listId
+                    accountKind = mapping.accountKind
+                } else {
+                    // Fallback to primary list/account for backward compatibility
+                    listId = data.listId
+                    accountKind = data.accountKind
+                }
+
                 await tasksVM.createTask(
                     title: task.title,
                     notes: task.notes,
                     dueDate: task.dueDate,
-                    in: data.listId,
-                    for: data.accountKind
+                    in: listId,
+                    for: accountKind
                 )
 
                 // Restore time window if it existed
@@ -285,6 +379,19 @@ class BulkEditManager: ObservableObject {
 
         Task {
             for task in data.tasks {
+                // Get the original list/account for this specific task
+                let originalListId: String
+                let originalAccountKind: GoogleAuthManager.AccountKind
+
+                if let mapping = data.taskListMapping?[task.id] {
+                    originalListId = mapping.listId
+                    originalAccountKind = mapping.accountKind
+                } else {
+                    // Fallback to primary list/account for backward compatibility
+                    originalListId = data.listId
+                    originalAccountKind = data.accountKind
+                }
+
                 // Delete from destination list
                 let destinationTasks: [GoogleTask]
                 switch destinationAccountKind {
@@ -298,13 +405,13 @@ class BulkEditManager: ObservableObject {
                     await tasksVM.deleteTask(movedTask, from: destinationListId, for: destinationAccountKind)
                 }
 
-                // Recreate in source list
+                // Recreate in original source list
                 await tasksVM.createTask(
                     title: task.title,
                     notes: task.notes,
                     dueDate: task.dueDate,
-                    in: data.listId,
-                    for: data.accountKind
+                    in: originalListId,
+                    for: originalAccountKind
                 )
 
                 // Restore time window if it existed
@@ -329,6 +436,19 @@ class BulkEditManager: ObservableObject {
             for task in data.tasks {
                 guard let originalDue = originalDueDates[task.id] else { continue }
 
+                // Get the list/account for this specific task
+                let listId: String
+                let accountKind: GoogleAuthManager.AccountKind
+
+                if let mapping = data.taskListMapping?[task.id] {
+                    listId = mapping.listId
+                    accountKind = mapping.accountKind
+                } else {
+                    // Fallback to primary list/account for backward compatibility
+                    listId = data.listId
+                    accountKind = data.accountKind
+                }
+
                 let restoredTask = GoogleTask(
                     id: task.id,
                     title: task.title,
@@ -339,7 +459,7 @@ class BulkEditManager: ObservableObject {
                     updated: task.updated
                 )
 
-                await tasksVM.updateTask(restoredTask, in: data.listId, for: data.accountKind)
+                await tasksVM.updateTask(restoredTask, in: listId, for: accountKind)
 
                 // Restore time window if it existed
                 if let originalTimeWindows = data.originalTimeWindows,

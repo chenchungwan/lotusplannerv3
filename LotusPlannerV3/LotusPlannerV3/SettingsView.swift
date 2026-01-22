@@ -377,9 +377,15 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(showFoodLogs, forKey: "showFoodLogs")
         }
     }
-    
+
+    @Published var showSleepLogs: Bool {
+        didSet {
+            UserDefaults.standard.set(showSleepLogs, forKey: "showSleepLogs")
+        }
+    }
+
     var showAnyLogs: Bool {
-        showWeightLogs || showWorkoutLogs || showFoodLogs || showCustomLogs
+        showWeightLogs || showWorkoutLogs || showFoodLogs || showSleepLogs || showCustomLogs
     }
     
     
@@ -421,10 +427,22 @@ class AppPreferences: ObservableObject {
         }
     }
 
-    // DayViewStandard Divider Position
+    // DayViewStandard Divider Positions
     @Published var dayViewStandardEventTaskDividerPosition: CGFloat {
         didSet {
             UserDefaults.standard.set(dayViewStandardEventTaskDividerPosition, forKey: "dayViewStandardEventTaskDividerPosition")
+        }
+    }
+
+    @Published var dayViewStandardColumnDividerPosition: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewStandardColumnDividerPosition, forKey: "dayViewStandardColumnDividerPosition")
+        }
+    }
+
+    @Published var dayViewStandardLogsSectionCollapsed: Bool {
+        didSet {
+            UserDefaults.standard.set(dayViewStandardLogsSectionCollapsed, forKey: "dayViewStandardLogsSectionCollapsed")
         }
     }
 
@@ -606,6 +624,7 @@ class AppPreferences: ObservableObject {
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
+        self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? false
@@ -630,6 +649,8 @@ class AppPreferences: ObservableObject {
         self.dayViewExpandedLeftTimelineWidth = UserDefaults.standard.object(forKey: "dayViewExpandedLeftTimelineWidth") as? CGFloat ?? 200
         self.dayViewExpandedLogsHeight = UserDefaults.standard.object(forKey: "dayViewExpandedLogsHeight") as? CGFloat ?? 300
         self.dayViewStandardEventTaskDividerPosition = UserDefaults.standard.object(forKey: "dayViewStandardEventTaskDividerPosition") as? CGFloat ?? 300
+        self.dayViewStandardColumnDividerPosition = UserDefaults.standard.object(forKey: "dayViewStandardColumnDividerPosition") as? CGFloat ?? 600
+        self.dayViewStandardLogsSectionCollapsed = UserDefaults.standard.object(forKey: "dayViewStandardLogsSectionCollapsed") as? Bool ?? true
         self.dayViewClassic2EventsHeight = UserDefaults.standard.object(forKey: "dayViewClassic2EventsHeight") as? CGFloat ?? 250
         self.dayViewClassic2LogsHeight = UserDefaults.standard.object(forKey: "dayViewClassic2LogsHeight") as? CGFloat ?? 200
         self.dayViewClassic3TasksHeight = UserDefaults.standard.object(forKey: "dayViewClassic3TasksHeight") as? CGFloat ?? 300
@@ -746,6 +767,14 @@ class AppPreferences: ObservableObject {
 
     func updateDayViewStandardEventTaskDividerPosition(_ value: CGFloat) {
         dayViewStandardEventTaskDividerPosition = value
+    }
+
+    func updateDayViewStandardColumnDividerPosition(_ value: CGFloat) {
+        dayViewStandardColumnDividerPosition = value
+    }
+
+    func updateDayViewStandardLogsSectionCollapsed(_ value: Bool) {
+        dayViewStandardLogsSectionCollapsed = value
     }
 
     func updateDayViewClassic2EventsHeight(_ value: CGFloat) {
@@ -1114,7 +1143,24 @@ get: { appPrefs.showFoodLogs },
                             }
                         }
                     }
-                    
+
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showSleepLogs },
+                        set: { appPrefs.showSleepLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "bed.double.fill")
+                                .foregroundColor(appPrefs.showSleepLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sleep Logs")
+                                    .font(.body)
+                                Text("Track wake up time and bed time")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
                     Toggle(isOn: Binding(
                         get: { appPrefs.showCustomLogs },
                         set: { appPrefs.updateShowCustomLogs($0) }

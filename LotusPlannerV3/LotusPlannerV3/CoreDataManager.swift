@@ -201,7 +201,7 @@ class CoreDataManager: ObservableObject {
     func deleteFoodEntry(_ entry: FoodLogEntry) {
         let request: NSFetchRequest<FoodLog> = FoodLog.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", entry.id)
-        
+
         do {
             let logs = try context.fetch(request)
             logs.forEach(context.delete)
@@ -209,13 +209,85 @@ class CoreDataManager: ObservableObject {
         } catch {
         }
     }
-    
+
+    // MARK: - Sleep Logs
+    func saveSleepEntry(_ entry: SleepLogEntry) {
+        let sleepLog = SleepLog(context: context)
+        sleepLog.id = entry.id
+        sleepLog.date = entry.date
+        sleepLog.wakeUpTime = entry.wakeUpTime
+        sleepLog.bedTime = entry.bedTime
+        sleepLog.userId = entry.userId
+        sleepLog.createdAt = entry.createdAt
+        sleepLog.updatedAt = entry.updatedAt
+
+        save()
+    }
+
+    func loadSleepEntries() -> [SleepLogEntry] {
+        let request: NSFetchRequest<SleepLog> = SleepLog.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \SleepLog.date, ascending: false)]
+
+        do {
+            let logs = try context.fetch(request)
+            return logs.compactMap { log in
+                guard let id = log.id,
+                      let date = log.date,
+                      let userId = log.userId,
+                      let createdAt = log.createdAt,
+                      let updatedAt = log.updatedAt else { return nil }
+
+                return SleepLogEntry(
+                    id: id,
+                    date: date,
+                    wakeUpTime: log.wakeUpTime,
+                    bedTime: log.bedTime,
+                    userId: userId,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func updateSleepEntry(_ entry: SleepLogEntry) {
+        let request: NSFetchRequest<SleepLog> = SleepLog.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id)
+
+        do {
+            let logs = try context.fetch(request)
+            if let log = logs.first {
+                log.date = entry.date
+                log.wakeUpTime = entry.wakeUpTime
+                log.bedTime = entry.bedTime
+                log.updatedAt = Date()
+                save()
+            }
+        } catch {
+        }
+    }
+
+    func deleteSleepEntry(_ entry: SleepLogEntry) {
+        let request: NSFetchRequest<SleepLog> = SleepLog.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id)
+
+        do {
+            let logs = try context.fetch(request)
+            logs.forEach(context.delete)
+            save()
+        } catch {
+        }
+    }
+
     // MARK: - Danger Zone: Delete All Logs
     func deleteAllLogs() {
         let deleteRequests: [NSFetchRequest<NSFetchRequestResult>] = [
             WeightLog.fetchRequest(),
             WorkoutLog.fetchRequest(),
             FoodLog.fetchRequest(),
+            SleepLog.fetchRequest(),
         ]
         do {
             for request in deleteRequests {

@@ -36,7 +36,12 @@ class LogsViewModel: ObservableObject {
     // Food entry form
     @Published var foodName = ""
     @Published var foodDate = Date()
-    
+
+    // Sleep entry form
+    @Published var sleepDate = Date()
+    @Published var sleepWakeUpTime: Date?
+    @Published var sleepBedTime: Date?
+
     // Original values for change detection in edit mode
     private var originalWeightValue = ""
     private var originalWeightUnit: WeightUnit = .pounds
@@ -45,6 +50,9 @@ class LogsViewModel: ObservableObject {
     private var originalWorkoutDate = Date()
     private var originalFoodName = ""
     private var originalFoodDate = Date()
+    private var originalSleepDate = Date()
+    private var originalSleepWakeUpTime: Date?
+    private var originalSleepBedTime: Date?
     
     // Local data storage
     @Published var weightEntries: [WeightLogEntry] = [] {
@@ -56,12 +64,16 @@ class LogsViewModel: ObservableObject {
     @Published var foodEntries: [FoodLogEntry] = [] {
         didSet { rebuildFoodCache() }
     }
-    
+    @Published var sleepEntries: [SleepLogEntry] = [] {
+        didSet { rebuildSleepCache() }
+    }
+
     private let coreDataManager = CoreDataManager.shared
     private let authManager = GoogleAuthManager.shared
     private var weightEntriesByDay: [Date: [WeightLogEntry]] = [:]
     private var workoutEntriesByDay: [Date: [WorkoutLogEntry]] = [:]
     private var foodEntriesByDay: [Date: [FoodLogEntry]] = [:]
+    private var sleepEntriesByDay: [Date: [SleepLogEntry]] = [:]
     
     // MARK: - Computed Properties
     var filteredWeightEntries: [WeightLogEntry] {
@@ -75,17 +87,25 @@ class LogsViewModel: ObservableObject {
     var filteredFoodEntries: [FoodLogEntry] {
         foodLogs(on: currentDate)
     }
-    
+
+    var filteredSleepEntries: [SleepLogEntry] {
+        sleepLogs(on: currentDate)
+    }
+
     func weightLogs(on date: Date) -> [WeightLogEntry] {
         weightEntriesByDay[normalizedDay(date)] ?? []
     }
-    
+
     func workoutLogs(on date: Date) -> [WorkoutLogEntry] {
         workoutEntriesByDay[normalizedDay(date)] ?? []
     }
-    
+
     func foodLogs(on date: Date) -> [FoodLogEntry] {
         foodEntriesByDay[normalizedDay(date)] ?? []
+    }
+
+    func sleepLogs(on date: Date) -> [SleepLogEntry] {
+        sleepEntriesByDay[normalizedDay(date)] ?? []
     }
     
     var accentColor: Color {
@@ -97,10 +117,11 @@ class LogsViewModel: ObservableObject {
         // Refresh Core Data context to get latest changes from iCloud
         let context = PersistenceController.shared.container.viewContext
         context.refreshAllObjects()
-        
+
         weightEntries = coreDataManager.loadWeightEntries()
         workoutEntries = coreDataManager.loadWorkoutEntries()
         foodEntries = coreDataManager.loadFoodEntries()
+        sleepEntries = coreDataManager.loadSleepEntries()
     }
     
     private func setupiCloudSync() {
@@ -160,7 +181,19 @@ class LogsViewModel: ObservableObject {
         }
         foodEntriesByDay = map
     }
-    
+
+    private func rebuildSleepCache() {
+        var map: [Date: [SleepLogEntry]] = [:]
+        for entry in sleepEntries {
+            let key = normalizedDay(entry.date)
+            map[key, default: []].append(entry)
+        }
+        for key in map.keys {
+            map[key]?.sort { $0.createdAt < $1.createdAt }
+        }
+        sleepEntriesByDay = map
+    }
+
     private func normalizedDay(_ date: Date) -> Date {
         Calendar.current.startOfDay(for: date)
     }
@@ -272,12 +305,43 @@ class LogsViewModel: ObservableObject {
     func deleteFoodEntry(_ entry: FoodLogEntry) {
         // Delete from Core Data
         coreDataManager.deleteFoodEntry(entry)
-        
+
         // Update local array
         foodEntries.removeAll { $0.id == entry.id }
-        
+
     }
-    
+
+    // MARK: - Sleep Entries
+    func addSleepEntry() {
+        let userId = getUserId()
+        let entry = SleepLogEntry(
+            date: sleepDate,
+            wakeUpTime: sleepWakeUpTime,
+            bedTime: sleepBedTime,
+            userId: userId
+        )
+
+        // Save to Core Data immediately
+        coreDataManager.saveSleepEntry(entry)
+
+        // Update local array
+        sleepEntries.append(entry)
+
+        // Clear form
+        sleepDate = Date()
+        sleepWakeUpTime = nil
+        sleepBedTime = nil
+        showingAddLogSheet = false
+    }
+
+    func deleteSleepEntry(_ entry: SleepLogEntry) {
+        // Delete from Core Data
+        coreDataManager.deleteSleepEntry(entry)
+
+        // Update local array
+        sleepEntries.removeAll { $0.id == entry.id }
+    }
+
     // MARK: - Helper Methods
     private func getUserId() -> String {
         return authManager.getEmail(for: .personal) ?? "default_user"
@@ -312,18 +376,24 @@ class LogsViewModel: ObservableObject {
     var canAddFood: Bool {
         return !foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
-    
+
+    var canAddSleep: Bool {
+        // At least one time must be set
+        return sleepWakeUpTime != nil || sleepBedTime != nil
+    }
+
     var canAddCurrentLogType: Bool {
         switch selectedLogType {
         case .weight: return canAddWeight
         case .workout: return canAddWorkout
         case .food: return canAddFood
+        case .sleep: return canAddSleep
         }
     }
-    
+
     var hasEditChanges: Bool {
         guard editingEntry != nil else { return false }
-        
+
         switch selectedLogType {
         case .weight:
             return weightValue != originalWeightValue ||
@@ -335,18 +405,23 @@ class LogsViewModel: ObservableObject {
         case .food:
             return foodName != originalFoodName ||
                    foodDate != originalFoodDate
+        case .sleep:
+            return sleepDate != originalSleepDate ||
+                   sleepWakeUpTime != originalSleepWakeUpTime ||
+                   sleepBedTime != originalSleepBedTime
         }
     }
-    
+
     var canSaveEdit: Bool {
         canAddCurrentLogType && hasEditChanges
     }
-    
+
     func addCurrentLogEntry() {
         switch selectedLogType {
         case .weight: addWeightEntry()
         case .workout: addWorkoutEntry()
         case .food: addFoodEntry()
+        case .sleep: addSleepEntry()
         }
     }
     
@@ -357,6 +432,9 @@ class LogsViewModel: ObservableObject {
         foodName = ""
         workoutDate = currentDate
         foodDate = currentDate
+        sleepDate = currentDate
+        sleepWakeUpTime = nil
+        sleepBedTime = nil
     }
     
     // MARK: - Edit Entry Methods
@@ -394,10 +472,23 @@ class LogsViewModel: ObservableObject {
         originalFoodDate = entry.date
         showingEditLogSheet = true
     }
-    
+
+    func editSleepEntry(_ entry: SleepLogEntry) {
+        editingEntry = (.sleep, entry.id)
+        selectedLogType = .sleep
+        sleepDate = entry.date
+        sleepWakeUpTime = entry.wakeUpTime
+        sleepBedTime = entry.bedTime
+        // Store original values for change detection
+        originalSleepDate = entry.date
+        originalSleepWakeUpTime = entry.wakeUpTime
+        originalSleepBedTime = entry.bedTime
+        showingEditLogSheet = true
+    }
+
     func updateCurrentLogEntry() {
         guard let editingEntry = editingEntry else { return }
-        
+
         switch editingEntry.type {
         case .weight:
             updateWeightEntry()
@@ -405,6 +496,8 @@ class LogsViewModel: ObservableObject {
             updateWorkoutEntry()
         case .food:
             updateFoodEntry()
+        case .sleep:
+            updateSleepEntry()
         }
     }
     
@@ -481,7 +574,7 @@ class LogsViewModel: ObservableObject {
             errorMessage = "Please enter a food name"
             return
         }
-        
+
         // Find and update the entry
         if let index = foodEntries.firstIndex(where: { $0.id == editingEntry.id }) {
             let updatedEntry = FoodLogEntry(
@@ -491,19 +584,49 @@ class LogsViewModel: ObservableObject {
                 userId: foodEntries[index].userId,
                 createdAt: foodEntries[index].createdAt
             )
-            
+
             // Update in Core Data
             coreDataManager.deleteFoodEntry(foodEntries[index])
             coreDataManager.saveFoodEntry(updatedEntry)
-            
+
             // Update local array
             foodEntries[index] = updatedEntry
         }
-        
+
         // Clear form and close sheet
         resetForms()
         showingEditLogSheet = false
         self.editingEntry = nil
     }
-    
+
+    private func updateSleepEntry() {
+        guard let editingEntry = editingEntry else {
+            return
+        }
+
+        // Find and update the entry
+        if let index = sleepEntries.firstIndex(where: { $0.id == editingEntry.id }) {
+            let updatedEntry = SleepLogEntry(
+                id: editingEntry.id,
+                date: sleepDate,
+                wakeUpTime: sleepWakeUpTime,
+                bedTime: sleepBedTime,
+                userId: sleepEntries[index].userId,
+                createdAt: sleepEntries[index].createdAt,
+                updatedAt: Date()
+            )
+
+            // Update in Core Data
+            coreDataManager.updateSleepEntry(updatedEntry)
+
+            // Update local array
+            sleepEntries[index] = updatedEntry
+        }
+
+        // Clear form and close sheet
+        resetForms()
+        showingEditLogSheet = false
+        self.editingEntry = nil
+    }
+
 } 

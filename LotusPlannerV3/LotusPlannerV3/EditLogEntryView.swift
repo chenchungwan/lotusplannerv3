@@ -16,6 +16,8 @@ struct EditLogEntryView: View {
                     workoutForm
                 case .food:
                     foodForm
+                case .sleep:
+                    sleepForm
                 }
             }
             .navigationTitle("Edit \(viewModel.selectedLogType.displayName)")
@@ -77,6 +79,10 @@ struct EditLogEntryView: View {
             if let entry = viewModel.foodEntries.first(where: { $0.id == editingEntry.id }) {
                 viewModel.deleteFoodEntry(entry)
             }
+        case .sleep:
+            if let entry = viewModel.sleepEntries.first(where: { $0.id == editingEntry.id }) {
+                viewModel.deleteSleepEntry(entry)
+            }
         }
     }
     
@@ -114,5 +120,84 @@ struct EditLogEntryView: View {
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
         }
     }
-    
+
+    private var sleepForm: some View {
+        Section("Sleep Details") {
+            HStack {
+                Text("Bed Time")
+                Spacer()
+                if let bedTime = viewModel.sleepBedTime {
+                    Text(formatDateTime(bedTime))
+                        .foregroundColor(.secondary)
+                    Button(action: {
+                        viewModel.sleepBedTime = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    Button("Set") {
+                        // Set to 11 PM on the day before sleepDate
+                        let calendar = Calendar.current
+                        let dayBefore = calendar.date(byAdding: .day, value: -1, to: viewModel.sleepDate) ?? viewModel.sleepDate
+                        viewModel.sleepBedTime = calendar.date(bySettingHour: 23, minute: 0, second: 0, of: dayBefore) ?? Date()
+                    }
+                }
+            }
+
+            if viewModel.sleepBedTime != nil {
+                DatePicker("", selection: Binding(
+                    get: { viewModel.sleepBedTime ?? Date() },
+                    set: { viewModel.sleepBedTime = $0 }
+                ), displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+            }
+
+            HStack {
+                Text("Wake Up Time")
+                Spacer()
+                if let wakeTime = viewModel.sleepWakeUpTime {
+                    Text(formatDateTime(wakeTime))
+                        .foregroundColor(.secondary)
+                    Button(action: {
+                        viewModel.sleepWakeUpTime = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    Button("Set") {
+                        // Set to 7 AM on sleepDate
+                        viewModel.sleepWakeUpTime = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: viewModel.sleepDate) ?? Date()
+                    }
+                }
+            }
+
+            if viewModel.sleepWakeUpTime != nil {
+                DatePicker("", selection: Binding(
+                    get: { viewModel.sleepWakeUpTime ?? Date() },
+                    set: { viewModel.sleepWakeUpTime = $0 }
+                ), displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+            }
+        }
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
 }

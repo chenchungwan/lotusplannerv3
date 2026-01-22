@@ -20,8 +20,12 @@ struct DayViewStandard: View {
     @State private var eventsTasksDividerPosition: CGFloat
     @State private var isEventTaskDividerDragging: Bool = false
 
-    // Logs section collapsible state
-    @State private var logsExpanded: Bool = true
+    // Divider state between columns (events/tasks and journal)
+    @State private var columnDividerPosition: CGFloat
+    @State private var isColumnDividerDragging: Bool = false
+
+    // Logs section collapsible state (defaults to collapsed)
+    @State private var logsExpanded: Bool
 
     // Task selection state
     @State private var selectedTask: GoogleTask?
@@ -38,29 +42,31 @@ struct DayViewStandard: View {
         self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
         self.onEventTap = onEventTap
 
-        // Initialize divider position (40% for events, 60% for tasks by default)
+        // Initialize divider positions and collapsed state from AppPreferences
         self._eventsTasksDividerPosition = State(initialValue: AppPreferences.shared.dayViewStandardEventTaskDividerPosition)
+        self._columnDividerPosition = State(initialValue: AppPreferences.shared.dayViewStandardColumnDividerPosition)
+        self._logsExpanded = State(initialValue: !AppPreferences.shared.dayViewStandardLogsSectionCollapsed)
     }
 
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Collapsible Logs Section
+                // Collapsible Logs Section (at top)
                 if appPrefs.showAnyLogs {
                     logsSection
                 }
 
-                // Main Content: Journal (left) | Events + Tasks (right)
+                // Main Content: Events + Tasks (left) | Journal (right)
                 HStack(spacing: 0) {
-                    // Left Column: Journal
+                    // Left Column: Events + Tasks with draggable divider
+                    leftColumn(geometry: geometry)
+                        .frame(width: columnDividerPosition)
+
+                    // Draggable divider between columns
+                    columnDivider(geometry: geometry)
+
+                    // Right Column: Journal
                     journalColumn
-                        .frame(width: geometry.size.width * 0.4)
-
-                    Divider()
-                        .frame(width: 1)
-
-                    // Right Column: Events + Tasks with draggable divider
-                    rightColumn(geometry: geometry)
                         .frame(maxWidth: .infinity)
                 }
                 .frame(maxHeight: .infinity)
@@ -115,34 +121,55 @@ struct DayViewStandard: View {
 
     private var logsSection: some View {
         VStack(spacing: 0) {
-            // Header with collapse button
-            HStack {
-                Text("Daily Logs")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        logsExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: logsExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemBackground))
-
             // Logs content (collapsible)
             if logsExpanded {
-                LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
-                    .padding(8)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                // Collapse button
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            logsExpanded = false
+                            appPrefs.updateDayViewStandardLogsSectionCollapsed(true)
+                        }
+                    }) {
+                        Image(systemName: "chevron.up")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(4)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 8)
+                }
+                .padding(.vertical, 4)
+                .background(Color(.systemBackground))
+
+                LogsComponent(currentDate: navigationManager.currentDate, horizontal: false, compactHorizontal: true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                // Expand button when collapsed
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        logsExpanded = true
+                        appPrefs.updateDayViewStandardLogsSectionCollapsed(false)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Logs")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .background(Color(.systemGray6))
             }
 
             Divider()
@@ -153,23 +180,42 @@ struct DayViewStandard: View {
 
     private var journalColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Journal")
-                .font(.headline)
-                .foregroundColor(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemBackground))
-
             JournalView(currentDate: .constant(navigationManager.currentDate), embedded: true, layoutType: .compact)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(.systemBackground))
     }
 
-    // MARK: - Right Column (Events + Tasks)
+    // MARK: - Column Divider
 
-    private func rightColumn(geometry: GeometryProxy) -> some View {
+    private func columnDivider(geometry: GeometryProxy) -> some View {
+        Rectangle()
+            .fill(isColumnDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(width: 8)
+            .overlay(
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundColor(isColumnDividerDragging ? .white : .gray)
+            )
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isColumnDividerDragging = true
+                        let minWidth: CGFloat = 200
+                        let maxWidth: CGFloat = geometry.size.width - 200
+                        let newWidth = columnDividerPosition + value.translation.width
+                        columnDividerPosition = max(minWidth, min(maxWidth, newWidth))
+                    }
+                    .onEnded { _ in
+                        isColumnDividerDragging = false
+                        appPrefs.updateDayViewStandardColumnDividerPosition(columnDividerPosition)
+                    }
+            )
+    }
+
+    // MARK: - Left Column (Events + Tasks)
+
+    private func leftColumn(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
             // Events Section
             eventsSection
@@ -186,13 +232,17 @@ struct DayViewStandard: View {
 
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Events")
-                .font(.headline)
-                .foregroundColor(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemBackground))
+            // Events title
+            HStack {
+                Text("Events")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                Spacer()
+            }
+            .background(Color(.systemBackground))
 
             ScrollView(.vertical, showsIndicators: true) {
                 if appPrefs.showEventsAsListInDay {
@@ -256,17 +306,6 @@ struct DayViewStandard: View {
             if bulkEditManager.state.isActive {
                 BulkEditToolbarView(bulkEditManager: bulkEditManager)
             }
-
-            HStack {
-                Text("Tasks")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemBackground))
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 12) {

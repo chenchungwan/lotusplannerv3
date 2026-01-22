@@ -75,11 +75,12 @@ struct BulkEditState {
 
 struct BulkEditUndoData {
     let tasks: [GoogleTask]
-    let listId: String
-    let accountKind: GoogleAuthManager.AccountKind
+    let listId: String  // Primary list ID (for backward compatibility)
+    let accountKind: GoogleAuthManager.AccountKind  // Primary account kind (for backward compatibility)
     let destinationListId: String?
     let destinationAccountKind: GoogleAuthManager.AccountKind?
     let originalDueDates: [String: String?]?
     let originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?]?
+    let taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)]?  // Maps task ID to its list/account
     let count: Int
 }

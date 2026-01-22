@@ -5,20 +5,23 @@ enum LogType: String, CaseIterable, Codable {
     case weight = "weight"
     case workout = "workout"
     case food = "food"
-    
+    case sleep = "sleep"
+
     var displayName: String {
         switch self {
         case .weight: return "Weight"
         case .workout: return "Workout"
         case .food: return "Food"
+        case .sleep: return "Sleep"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .weight: return "scalemass"
         case .workout: return "figure.run"
         case .food: return "fork.knife"
+        case .sleep: return "bed.double.fill"
         }
     }
 }
@@ -86,13 +89,62 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
     let name: String
     let userId: String
     let createdAt: Date
-    
+
     init(date: Date, name: String, userId: String) {
         self.id = UUID().uuidString
         self.date = date
         self.name = name
         self.userId = userId
         self.createdAt = Date()
+    }
+}
+
+// MARK: - Sleep Log Entry
+struct SleepLogEntry: Identifiable, Codable, Hashable {
+    let id: String
+    let date: Date
+    let wakeUpTime: Date?
+    let bedTime: Date?
+    let userId: String
+    let createdAt: Date
+    let updatedAt: Date
+
+    init(date: Date, wakeUpTime: Date?, bedTime: Date?, userId: String) {
+        self.id = UUID().uuidString
+        self.date = date
+        self.wakeUpTime = wakeUpTime
+        self.bedTime = bedTime
+        self.userId = userId
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    init(id: String, date: Date, wakeUpTime: Date?, bedTime: Date?, userId: String, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.date = date
+        self.wakeUpTime = wakeUpTime
+        self.bedTime = bedTime
+        self.userId = userId
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var sleepDuration: TimeInterval? {
+        guard let wake = wakeUpTime, let bed = bedTime else { return nil }
+        // Calculate duration considering bed time might be on previous day
+        if wake > bed {
+            // Normal case: went to bed on previous day, woke up on current day
+            return wake.timeIntervalSince(bed)
+        } else {
+            // Edge case: both times on same day (shouldn't normally happen)
+            return bed.timeIntervalSince(wake) + 86400 // Add 24 hours
+        }
+    }
+
+    var sleepDurationFormatted: String? {
+        guard let duration = sleepDuration else { return nil }
+        let decimalHours = duration / 3600
+        return String(format: "%.1f hours", decimalHours)
     }
 }
 
@@ -130,4 +182,5 @@ extension WeightLogEntry: LogEntry {
 
 extension WorkoutLogEntry: LogEntry {}
 extension FoodLogEntry: LogEntry {}
+extension SleepLogEntry: LogEntry {}
 extension ScrapbookEntry: LogEntry {} 

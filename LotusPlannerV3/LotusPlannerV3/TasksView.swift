@@ -701,11 +701,17 @@ class TasksViewModel: ObservableObject {
             // Also delete the time window for this task
             TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
         }
-        
+
         // BACKGROUND SYNC: Delete from server in background
         Task {
             do {
                 try await deleteTaskFromServer(task, from: listId, for: kind)
+
+                // Clear cache after successful deletion to prevent deleted tasks from reappearing
+                await MainActor.run {
+                    self.clearCacheForAccount(kind)
+                    self.clearAllFilteredCaches()
+                }
             } catch {
                 // REVERT OPTIMISTIC DELETE on error - restore the task
                 await MainActor.run {
@@ -725,7 +731,7 @@ class TasksViewModel: ObservableObject {
                     }
                     self.errorMessage = "Failed to delete task: \(error.localizedDescription)"
                 }
-                // Note: We don't restore the time window on error - if deletion fails, 
+                // Note: We don't restore the time window on error - if deletion fails,
                 // the task will be treated as all-day (no time window)
             }
         }
@@ -1514,6 +1520,7 @@ struct TasksView: View {
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @StateObject private var bulkEditManager = BulkEditManager()
     @State private var selectedFilter: TaskFilter = .day
     @State private var referenceDate: Date = Date()
     @State private var selectedTask: GoogleTask?
@@ -1781,7 +1788,16 @@ struct TasksView: View {
                             },
                             horizontalCards: false,
                             isSingleDayView: selectedFilter == .day,
-                            showTitle: false
+                            showTitle: false,
+                            isBulkEditMode: bulkEditManager.state.isActive,
+                            selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                            onTaskSelectionToggle: { taskId in
+                                if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                    bulkEditManager.state.selectedTaskIds.remove(taskId)
+                                } else {
+                                    bulkEditManager.state.selectedTaskIds.insert(taskId)
+                                }
+                            }
                         )
                     }
                 }
@@ -1820,7 +1836,16 @@ struct TasksView: View {
                             },
                             horizontalCards: false,
                             isSingleDayView: selectedFilter == .day,
-                            showTitle: false
+                            showTitle: false,
+                            isBulkEditMode: bulkEditManager.state.isActive,
+                            selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                            onTaskSelectionToggle: { taskId in
+                                if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                    bulkEditManager.state.selectedTaskIds.remove(taskId)
+                                } else {
+                                    bulkEditManager.state.selectedTaskIds.insert(taskId)
+                                }
+                            }
                         )
                     }
                 }
@@ -1851,6 +1876,12 @@ struct TasksView: View {
         .onAppear {
             Task {
                 await viewModel.loadTasks()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleTasksBulkEdit"))) { _ in
+            bulkEditManager.state.isActive.toggle()
+            if !bulkEditManager.state.isActive {
+                bulkEditManager.state.selectedTaskIds.removeAll()
             }
         }
         .sheet(item: $taskSheetSelection) { selection in
@@ -1942,8 +1973,15 @@ struct TasksView: View {
         }
         .toolbarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .top) {
-            GlobalNavBar()
-                .background(.ultraThinMaterial)
+            VStack(spacing: 0) {
+                GlobalNavBar()
+                    .background(.ultraThinMaterial)
+
+                if bulkEditManager.state.isActive {
+                    BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
         }
         .sheet(isPresented: $showingAddEvent) {
             // Launch event creation modal from Tasks view
@@ -1954,6 +1992,77 @@ struct TasksView: View {
                 appPrefs: appPrefs,
                 showEventOnly: true
             )
+        }
+        // MARK: - Bulk Edit Confirmations and Sheets
+        .confirmationDialog(
+            "Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")?",
+            isPresented: $bulkEditManager.state.showingCompleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Complete") {
+                performBulkComplete()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")?",
+            isPresented: $bulkEditManager.state.showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                performBulkDelete()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        .sheet(isPresented: $bulkEditManager.state.showingDueDatePicker) {
+            BulkUpdateDueDatePicker(
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                onSave: { date, isAllDay, startTime, endTime in
+                    bulkEditManager.state.pendingDueDate = date
+                    bulkEditManager.state.pendingIsAllDay = isAllDay
+                    bulkEditManager.state.pendingStartTime = startTime
+                    bulkEditManager.state.pendingEndTime = endTime
+                    performBulkUpdateDueDate()
+                }
+            )
+        }
+        .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
+            BulkMoveDestinationPicker(
+                personalTaskLists: viewModel.personalTaskLists,
+                professionalTaskLists: viewModel.professionalTaskLists,
+                onSelect: { accountKind, listId in
+                    bulkEditManager.state.pendingMoveDestination = (listId: listId, accountKind: accountKind)
+                    performBulkMove()
+                }
+            )
+        }
+        // Undo Toast
+        .overlay(alignment: .bottom) {
+            if bulkEditManager.state.showingUndoToast,
+               let action = bulkEditManager.state.undoAction,
+               let undoData = bulkEditManager.state.undoData {
+                UndoToast(
+                    action: action,
+                    count: undoData.count,
+                    accentColor: appPrefs.personalColor,
+                    onUndo: {
+                        performUndo(action: action, data: undoData)
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
+                    },
+                    onDismiss: {
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
+                    }
+                )
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: bulkEditManager.state.showingUndoToast)
+            }
         }
         .onAppear {
             // Load tasks on-demand when TasksView appears (performance optimization)
@@ -2127,7 +2236,16 @@ struct TasksView: View {
                             }
                         },
                         horizontalCards: true,
-                        isSingleDayView: selectedFilter == .day
+                        isSingleDayView: selectedFilter == .day,
+                        isBulkEditMode: bulkEditManager.state.isActive,
+                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                        onTaskSelectionToggle: { taskId in
+                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                bulkEditManager.state.selectedTaskIds.remove(taskId)
+                            } else {
+                                bulkEditManager.state.selectedTaskIds.insert(taskId)
+                            }
+                        }
                     )
                 }
             }
@@ -2163,7 +2281,16 @@ struct TasksView: View {
                             }
                         },
                         horizontalCards: true,
-                        isSingleDayView: selectedFilter == .day
+                        isSingleDayView: selectedFilter == .day,
+                        isBulkEditMode: bulkEditManager.state.isActive,
+                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                        onTaskSelectionToggle: { taskId in
+                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                bulkEditManager.state.selectedTaskIds.remove(taskId)
+                            } else {
+                                bulkEditManager.state.selectedTaskIds.insert(taskId)
+                            }
+                        }
                     )
                 }
             }
@@ -2200,7 +2327,16 @@ struct TasksView: View {
                         }
                     },
                     horizontalCards: false,
-                    isSingleDayView: selectedFilter == .day
+                    isSingleDayView: selectedFilter == .day,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
                 .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
             }
@@ -2236,7 +2372,16 @@ struct TasksView: View {
                         }
                     },
                     horizontalCards: false,
-                    isSingleDayView: selectedFilter == .day
+                    isSingleDayView: selectedFilter == .day,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
                 .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
             }
@@ -2386,6 +2531,190 @@ struct TasksView: View {
         allSubfilter = .all
         referenceDate = Date()
         navigationManager.updateInterval(.day, date: Date())
+    }
+
+    // MARK: - Bulk Edit Operations
+
+    private func performBulkComplete() {
+        // Get all selected tasks from both personal and professional accounts
+        let selectedIds = bulkEditManager.state.selectedTaskIds
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Collect from personal tasks
+        for (listId, tasks) in viewModel.personalTasks {
+            for task in tasks where selectedIds.contains(task.id) && !task.isCompleted {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Collect from professional tasks
+        for (listId, tasks) in viewModel.professionalTasks {
+            for task in tasks where selectedIds.contains(task.id) && !task.isCompleted {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        guard !allTasks.isEmpty else { return }
+
+        // Pass tasks with their list/account info
+        bulkEditManager.bulkComplete(
+            tasks: allTasks,
+            tasksVM: viewModel
+        ) { undoData in
+            bulkEditManager.state.undoAction = .complete
+            bulkEditManager.state.undoData = undoData
+            bulkEditManager.state.showingUndoToast = true
+
+            // Auto-dismiss toast after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if bulkEditManager.state.undoAction == .complete {
+                    bulkEditManager.state.showingUndoToast = false
+                    bulkEditManager.state.undoAction = nil
+                    bulkEditManager.state.undoData = nil
+                }
+            }
+        }
+    }
+
+    private func performBulkDelete() {
+        // Get all selected tasks from both personal and professional accounts
+        let selectedIds = bulkEditManager.state.selectedTaskIds
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Collect from personal tasks
+        for (listId, tasks) in viewModel.personalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Collect from professional tasks
+        for (listId, tasks) in viewModel.professionalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        guard !allTasks.isEmpty else { return }
+
+        bulkEditManager.bulkDelete(
+            tasks: allTasks,
+            tasksVM: viewModel
+        ) { undoData in
+            bulkEditManager.state.undoAction = .delete
+            bulkEditManager.state.undoData = undoData
+            bulkEditManager.state.showingUndoToast = true
+
+            // Auto-dismiss toast after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if bulkEditManager.state.undoAction == .delete {
+                    bulkEditManager.state.showingUndoToast = false
+                    bulkEditManager.state.undoAction = nil
+                    bulkEditManager.state.undoData = nil
+                }
+            }
+        }
+    }
+
+    private func performBulkMove() {
+        guard let destination = bulkEditManager.state.pendingMoveDestination else { return }
+
+        // Get all selected tasks from both personal and professional accounts
+        let selectedIds = bulkEditManager.state.selectedTaskIds
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Collect from personal tasks
+        for (listId, tasks) in viewModel.personalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Collect from professional tasks
+        for (listId, tasks) in viewModel.professionalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        guard !allTasks.isEmpty else { return }
+
+        bulkEditManager.bulkMove(
+            tasks: allTasks,
+            to: destination.listId,
+            destinationAccountKind: destination.accountKind,
+            tasksVM: viewModel
+        ) { undoData in
+            bulkEditManager.state.undoAction = .move
+            bulkEditManager.state.undoData = undoData
+            bulkEditManager.state.showingUndoToast = true
+
+            // Auto-dismiss toast after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if bulkEditManager.state.undoAction == .move {
+                    bulkEditManager.state.showingUndoToast = false
+                    bulkEditManager.state.undoAction = nil
+                    bulkEditManager.state.undoData = nil
+                }
+            }
+        }
+    }
+
+    private func performBulkUpdateDueDate() {
+        // Get all selected tasks from both personal and professional accounts
+        let selectedIds = bulkEditManager.state.selectedTaskIds
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Collect from personal tasks
+        for (listId, tasks) in viewModel.personalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Collect from professional tasks
+        for (listId, tasks) in viewModel.professionalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        guard !allTasks.isEmpty else { return }
+
+        bulkEditManager.bulkUpdateDueDate(
+            tasks: allTasks,
+            dueDate: bulkEditManager.state.pendingDueDate,
+            isAllDay: bulkEditManager.state.pendingIsAllDay,
+            startTime: bulkEditManager.state.pendingStartTime,
+            endTime: bulkEditManager.state.pendingEndTime,
+            tasksVM: viewModel
+        ) { undoData in
+            bulkEditManager.state.undoAction = .updateDueDate
+            bulkEditManager.state.undoData = undoData
+            bulkEditManager.state.showingUndoToast = true
+
+            // Auto-dismiss toast after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if bulkEditManager.state.undoAction == .updateDueDate {
+                    bulkEditManager.state.showingUndoToast = false
+                    bulkEditManager.state.undoAction = nil
+                    bulkEditManager.state.undoData = nil
+                }
+            }
+        }
+    }
+
+    private func performUndo(action: BulkEditAction, data: BulkEditUndoData) {
+        switch action {
+        case .complete:
+            bulkEditManager.undoComplete(data: data, tasksVM: viewModel)
+        case .delete:
+            bulkEditManager.undoDelete(data: data, tasksVM: viewModel)
+        case .move:
+            bulkEditManager.undoMove(data: data, tasksVM: viewModel)
+        case .updateDueDate:
+            bulkEditManager.undoUpdateDueDate(data: data, tasksVM: viewModel)
+        }
     }
 }
 
