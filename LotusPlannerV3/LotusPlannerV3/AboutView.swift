@@ -63,7 +63,7 @@ struct AboutView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Text("© 2025 Lotus Planner")
+                    Text("© 2026 Lotus Planner")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

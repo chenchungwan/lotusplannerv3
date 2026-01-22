@@ -336,3 +336,99 @@ struct BulkMoveDestinationPicker: View {
         }
     }
 }
+
+// MARK: - Bulk Edit Toolbar View
+
+struct BulkEditToolbarView: View {
+    @ObservedObject var bulkEditManager: BulkEditManager
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 20) {
+                // Exit button
+                Button {
+                    bulkEditManager.state.isActive = false
+                    bulkEditManager.state.selectedTaskIds.removeAll()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+
+                // Selection count
+                Text("\(bulkEditManager.state.selectedTaskIds.count) selected")
+                    .font(.headline)
+
+                Spacer()
+
+                // Action buttons
+                HStack(spacing: 16) {
+                    // Complete button
+                    Button {
+                        bulkEditManager.state.showingCompleteConfirmation = true
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle")
+                                .font(.title2)
+                            Text("Complete")
+                                .font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
+                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .green)
+
+                    // Due Date button
+                    Button {
+                        bulkEditManager.state.showingDueDatePicker = true
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                                .font(.title2)
+                            Text("Due Date")
+                                .font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
+                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .blue)
+
+                    // Move button
+                    Button {
+                        bulkEditManager.state.showingMoveDestinationPicker = true
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "folder")
+                                .font(.title2)
+                            Text("Move")
+                                .font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
+                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .orange)
+
+                    // Delete button
+                    Button {
+                        bulkEditManager.state.showingDeleteConfirmation = true
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "trash")
+                                .font(.title2)
+                            Text("Delete")
+                                .font(.caption2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
+                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .red)
+                }
+            }
+            .padding(12)
+            .background(Color.blue.opacity(0.15))
+
+            Divider()
+        }
+    }
+}

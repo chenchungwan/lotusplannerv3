@@ -6,6 +6,7 @@ struct DayViewExpanded: View {
     private let calendarVM: CalendarViewModel
     @ObservedObject private var tasksVM: TasksViewModel
     @ObservedObject private var auth: GoogleAuthManager
+    @ObservedObject private var bulkEditManager: BulkEditManager
     private let onEventTap: ((GoogleCalendarEvent) -> Void)?
 
     // Divider state between top row and logs
@@ -25,14 +26,15 @@ struct DayViewExpanded: View {
     @State private var selectedTaskAccount: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails: Bool = false
 
-    init(onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+    init(bulkEditManager: BulkEditManager, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
         self._navigationManager = ObservedObject(wrappedValue: NavigationManager.shared)
         self._appPrefs = ObservedObject(wrappedValue: AppPreferences.shared)
         self.calendarVM = DataManager.shared.calendarViewModel
         self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
         self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
+        self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
         self.onEventTap = onEventTap
-        
+
         // Initialize divider positions from AppPreferences
         self._topRowHeight = State(initialValue: AppPreferences.shared.dayViewExpandedTopRowHeight)
         self._leftTimelineWidth = State(initialValue: AppPreferences.shared.dayViewExpandedLeftTimelineWidth)
@@ -114,7 +116,12 @@ struct DayViewExpanded: View {
                                 )
 
                             // Tasks (two side-by-side columns)
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Bulk Edit Toolbar (shown when in bulk edit mode)
+                                if bulkEditManager.state.isActive {
+                                    BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                                }
+
                                 ScrollView(.vertical, showsIndicators: true) {
                                     HStack(alignment: .top, spacing: 12) {
                                 let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
@@ -387,7 +394,7 @@ extension DayViewExpanded {
 }
 
 #Preview {
-    DayViewExpanded()
+    DayViewExpanded(bulkEditManager: BulkEditManager())
 }
 
 

@@ -2585,21 +2585,20 @@ struct CalendarView: View {
     }
     
     private var dayView: some View {
-        ZStack(alignment: .top) {
-            dayViewBase
-                .task {
-                    // Clear caches and load fresh data
-                    calendarViewModel.clearAllData()
-                    await tasksViewModel.loadTasks(forceClear: true)
-                    await calendarViewModel.refreshDataForCurrentView()
+        dayViewBase
+            .task {
+                // Clear caches and load fresh data
+                calendarViewModel.clearAllData()
+                await tasksViewModel.loadTasks(forceClear: true)
+                await calendarViewModel.refreshDataForCurrentView()
 
-                    await MainActor.run {
-                        updateCachedTasks()
-                        // Force view updates
-                        calendarViewModel.objectWillChange.send()
-                        tasksViewModel.objectWillChange.send()
-                    }
+                await MainActor.run {
+                    updateCachedTasks()
+                    // Force view updates
+                    calendarViewModel.objectWillChange.send()
+                    tasksViewModel.objectWillChange.send()
                 }
+            }
             .onChange(of: currentDate) { oldValue, newValue in
                 Task {
                     // Clear caches and load fresh data
@@ -2701,15 +2700,6 @@ struct CalendarView: View {
             .onDisappear {
                 stopCurrentTimeTimer()
             }
-
-            // Bulk Edit Toolbar Overlay
-            if bulkEditManager.state.isActive {
-                VStack(spacing: 0) {
-                    bulkEditToolbar
-                    Spacer()
-                }
-            }
-        }
     }
     
     private var dayViewBase: some View {
@@ -2845,25 +2835,37 @@ struct CalendarView: View {
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         switch appPrefs.dayViewLayout {
         case .defaultNew:
-            DayViewExpanded(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewExpanded(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .compactTwo:
-            DayViewCompact(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewCompact(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .mobile:
-            DayViewMobile(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewMobile(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .timebox:
-            DayViewTimebox(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewTimebox(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         default:
             dayViewContentCompact(geometry: geometry)
         }
@@ -2890,7 +2892,12 @@ struct CalendarView: View {
             // Top row: HStack of Tasks (left) and Logs (right) with vertical divider
             HStack(spacing: 0) {
                 // Tasks content (reuse topLeftDaySection)
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Bulk Edit Toolbar (shown when in bulk edit mode)
+                    if bulkEditManager.state.isActive {
+                        bulkEditToolbar
+                    }
+
                     ScrollView(.vertical, showsIndicators: true) {
                         topLeftDaySection
                             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -3036,7 +3043,12 @@ struct CalendarView: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 12) {
                 // Row 1: Tasks (Personal + Professional stacked vertically)
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Bulk Edit Toolbar (shown when in bulk edit mode)
+                    if bulkEditManager.state.isActive {
+                        bulkEditToolbar
+                    }
+
                     // Reuse existing day tasks section which renders personal and professional
                     topLeftDaySection
                 }
@@ -3117,7 +3129,12 @@ struct CalendarView: View {
                 .padding(.horizontal, 8)
 
                 // Row 2: Tasks (Personal + Professional stacked vertically)
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Bulk Edit Toolbar (shown when in bulk edit mode)
+                    if bulkEditManager.state.isActive {
+                        bulkEditToolbar
+                    }
+
                     topLeftDaySection
                 }
                 .padding(.horizontal, 8)
@@ -3150,7 +3167,12 @@ struct CalendarView: View {
         
         return VStack(spacing: 0) {
             // Top section - Tasks
-            VStack(spacing: 6) {
+            VStack(spacing: 0) {
+                // Bulk Edit Toolbar (shown when in bulk edit mode)
+                if bulkEditManager.state.isActive {
+                    bulkEditToolbar
+                }
+
                 // Personal & Professional tasks (full width) with vertical scrolling
                 ScrollView(.vertical, showsIndicators: true) {
                     topLeftDaySection
