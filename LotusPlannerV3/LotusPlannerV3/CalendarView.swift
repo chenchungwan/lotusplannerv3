@@ -1289,6 +1289,95 @@ struct CalendarView: View {
                 }
             )
         }
+        // Bulk edit confirmation dialogs
+        .confirmationDialog("Complete Tasks", isPresented: $bulkEditManager.state.showingCompleteConfirmation) {
+            Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
+                Task {
+                    // Get all selected tasks from both accounts
+                    let allTasks = getAllTasksForBulkEdit()
+                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+
+                    await bulkEditManager.bulkComplete(
+                        tasks: selectedTasks.map { $0.task },
+                        listIds: selectedTasks.map { $0.listId },
+                        accountKinds: selectedTasks.map { $0.accountKind },
+                        tasksVM: tasksViewModel
+                    ) { undoData in
+                        // Success - update cached tasks
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete Tasks", isPresented: $bulkEditManager.state.showingDeleteConfirmation) {
+            Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+
+                    await bulkEditManager.bulkDelete(
+                        tasks: selectedTasks.map { $0.task },
+                        listIds: selectedTasks.map { $0.listId },
+                        accountKinds: selectedTasks.map { $0.accountKind },
+                        tasksVM: tasksViewModel
+                    ) { undoData in
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $bulkEditManager.state.showingDueDatePicker) {
+            BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+
+                    await bulkEditManager.bulkUpdateDueDate(
+                        tasks: selectedTasks.map { $0.task },
+                        listIds: selectedTasks.map { $0.listId },
+                        accountKinds: selectedTasks.map { $0.accountKind },
+                        newDueDate: date,
+                        isAllDay: isAllDay,
+                        startTime: startTime,
+                        endTime: endTime,
+                        tasksVM: tasksViewModel
+                    ) { undoData in
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
+                    }
+                }
+                bulkEditManager.state.showingDueDatePicker = false
+            }
+        }
+        .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
+            BulkMoveDestinationPicker(
+                personalTaskLists: tasksViewModel.personalTaskLists,
+                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                onSelect: { targetAccount, targetListId in
+                    Task {
+                        let allTasks = getAllTasksForBulkEdit()
+                        let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+
+                        await bulkEditManager.bulkMove(
+                            tasks: selectedTasks.map { $0.task },
+                            sourceListIds: selectedTasks.map { $0.listId },
+                            sourceAccountKinds: selectedTasks.map { $0.accountKind },
+                            targetAccount: targetAccount,
+                            targetListId: targetListId,
+                            tasksVM: tasksViewModel
+                        ) { undoData in
+                            updateCachedTasks()
+                            updateMonthCachedTasks()
+                        }
+                    }
+                    bulkEditManager.state.showingMoveDestinationPicker = false
+                }
+            )
+        }
         .onChange(of: authManager.linkedStates) { oldValue, newValue in
             // When an account is unlinked, clear associated tasks and calendar events
             if !(newValue[.personal] ?? false) {
@@ -1983,35 +2072,44 @@ struct CalendarView: View {
             HStack(spacing: 0) {
                 // Personal Tasks Component
                 TasksComponent(
-                taskLists: tasksViewModel.personalTaskLists,
-                tasksDict: cachedMonthPersonalTasks,
-                accentColor: appPrefs.personalColor,
-                accountType: .personal,
-                onTaskToggle: { task, listId in
-                    Task {
-                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                        updateCachedTasks()
+                    taskLists: tasksViewModel.personalTaskLists,
+                    tasksDict: cachedMonthPersonalTasks,
+                    accentColor: appPrefs.personalColor,
+                    accountType: .personal,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            updateCachedTasks()
+                        }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                        }
+                    },
+                    isSingleDayView: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
                     }
-                },
-                onTaskDetails: { task, listId in
-                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
-                },
-                onListRename: { listId, newName in
-                    Task {
-                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                    }
-                },
-                onOrderChanged: { newOrder in
-                    Task {
-                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
-                    }
-                },
-                isSingleDayView: true
-            )
+                )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.all, 8)
             
-            // Professional Tasks Component  
+            // Professional Tasks Component
             TasksComponent(
                 taskLists: tasksViewModel.professionalTaskLists,
                 tasksDict: cachedMonthProfessionalTasks,
@@ -2036,7 +2134,16 @@ struct CalendarView: View {
                         await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                     }
                 },
-                isSingleDayView: true
+                isSingleDayView: true,
+                isBulkEditMode: bulkEditManager.state.isActive,
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                onTaskSelectionToggle: { taskId in
+                    if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                        bulkEditManager.state.selectedTaskIds.remove(taskId)
+                    } else {
+                        bulkEditManager.state.selectedTaskIds.insert(taskId)
+                    }
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             
@@ -4687,21 +4794,41 @@ struct CalendarView: View {
 
     
     // MARK: - Helper Methods for Real Tasks
+    private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Add personal tasks
+        for (listId, tasks) in cachedMonthPersonalTasks {
+            for task in tasks {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Add professional tasks
+        for (listId, tasks) in cachedMonthProfessionalTasks {
+            for task in tasks {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        return allTasks
+    }
+
     private func updateCachedTasks() {
-        
+
         cachedPersonalTasks = authManager.isLinked(kind: .personal) ? filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate) : [:]
         cachedProfessionalTasks = authManager.isLinked(kind: .professional) ? filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate) : [:]
-        
-        
+
+
         // Debug: Print first few task titles to verify content
         let _ = cachedPersonalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
         let _ = cachedProfessionalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
-        
+
         // Force UI update
         DispatchQueue.main.async {
             // This should trigger a UI refresh
         }
-        
+
         updateMonthCachedTasks() // Also update month cached tasks
     }
     

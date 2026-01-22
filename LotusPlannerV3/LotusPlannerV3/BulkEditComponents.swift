@@ -272,3 +272,67 @@ struct UndoToast: View {
         .padding(.horizontal, 16)
     }
 }
+
+// MARK: - Bulk Move Destination Picker
+
+struct BulkMoveDestinationPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let personalTaskLists: [GoogleTaskList]
+    let professionalTaskLists: [GoogleTaskList]
+    let onSelect: (GoogleAuthManager.AccountKind, String) -> Void
+
+    var body: some View {
+        NavigationView {
+            List {
+                if !personalTaskLists.isEmpty {
+                    Section("Personal") {
+                        ForEach(personalTaskLists) { list in
+                            Button {
+                                onSelect(.personal, list.id)
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(list.title)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !professionalTaskLists.isEmpty {
+                    Section("Professional") {
+                        ForEach(professionalTaskLists) { list in
+                            Button {
+                                onSelect(.professional, list.id)
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(list.title)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Move to List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}

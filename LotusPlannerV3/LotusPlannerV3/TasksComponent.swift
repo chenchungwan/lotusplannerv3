@@ -15,12 +15,15 @@ struct TasksComponent: View {
     let isSingleDayView: Bool
     let showTitle: Bool
     let showTaskStartTime: Bool
+    let isBulkEditMode: Bool
+    let selectedTaskIds: Set<String>
+    let onTaskSelectionToggle: ((String) -> Void)?
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
-    
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true, showTaskStartTime: Bool = false) {
+
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true, showTaskStartTime: Bool = false, isBulkEditMode: Bool = false, selectedTaskIds: Set<String> = [], onTaskSelectionToggle: ((String) -> Void)? = nil) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -37,6 +40,9 @@ struct TasksComponent: View {
         self.isSingleDayView = isSingleDayView
         self.showTitle = showTitle
         self.showTaskStartTime = showTaskStartTime
+        self.isBulkEditMode = isBulkEditMode
+        self.selectedTaskIds = selectedTaskIds
+        self.onTaskSelectionToggle = onTaskSelectionToggle
         self._localTaskLists = State(initialValue: taskLists)
     }
     
@@ -362,10 +368,15 @@ private struct TaskComponentListCard: View {
                         accentColor: accentColor,
                         onToggle: { onTaskToggle(task) },
                         onDetails: { task, listId in
-                            onTaskDetails(task, listId) 
+                            onTaskDetails(task, listId)
                         },
                         isSingleDayView: isSingleDayView,
-                        showTaskStartTime: showTaskStartTime
+                        showTaskStartTime: showTaskStartTime,
+                        isBulkEditMode: isBulkEditMode,
+                        isSelected: selectedTaskIds.contains(task.id),
+                        onSelectionToggle: {
+                            onTaskSelectionToggle?(task.id)
+                        }
                     )
                     .environment(\.hideDueDate, hideDueDateTag)
                 }
@@ -385,10 +396,15 @@ private struct TaskComponentListCard: View {
                     accentColor: accentColor,
                     onToggle: { onTaskToggle(task) },
                     onDetails: { task, listId in
-                        onTaskDetails(task, listId) 
+                        onTaskDetails(task, listId)
                     },
                     isSingleDayView: isSingleDayView,
-                    showTaskStartTime: showTaskStartTime
+                    showTaskStartTime: showTaskStartTime,
+                    isBulkEditMode: isBulkEditMode,
+                    isSelected: selectedTaskIds.contains(task.id),
+                    onSelectionToggle: {
+                        onTaskSelectionToggle?(task.id)
+                    }
                 )
                 .environment(\.hideDueDate, hideDueDateTag)
             }
@@ -428,6 +444,9 @@ private struct TaskComponentRow: View {
     let onDetails: (GoogleTask, String) -> Void
     let isSingleDayView: Bool
     let showTaskStartTime: Bool
+    let isBulkEditMode: Bool
+    let isSelected: Bool
+    let onSelectionToggle: () -> Void
     @Environment(\.hideDueDate) private var hideDueDate: Bool
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     
@@ -439,12 +458,25 @@ private struct TaskComponentRow: View {
     
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: onToggle) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.body)
-                    .foregroundColor(task.isCompleted ? accentColor : .secondary)
+            // In bulk edit mode: show selection checkbox (square)
+            // In normal mode: show completion checkbox (circle)
+            if isBulkEditMode && !task.isCompleted {
+                // Square selection checkbox for incomplete tasks in bulk edit mode
+                Button(action: onSelectionToggle) {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.body)
+                        .foregroundColor(isSelected ? accentColor : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                // Regular circular checkbox - tappable to toggle completion
+                Button(action: onToggle) {
+                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.body)
+                        .foregroundColor(task.isCompleted ? (isBulkEditMode ? .secondary : accentColor) : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
-            .buttonStyle(PlainButtonStyle())
 
             HStack(spacing: 8) {
                 Text(task.title)
@@ -487,8 +519,14 @@ private struct TaskComponentRow: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { 
-                onDetails(task, listId) 
+            .onTapGesture {
+                // In bulk edit mode: tap on task to toggle selection
+                // In normal mode: tap on task to show details
+                if isBulkEditMode && !task.isCompleted {
+                    onSelectionToggle()
+                } else {
+                    onDetails(task, listId)
+                }
             }
         }
     }
