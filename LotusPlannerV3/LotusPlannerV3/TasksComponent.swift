@@ -389,7 +389,7 @@ private struct TaskComponentListCard: View {
                         isBulkEditMode: isBulkEditMode,
                         isSelected: selectedTaskIds.contains(task.id),
                         onSelectionToggle: {
-                            onTaskSelectionToggle?(task.id)
+                            onTaskSelectionToggle(task.id)
                         }
                     )
                     .environment(\.hideDueDate, hideDueDateTag)
@@ -417,7 +417,7 @@ private struct TaskComponentListCard: View {
                     isBulkEditMode: isBulkEditMode,
                     isSelected: selectedTaskIds.contains(task.id),
                     onSelectionToggle: {
-                        onTaskSelectionToggle?(task.id)
+                        onTaskSelectionToggle(task.id)
                     }
                 )
                 .environment(\.hideDueDate, hideDueDateTag)
