@@ -4561,7 +4561,16 @@ struct CalendarView: View {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
                         }
                     },
-                    isSingleDayView: true
+                    isSingleDayView: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
@@ -4612,7 +4621,16 @@ struct CalendarView: View {
                             await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
                         }
                     },
-                    isSingleDayView: true
+                    isSingleDayView: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }

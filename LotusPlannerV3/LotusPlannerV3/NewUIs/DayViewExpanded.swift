@@ -155,7 +155,16 @@ struct DayViewExpanded: View {
                                         hideDueDateTag: false,
                                         showEmptyState: true,
                                         horizontalCards: false,
-                                        isSingleDayView: true
+                                        isSingleDayView: true,
+                                        isBulkEditMode: bulkEditManager.state.isActive,
+                                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                                        onTaskSelectionToggle: { taskId in
+                                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                                bulkEditManager.state.selectedTaskIds.remove(taskId)
+                                            } else {
+                                                bulkEditManager.state.selectedTaskIds.insert(taskId)
+                                            }
+                                        }
                                     )
                                     .frame(maxWidth: .infinity, alignment: .top)
                                 }
@@ -185,7 +194,16 @@ struct DayViewExpanded: View {
                                         hideDueDateTag: false,
                                         showEmptyState: true,
                                         horizontalCards: false,
-                                        isSingleDayView: true
+                                        isSingleDayView: true,
+                                        isBulkEditMode: bulkEditManager.state.isActive,
+                                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                                        onTaskSelectionToggle: { taskId in
+                                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                                bulkEditManager.state.selectedTaskIds.remove(taskId)
+                                            } else {
+                                                bulkEditManager.state.selectedTaskIds.insert(taskId)
+                                            }
+                                        }
                                     )
                                     .frame(maxWidth: .infinity, alignment: .top)
                                 }
