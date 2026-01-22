@@ -23,9 +23,10 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case defaultNew = 3
     case mobile = 4
     case timebox = 6
+    case standard = 7
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .timebox] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .timebox, .standard] }
 
     var displayName: String {
         switch self {
@@ -34,6 +35,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compactTwo: "Compact"
         case .mobile: "Mobile"
         case .timebox: "Timebox"
+        case .standard: "Standard"
         }
     }
     
@@ -44,6 +46,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .compactTwo: "Events & Logs on left, Tasks (Personal/Professional side-by-side) and Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .timebox: "Timebox timeline on left, Journal on top right, Logs on bottom right"
+        case .standard: "Collapsible Logs row, then Journal on left with Events & Tasks on right"
         }
     }
 }
@@ -417,7 +420,14 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(dayViewExpandedLogsHeight, forKey: "dayViewExpandedLogsHeight")
         }
     }
-    
+
+    // DayViewStandard Divider Position
+    @Published var dayViewStandardEventTaskDividerPosition: CGFloat {
+        didSet {
+            UserDefaults.standard.set(dayViewStandardEventTaskDividerPosition, forKey: "dayViewStandardEventTaskDividerPosition")
+        }
+    }
+
     // DayViewClassic2 Divider Positions
     @Published var dayViewClassic2EventsHeight: CGFloat {
         didSet {
@@ -619,6 +629,7 @@ class AppPreferences: ObservableObject {
         self.dayViewExpandedTopRowHeight = UserDefaults.standard.object(forKey: "dayViewExpandedTopRowHeight") as? CGFloat ?? 400
         self.dayViewExpandedLeftTimelineWidth = UserDefaults.standard.object(forKey: "dayViewExpandedLeftTimelineWidth") as? CGFloat ?? 200
         self.dayViewExpandedLogsHeight = UserDefaults.standard.object(forKey: "dayViewExpandedLogsHeight") as? CGFloat ?? 300
+        self.dayViewStandardEventTaskDividerPosition = UserDefaults.standard.object(forKey: "dayViewStandardEventTaskDividerPosition") as? CGFloat ?? 300
         self.dayViewClassic2EventsHeight = UserDefaults.standard.object(forKey: "dayViewClassic2EventsHeight") as? CGFloat ?? 250
         self.dayViewClassic2LogsHeight = UserDefaults.standard.object(forKey: "dayViewClassic2LogsHeight") as? CGFloat ?? 200
         self.dayViewClassic3TasksHeight = UserDefaults.standard.object(forKey: "dayViewClassic3TasksHeight") as? CGFloat ?? 300
@@ -732,7 +743,11 @@ class AppPreferences: ObservableObject {
     func updateDayViewExpandedLogsHeight(_ value: CGFloat) {
         dayViewExpandedLogsHeight = value
     }
-    
+
+    func updateDayViewStandardEventTaskDividerPosition(_ value: CGFloat) {
+        dayViewStandardEventTaskDividerPosition = value
+    }
+
     func updateDayViewClassic2EventsHeight(_ value: CGFloat) {
         dayViewClassic2EventsHeight = value
     }

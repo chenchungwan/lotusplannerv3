@@ -2857,6 +2857,14 @@ struct CalendarView: View {
                 selectedCalendarEvent = ev
                 showingEventDetails = true
             })
+        case .standard:
+            DayViewStandard(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         default:
             dayViewContentCompact(geometry: geometry)
         }
