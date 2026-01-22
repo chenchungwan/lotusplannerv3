@@ -43,6 +43,7 @@
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="userId" optional="YES" attributeType="String"/>
+        <attribute name="linkedTasksJSON" optional="YES" attributeType="String"/>
     </entity>
     <entity name="CustomLogItem" representedClassName="CustomLogItem" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="String"/>

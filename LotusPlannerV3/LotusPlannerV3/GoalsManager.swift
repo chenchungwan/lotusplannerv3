@@ -87,7 +87,18 @@ class GoalsManager: ObservableObject {
         do {
             let coreDataGoals = try context.fetch(goalRequest)
             let mappedGoals = coreDataGoals.map { entity in
-                GoalData(
+                // Deserialize linked tasks from JSON
+                var linkedTasks: [LinkedTaskData] = []
+                if let linkedTasksJSON = entity.linkedTasksJSON,
+                   let jsonData = linkedTasksJSON.data(using: .utf8) {
+                    do {
+                        linkedTasks = try JSONDecoder().decode([LinkedTaskData].self, from: jsonData)
+                    } catch {
+                        devLog("Error decoding linked tasks JSON: \(error)")
+                    }
+                }
+
+                return GoalData(
                     id: UUID(uuidString: entity.id ?? "") ?? UUID(),
                     title: entity.title ?? "",
                     description: entity.goalDescription ?? "",
@@ -97,7 +108,8 @@ class GoalsManager: ObservableObject {
                     dueDate: entity.dueDate ?? Date(),
                     isCompleted: entity.isCompleted,
                     createdAt: entity.createdAt ?? Date(),
-                    updatedAt: entity.updatedAt ?? Date()
+                    updatedAt: entity.updatedAt ?? Date(),
+                    linkedTasks: linkedTasks
                 )
             }
             goals = deduplicatedGoals(from: mappedGoals)
@@ -200,11 +212,37 @@ class GoalsManager: ObservableObject {
             goals[index].isCompleted.toggle()
             goals[index].updatedAt = Date()
             updateGoalInCoreData(goals[index])
-            
+
             // CloudKit sync handled automatically by NSPersistentCloudKitContainer
         }
     }
-    
+
+    // MARK: - Task Linking Management
+    func linkTask(to goalId: UUID, taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        if let index = goals.firstIndex(where: { $0.id == goalId }) {
+            let linkedTask = LinkedTaskData(taskId: taskId, listId: listId, accountKind: accountKind)
+            // Only add if not already linked
+            if !goals[index].linkedTasks.contains(where: { $0.taskId == taskId }) {
+                goals[index].linkedTasks.append(linkedTask)
+                goals[index].updatedAt = Date()
+                updateGoalInCoreData(goals[index])
+            }
+        }
+    }
+
+    func unlinkTask(from goalId: UUID, taskId: String) {
+        if let index = goals.firstIndex(where: { $0.id == goalId }) {
+            goals[index].linkedTasks.removeAll { $0.taskId == taskId }
+            goals[index].updatedAt = Date()
+            updateGoalInCoreData(goals[index])
+        }
+    }
+
+    func isTaskLinked(to goalId: UUID, taskId: String) -> Bool {
+        guard let goal = goals.first(where: { $0.id == goalId }) else { return false }
+        return goal.linkedTasks.contains(where: { $0.taskId == taskId })
+    }
+
     // MARK: - Helper Functions
     private func getNextAvailablePosition() -> Int {
         let usedPositions = Set(categories.map { $0.displayPosition })
@@ -318,7 +356,20 @@ class GoalsManager: ObservableObject {
             entity.isCompleted = goal.isCompleted
             entity.updatedAt = goal.updatedAt
             entity.userId = "default" // You might want to use actual user ID
-            
+
+            // Serialize linked tasks to JSON
+            if !goal.linkedTasks.isEmpty {
+                do {
+                    let jsonData = try JSONEncoder().encode(goal.linkedTasks)
+                    entity.linkedTasksJSON = String(data: jsonData, encoding: .utf8)
+                } catch {
+                    devLog("Error encoding linked tasks to JSON: \(error)")
+                    entity.linkedTasksJSON = nil
+                }
+            } else {
+                entity.linkedTasksJSON = nil
+            }
+
             saveContext()
         } catch {
             devLog("Error saving goal to Core Data: \(error)")
@@ -328,7 +379,7 @@ class GoalsManager: ObservableObject {
     private func updateGoalInCoreData(_ goal: GoalData) {
         let request: NSFetchRequest<Goal> = Goal.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", goal.id.uuidString)
-        
+
         do {
             let entities = try context.fetch(request)
             if let entity = entities.first {
@@ -340,6 +391,20 @@ class GoalsManager: ObservableObject {
                 entity.dueDate = goal.dueDate
                 entity.isCompleted = goal.isCompleted
                 entity.updatedAt = goal.updatedAt
+
+                // Serialize linked tasks to JSON
+                if !goal.linkedTasks.isEmpty {
+                    do {
+                        let jsonData = try JSONEncoder().encode(goal.linkedTasks)
+                        entity.linkedTasksJSON = String(data: jsonData, encoding: .utf8)
+                    } catch {
+                        devLog("Error encoding linked tasks to JSON: \(error)")
+                        entity.linkedTasksJSON = nil
+                    }
+                } else {
+                    entity.linkedTasksJSON = nil
+                }
+
                 saveContext()
             }
         } catch {

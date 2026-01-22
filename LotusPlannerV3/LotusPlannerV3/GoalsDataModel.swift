@@ -25,6 +25,23 @@ enum GoalTimeframe: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - Linked Task Data
+struct LinkedTaskData: Codable, Hashable {
+    let taskId: String
+    let listId: String
+    let accountKind: String // "personal" or "professional"
+
+    init(taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind) {
+        self.taskId = taskId
+        self.listId = listId
+        self.accountKind = accountKind == .personal ? "personal" : "professional"
+    }
+
+    var accountKindEnum: GoogleAuthManager.AccountKind {
+        return accountKind == "personal" ? .personal : .professional
+    }
+}
+
 // MARK: - Goal Data Model
 struct GoalData: Identifiable, Codable {
     let id: UUID
@@ -37,7 +54,8 @@ struct GoalData: Identifiable, Codable {
     var isCompleted: Bool
     var createdAt: Date
     var updatedAt: Date
-    
+    var linkedTasks: [LinkedTaskData] // Tasks linked to this goal
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -48,7 +66,8 @@ struct GoalData: Identifiable, Codable {
         dueDate: Date,
         isCompleted: Bool = false,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        linkedTasks: [LinkedTaskData] = []
     ) {
         self.id = id
         self.title = title
@@ -60,6 +79,7 @@ struct GoalData: Identifiable, Codable {
         self.isCompleted = isCompleted
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.linkedTasks = linkedTasks
     }
 }
 

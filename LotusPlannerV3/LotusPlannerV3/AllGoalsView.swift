@@ -202,10 +202,7 @@ struct AllGoalsTableContent: View {
         }
         .sheet(isPresented: $showingEditGoal) {
             if let goal = goalToEdit {
-                CreateGoalView(editingGoal: goal) {
-                    goalToEdit = nil
-                    showingEditGoal = false
-                }
+                EditGoalView(goal: goal)
             }
         }
         .sheet(isPresented: $showingEditCategory) {
@@ -484,26 +481,73 @@ struct EditGoalView: View {
     let goal: GoalData
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var goalsManager = GoalsManager.shared
-    
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
     @State private var title: String
     @State private var description: String
-    
+    @State private var linkedTasks: [LinkedTaskData]
+    @State private var showingDeleteAlert = false
+
     init(goal: GoalData) {
         self.goal = goal
         _title = State(initialValue: goal.title)
         _description = State(initialValue: goal.description)
+        _linkedTasks = State(initialValue: goal.linkedTasks)
     }
-    
+
     var body: some View {
         NavigationStack {
             Form {
                 Section("Goal Title") {
                     TextField("Title", text: $title)
                 }
-                
+
                 Section("Description") {
                     TextEditor(text: $description)
                         .frame(minHeight: 100)
+                }
+
+                Section("Due Date") {
+                    HStack {
+                        Text("Timeframe")
+                        Spacer()
+                        Text(goal.targetTimeframe.displayName)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("Due Date")
+                        Spacer()
+                        Text(goal.dueDate, style: .date)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // Linked Tasks Section
+                Section {
+                    LinkedTasksSection(
+                        linkedTasks: $linkedTasks,
+                        goalId: goal.id
+                    )
+                } header: {
+                    Text("Linked Tasks")
+                } footer: {
+                    Text("Link tasks from your Google Tasks to track progress toward this goal.")
+                        .font(.caption)
+                }
+
+                // Delete Goal Section
+                Section {
+                    Button(role: .destructive) {
+                        showingDeleteAlert = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Delete Goal")
+                            Spacer()
+                        }
+                    }
                 }
             }
             .navigationTitle("Edit Goal")
@@ -514,19 +558,381 @@ struct EditGoalView: View {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         var updatedGoal = goal
                         updatedGoal.title = title
                         updatedGoal.description = description
+                        updatedGoal.linkedTasks = linkedTasks
                         goalsManager.updateGoal(updatedGoal)
                         dismiss()
                     }
                     .disabled(title.isEmpty)
                 }
             }
+            .alert("Delete Goal", isPresented: $showingDeleteAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    goalsManager.deleteGoal(goal.id)
+                    dismiss()
+                }
+            } message: {
+                Text("Are you sure you want to delete this goal? This action cannot be undone.")
+            }
         }
+    }
+}
+
+// MARK: - Linked Tasks Section with Cascading Columns
+struct LinkedTasksSection: View {
+    @Binding var linkedTasks: [LinkedTaskData]
+    let goalId: UUID
+
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
+    @State private var showingTaskPicker = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Show linked tasks
+            if linkedTasks.isEmpty {
+                Text("No tasks linked")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(linkedTasks, id: \.taskId) { linkedTask in
+                    if let task = findTask(linkedTask) {
+                        LinkedTaskRow(
+                            task: task,
+                            linkedTask: linkedTask,
+                            onRemove: {
+                                linkedTasks.removeAll { $0.taskId == linkedTask.taskId }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Add task button
+            Button(action: {
+                showingTaskPicker = true
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Link Task")
+                }
+                .foregroundColor(.blue)
+            }
+            .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $showingTaskPicker) {
+            TaskPickerView(
+                linkedTasks: $linkedTasks,
+                goalId: goalId
+            )
+        }
+    }
+
+    private func findTask(_ linkedTask: LinkedTaskData) -> GoogleTask? {
+        let accountKind = linkedTask.accountKindEnum
+        let tasksDict = accountKind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        return tasksDict[linkedTask.listId]?.first(where: { $0.id == linkedTask.taskId })
+    }
+}
+
+// MARK: - Linked Task Row
+struct LinkedTaskRow: View {
+    let task: GoogleTask
+    let linkedTask: LinkedTaskData
+    let onRemove: () -> Void
+
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(task.isCompleted ? .green : .secondary)
+                .font(.body)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(.subheadline)
+                    .strikethrough(task.isCompleted)
+                    .foregroundColor(task.isCompleted ? .secondary : .primary)
+
+                HStack(spacing: 4) {
+                    Image(systemName: linkedTask.accountKind == "personal" ? "person.fill" : "briefcase.fill")
+                        .font(.caption2)
+                        .foregroundColor(linkedTask.accountKind == "personal" ? appPrefs.personalColor : appPrefs.professionalColor)
+
+                    if let dueDate = task.dueDate {
+                        Text(dueDate, style: .date)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.gray)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Task Picker with Cascading Columns
+struct TaskPickerView: View {
+    @Binding var linkedTasks: [LinkedTaskData]
+    let goalId: UUID
+
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
+    @State private var selectedAccount: GoogleAuthManager.AccountKind?
+    @State private var selectedListId: String?
+
+    var body: some View {
+        NavigationStack {
+            HStack(spacing: 0) {
+                // Column 1: Account Selection
+                VStack(spacing: 0) {
+                    Text("Account")
+                        .font(.headline)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.systemGray6))
+
+                    List {
+                        if auth.isLinked(kind: .personal) {
+                            Button(action: {
+                                selectedAccount = .personal
+                                selectedListId = nil
+                            }) {
+                                HStack {
+                                    Image(systemName: "person.fill")
+                                        .foregroundColor(appPrefs.personalColor)
+                                    Text("Personal")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if selectedAccount == .personal {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .listRowBackground(selectedAccount == .personal ? Color.blue.opacity(0.1) : Color.clear)
+                        }
+
+                        if auth.isLinked(kind: .professional) {
+                            Button(action: {
+                                selectedAccount = .professional
+                                selectedListId = nil
+                            }) {
+                                HStack {
+                                    Image(systemName: "briefcase.fill")
+                                        .foregroundColor(appPrefs.professionalColor)
+                                    Text("Professional")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if selectedAccount == .professional {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.blue)
+                                    }
+                                }
+                            }
+                            .listRowBackground(selectedAccount == .professional ? Color.blue.opacity(0.1) : Color.clear)
+                        }
+
+                        if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
+                            Text("No accounts linked")
+                                .foregroundColor(.secondary)
+                                .font(.subheadline)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+
+                Divider()
+
+                // Column 2: List Selection
+                VStack(spacing: 0) {
+                    Text("List")
+                        .font(.headline)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.systemGray6))
+
+                    if let account = selectedAccount {
+                        let taskLists = account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+
+                        List {
+                            ForEach(taskLists) { list in
+                                Button(action: {
+                                    selectedListId = list.id
+                                }) {
+                                    HStack {
+                                        Text(list.title)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        if selectedListId == list.id {
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(.blue)
+                                        }
+                                    }
+                                }
+                                .listRowBackground(selectedListId == list.id ? Color.blue.opacity(0.1) : Color.clear)
+                            }
+                        }
+                        .listStyle(.plain)
+                    } else {
+                        VStack {
+                            Spacer()
+                            Text("Select an account")
+                                .foregroundColor(.secondary)
+                                .font(.subheadline)
+                            Spacer()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                Divider()
+
+                // Column 3: Task Selection
+                VStack(spacing: 0) {
+                    Text("Tasks")
+                        .font(.headline)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.systemGray6))
+
+                    if let account = selectedAccount, let listId = selectedListId {
+                        let tasksDict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                        let tasks = tasksDict[listId] ?? []
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if tasks.isEmpty {
+                                    VStack {
+                                        Spacer()
+                                        Text("No tasks in this list")
+                                            .foregroundColor(.secondary)
+                                            .font(.subheadline)
+                                        Spacer()
+                                    }
+                                    .frame(maxHeight: .infinity)
+                                } else {
+                                    ForEach(tasks) { task in
+                                        TaskPickerRow(
+                                            task: task,
+                                            isLinked: linkedTasks.contains(where: { $0.taskId == task.id }),
+                                            onToggle: {
+                                                toggleTask(task, listId: listId, account: account)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(8)
+                        }
+                    } else {
+                        VStack {
+                            Spacer()
+                            Text("Select a list")
+                                .foregroundColor(.secondary)
+                                .font(.subheadline)
+                            Spacer()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .navigationTitle("Link Tasks")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func toggleTask(_ task: GoogleTask, listId: String, account: GoogleAuthManager.AccountKind) {
+        if let index = linkedTasks.firstIndex(where: { $0.taskId == task.id }) {
+            // Unlink task
+            linkedTasks.remove(at: index)
+        } else {
+            // Link task
+            let linkedTask = LinkedTaskData(taskId: task.id, listId: listId, accountKind: account)
+            linkedTasks.append(linkedTask)
+        }
+    }
+}
+
+// MARK: - Task Picker Row
+struct TaskPickerRow: View {
+    let task: GoogleTask
+    let isLinked: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                Image(systemName: isLinked ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isLinked ? .blue : .secondary)
+                    .font(.title3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(task.title)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                        .strikethrough(task.isCompleted)
+                        .multilineTextAlignment(.leading)
+
+                    HStack(spacing: 8) {
+                        if task.isCompleted {
+                            HStack(spacing: 2) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                                Text("Completed")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if let dueDate = task.dueDate {
+                            HStack(spacing: 2) {
+                                Image(systemName: "calendar")
+                                    .font(.caption2)
+                                Text(dueDate, style: .date)
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(8)
+            .background(isLinked ? Color.blue.opacity(0.1) : Color(.systemBackground))
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
     }
 }
 

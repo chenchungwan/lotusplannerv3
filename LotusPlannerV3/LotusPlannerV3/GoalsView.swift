@@ -178,9 +178,7 @@ struct GoalsView: View {
             }
         }
         .sheet(item: $goalToEdit) { goal in
-            CreateGoalView(editingGoal: goal) {
-                goalToEdit = nil
-            }
+            EditGoalView(goal: goal)
         }
         .sheet(isPresented: $showingCreateGoal) {
             CreateGoalView(
@@ -711,20 +709,22 @@ struct GoalRow: View {
     let onDelete: () -> Void
     let showTags: Bool
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
     private var adaptivePadding: CGFloat {
         horizontalSizeClass == .compact ? 10 : 8
     }
-    
+
     private var adaptiveVerticalPadding: CGFloat {
         horizontalSizeClass == .compact ? 8 : 4
     }
-    
+
     // Computed properties for better performance
     private var isOverdue: Bool {
         goal.dueDate < Date() && !goal.isCompleted
     }
-    
+
     private var daysRemaining: Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -732,16 +732,22 @@ struct GoalRow: View {
         let components = calendar.dateComponents([.day], from: today, to: dueDate)
         return components.day ?? 0
     }
-    
+
     private func formatDueDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
         return formatter.string(from: date)
     }
-    
+
+    // Helper to get task from linked task data
+    private func getTask(from linkedTask: LinkedTaskData) -> GoogleTask? {
+        let tasksDict = linkedTask.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        return tasksDict[linkedTask.listId]?.first(where: { $0.id == linkedTask.taskId })
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            // Checkbox (larger tap target)
+        HStack(alignment: .top, spacing: 10) {
+            // Checkbox (larger tap target) - aligned to top
             Button(action: onTap) {
                 Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title3) // Slightly larger for better tap target
@@ -749,7 +755,7 @@ struct GoalRow: View {
             }
             .buttonStyle(PlainButtonStyle())
             .contentShape(Rectangle())
-            
+
             // Goal content
             VStack(alignment: .leading, spacing: 3) {
                 Text(goal.title)
@@ -757,7 +763,7 @@ struct GoalRow: View {
                     .strikethrough(goal.isCompleted)
                     .foregroundColor(goal.isCompleted ? .secondary : .primary)
                     .lineLimit(2)
-                
+
                 if showTags {
                     HStack(spacing: 4) {
                         Text(goal.targetTimeframe.displayName)
@@ -767,7 +773,7 @@ struct GoalRow: View {
                             .background(Color.blue.opacity(0.2))
                             .foregroundColor(.blue)
                             .cornerRadius(4)
-                        
+
                         Text(formatDueDate(goal.dueDate))
                             .font(.caption2)
                             .padding(.horizontal, 6)
@@ -775,16 +781,41 @@ struct GoalRow: View {
                             .background(isOverdue ? Color.red.opacity(0.2) : Color.green.opacity(0.2))
                             .foregroundColor(isOverdue ? .red : .green)
                             .cornerRadius(4)
-                        
+
                         Spacer()
                     }
+                }
+
+                // Linked tasks section
+                if !goal.linkedTasks.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(goal.linkedTasks, id: \.taskId) { linkedTask in
+                            if let task = getTask(from: linkedTask) {
+                                HStack(spacing: 6) {
+                                    // Task completion indicator
+                                    Image(systemName: task.status == "completed" ? "checkmark.circle.fill" : "circle")
+                                        .font(.caption2)
+                                        .foregroundColor(task.status == "completed" ? .green : .secondary)
+
+                                    // Task title
+                                    Text(task.title)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .strikethrough(task.status == "completed")
+                                        .lineLimit(1)
+                                }
+                                .padding(.leading, 4)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture {
                 onEdit()
             }
-            
+
             Spacer()
         }
         .padding(.horizontal, adaptivePadding)
