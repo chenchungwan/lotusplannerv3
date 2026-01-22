@@ -2843,29 +2843,20 @@ struct CalendarView: View {
                 }
             )
         case .compactTwo:
-            DayViewCompact(
-                bulkEditManager: bulkEditManager,
-                onEventTap: { ev in
-                    selectedCalendarEvent = ev
-                    showingEventDetails = true
-                }
-            )
+            DayViewCompact(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         case .mobile:
-            DayViewMobile(
-                bulkEditManager: bulkEditManager,
-                onEventTap: { ev in
-                    selectedCalendarEvent = ev
-                    showingEventDetails = true
-                }
-            )
+            DayViewMobile(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         case .timebox:
-            DayViewTimebox(
-                bulkEditManager: bulkEditManager,
-                onEventTap: { ev in
-                    selectedCalendarEvent = ev
-                    showingEventDetails = true
-                }
-            )
+            DayViewTimebox(onEventTap: { ev in
+                selectedCalendarEvent = ev
+                showingEventDetails = true
+            })
         default:
             dayViewContentCompact(geometry: geometry)
         }
