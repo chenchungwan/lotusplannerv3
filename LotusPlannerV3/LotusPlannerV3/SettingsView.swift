@@ -26,7 +26,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case standard = 7
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .timebox, .standard] }
+    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .standard, .timebox] }
 
     var displayName: String {
         switch self {

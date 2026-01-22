@@ -51,11 +51,6 @@ struct DayViewStandard: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Collapsible Logs Section (at top)
-                if appPrefs.showAnyLogs {
-                    logsSection
-                }
-
                 // Main Content: Events + Tasks (left) | Journal (right)
                 HStack(spacing: 0) {
                     // Left Column: Events + Tasks with draggable divider
@@ -70,6 +65,11 @@ struct DayViewStandard: View {
                         .frame(maxWidth: .infinity)
                 }
                 .frame(maxHeight: .infinity)
+
+                // Collapsible Logs Section (at bottom)
+                if appPrefs.showAnyLogs {
+                    logsSection
+                }
             }
         }
         .background(Color(.systemBackground))
@@ -146,7 +146,7 @@ struct DayViewStandard: View {
                 LogsComponent(currentDate: navigationManager.currentDate, horizontal: false, compactHorizontal: true)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(.move(edge: .top).combined(with: .opacity))
             } else {
                 // Expand button when collapsed
                 Button(action: {
