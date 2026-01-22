@@ -548,6 +548,7 @@ struct GlobalNavBar: View {
                             // Bulk edit toggle (in Calendar day view only)
                             if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
                                 Button {
+                                    print("🔵 Bulk edit button tapped - posting notification")
                                     NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
                                 } label: {
                                     Image(systemName: "checkmark.rectangle.stack")
@@ -555,6 +556,7 @@ struct GlobalNavBar: View {
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(.accentColor)
                                 }
+                                .buttonStyle(.plain)
                             }
 
                             // + menu based on current view
@@ -817,6 +819,7 @@ struct GlobalNavBar: View {
                             // Bulk edit toggle (in Calendar day view only)
                             if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
                                 Button {
+                                    print("🔵 Bulk edit button tapped - posting notification")
                                     NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
                                 } label: {
                                     Image(systemName: "checkmark.rectangle.stack")
@@ -824,6 +827,7 @@ struct GlobalNavBar: View {
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                         .foregroundColor(.accentColor)
                                 }
+                                .buttonStyle(.plain)
                             }
 
                             // + menu based on current view
