@@ -2585,20 +2585,21 @@ struct CalendarView: View {
     }
     
     private var dayView: some View {
-        dayViewBase
-            .task {
-                // Clear caches and load fresh data
-                calendarViewModel.clearAllData()
-                await tasksViewModel.loadTasks(forceClear: true)
-                await calendarViewModel.refreshDataForCurrentView()
-                
-                await MainActor.run {
-                    updateCachedTasks()
-                    // Force view updates
-                    calendarViewModel.objectWillChange.send()
-                    tasksViewModel.objectWillChange.send()
+        ZStack(alignment: .top) {
+            dayViewBase
+                .task {
+                    // Clear caches and load fresh data
+                    calendarViewModel.clearAllData()
+                    await tasksViewModel.loadTasks(forceClear: true)
+                    await calendarViewModel.refreshDataForCurrentView()
+
+                    await MainActor.run {
+                        updateCachedTasks()
+                        // Force view updates
+                        calendarViewModel.objectWillChange.send()
+                        tasksViewModel.objectWillChange.send()
+                    }
                 }
-            }
             .onChange(of: currentDate) { oldValue, newValue in
                 Task {
                     // Clear caches and load fresh data
@@ -2700,6 +2701,15 @@ struct CalendarView: View {
             .onDisappear {
                 stopCurrentTimeTimer()
             }
+
+            // Bulk Edit Toolbar Overlay
+            if bulkEditManager.state.isActive {
+                VStack(spacing: 0) {
+                    bulkEditToolbar
+                    Spacer()
+                }
+            }
+        }
     }
     
     private var dayViewBase: some View {
