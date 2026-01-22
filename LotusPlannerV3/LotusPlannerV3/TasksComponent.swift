@@ -135,15 +135,20 @@ extension TasksComponent {
                 tasks: filtered,
                 accentColor: accentColor,
                 onTaskToggle: { task in onTaskToggle(task, taskList.id) },
-                onTaskDetails: { task, listId in 
-                    onTaskDetails(task, listId) 
+                onTaskDetails: { task, listId in
+                    onTaskDetails(task, listId)
                 },
                 onListRename: { newName in onListRename?(taskList.id, newName) },
                 hideDueDateTag: hideDueDateTag,
                 enableScroll: enableScroll,
                 maxTasksAreaHeight: maxHeight,
                 isSingleDayView: isSingleDayView,
-                showTaskStartTime: showTaskStartTime
+                showTaskStartTime: showTaskStartTime,
+                isBulkEditMode: isBulkEditMode,
+                selectedTaskIds: selectedTaskIds,
+                onTaskSelectionToggle: { taskId in
+                    onTaskSelectionToggle?(taskId)
+                }
             )
         }
     }
@@ -227,6 +232,9 @@ private struct TaskComponentListCard: View {
     let maxTasksAreaHeight: CGFloat?
     let isSingleDayView: Bool
     let showTaskStartTime: Bool
+    let isBulkEditMode: Bool
+    let selectedTaskIds: Set<String>
+    let onTaskSelectionToggle: (String) -> Void
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -259,7 +267,10 @@ private struct TaskComponentListCard: View {
         enableScroll: Bool = false,
         maxTasksAreaHeight: CGFloat? = nil,
         isSingleDayView: Bool = false,
-        showTaskStartTime: Bool = false
+        showTaskStartTime: Bool = false,
+        isBulkEditMode: Bool = false,
+        selectedTaskIds: Set<String> = [],
+        onTaskSelectionToggle: @escaping (String) -> Void = { _ in }
     ) {
         self.taskList = taskList
         self.tasks = tasks
@@ -272,6 +283,9 @@ private struct TaskComponentListCard: View {
         self.maxTasksAreaHeight = maxTasksAreaHeight
         self.isSingleDayView = isSingleDayView
         self.showTaskStartTime = showTaskStartTime
+        self.isBulkEditMode = isBulkEditMode
+        self.selectedTaskIds = selectedTaskIds
+        self.onTaskSelectionToggle = onTaskSelectionToggle
     }
     
     var body: some View {
