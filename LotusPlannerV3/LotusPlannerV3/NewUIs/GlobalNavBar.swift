@@ -544,7 +544,19 @@ struct GlobalNavBar: View {
                                         .foregroundColor(.accentColor)
                                 }
                             }
-                            
+
+                            // Bulk edit toggle (in Calendar day view only)
+                            if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                            }
+
                             // + menu based on current view
                             if navigationManager.currentView == .journalDayViews {
                                 // In Journal Day Views: menu with Event and Task only
@@ -801,7 +813,19 @@ struct GlobalNavBar: View {
                                         .foregroundColor(.accentColor)
                                 }
                             }
-                            
+
+                            // Bulk edit toggle (in Calendar day view only)
+                            if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                            }
+
                             // + menu based on current view
                             if navigationManager.currentView == .journalDayViews {
                                 // In Journal Day Views: menu with Event and Task only
