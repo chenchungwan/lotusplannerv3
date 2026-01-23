@@ -276,7 +276,7 @@ struct DayViewExpanded: View {
                                 // Logs component below tasks
                                 if appPrefs.showAnyLogs {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: true)
+                                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                                     }
                                     .frame(height: logsHeight)
                                 }

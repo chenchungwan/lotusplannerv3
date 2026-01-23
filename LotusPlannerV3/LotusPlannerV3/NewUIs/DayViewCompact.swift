@@ -17,6 +17,7 @@ struct DayViewCompact: View {
     @State private var logsHeight: CGFloat
     @State private var isLogsDividerDragging = false
     @State private var isDayVerticalDividerDragging = false
+    @State private var isLogsSectionCollapsed: Bool = false
     
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
@@ -101,20 +102,74 @@ struct DayViewCompact: View {
     
     // MARK: - Left Section
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 16) {
-                // Events section
+        VStack(spacing: 0) {
+            // Events section - scrollable
+            ScrollView(.vertical, showsIndicators: true) {
                 eventsTimelineCard()
                     .padding(.leading, 16 + geometry.safeAreaInsets.leading)
                     .padding(.trailing, 8)
-                
-                // Logs section (only if any logs are enabled)
-                if appPrefs.showAnyLogs {
-                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                    .padding(.vertical, 8)
+            }
+            .frame(maxHeight: .infinity)
+
+            // Logs section at the bottom (collapsible, only if any logs are enabled)
+            if appPrefs.showAnyLogs {
+                if !isLogsSectionCollapsed {
+                    // Draggable divider
+                    logsDivider
+
+                    // Collapse button
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isLogsSectionCollapsed = true
+                            }
+                        }) {
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(4)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 8)
+                    }
+                    .padding(.vertical, 4)
+                    .background(Color(.systemBackground))
+
+                    // Logs content
+                    ScrollView(.vertical, showsIndicators: true) {
+                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 8)
+                    }
+                    .frame(height: logsHeight)
+                    .background(Color(.systemBackground))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    // Expand button when collapsed
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isLogsSectionCollapsed = false
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "chevron.up")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Logs")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
                         .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemGray6))
                 }
             }
-            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -310,20 +365,21 @@ struct DayViewCompact: View {
                     .font(.caption)
                     .foregroundColor(isLogsDividerDragging ? .white : .gray)
             )
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                isLogsDividerDragging = true
-                                let newHeight = logsHeight - value.translation.height
-                                let minHeight: CGFloat = 100
-                                let maxHeight: CGFloat = 1200
-                                logsHeight = max(minHeight, min(maxHeight, newHeight))
-                            }
-                            .onEnded { _ in
-                                isLogsDividerDragging = false
-                                appPrefs.updateDayViewClassic2LogsHeight(logsHeight)
-                            }
-                    )
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isLogsDividerDragging = true
+                        let newHeight = logsHeight - value.translation.height
+                        let minHeight: CGFloat = 100
+                        let maxHeight: CGFloat = 600
+                        logsHeight = max(minHeight, min(maxHeight, newHeight))
+                    }
+                    .onEnded { _ in
+                        isLogsDividerDragging = false
+                        appPrefs.updateDayViewClassic2LogsHeight(logsHeight)
+                    }
+            )
     }
     
     private var leftTimelineDivider: some View {

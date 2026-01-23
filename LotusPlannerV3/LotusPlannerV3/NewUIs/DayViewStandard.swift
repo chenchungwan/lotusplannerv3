@@ -50,26 +50,18 @@ struct DayViewStandard: View {
 
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Main Content: Events + Tasks (left) | Journal (right)
-                HStack(spacing: 0) {
-                    // Left Column: Events + Tasks with draggable divider
-                    leftColumn(geometry: geometry)
-                        .frame(width: columnDividerPosition)
+            // Main Content: Events + Tasks (left) | Journal (right)
+            HStack(spacing: 0) {
+                // Left Column: Events + Tasks + Logs with draggable divider
+                leftColumn(geometry: geometry)
+                    .frame(width: columnDividerPosition)
 
-                    // Draggable divider between columns
-                    columnDivider(geometry: geometry)
+                // Draggable divider between columns
+                columnDivider(geometry: geometry)
 
-                    // Right Column: Journal
-                    journalColumn
-                        .frame(maxWidth: .infinity)
-                }
-                .frame(maxHeight: .infinity)
-
-                // Collapsible Logs Section (at bottom)
-                if appPrefs.showAnyLogs {
-                    logsSection
-                }
+                // Right Column: Journal
+                journalColumn
+                    .frame(maxWidth: .infinity)
             }
         }
         .background(Color(.systemBackground))
@@ -121,6 +113,8 @@ struct DayViewStandard: View {
 
     private var logsSection: some View {
         VStack(spacing: 0) {
+            Divider()
+
             // Logs content (collapsible)
             if logsExpanded {
                 // Collapse button
@@ -132,7 +126,7 @@ struct DayViewStandard: View {
                             appPrefs.updateDayViewStandardLogsSectionCollapsed(true)
                         }
                     }) {
-                        Image(systemName: "chevron.up")
+                        Image(systemName: "chevron.down")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .padding(4)
@@ -143,10 +137,13 @@ struct DayViewStandard: View {
                 .padding(.vertical, 4)
                 .background(Color(.systemBackground))
 
-                LogsComponent(currentDate: navigationManager.currentDate, horizontal: false, compactHorizontal: true)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                ScrollView(.vertical, showsIndicators: true) {
+                    LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                }
+                .frame(height: 200)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 // Expand button when collapsed
                 Button(action: {
@@ -156,7 +153,7 @@ struct DayViewStandard: View {
                     }
                 }) {
                     HStack {
-                        Image(systemName: "chevron.down")
+                        Image(systemName: "chevron.up")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Text("Logs")
@@ -170,9 +167,8 @@ struct DayViewStandard: View {
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
                 .background(Color(.systemGray6))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-
-            Divider()
         }
     }
 
@@ -213,7 +209,7 @@ struct DayViewStandard: View {
             )
     }
 
-    // MARK: - Left Column (Events + Tasks)
+    // MARK: - Left Column (Events + Tasks + Logs)
 
     private func leftColumn(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
@@ -227,6 +223,11 @@ struct DayViewStandard: View {
             // Tasks Section
             tasksSection
                 .frame(maxHeight: .infinity)
+
+            // Collapsible Logs Section (at bottom of left column)
+            if appPrefs.showAnyLogs {
+                logsSection
+            }
         }
     }
 
