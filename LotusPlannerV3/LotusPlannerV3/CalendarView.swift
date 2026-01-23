@@ -2852,20 +2852,29 @@ struct CalendarView: View {
                 }
             )
         case .compactTwo:
-            DayViewCompact(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewCompact(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .mobile:
-            DayViewMobile(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewMobile(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .timebox:
-            DayViewTimebox(onEventTap: { ev in
-                selectedCalendarEvent = ev
-                showingEventDetails = true
-            })
+            DayViewTimebox(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .standard:
             DayViewStandard(
                 bulkEditManager: bulkEditManager,
@@ -5480,6 +5489,7 @@ struct AddItemView: View {
     @State private var eventEnd: Date
     @State private var isAllDay = false
     @State private var showingDeleteEventAlert = false
+    @State private var showingEndTimePicker = false
     
     let currentDate: Date
     let tasksViewModel: TasksViewModel
@@ -5847,14 +5857,29 @@ struct AddItemView: View {
                                 }
                             ), displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
                                 .environment(\.calendar, Calendar.mondayFirst)
-                            DatePicker("End", selection: Binding(
-                                get: { eventEnd },
-                                set: { newValue in
-                                    // Accept the new value directly - user can change both date and time
-                                    eventEnd = newValue
+
+                            // Custom end time picker for non-all-day events
+                            if !isAllDay {
+                                HStack {
+                                    Text("End")
+                                    Spacer()
+                                    Button(action: {
+                                        showingEndTimePicker = true
+                                    }) {
+                                        Text(formatEndTime(eventEnd))
+                                            .foregroundColor(.primary)
+                                    }
                                 }
-                            ), in: eventStart..., displayedComponents: isAllDay ? [.date] : [.date, .hourAndMinute])
-                                .environment(\.calendar, Calendar.mondayFirst)
+                            } else {
+                                DatePicker("End", selection: Binding(
+                                    get: { eventEnd },
+                                    set: { newValue in
+                                        // Accept the new value directly - user can change both date and time
+                                        eventEnd = newValue
+                                    }
+                                ), in: eventStart..., displayedComponents: [.date])
+                                    .environment(\.calendar, Calendar.mondayFirst)
+                            }
                         }
                     }
                     
@@ -5970,6 +5995,13 @@ struct AddItemView: View {
                 
                 // Removed delete button from top toolbar
             }
+        }
+        .sheet(isPresented: $showingEndTimePicker) {
+            EndTimePickerView(
+                startTime: eventStart,
+                endTime: $eventEnd,
+                onDismiss: { showingEndTimePicker = false }
+            )
         }
         .alert("Delete Event", isPresented: $showingDeleteEventAlert) {
             Button("Cancel", role: .cancel) { }
@@ -6488,6 +6520,150 @@ struct AddItemView: View {
                 await MainActor.run { isCreating = false }
             }
         }
+    }
+
+    // MARK: - Helper Functions
+    private func formatEndTime(_ time: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: time)
+    }
+}
+
+// MARK: - End Time Picker View
+
+struct EndTimePickerView: View {
+    let startTime: Date
+    @Binding var endTime: Date
+    let onDismiss: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showingCustomPicker = false
+
+    private var timeOptions: [(time: Date, label: String, duration: String)] {
+        let calendar = Calendar.current
+        var options: [(time: Date, label: String, duration: String)] = []
+
+        // Generate time options in 15-minute increments
+        // Start from the start time and go up to 8 hours later (to cover full workday)
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+
+        // Check if we need to show the date (for next-day times)
+        let fullFormatter = DateFormatter()
+        fullFormatter.dateStyle = .short
+        fullFormatter.timeStyle = .short
+
+        for minutes in stride(from: 0, through: 480, by: 15) {
+            if let optionTime = calendar.date(byAdding: .minute, value: minutes, to: startTime) {
+                let durationMinutes = minutes
+                let durationText: String
+
+                if durationMinutes == 0 {
+                    durationText = "(0 mins)"
+                } else if durationMinutes < 60 {
+                    durationText = "(\(durationMinutes) mins)"
+                } else {
+                    let hours = durationMinutes / 60
+                    let remainingMins = durationMinutes % 60
+                    if remainingMins == 0 {
+                        durationText = "(\(hours) hr\(hours > 1 ? "s" : ""))"
+                    } else {
+                        durationText = "(\(hours) hr\(hours > 1 ? "s" : "") \(remainingMins) mins)"
+                    }
+                }
+
+                // Show date + time if it's a different day
+                let timeLabel: String
+                if calendar.isDate(startTime, inSameDayAs: optionTime) {
+                    timeLabel = formatter.string(from: optionTime)
+                } else {
+                    timeLabel = fullFormatter.string(from: optionTime)
+                }
+                options.append((time: optionTime, label: timeLabel, duration: durationText))
+            }
+        }
+
+        return options
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(timeOptions, id: \.time) { option in
+                    Button(action: {
+                        endTime = option.time
+                        dismiss()
+                        onDismiss()
+                    }) {
+                        HStack {
+                            Text("\(option.label) \(option.duration)")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if calendar.isDate(endTime, equalTo: option.time, toGranularity: .minute) {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
+                }
+
+                // Custom time option
+                Section {
+                    Button(action: {
+                        showingCustomPicker = true
+                    }) {
+                        HStack {
+                            Text("Custom...")
+                                .foregroundColor(.blue)
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("End Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                        onDismiss()
+                    }
+                }
+            }
+            .sheet(isPresented: $showingCustomPicker) {
+                NavigationStack {
+                    Form {
+                        DatePicker("End Time", selection: $endTime, in: startTime..., displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.calendar, Calendar.mondayFirst)
+                    }
+                    .navigationTitle("Custom End Time")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                showingCustomPicker = false
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showingCustomPicker = false
+                                dismiss()
+                                onDismiss()
+                            }
+                            .fontWeight(.semibold)
+                        }
+                    }
+                }
+                .presentationDetents([.medium])
+            }
+        }
+    }
+
+    private var calendar: Calendar {
+        Calendar.current
     }
 }
 

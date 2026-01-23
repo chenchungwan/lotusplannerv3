@@ -210,6 +210,74 @@ class CoreDataManager: ObservableObject {
         }
     }
 
+    // MARK: - Water Logs
+    func saveWaterEntry(_ entry: WaterLogEntry) {
+        let waterLog = WaterLog(context: context)
+        waterLog.id = entry.id
+        waterLog.date = entry.date
+        waterLog.cupsConsumed = Int16(entry.cupsConsumed)
+        waterLog.userId = entry.userId
+        waterLog.createdAt = entry.createdAt
+        waterLog.updatedAt = entry.updatedAt
+
+        save()
+    }
+
+    func loadWaterEntries() -> [WaterLogEntry] {
+        let request: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \WaterLog.date, ascending: false)]
+
+        do {
+            let logs = try context.fetch(request)
+            return logs.compactMap { log in
+                guard let id = log.id,
+                      let date = log.date,
+                      let userId = log.userId,
+                      let createdAt = log.createdAt,
+                      let updatedAt = log.updatedAt else { return nil }
+
+                return WaterLogEntry(
+                    id: id,
+                    date: date,
+                    cupsConsumed: Int(log.cupsConsumed),
+                    userId: userId,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    func updateWaterEntry(_ entry: WaterLogEntry) {
+        let request: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id)
+
+        do {
+            let logs = try context.fetch(request)
+            if let log = logs.first {
+                log.date = entry.date
+                log.cupsConsumed = Int16(entry.cupsConsumed)
+                log.updatedAt = Date()
+                save()
+            }
+        } catch {
+        }
+    }
+
+    func deleteWaterEntry(_ entry: WaterLogEntry) {
+        let request: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id)
+
+        do {
+            let logs = try context.fetch(request)
+            logs.forEach(context.delete)
+            save()
+        } catch {
+        }
+    }
+
     // MARK: - Sleep Logs
     func saveSleepEntry(_ entry: SleepLogEntry) {
         let sleepLog = SleepLog(context: context)
@@ -287,6 +355,7 @@ class CoreDataManager: ObservableObject {
             WeightLog.fetchRequest(),
             WorkoutLog.fetchRequest(),
             FoodLog.fetchRequest(),
+            WaterLog.fetchRequest(),
             SleepLog.fetchRequest(),
         ]
         do {

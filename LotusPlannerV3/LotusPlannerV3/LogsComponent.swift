@@ -70,7 +70,16 @@ struct LogsComponent: View {
                                     Spacer()
                                 }
 
-                                // Third row: Custom Logs (same width as other logs)
+                                // Third row: Water
+                                HStack(alignment: .top, spacing: 16) {
+                                    if appPrefs.showWaterLogs {
+                                        waterSection
+                                    }
+
+                                    Spacer()
+                                }
+
+                                // Fourth row: Custom Logs (same width as other logs)
                                 if appPrefs.showCustomLogs {
                                     HStack(alignment: .top, spacing: 16) {
                                         customLogSectionHorizontal
@@ -100,6 +109,11 @@ struct LogsComponent: View {
                             // Food Section
                             if appPrefs.showFoodLogs {
                                 foodSection
+                            }
+
+                            // Water Section
+                            if appPrefs.showWaterLogs {
+                                waterSection
                             }
 
                             // Custom Log Section
@@ -238,7 +252,7 @@ extension LogsComponent {
                     .fontWeight(.semibold)
                 Spacer()
             }
-            
+
             if viewModel.filteredFoodEntries.isEmpty {
                 Text("No entries")
                     .font(.caption)
@@ -260,7 +274,37 @@ extension LogsComponent {
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
     }
-    
+
+    var waterSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "drop.fill")
+                    .foregroundColor(viewModel.accentColor)
+                Text("Water")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+
+            // Interactive water cups
+            WaterCupsView(
+                currentDate: currentDate,
+                cupsConsumed: viewModel.filteredWaterEntries.first?.cupsConsumed ?? 0,
+                onUpdate: { newCups in
+                    viewModel.addOrUpdateWaterEntry(cupsConsumed: newCups, date: currentDate)
+                }
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
+    }
+
     func weightEntryRow(_ entry: WeightLogEntry) -> some View {
         HStack(spacing: 8) {
             Text("\(entry.weight, specifier: "%.1f") \(entry.unit.displayName)")
@@ -486,6 +530,10 @@ extension LogsComponent {
                         compactLogCard(section: foodSection, width: cardWidth)
                     }
 
+                    if appPrefs.showWaterLogs {
+                        compactLogCard(section: waterSection, width: cardWidth)
+                    }
+
                     if appPrefs.showCustomLogs {
                         compactLogCard(section: customLogSectionHorizontal, width: cardWidth)
                     }
@@ -500,4 +548,84 @@ extension LogsComponent {
             .frame(width: width, alignment: .top)
     }
 
+}
+
+// MARK: - Water Cups Interactive View
+struct WaterCupsView: View {
+    let currentDate: Date
+    let cupsConsumed: Int
+    let onUpdate: (Int) -> Void
+
+    @State private var currentCupsConsumed: Int
+
+    init(currentDate: Date, cupsConsumed: Int, onUpdate: @escaping (Int) -> Void) {
+        self.currentDate = currentDate
+        self.cupsConsumed = cupsConsumed
+        self.onUpdate = onUpdate
+        self._currentCupsConsumed = State(initialValue: cupsConsumed)
+    }
+
+    private let defaultCupsCount = 4
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Display cups in rows of 4
+            LazyVGrid(columns: columns, spacing: 12) {
+                // Show default 4 cups or more if user added more
+                ForEach(0..<max(defaultCupsCount, currentCupsConsumed), id: \.self) { index in
+                    Button(action: {
+                        toggleCup(at: index)
+                    }) {
+                        Image(systemName: currentCupsConsumed > index ? "drop.fill" : "drop")
+                            .font(.title2)
+                            .foregroundColor(currentCupsConsumed > index ? .blue : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Show + button after 4th cup or last consumed cup
+                if currentCupsConsumed >= defaultCupsCount {
+                    Button(action: {
+                        addCup()
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Display count text
+            Text("\(currentCupsConsumed) cup\(currentCupsConsumed == 1 ? "" : "s")")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
+        .onChange(of: cupsConsumed) { oldValue, newValue in
+            currentCupsConsumed = newValue
+        }
+    }
+
+    private func toggleCup(at index: Int) {
+        if currentCupsConsumed > index {
+            // Unfill this cup and all cups after it
+            currentCupsConsumed = index
+        } else {
+            // Fill up to and including this cup
+            currentCupsConsumed = index + 1
+        }
+        onUpdate(currentCupsConsumed)
+    }
+
+    private func addCup() {
+        currentCupsConsumed += 1
+        onUpdate(currentCupsConsumed)
+    }
 }

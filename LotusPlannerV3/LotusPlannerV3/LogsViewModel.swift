@@ -37,6 +37,10 @@ class LogsViewModel: ObservableObject {
     @Published var foodName = ""
     @Published var foodDate = Date()
 
+    // Water entry form
+    @Published var waterCupsConsumed = 0
+    @Published var waterDate = Date()
+
     // Sleep entry form
     @Published var sleepDate = Date()
     @Published var sleepWakeUpTime: Date?
@@ -50,6 +54,8 @@ class LogsViewModel: ObservableObject {
     private var originalWorkoutDate = Date()
     private var originalFoodName = ""
     private var originalFoodDate = Date()
+    private var originalWaterCupsConsumed = 0
+    private var originalWaterDate = Date()
     private var originalSleepDate = Date()
     private var originalSleepWakeUpTime: Date?
     private var originalSleepBedTime: Date?
@@ -64,6 +70,9 @@ class LogsViewModel: ObservableObject {
     @Published var foodEntries: [FoodLogEntry] = [] {
         didSet { rebuildFoodCache() }
     }
+    @Published var waterEntries: [WaterLogEntry] = [] {
+        didSet { rebuildWaterCache() }
+    }
     @Published var sleepEntries: [SleepLogEntry] = [] {
         didSet { rebuildSleepCache() }
     }
@@ -73,6 +82,7 @@ class LogsViewModel: ObservableObject {
     private var weightEntriesByDay: [Date: [WeightLogEntry]] = [:]
     private var workoutEntriesByDay: [Date: [WorkoutLogEntry]] = [:]
     private var foodEntriesByDay: [Date: [FoodLogEntry]] = [:]
+    private var waterEntriesByDay: [Date: [WaterLogEntry]] = [:]
     private var sleepEntriesByDay: [Date: [SleepLogEntry]] = [:]
     
     // MARK: - Computed Properties
@@ -86,6 +96,10 @@ class LogsViewModel: ObservableObject {
     
     var filteredFoodEntries: [FoodLogEntry] {
         foodLogs(on: currentDate)
+    }
+
+    var filteredWaterEntries: [WaterLogEntry] {
+        waterLogs(on: currentDate)
     }
 
     var filteredSleepEntries: [SleepLogEntry] {
@@ -102,6 +116,10 @@ class LogsViewModel: ObservableObject {
 
     func foodLogs(on date: Date) -> [FoodLogEntry] {
         foodEntriesByDay[normalizedDay(date)] ?? []
+    }
+
+    func waterLogs(on date: Date) -> [WaterLogEntry] {
+        waterEntriesByDay[normalizedDay(date)] ?? []
     }
 
     func sleepLogs(on date: Date) -> [SleepLogEntry] {
@@ -121,6 +139,7 @@ class LogsViewModel: ObservableObject {
         weightEntries = coreDataManager.loadWeightEntries()
         workoutEntries = coreDataManager.loadWorkoutEntries()
         foodEntries = coreDataManager.loadFoodEntries()
+        waterEntries = coreDataManager.loadWaterEntries()
         sleepEntries = coreDataManager.loadSleepEntries()
     }
     
@@ -180,6 +199,18 @@ class LogsViewModel: ObservableObject {
             map[key]?.sort { $0.createdAt < $1.createdAt }
         }
         foodEntriesByDay = map
+    }
+
+    private func rebuildWaterCache() {
+        var map: [Date: [WaterLogEntry]] = [:]
+        for entry in waterEntries {
+            let key = normalizedDay(entry.date)
+            map[key, default: []].append(entry)
+        }
+        for key in map.keys {
+            map[key]?.sort { $0.createdAt < $1.createdAt }
+        }
+        waterEntriesByDay = map
     }
 
     private func rebuildSleepCache() {
@@ -311,6 +342,48 @@ class LogsViewModel: ObservableObject {
 
     }
 
+    // MARK: - Water Entries
+    func addOrUpdateWaterEntry(cupsConsumed: Int, date: Date) {
+        let userId = getUserId()
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+
+        // Check if entry already exists for this date
+        if let existingEntry = waterLogs(on: normalizedDate).first {
+            // Update existing entry
+            let updatedEntry = WaterLogEntry(
+                id: existingEntry.id,
+                date: normalizedDate,
+                cupsConsumed: cupsConsumed,
+                userId: userId,
+                createdAt: existingEntry.createdAt,
+                updatedAt: Date()
+            )
+
+            coreDataManager.updateWaterEntry(updatedEntry)
+
+            // Update local array
+            if let index = waterEntries.firstIndex(where: { $0.id == existingEntry.id }) {
+                waterEntries[index] = updatedEntry
+            }
+        } else {
+            // Create new entry
+            let entry = WaterLogEntry(date: normalizedDate, cupsConsumed: cupsConsumed, userId: userId)
+
+            coreDataManager.saveWaterEntry(entry)
+
+            // Update local array
+            waterEntries.append(entry)
+        }
+    }
+
+    func deleteWaterEntry(_ entry: WaterLogEntry) {
+        // Delete from Core Data
+        coreDataManager.deleteWaterEntry(entry)
+
+        // Update local array
+        waterEntries.removeAll { $0.id == entry.id }
+    }
+
     // MARK: - Sleep Entries
     func addSleepEntry() {
         let userId = getUserId()
@@ -377,6 +450,10 @@ class LogsViewModel: ObservableObject {
         return !foodName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    var canAddWater: Bool {
+        return waterCupsConsumed >= 0
+    }
+
     var canAddSleep: Bool {
         // At least one time must be set
         return sleepWakeUpTime != nil || sleepBedTime != nil
@@ -387,6 +464,7 @@ class LogsViewModel: ObservableObject {
         case .weight: return canAddWeight
         case .workout: return canAddWorkout
         case .food: return canAddFood
+        case .water: return canAddWater
         case .sleep: return canAddSleep
         }
     }
@@ -405,6 +483,9 @@ class LogsViewModel: ObservableObject {
         case .food:
             return foodName != originalFoodName ||
                    foodDate != originalFoodDate
+        case .water:
+            return waterCupsConsumed != originalWaterCupsConsumed ||
+                   waterDate != originalWaterDate
         case .sleep:
             return sleepDate != originalSleepDate ||
                    sleepWakeUpTime != originalSleepWakeUpTime ||
@@ -421,10 +502,21 @@ class LogsViewModel: ObservableObject {
         case .weight: addWeightEntry()
         case .workout: addWorkoutEntry()
         case .food: addFoodEntry()
+        case .water: addWaterEntry()
         case .sleep: addSleepEntry()
         }
     }
-    
+
+    func addWaterEntry() {
+        let normalizedDate = Calendar.current.startOfDay(for: waterDate)
+        addOrUpdateWaterEntry(cupsConsumed: waterCupsConsumed, date: normalizedDate)
+
+        // Clear form
+        waterCupsConsumed = 0
+        waterDate = Date()
+        showingAddLogSheet = false
+    }
+
     func resetForms() {
         weightValue = ""
         weightDate = currentDate
@@ -432,6 +524,8 @@ class LogsViewModel: ObservableObject {
         foodName = ""
         workoutDate = currentDate
         foodDate = currentDate
+        waterCupsConsumed = 0
+        waterDate = currentDate
         sleepDate = currentDate
         sleepWakeUpTime = nil
         sleepBedTime = nil
@@ -473,6 +567,17 @@ class LogsViewModel: ObservableObject {
         showingEditLogSheet = true
     }
 
+    func editWaterEntry(_ entry: WaterLogEntry) {
+        editingEntry = (.water, entry.id)
+        selectedLogType = .water
+        waterCupsConsumed = entry.cupsConsumed
+        waterDate = entry.date
+        // Store original values for change detection
+        originalWaterCupsConsumed = entry.cupsConsumed
+        originalWaterDate = entry.date
+        showingEditLogSheet = true
+    }
+
     func editSleepEntry(_ entry: SleepLogEntry) {
         editingEntry = (.sleep, entry.id)
         selectedLogType = .sleep
@@ -496,6 +601,8 @@ class LogsViewModel: ObservableObject {
             updateWorkoutEntry()
         case .food:
             updateFoodEntry()
+        case .water:
+            updateWaterEntryForm()
         case .sleep:
             updateSleepEntry()
         }
@@ -591,6 +698,34 @@ class LogsViewModel: ObservableObject {
 
             // Update local array
             foodEntries[index] = updatedEntry
+        }
+
+        // Clear form and close sheet
+        resetForms()
+        showingEditLogSheet = false
+        self.editingEntry = nil
+    }
+
+    private func updateWaterEntryForm() {
+        guard let editingEntry = editingEntry else { return }
+
+        // Find and update the entry
+        if let index = waterEntries.firstIndex(where: { $0.id == editingEntry.id }) {
+            let normalizedDate = Calendar.current.startOfDay(for: waterDate)
+            let updatedEntry = WaterLogEntry(
+                id: editingEntry.id,
+                date: normalizedDate,
+                cupsConsumed: waterCupsConsumed,
+                userId: waterEntries[index].userId,
+                createdAt: waterEntries[index].createdAt,
+                updatedAt: Date()
+            )
+
+            // Update in Core Data
+            coreDataManager.updateWaterEntry(updatedEntry)
+
+            // Update local array
+            waterEntries[index] = updatedEntry
         }
 
         // Clear form and close sheet

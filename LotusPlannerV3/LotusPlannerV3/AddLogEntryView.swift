@@ -9,6 +9,7 @@ struct AddLogEntryView: View {
         if appPrefs.showWeightLogs { return .weight }
         if appPrefs.showWorkoutLogs { return .workout }
         if appPrefs.showFoodLogs { return .food }
+        if appPrefs.showWaterLogs { return .water }
         if appPrefs.showSleepLogs { return .sleep }
         return .weight // Fallback, though this case shouldn't happen as the + button should be hidden
     }
@@ -28,6 +29,8 @@ struct AddLogEntryView: View {
                                 viewModel.selectedLogType = .workout
                             case .food where appPrefs.showFoodLogs:
                                 viewModel.selectedLogType = .food
+                            case .water where appPrefs.showWaterLogs:
+                                viewModel.selectedLogType = .water
                             case .sleep where appPrefs.showSleepLogs:
                                 viewModel.selectedLogType = .sleep
                             default:
@@ -48,6 +51,10 @@ struct AddLogEntryView: View {
                             Label(LogType.food.displayName, systemImage: LogType.food.icon)
                                 .tag(LogType.food)
                         }
+                        if appPrefs.showWaterLogs {
+                            Label(LogType.water.displayName, systemImage: LogType.water.icon)
+                                .tag(LogType.water)
+                        }
                         if appPrefs.showSleepLogs {
                             Label(LogType.sleep.displayName, systemImage: LogType.sleep.icon)
                                 .tag(LogType.sleep)
@@ -60,6 +67,7 @@ struct AddLogEntryView: View {
                         case .weight where !appPrefs.showWeightLogs,
                              .workout where !appPrefs.showWorkoutLogs,
                              .food where !appPrefs.showFoodLogs,
+                             .water where !appPrefs.showWaterLogs,
                              .sleep where !appPrefs.showSleepLogs:
                             viewModel.selectedLogType = getFirstAvailableLogType()
                         default:
@@ -75,6 +83,8 @@ struct AddLogEntryView: View {
                     workoutForm
                 } else if case .food = viewModel.selectedLogType, appPrefs.showFoodLogs {
                     foodForm
+                } else if case .water = viewModel.selectedLogType, appPrefs.showWaterLogs {
+                    waterForm
                 } else if case .sleep = viewModel.selectedLogType, appPrefs.showSleepLogs {
                     sleepForm
                 }
@@ -106,6 +116,8 @@ struct AddLogEntryView: View {
             viewModel.weightDate = currentDateTime
             viewModel.workoutDate = currentDateTime
             viewModel.foodDate = currentDateTime
+            viewModel.waterDate = currentDateTime
+            viewModel.waterCupsConsumed = 4  // Default to 4 cups
             viewModel.sleepDate = currentDateTime
         }
     }
@@ -142,6 +154,13 @@ struct AddLogEntryView: View {
         Section("Food Details") {
             TextField("Food name", text: $viewModel.foodName)
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+
+    private var waterForm: some View {
+        Section("Water Details") {
+            Stepper("Cups: \(viewModel.waterCupsConsumed)", value: $viewModel.waterCupsConsumed, in: 0...20)
+            DatePicker("Date", selection: $viewModel.waterDate, displayedComponents: [.date])
         }
     }
 

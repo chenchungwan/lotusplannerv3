@@ -16,6 +16,8 @@ struct EditLogEntryView: View {
                     workoutForm
                 case .food:
                     foodForm
+                case .water:
+                    waterForm
                 case .sleep:
                     sleepForm
                 }
@@ -79,6 +81,10 @@ struct EditLogEntryView: View {
             if let entry = viewModel.foodEntries.first(where: { $0.id == editingEntry.id }) {
                 viewModel.deleteFoodEntry(entry)
             }
+        case .water:
+            if let entry = viewModel.waterEntries.first(where: { $0.id == editingEntry.id }) {
+                viewModel.deleteWaterEntry(entry)
+            }
         case .sleep:
             if let entry = viewModel.sleepEntries.first(where: { $0.id == editingEntry.id }) {
                 viewModel.deleteSleepEntry(entry)
@@ -118,6 +124,13 @@ struct EditLogEntryView: View {
         Section("Food Details") {
             TextField("Food name", text: $viewModel.foodName)
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+
+    private var waterForm: some View {
+        Section("Water Details") {
+            Stepper("Cups: \(viewModel.waterCupsConsumed)", value: $viewModel.waterCupsConsumed, in: 0...20)
+            DatePicker("Date", selection: $viewModel.waterDate, displayedComponents: [.date])
         }
     }
 

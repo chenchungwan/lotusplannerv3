@@ -7,6 +7,9 @@ struct TasksCompactComponent: View {
     let accountType: GoogleAuthManager.AccountKind
     let onTaskToggle: (GoogleTask, String) -> Void
     let onTaskDetails: (GoogleTask, String) -> Void
+    var isBulkEditMode: Bool = false
+    var selectedTaskIds: Set<String> = []
+    var onTaskSelectionToggle: ((String) -> Void)? = nil
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     
@@ -37,7 +40,12 @@ struct TasksCompactComponent: View {
                                 listName: item.listName,
                                 accentColor: accentColor,
                                 onToggle: { onTaskToggle(item.task, item.listId) },
-                                onDetails: { onTaskDetails(item.task, item.listId) }
+                                onDetails: { onTaskDetails(item.task, item.listId) },
+                                isBulkEditMode: isBulkEditMode,
+                                isSelected: selectedTaskIds.contains(item.task.id),
+                                onSelectionToggle: {
+                                    onTaskSelectionToggle?(item.task.id)
+                                }
                             )
                         }
                     }
@@ -98,16 +106,31 @@ private struct TaskCompactRow: View {
     let accentColor: Color
     let onToggle: () -> Void
     let onDetails: () -> Void
-    
+    var isBulkEditMode: Bool = false
+    var isSelected: Bool = false
+    var onSelectionToggle: (() -> Void)? = nil
+
     var body: some View {
         HStack(spacing: 8) {
-            // Checkable circle
-            Button(action: onToggle) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.body)
-                    .foregroundColor(task.isCompleted ? accentColor : .secondary)
+            // Bulk edit checkbox or normal completion toggle
+            if isBulkEditMode {
+                Button(action: {
+                    onSelectionToggle?()
+                }) {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .font(.body)
+                        .foregroundColor(isSelected ? accentColor : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                // Normal checkable circle
+                Button(action: onToggle) {
+                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.body)
+                        .foregroundColor(task.isCompleted ? accentColor : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
-            .buttonStyle(PlainButtonStyle())
             
             // Task title - allow it to shrink and truncate
             Text(task.title)
@@ -138,7 +161,11 @@ private struct TaskCompactRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            onDetails()
+            if isBulkEditMode {
+                onSelectionToggle?()
+            } else {
+                onDetails()
+            }
         }
     }
 }

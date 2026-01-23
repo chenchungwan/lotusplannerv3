@@ -6,8 +6,9 @@ struct DayViewTimebox: View {
     private let calendarVM: CalendarViewModel
     @ObservedObject private var tasksVM: TasksViewModel
     @ObservedObject private var auth: GoogleAuthManager
+    @ObservedObject private var bulkEditManager: BulkEditManager
     private let onEventTap: ((GoogleCalendarEvent) -> Void)?
-    
+
     // MARK: - State Variables
     @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
@@ -16,20 +17,21 @@ struct DayViewTimebox: View {
     @State private var isLogsSectionCollapsed: Bool = false
     @State private var personalTasksHeight: CGFloat = 300
     @State private var isPersonalProfessionalDividerDragging = false
-    
+
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedTaskAccount: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails: Bool = false
     @State private var selectedEvent: GoogleCalendarEvent?
-    
-    init(onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+
+    init(bulkEditManager: BulkEditManager, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
         self._navigationManager = ObservedObject(wrappedValue: NavigationManager.shared)
         self._appPrefs = ObservedObject(wrappedValue: AppPreferences.shared)
         self.calendarVM = DataManager.shared.calendarViewModel
         self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
         self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
+        self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
         self.onEventTap = onEventTap
         
         // Initialize state variables with stored values from AppPreferences
@@ -244,6 +246,11 @@ struct DayViewTimebox: View {
     // MARK: - Tasks Section
     private var tasksSection: some View {
         VStack(spacing: 0) {
+            // Bulk Edit Toolbar (shown when in bulk edit mode)
+            if bulkEditManager.state.isActive {
+                BulkEditToolbarView(bulkEditManager: bulkEditManager)
+            }
+
             // Personal Tasks section (top)
             ScrollView(.vertical, showsIndicators: true) {
                 personalTasksSection
@@ -299,7 +306,16 @@ struct DayViewTimebox: View {
                         }
                     },
                     isSingleDayView: true,
-                    showTaskStartTime: true
+                    showTaskStartTime: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
@@ -365,7 +381,16 @@ struct DayViewTimebox: View {
                         }
                     },
                     isSingleDayView: true,
-                    showTaskStartTime: true
+                    showTaskStartTime: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else {
@@ -524,6 +549,6 @@ struct DayViewTimebox: View {
 }
 
 #Preview {
-    DayViewTimebox()
+    DayViewTimebox(bulkEditManager: BulkEditManager())
 }
 

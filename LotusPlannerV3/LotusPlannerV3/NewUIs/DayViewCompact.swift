@@ -6,8 +6,9 @@ struct DayViewCompact: View {
     private let calendarVM: CalendarViewModel
     @ObservedObject private var tasksVM: TasksViewModel
     @ObservedObject private var auth: GoogleAuthManager
+    @ObservedObject private var bulkEditManager: BulkEditManager
     private let onEventTap: ((GoogleCalendarEvent) -> Void)?
-    
+
     // MARK: - State Variables
     @State private var dayLeftSectionWidth: CGFloat
     @State private var leftTimelineHeight: CGFloat
@@ -18,19 +19,20 @@ struct DayViewCompact: View {
     @State private var isLogsDividerDragging = false
     @State private var isDayVerticalDividerDragging = false
     @State private var isLogsSectionCollapsed: Bool = false
-    
+
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
     @State private var selectedTaskAccount: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails: Bool = false
-    
-    init(onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+
+    init(bulkEditManager: BulkEditManager, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
         self._navigationManager = ObservedObject(wrappedValue: NavigationManager.shared)
         self._appPrefs = ObservedObject(wrappedValue: AppPreferences.shared)
         self.calendarVM = DataManager.shared.calendarViewModel
         self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
         self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
+        self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
         self.onEventTap = onEventTap
         
         // Initialize state variables with stored values from AppPreferences
@@ -192,11 +194,16 @@ struct DayViewCompact: View {
     @ViewBuilder
     private var tasksSection: some View {
         VStack(spacing: 0) {
+            // Bulk Edit Toolbar (shown when in bulk edit mode)
+            if bulkEditManager.state.isActive {
+                BulkEditToolbarView(bulkEditManager: bulkEditManager)
+            }
+
             HStack(alignment: .top, spacing: 12) {
                 // Personal Tasks on the left
                 personalTasksSection
                     .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 // Professional Tasks on the right
                 professionalTasksSection
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -303,6 +310,15 @@ struct DayViewCompact: View {
                     selectedTaskListId = listId
                     selectedTaskAccount = .personal
                     showingTaskDetails = true
+                },
+                isBulkEditMode: bulkEditManager.state.isActive,
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                onTaskSelectionToggle: { taskId in
+                    if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                        bulkEditManager.state.selectedTaskIds.remove(taskId)
+                    } else {
+                        bulkEditManager.state.selectedTaskIds.insert(taskId)
+                    }
                 }
             )
         }
@@ -326,6 +342,15 @@ struct DayViewCompact: View {
                 selectedTaskListId = listId
                 selectedTaskAccount = .professional
                 showingTaskDetails = true
+            },
+            isBulkEditMode: bulkEditManager.state.isActive,
+            selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+            onTaskSelectionToggle: { taskId in
+                if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                    bulkEditManager.state.selectedTaskIds.remove(taskId)
+                } else {
+                    bulkEditManager.state.selectedTaskIds.insert(taskId)
+                }
             }
         )
     }
@@ -475,5 +500,5 @@ struct DayViewCompact: View {
 }
 
 #Preview {
-    DayViewCompact()
+    DayViewCompact(bulkEditManager: BulkEditManager())
 }

@@ -409,6 +409,12 @@ class AppPreferences: ObservableObject {
         }
     }
 
+    @Published var showWaterLogs: Bool {
+        didSet {
+            UserDefaults.standard.set(showWaterLogs, forKey: "showWaterLogs")
+        }
+    }
+
     @Published var showSleepLogs: Bool {
         didSet {
             UserDefaults.standard.set(showSleepLogs, forKey: "showSleepLogs")
@@ -416,7 +422,7 @@ class AppPreferences: ObservableObject {
     }
 
     var showAnyLogs: Bool {
-        showWeightLogs || showWorkoutLogs || showFoodLogs || showSleepLogs || showCustomLogs
+        showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs || showSleepLogs || showCustomLogs
     }
     
     
@@ -655,6 +661,7 @@ class AppPreferences: ObservableObject {
         self.showWeightLogs = UserDefaults.standard.object(forKey: "showWeightLogs") as? Bool ?? true
         self.showWorkoutLogs = UserDefaults.standard.object(forKey: "showWorkoutLogs") as? Bool ?? true
         self.showFoodLogs = UserDefaults.standard.object(forKey: "showFoodLogs") as? Bool ?? true
+        self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
@@ -1173,6 +1180,23 @@ get: { appPrefs.showFoodLogs },
                                 Text("Food Logs")
                                     .font(.body)
                                 Text("Show food tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showWaterLogs },
+                        set: { appPrefs.showWaterLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "drop.fill")
+                                .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Water Logs")
+                                    .font(.body)
+                                Text("Track daily water intake in cups")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

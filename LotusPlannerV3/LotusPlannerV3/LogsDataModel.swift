@@ -5,6 +5,7 @@ enum LogType: String, CaseIterable, Codable {
     case weight = "weight"
     case workout = "workout"
     case food = "food"
+    case water = "water"
     case sleep = "sleep"
 
     var displayName: String {
@@ -12,6 +13,7 @@ enum LogType: String, CaseIterable, Codable {
         case .weight: return "Weight"
         case .workout: return "Workout"
         case .food: return "Food"
+        case .water: return "Water"
         case .sleep: return "Sleep"
         }
     }
@@ -21,6 +23,7 @@ enum LogType: String, CaseIterable, Codable {
         case .weight: return "scalemass"
         case .workout: return "figure.run"
         case .food: return "fork.knife"
+        case .water: return "drop.fill"
         case .sleep: return "bed.double.fill"
         }
     }
@@ -96,6 +99,34 @@ struct FoodLogEntry: Identifiable, Codable, Hashable {
         self.name = name
         self.userId = userId
         self.createdAt = Date()
+    }
+}
+
+// MARK: - Water Log Entry
+struct WaterLogEntry: Identifiable, Codable, Hashable {
+    let id: String
+    let date: Date
+    let cupsConsumed: Int
+    let userId: String
+    let createdAt: Date
+    let updatedAt: Date
+
+    init(date: Date, cupsConsumed: Int, userId: String) {
+        self.id = UUID().uuidString
+        self.date = date
+        self.cupsConsumed = cupsConsumed
+        self.userId = userId
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    init(id: String, date: Date, cupsConsumed: Int, userId: String, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.date = date
+        self.cupsConsumed = cupsConsumed
+        self.userId = userId
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }
 
@@ -182,5 +213,6 @@ extension WeightLogEntry: LogEntry {
 
 extension WorkoutLogEntry: LogEntry {}
 extension FoodLogEntry: LogEntry {}
+extension WaterLogEntry: LogEntry {}
 extension SleepLogEntry: LogEntry {}
 extension ScrapbookEntry: LogEntry {} 
