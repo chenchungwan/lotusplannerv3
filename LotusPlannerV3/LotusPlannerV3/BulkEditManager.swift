@@ -40,6 +40,7 @@ class BulkEditManager: ObservableObject {
             destinationAccountKind: nil,
             originalDueDates: nil,
             originalTimeWindows: nil,
+            originalPriorities: nil,
             taskListMapping: taskListMapping,
             count: tasksToComplete.count
         )
@@ -98,6 +99,7 @@ class BulkEditManager: ObservableObject {
             destinationAccountKind: nil,
             originalDueDates: nil,
             originalTimeWindows: originalTimeWindows,
+            originalPriorities: nil,
             taskListMapping: taskListMapping,
             count: tasksToDelete.count
         )
@@ -155,6 +157,7 @@ class BulkEditManager: ObservableObject {
             destinationAccountKind: destinationAccountKind,
             originalDueDates: nil,
             originalTimeWindows: originalTimeWindows,
+            originalPriorities: nil,
             taskListMapping: taskListMapping,
             count: tasksToMove.count
         )
@@ -228,6 +231,7 @@ class BulkEditManager: ObservableObject {
             destinationAccountKind: nil,
             originalDueDates: originalDueDates,
             originalTimeWindows: originalTimeWindows,
+            originalPriorities: nil,
             taskListMapping: taskListMapping,
             count: tasksToUpdate.count
         )
@@ -294,6 +298,62 @@ class BulkEditManager: ObservableObject {
     ) {
         let tasksWithInfo = tasks.map { (task: $0, listId: listId, accountKind: accountKind) }
         bulkUpdateDueDate(tasks: tasksWithInfo, dueDate: dueDate, isAllDay: isAllDay, startTime: startTime, endTime: endTime, tasksVM: tasksVM, completion: completion)
+    }
+
+    func bulkUpdatePriority(
+        tasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)],
+        priority: TaskPriorityData?,
+        tasksVM: TasksViewModel,
+        completion: @escaping (BulkEditUndoData) -> Void
+    ) {
+        let tasksToUpdate = tasks.filter { state.selectedTaskIds.contains($0.task.id) }
+
+        // Store original priorities for undo
+        var originalPriorities: [String: TaskPriorityData?] = [:]
+        var taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)] = [:]
+        for taskInfo in tasksToUpdate {
+            originalPriorities[taskInfo.task.id] = taskInfo.task.priority
+            taskListMapping[taskInfo.task.id] = (listId: taskInfo.listId, accountKind: taskInfo.accountKind)
+        }
+
+        guard let firstTask = tasksToUpdate.first else { return }
+        let undoData = BulkEditUndoData(
+            tasks: tasksToUpdate.map { $0.task },
+            listId: firstTask.listId,
+            accountKind: firstTask.accountKind,
+            destinationListId: nil,
+            destinationAccountKind: nil,
+            originalDueDates: nil,
+            originalTimeWindows: nil,
+            originalPriorities: originalPriorities,
+            taskListMapping: taskListMapping,
+            count: tasksToUpdate.count
+        )
+
+        Task {
+            // Update each task with new priority
+            for taskInfo in tasksToUpdate {
+                let updatedTask = taskInfo.task.withPriority(priority)
+                await tasksVM.updateTask(updatedTask, in: taskInfo.listId, for: taskInfo.accountKind)
+            }
+
+            await MainActor.run {
+                state.reset()
+                completion(undoData)
+            }
+        }
+    }
+
+    func bulkUpdatePriority(
+        tasks: [GoogleTask],
+        in listId: String,
+        for accountKind: GoogleAuthManager.AccountKind,
+        priority: TaskPriorityData?,
+        tasksVM: TasksViewModel,
+        completion: @escaping (BulkEditUndoData) -> Void
+    ) {
+        let tasksWithInfo = tasks.map { (task: $0, listId: listId, accountKind: accountKind) }
+        bulkUpdatePriority(tasks: tasksWithInfo, priority: priority, tasksVM: tasksVM, completion: completion)
     }
 
     // MARK: - Undo Operations
@@ -475,6 +535,45 @@ class BulkEditManager: ObservableObject {
                         TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
                     }
                 }
+            }
+        }
+    }
+
+    func undoUpdatePriority(data: BulkEditUndoData, tasksVM: TasksViewModel) {
+        guard let originalPriorities = data.originalPriorities else { return }
+
+        Task {
+            for task in data.tasks {
+                // Get the list/account for this specific task
+                let listId: String
+                let accountKind: GoogleAuthManager.AccountKind
+
+                if let mapping = data.taskListMapping?[task.id] {
+                    listId = mapping.listId
+                    accountKind = mapping.accountKind
+                } else {
+                    // Fallback to primary list/account for backward compatibility
+                    listId = data.listId
+                    accountKind = data.accountKind
+                }
+
+                // Get current task version from tasksVM
+                let currentTasks: [GoogleTask]
+                switch accountKind {
+                case .personal:
+                    currentTasks = tasksVM.personalTasks[listId] ?? []
+                case .professional:
+                    currentTasks = tasksVM.professionalTasks[listId] ?? []
+                }
+
+                // Find current version of the task
+                guard let currentTask = currentTasks.first(where: { $0.id == task.id }) else { continue }
+
+                // Restore original priority (which may be nil)
+                let originalPriority = originalPriorities[task.id] ?? nil
+                let restoredTask = currentTask.withPriority(originalPriority)
+
+                await tasksVM.updateTask(restoredTask, in: listId, for: accountKind)
             }
         }
     }

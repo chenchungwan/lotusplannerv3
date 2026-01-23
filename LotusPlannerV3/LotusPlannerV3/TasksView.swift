@@ -78,6 +78,26 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         // Timed tasks have format "yyyy-MM-ddTHH:mm:ss.SSSZ" (24+ chars)
         return due.count > 10
     }
+
+    // MARK: - Priority Support
+
+    /// Get priority from notes field
+    var priority: TaskPriorityData? {
+        return TaskPriorityData.parse(from: notes)
+    }
+
+    /// Get notes with priority tag removed (user-visible notes only)
+    var userNotes: String? {
+        return TaskPriorityData.removeTag(from: notes)
+    }
+
+    /// Create a copy of this task with updated priority
+    func withPriority(_ priority: TaskPriorityData?) -> GoogleTask {
+        let updatedNotes = TaskPriorityData.updateNotes(notes, with: priority)
+        var copy = self
+        copy.notes = updatedNotes
+        return copy
+    }
 }
 
 struct GoogleTasksResponse: Codable {
@@ -2038,6 +2058,15 @@ struct TasksView: View {
                 }
             )
         }
+        .sheet(isPresented: $bulkEditManager.state.showingPriorityPicker) {
+            BulkUpdatePriorityPicker(
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                onSave: { priority in
+                    bulkEditManager.state.pendingPriority = priority
+                    performBulkUpdatePriority()
+                }
+            )
+        }
         // Undo Toast
         .overlay(alignment: .bottom) {
             if bulkEditManager.state.showingUndoToast,
@@ -2704,6 +2733,47 @@ struct TasksView: View {
         }
     }
 
+    private func performBulkUpdatePriority() {
+        // Get all selected tasks from both personal and professional accounts
+        let selectedIds = bulkEditManager.state.selectedTaskIds
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Collect from personal tasks
+        for (listId, tasks) in viewModel.personalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Collect from professional tasks
+        for (listId, tasks) in viewModel.professionalTasks {
+            for task in tasks where selectedIds.contains(task.id) {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        guard !allTasks.isEmpty else { return }
+
+        bulkEditManager.bulkUpdatePriority(
+            tasks: allTasks,
+            priority: bulkEditManager.state.pendingPriority,
+            tasksVM: viewModel
+        ) { undoData in
+            bulkEditManager.state.undoAction = .updatePriority
+            bulkEditManager.state.undoData = undoData
+            bulkEditManager.state.showingUndoToast = true
+
+            // Auto-dismiss toast after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                if bulkEditManager.state.undoAction == .updatePriority {
+                    bulkEditManager.state.showingUndoToast = false
+                    bulkEditManager.state.undoAction = nil
+                    bulkEditManager.state.undoData = nil
+                }
+            }
+        }
+    }
+
     private func performUndo(action: BulkEditAction, data: BulkEditUndoData) {
         switch action {
         case .complete:
@@ -2714,6 +2784,8 @@ struct TasksView: View {
             bulkEditManager.undoMove(data: data, tasksVM: viewModel)
         case .updateDueDate:
             bulkEditManager.undoUpdateDueDate(data: data, tasksVM: viewModel)
+        case .updatePriority:
+            bulkEditManager.undoUpdatePriority(data: data, tasksVM: viewModel)
         }
     }
 }
@@ -3146,7 +3218,8 @@ struct TaskDetailsView: View {
     @State private var endTime: Date = Date()
     @State private var isAllDay: Bool = true
     @State private var isCompleted: Bool = false
-    
+    @State private var selectedPriority: TaskPriorityData?
+
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     
     // Track original due date to detect changes properly
@@ -3191,12 +3264,13 @@ struct TaskDetailsView: View {
         self.originalCompletedTimestamp = task.completed
         
         _editedTitle = State(initialValue: task.title)
-        _editedNotes = State(initialValue: task.notes ?? "")
+        _editedNotes = State(initialValue: task.userNotes ?? "")
         // For new tasks, default due date to current day; for existing tasks, use the task's due date
         _editedDueDate = State(initialValue: isNew ? Calendar.current.startOfDay(for: Date()) : task.dueDate)
         _selectedAccountKind = State(initialValue: accountKind)
         _selectedListId = State(initialValue: taskListId)
         _isCompleted = State(initialValue: isNew ? false : task.isCompleted)
+        _selectedPriority = State(initialValue: task.priority)
         
         // Initialize time window state and store original values
         let calendar = Calendar.current
@@ -3253,7 +3327,7 @@ struct TaskDetailsView: View {
     
     var hasChanges: Bool {
         editedTitle != task.title ||
-        editedNotes != (task.notes ?? "") ||
+        editedNotes != (task.userNotes ?? "") ||
         editedDueDate != originalDueDate ||
         selectedAccountKind != accountKind ||
         selectedListId != taskListId ||
@@ -3261,7 +3335,8 @@ struct TaskDetailsView: View {
         isAllDay != originalIsAllDay ||
         !areTimesEqual(startTime, originalStartTime) ||
         !areTimesEqual(endTime, originalEndTime) ||
-        isCompleted != originalIsCompleted
+        isCompleted != originalIsCompleted ||
+        selectedPriority != task.priority
     }
     
     // Helper function to compare times (ignoring seconds and milliseconds)
@@ -3599,7 +3674,61 @@ struct TaskDetailsView: View {
                     
                     // Removed Task Status section per request
                 }
-                
+
+                // Priority Section
+                Section("Priority") {
+                    let priorityStyle = UserDefaults.standard.taskPriorityStyle
+                    let allValues = priorityStyle.allValues()
+
+                    Picker("Priority Level", selection: Binding<String?>(
+                        get: {
+                            selectedPriority?.value
+                        },
+                        set: { newValue in
+                            if let value = newValue {
+                                selectedPriority = TaskPriorityData(style: priorityStyle, value: value)
+                            } else {
+                                selectedPriority = nil
+                            }
+                        }
+                    )) {
+                        Text(priorityStyle.noPriorityLabel)
+                            .tag(nil as String?)
+
+                        ForEach(allValues, id: \.self) { value in
+                            HStack {
+                                Text(value)
+                                Spacer()
+                                Circle()
+                                    .fill(priorityStyle.color(for: value))
+                                    .frame(width: 10, height: 10)
+                            }
+                            .tag(value as String?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    if let priority = selectedPriority {
+                        HStack {
+                            Text("Selected:")
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Text(priority.displayText)
+                                    .fontWeight(.semibold)
+                                Circle()
+                                    .fill(priority.color)
+                                    .frame(width: 12, height: 12)
+                            }
+                            .foregroundColor(priority.color)
+                        }
+                        .font(.subheadline)
+                    }
+
+                    Text("Change priority style in Settings")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 // Add empty section at bottom to provide space when time pickers are visible
                 if !isNew && !isAllDay {
                     Section {
@@ -3607,7 +3736,7 @@ struct TaskDetailsView: View {
                     }
                     .frame(height: 60)
                 }
-                
+
                 // Danger Zone section at bottom
                 if !isNew {
                     Section("Danger Zone") {
@@ -3886,10 +4015,14 @@ struct TaskDetailsView: View {
                 completionTimestamp = nil
             }
             
+            // Combine user notes with priority tag
+            let userNotesText = editedNotes.isEmpty ? nil : editedNotes
+            let notesWithPriority = TaskPriorityData.updateNotes(userNotesText, with: selectedPriority)
+
             let updatedTask = GoogleTask(
                 id: task.id,
                 title: editedTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-                notes: editedNotes.isEmpty ? nil : editedNotes,
+                notes: notesWithPriority,
                 status: statusString,
                 due: dueDateString,
                 completed: completionTimestamp,

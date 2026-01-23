@@ -502,8 +502,28 @@ private struct TaskComponentRow: View {
                     .truncationMode(.tail)
 
                 Spacer()
-                
+
                 HStack(spacing: 4) {
+                    // Priority indicator
+                    if let priority = task.priority {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(priority.color)
+                                .frame(width: 8, height: 8)
+                            Text(priority.displayText)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(priority.color)
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(priority.color.opacity(0.15))
+                        )
+                        .fixedSize()
+                    }
+
                     if showTaskStartTime, let startText = startTimeTagText(for: task) {
                         Text(startText)
                             .font(.caption)
@@ -516,7 +536,7 @@ private struct TaskComponentRow: View {
                             )
                             .fixedSize()
                     }
-                    
+
                     // Due date tags (only show if not hidden and tag is available) - aligned to the right
                     if !hideDueDate, let tagInfo = dueDateTag(for: task) {
                         Text(tagInfo.text)

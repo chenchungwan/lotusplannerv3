@@ -211,6 +211,104 @@ struct BulkUpdateDueDatePicker: View {
     }
 }
 
+// MARK: - Bulk Update Priority Picker
+
+struct BulkUpdatePriorityPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let selectedTaskIds: Set<String>
+    let onSave: (TaskPriorityData?) -> Void
+
+    @State private var selectedPriority: TaskPriorityData?
+    @State private var priorityStyle: TaskPriorityDataStyle
+
+    init(selectedTaskIds: Set<String>, onSave: @escaping (TaskPriorityData?) -> Void) {
+        self.selectedTaskIds = selectedTaskIds
+        self.onSave = onSave
+
+        // Get user's preferred priority style
+        _priorityStyle = State(initialValue: UserDefaults.standard.taskPriorityStyle)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Priority Section
+                Section("Priority") {
+                    if let priority = selectedPriority {
+                        // Show current priority with trash can
+                        HStack {
+                            Image(systemName: "flag.fill")
+                                .foregroundColor(priority.color)
+
+                            Text(priority.displayText)
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            Button(action: {
+                                selectedPriority = nil
+                            }) {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+
+                    // Priority picker
+                    Picker("Priority Level", selection: Binding<String?>(
+                        get: { selectedPriority?.value },
+                        set: { newValue in
+                            if let value = newValue {
+                                selectedPriority = TaskPriorityData(style: priorityStyle, value: value)
+                            } else {
+                                selectedPriority = nil
+                            }
+                        }
+                    )) {
+                        Text(priorityStyle.noPriorityLabel).tag(nil as String?)
+
+                        ForEach(priorityStyle.allValues(), id: \.self) { value in
+                            HStack {
+                                Text(value)
+                                Spacer()
+                                Circle()
+                                    .fill(priorityStyle.color(for: value))
+                                    .frame(width: 10, height: 10)
+                            }
+                            .tag(value as String?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                Section {
+                    Text("This will update the priority for \(selectedTaskIds.count) selected task\(selectedTaskIds.count == 1 ? "" : "s").")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Update Priority")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(selectedPriority)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
 // MARK: - Undo Toast Component
 
 struct UndoToast: View {
@@ -230,6 +328,8 @@ struct UndoToast: View {
         case .move:
             return "\(count) \(taskWord) moved"
         case .updateDueDate:
+            return "\(count) \(taskWord) updated"
+        case .updatePriority:
             return "\(count) \(taskWord) updated"
         }
     }
@@ -392,6 +492,22 @@ struct BulkEditToolbarView: View {
                         bulkEditManager.state.showingDueDatePicker = true
                     } label: {
                         Image(systemName: "calendar")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(bulkEditManager.state.selectedTaskIds.isEmpty ? Color(.systemGray6) : Color(.systemGray5))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
+
+                    // Priority button
+                    Button {
+                        bulkEditManager.state.showingPriorityPicker = true
+                    } label: {
+                        Image(systemName: "flag")
                             .font(.system(size: 18, weight: .regular))
                             .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
                             .frame(width: 32, height: 32)

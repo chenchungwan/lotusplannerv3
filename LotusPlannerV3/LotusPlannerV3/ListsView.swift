@@ -720,6 +720,22 @@ struct TasksDetailColumn: View {
                                         .buttonStyle(.plain)
                                         .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
 
+                                        // Update Priority button
+                                        Button {
+                                            bulkEditManager.state.showingPriorityPicker = true
+                                        } label: {
+                                            Image(systemName: "flag")
+                                                .font(.system(size: 18, weight: .regular))
+                                                .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
+                                                .frame(width: 32, height: 32)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .fill(bulkEditManager.state.selectedTaskIds.isEmpty ? Color(.systemGray6) : Color(.systemGray5))
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
+
                                         // Move button
                                         Button {
                                             bulkEditManager.state.showingMoveDestinationPicker = true
@@ -957,6 +973,15 @@ struct TasksDetailColumn: View {
                 }
             )
         }
+        .sheet(isPresented: $bulkEditManager.state.showingPriorityPicker) {
+            BulkUpdatePriorityPicker(
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                onSave: { priority in
+                    bulkEditManager.state.pendingPriority = priority
+                    bulkEditManager.state.showingUpdatePriorityConfirmation = true
+                }
+            )
+        }
         .alert("Delete List", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
@@ -1047,6 +1072,23 @@ struct TasksDetailColumn: View {
             }
         } message: {
             Text("Update due date for \(bulkEditManager.state.selectedTaskIds.count) selected task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")?")
+        }
+        .alert("Update Priority", isPresented: $bulkEditManager.state.showingUpdatePriorityConfirmation) {
+            Button("Cancel", role: .cancel) {
+                bulkEditManager.state.pendingPriority = nil
+            }
+            Button("Update") {
+                if let listId = selectedListId,
+                   let accountKind = selectedAccountKind {
+                    bulkUpdatePriority(
+                        listId: listId,
+                        accountKind: accountKind,
+                        priority: bulkEditManager.state.pendingPriority
+                    )
+                }
+            }
+        } message: {
+            Text("Update priority for \(bulkEditManager.state.selectedTaskIds.count) selected task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")?")
         }
         .onChange(of: selectedListId) { _ in
             // Reset inline task creation when list changes
@@ -1217,6 +1259,31 @@ struct TasksDetailColumn: View {
         }
     }
 
+    private func bulkUpdatePriority(listId: String, accountKind: GoogleAuthManager.AccountKind, priority: TaskPriorityData?) {
+        bulkEditManager.bulkUpdatePriority(
+            tasks: tasks,
+            in: listId,
+            for: accountKind,
+            priority: priority,
+            tasksVM: tasksVM
+        ) { undoTaskData in
+            // Show undo toast
+            bulkEditManager.state.undoAction = .updatePriority
+            bulkEditManager.state.undoData = undoTaskData
+            bulkEditManager.state.showingUndoToast = true
+
+            // Auto-dismiss after 5 seconds
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                await MainActor.run {
+                    if bulkEditManager.state.undoAction == .updatePriority && bulkEditManager.state.undoData?.count == undoTaskData.count {
+                        bulkEditManager.state.showingUndoToast = false
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Undo Functions
 
     private func performUndo() {
@@ -1236,6 +1303,8 @@ struct TasksDetailColumn: View {
             onNavigateToList(data.listId, data.accountKind)
         case .updateDueDate:
             bulkEditManager.undoUpdateDueDate(data: data, tasksVM: tasksVM)
+        case .updatePriority:
+            bulkEditManager.undoUpdatePriority(data: data, tasksVM: tasksVM)
         }
 
         // Clear undo state
@@ -1338,9 +1407,29 @@ struct SimpleTaskRow: View {
                         .font(.body)
                         .strikethrough(task.isCompleted)
                         .foregroundColor(task.isCompleted ? .secondary : .primary)
-                    
+
                     Spacer()
-                    
+
+                    // Priority indicator
+                    if let priority = task.priority {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(priority.color)
+                                .frame(width: 8, height: 8)
+                            Text(priority.displayText)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(priority.color)
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(priority.color.opacity(0.15))
+                        )
+                        .fixedSize()
+                    }
+
                     if let dueDateTag = dueDateTag(for: task) {
                         Text(dueDateTag.text)
                             .font(.caption)
@@ -1354,7 +1443,7 @@ struct SimpleTaskRow: View {
                     }
                 }
                 
-                if let notes = task.notes, !notes.isEmpty {
+                if let notes = task.userNotes, !notes.isEmpty {
                     Text(notes)
                         .font(.caption)
                         .foregroundColor(.secondary)

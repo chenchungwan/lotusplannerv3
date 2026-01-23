@@ -1419,6 +1419,33 @@ struct CalendarView: View {
                 }
             )
         }
+        .sheet(isPresented: $bulkEditManager.state.showingPriorityPicker) {
+            BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+
+                    // Group tasks by list+account
+                    let grouped = Dictionary(grouping: selectedTasks) { "\($0.listId)-\($0.accountKind)" }
+
+                    // Update priority for each group
+                    for (_, group) in grouped {
+                        guard let first = group.first else { continue }
+                        await bulkEditManager.bulkUpdatePriority(
+                            tasks: group.map { $0.task },
+                            in: first.listId,
+                            for: first.accountKind,
+                            priority: priority,
+                            tasksVM: tasksViewModel
+                        ) { undoData in
+                            updateCachedTasks()
+                            updateMonthCachedTasks()
+                        }
+                    }
+                }
+                bulkEditManager.state.showingPriorityPicker = false
+            }
+        }
     }
 
     private var toolbarAndSheetsContent: some View {

@@ -14,6 +14,7 @@ enum BulkEditAction {
     case delete
     case move
     case updateDueDate
+    case updatePriority
 }
 
 // MARK: - Bulk Edit State
@@ -27,6 +28,8 @@ struct BulkEditState {
     var showingDueDatePicker: Bool = false
     var showingMoveConfirmation: Bool = false
     var showingUpdateDueDateConfirmation: Bool = false
+    var showingPriorityPicker: Bool = false
+    var showingUpdatePriorityConfirmation: Bool = false
 
     // Pending operation data
     var pendingMoveDestination: (listId: String, accountKind: GoogleAuthManager.AccountKind)?
@@ -34,6 +37,7 @@ struct BulkEditState {
     var pendingIsAllDay: Bool = true
     var pendingStartTime: Date?
     var pendingEndTime: Date?
+    var pendingPriority: TaskPriorityData?
 
     // Undo state
     var showingUndoToast: Bool = false
@@ -49,11 +53,14 @@ struct BulkEditState {
         showingDueDatePicker = false
         showingMoveConfirmation = false
         showingUpdateDueDateConfirmation = false
+        showingPriorityPicker = false
+        showingUpdatePriorityConfirmation = false
         pendingMoveDestination = nil
         pendingDueDate = nil
         pendingIsAllDay = true
         pendingStartTime = nil
         pendingEndTime = nil
+        pendingPriority = nil
     }
 
     mutating func clearPendingState() {
@@ -63,11 +70,14 @@ struct BulkEditState {
         showingDueDatePicker = false
         showingMoveConfirmation = false
         showingUpdateDueDateConfirmation = false
+        showingPriorityPicker = false
+        showingUpdatePriorityConfirmation = false
         pendingMoveDestination = nil
         pendingDueDate = nil
         pendingIsAllDay = true
         pendingStartTime = nil
         pendingEndTime = nil
+        pendingPriority = nil
     }
 }
 
@@ -81,6 +91,7 @@ struct BulkEditUndoData {
     let destinationAccountKind: GoogleAuthManager.AccountKind?
     let originalDueDates: [String: String?]?
     let originalTimeWindows: [String: (startTime: Date, endTime: Date, isAllDay: Bool)?]?
+    let originalPriorities: [String: TaskPriorityData?]?  // Maps task ID to its original priority
     let taskListMapping: [String: (listId: String, accountKind: GoogleAuthManager.AccountKind)]?  // Maps task ID to its list/account
     let count: Int
 }
