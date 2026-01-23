@@ -50,39 +50,24 @@ struct DayViewExpanded: View {
                         VStack(spacing: 12) {
                             // 1) Timeline + Tasks side-by-side
                             HStack(alignment: .top, spacing: 12) {
-                                // Timeline or Events List (based on preference)
+                                // Timeline (always shown in Expanded view)
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Events")
                                         .font(.headline)
                                         .padding(.horizontal, 8)
                                     
-                                    ScrollView(.vertical, showsIndicators: true) {
-                                        Group {
-                                            if appPrefs.showEventsAsListInDay {
-                                                EventsListComponent(
-                                                    events: filteredEventsForDay(navigationManager.currentDate),
-                                                    personalEvents: calendarVM.personalEvents,
-                                                    professionalEvents: calendarVM.professionalEvents,
-                                                    personalColor: appPrefs.personalColor,
-                                                    professionalColor: appPrefs.professionalColor,
-                                                    onEventTap: { ev in onEventTap?(ev) },
-                                                    date: navigationManager.currentDate
-                                                )
-                                            } else {
-                                                TimelineComponent(
-                                                    date: navigationManager.currentDate,
-                                                    events: filteredEventsForDay(navigationManager.currentDate),
-                                                    personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                                                    professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                                                    personalColor: appPrefs.personalColor,
-                                                    professionalColor: appPrefs.professionalColor,
-                                                    onEventTap: { event in
-                                                        onEventTap?(event)
-                                                    }
-                                                )
-                                            }
+                                    // No outer ScrollView - TimelineComponent has its own with auto-scroll
+                                    TimelineComponent(
+                                        date: navigationManager.currentDate,
+                                        events: filteredEventsForDay(navigationManager.currentDate),
+                                        personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                                        professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                                        personalColor: appPrefs.personalColor,
+                                        professionalColor: appPrefs.professionalColor,
+                                        onEventTap: { event in
+                                            onEventTap?(event)
                                         }
-                                    }
+                                    )
                                 }
                                 .frame(
                                     width: leftTimelineWidth,

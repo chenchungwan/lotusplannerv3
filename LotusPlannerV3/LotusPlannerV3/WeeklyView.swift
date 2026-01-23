@@ -504,7 +504,7 @@ extension WeeklyView {
             }
             
             // Logs Section (all log types under one collapsible header)
-            if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
                 // Divider before logs section
                 Rectangle()
                     .fill(Color(.systemGray3))
@@ -536,6 +536,36 @@ extension WeeklyView {
                     // Logs content (collapsible)
                     if logsExpanded {
                         VStack(spacing: 0) {
+                            // Sleep Logs Row
+                            if appPrefs.showSleepLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day sleep log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekSleepLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("sleep_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+
+                                if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+
                             // Weight Logs Row
                             if appPrefs.showWeightLogs {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -844,7 +874,7 @@ extension WeeklyView {
                             }
                             
                             // Logs Columns (no width restrictions - natural sizing)
-                            if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
                                 VStack(spacing: 0) {
                                     // Logs column header
                                     VStack(alignment: .center, spacing: 4) {
@@ -1018,6 +1048,23 @@ extension WeeklyView {
     
     private func weekDayRowLogsColumn(date: Date) -> some View {
         HStack(alignment: .top, spacing: 0) {
+            // Sleep Logs
+            if appPrefs.showSleepLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let sleepLogsForDate = getSleepLogsForDate(date)
+                        ForEach(sleepLogsForDate, id: \.id) { entry in
+                            sleepLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+
+                Divider()
+            }
+
             // Weight Logs
             if appPrefs.showWeightLogs {
                 ScrollView(.vertical, showsIndicators: false) {
@@ -1031,7 +1078,7 @@ extension WeeklyView {
                 }
                 .frame(width: logColumnWidth(), alignment: .topLeading)
                 .frame(minHeight: 80)
-                
+
                 Divider()
             }
             
@@ -1183,7 +1230,23 @@ extension WeeklyView {
                 
                 Divider()
             }
-            
+
+            // Sleep Logs column
+            if appPrefs.showSleepLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let sleepLogsForDate = getSleepLogsForDate(date)
+                    ForEach(sleepLogsForDate, id: \.id) { entry in
+                        sleepLogCard(entry: entry)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
+
+                Divider()
+            }
+
             // Weight Logs column
             if appPrefs.showWeightLogs {
                 VStack(alignment: .leading, spacing: 4) {
@@ -1196,7 +1259,7 @@ extension WeeklyView {
                 .padding(.all, 8)
                 .frame(width: 228.6, alignment: .topLeading)
                 .frame(minHeight: 80)
-                
+
                 Divider()
             }
             
@@ -1359,7 +1422,23 @@ extension WeeklyView {
                 
                 Divider()
             }
-            
+
+            // Sleep Logs column
+            if appPrefs.showSleepLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let sleepLogsForDate = getSleepLogsForDate(date)
+                    ForEach(sleepLogsForDate, id: \.id) { entry in
+                        sleepLogCard(entry: entry)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+
+                Divider()
+            }
+
             // Weight Logs column
             if appPrefs.showWeightLogs {
                 VStack(alignment: .leading, spacing: 4) {
@@ -2096,8 +2175,94 @@ extension WeeklyView {
         proxy.scrollTo("day_row_\(dayIndex)", anchor: .top)
     }
 
-}
+    // MARK: - Sleep Log Helpers
 
+    private func getSleepLogsForDate(_ date: Date) -> [SleepLogEntry] {
+        logsViewModel.sleepLogs(on: date)
+    }
+
+    private func sleepLogCard(entry: SleepLogEntry) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            // Bed time, wake time, and duration
+            HStack(spacing: 4) {
+                if let bedTime = entry.bedTime, let wakeTime = entry.wakeUpTime {
+                    Text(formatLogTime(bedTime))
+                        .font(.body)
+                        .fontWeight(.medium)
+                    Text("→")
+                        .font(.body)
+                        .fontWeight(.medium)
+                    Text(formatLogTime(wakeTime))
+                        .font(.body)
+                        .fontWeight(.medium)
+                    if let duration = entry.sleepDurationFormatted {
+                        Text("(\(duration))")
+                            .font(.body)
+                            .fontWeight(.medium)
+                    }
+                } else if let bedTime = entry.bedTime {
+                    Text("Bed: \(formatLogTime(bedTime))")
+                        .font(.body)
+                        .fontWeight(.medium)
+                } else if let wakeTime = entry.wakeUpTime {
+                    Text("Wake: \(formatLogTime(wakeTime))")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func weekSleepLogColumn(date: Date) -> some View {
+        let sleepLogsForDate = getSleepLogsForDate(date)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(sleepLogsForDate, id: \.id) { entry in
+                weekSleepLogCard(entry: entry)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func weekSleepLogCard(entry: SleepLogEntry) -> some View {
+        HStack(alignment: .top, spacing: 2) {
+            // Bed time, wake time, and duration all on one line
+            if let bedTime = entry.bedTime, let wakeTime = entry.wakeUpTime {
+                Text(formatLogTime(bedTime))
+                    .font(.body)
+                    .foregroundColor(.primary)
+                Text("→")
+                    .font(.body)
+                    .foregroundColor(.primary)
+                Text(formatLogTime(wakeTime))
+                    .font(.body)
+                    .foregroundColor(.primary)
+                if let duration = entry.sleepDurationFormatted {
+                    Text("(\(duration))")
+                        .font(.body)
+                        .foregroundColor(.primary)
+                }
+            } else if let bedTime = entry.bedTime {
+                Text("Bed: \(formatLogTime(bedTime))")
+                    .font(.body)
+                    .foregroundColor(.primary)
+            } else if let wakeTime = entry.wakeUpTime {
+                Text("Wake: \(formatLogTime(wakeTime))")
+                    .font(.body)
+                    .foregroundColor(.primary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+}
 
 
 extension WeeklyViewMode {

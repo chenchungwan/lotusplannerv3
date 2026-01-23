@@ -630,20 +630,22 @@ struct TasksDetailColumn: View {
                     Text("\(incompleteTaskCount) | \(totalTaskCount)")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    Menu {
-                        Button {
-                            bulkEditManager.state.isActive.toggle()
-                            if !bulkEditManager.state.isActive {
-                                // Exit bulk edit mode - clear selections
-                                bulkEditManager.state.selectedTaskIds.removeAll()
-                            }
-                        } label: {
-                            Label(bulkEditManager.state.isActive ? "Cancel Bulk Edit" : "Bulk Edit", systemImage: "checkmark.rectangle.stack")
+
+                    // Bulk edit button
+                    Button {
+                        bulkEditManager.state.isActive.toggle()
+                        if !bulkEditManager.state.isActive {
+                            // Exit bulk edit mode - clear selections
+                            bulkEditManager.state.selectedTaskIds.removeAll()
                         }
+                    } label: {
+                        Image(systemName: bulkEditManager.state.isActive ? "checkmark.rectangle.stack.fill" : "checkmark.rectangle.stack")
+                            .font(.title3)
+                            .foregroundColor(bulkEditManager.state.isActive ? accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
 
-                        Divider()
-
+                    Menu {
                         Button(role: .destructive) {
                             showingDeleteCompletedConfirmation = true
                         } label: {
