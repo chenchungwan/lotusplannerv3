@@ -545,19 +545,18 @@ struct GlobalNavBar: View {
                                 }
                             }
 
-                            // Bulk edit toggle (in Calendar day view only) - TEMPORARILY HIDDEN
-                            // if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
-                            //     Button {
-                            //         print("🔵 Bulk edit button tapped - posting notification")
-                            //         NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
-                            //     } label: {
-                            //         Image(systemName: "checkmark.rectangle.stack")
-                            //             .font(adaptiveIconSize)
-                            //             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                            //             .foregroundColor(.accentColor)
-                            //     }
-                            //     .buttonStyle(.plain)
-                            // }
+                            // Bulk edit toggle (in Calendar day view)
+                            if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
 
                             // Bulk edit toggle (in Tasks view)
                             if navigationManager.currentView == .tasks {
@@ -842,19 +841,18 @@ struct GlobalNavBar: View {
                                 }
                             }
 
-                            // Bulk edit toggle (in Calendar day view only) - TEMPORARILY HIDDEN
-                            // if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
-                            //     Button {
-                            //         print("🔵 Bulk edit button tapped - posting notification")
-                            //         NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
-                            //     } label: {
-                            //         Image(systemName: "checkmark.rectangle.stack")
-                            //             .font(adaptiveIconSize)
-                            //             .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                            //             .foregroundColor(.accentColor)
-                            //     }
-                            //     .buttonStyle(.plain)
-                            // }
+                            // Bulk edit toggle (in Calendar day view)
+                            if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
 
                             // Bulk edit toggle (in Tasks view)
                             if navigationManager.currentView == .tasks {

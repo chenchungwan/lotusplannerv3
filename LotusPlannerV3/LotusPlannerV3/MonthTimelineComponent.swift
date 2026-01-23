@@ -178,6 +178,12 @@ struct MonthTimelineComponent: View {
         .frame(width: columnWidth)
         .frame(minHeight: max(adaptiveMinHeight, preferredHeight), maxHeight: preferredHeight)
         .background(isCurrentMonth ? Color(.systemBackground) : Color(.systemGray6).opacity(0.3))
+        .overlay(
+            // Red border for today
+            isToday ? RoundedRectangle(cornerRadius: 0)
+                .stroke(Color.red, lineWidth: 2)
+                : nil
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if let validDate = date {
