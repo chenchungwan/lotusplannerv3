@@ -11,10 +11,11 @@ struct DayViewTimebox: View {
     // MARK: - State Variables
     @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
-    @State private var isTasksSectionCollapsed: Bool = false
     @State private var tasksSectionHeight: CGFloat = 400
     @State private var isTasksDividerDragging = false
     @State private var isLogsSectionCollapsed: Bool = false
+    @State private var personalTasksHeight: CGFloat = 300
+    @State private var isPersonalProfessionalDividerDragging = false
     
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
@@ -33,25 +34,39 @@ struct DayViewTimebox: View {
         
         // Initialize state variables with stored values from AppPreferences
         self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxLeftSectionWidth)
-        self._isTasksSectionCollapsed = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionCollapsed)
         self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionHeight)
         self._isTasksDividerDragging = State(initialValue: false)
         self._isLogsSectionCollapsed = State(initialValue: AppPreferences.shared.dayViewTimeboxLogsSectionCollapsed)
+        self._personalTasksHeight = State(initialValue: 300)
+        self._isPersonalProfessionalDividerDragging = State(initialValue: false)
     }
     
     var body: some View {
         GeometryReader { geometry in
-            HStack(alignment: .top, spacing: 0) {
-                // Left section (dynamic width) - TimeboxComponent and Logs
-                leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
-                
-                // Vertical divider
-                dayVerticalDivider
-                
-                // Middle section (Tasks and Journal) - expands to fill remaining space
-                middleDaySection(geometry: geometry)
-                    .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(spacing: 0) {
+                    // First column: Timeline + Tasks
+                    HStack(alignment: .top, spacing: 0) {
+                        // Left section (dynamic width) - TimeboxComponent and Logs
+                        leftDaySectionWithDivider(geometry: geometry)
+                            .frame(width: dayLeftSectionWidth)
+
+                        // Vertical divider
+                        dayVerticalDivider
+
+                        // Middle section (Tasks only, no journal)
+                        middleDaySectionWithoutJournal(geometry: geometry)
+                            .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
+                    }
+                    .frame(width: geometry.size.width)
+
+                    // Second column: Journal (swipeable)
+                    JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
+                        .id(navigationManager.currentDate)
+                        .frame(width: geometry.size.width * 0.95)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(12)
+                }
             }
         }
         // Task details sheet
@@ -197,23 +212,23 @@ struct DayViewTimebox: View {
     }
     
     // MARK: - Middle Section (Tasks and Journal)
+    private func middleDaySectionWithoutJournal(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            // Tasks section (always visible)
+            tasksSection
+                .frame(maxHeight: .infinity) // Take full height since no journal
+        }
+    }
+
     private func middleDaySection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Tasks section (collapsible)
-            if !isTasksSectionCollapsed {
-                tasksSection
-                    .frame(height: tasksSectionHeight)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            } else {
-                // Expand button when collapsed
-                expandTasksButton
-            }
-            
-            // Draggable divider between Tasks and Journal (only show if tasks section is visible)
-            if !isTasksSectionCollapsed {
-                tasksJournalDivider
-            }
-            
+            // Tasks section (always visible)
+            tasksSection
+                .frame(height: tasksSectionHeight)
+
+            // Draggable divider between Tasks and Journal
+            tasksJournalDivider
+
             // Journal section (expands to fill remaining space)
             VStack(alignment: .leading, spacing: 6) {
                 JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .compact)
@@ -229,42 +244,23 @@ struct DayViewTimebox: View {
     // MARK: - Tasks Section
     private var tasksSection: some View {
         VStack(spacing: 0) {
-            // Header with collapse button in top-right corner
-            HStack {
-                Spacer()
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isTasksSectionCollapsed = true
-                        appPrefs.updateDayViewTimeboxTasksSectionCollapsed(true)
-                    }
-                }) {
-                    Image(systemName: "chevron.up")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(4)
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 8)
-            }
-            .padding(.vertical, 4)
-            .background(Color(.systemBackground))
-            
-            // Tasks content - side by side
+            // Personal Tasks section (top)
             ScrollView(.vertical, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 8) {
-                    // Personal Tasks section
-                    personalTasksSection
-                        .frame(maxWidth: .infinity)
-                    
-                    // Divider between personal and professional
-                    Divider()
-                    
-                    // Professional Tasks section
-                    professionalTasksSection
-                        .frame(maxWidth: .infinity)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
+                personalTasksSection
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+            }
+            .frame(height: personalTasksHeight)
+            .background(Color(.systemBackground))
+
+            // Draggable divider between Personal and Professional tasks
+            personalProfessionalTasksDivider
+
+            // Professional Tasks section (bottom)
+            ScrollView(.vertical, showsIndicators: true) {
+                professionalTasksSection
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
             }
             .frame(maxHeight: .infinity)
             .background(Color(.systemBackground))
@@ -435,30 +431,6 @@ struct DayViewTimebox: View {
         .background(Color(.systemGray6))
     }
     
-    private var expandTasksButton: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTasksSectionCollapsed = false
-                appPrefs.updateDayViewTimeboxTasksSectionCollapsed(false)
-            }
-        }) {
-            HStack {
-                Image(systemName: "chevron.down")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text("Tasks")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemGray6))
-    }
-    
     private var tasksJournalDivider: some View {
         Rectangle()
             .fill(isTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
@@ -484,7 +456,32 @@ struct DayViewTimebox: View {
                     }
             )
     }
-    
+
+    private var personalProfessionalTasksDivider: some View {
+        Rectangle()
+            .fill(isPersonalProfessionalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(height: 8)
+            .overlay(
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundColor(isPersonalProfessionalDividerDragging ? .white : .gray)
+            )
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isPersonalProfessionalDividerDragging = true
+                        let newHeight = personalTasksHeight + value.translation.height
+                        let minHeight: CGFloat = 150
+                        let maxHeight: CGFloat = 600
+                        personalTasksHeight = max(minHeight, min(maxHeight, newHeight))
+                    }
+                    .onEnded { _ in
+                        isPersonalProfessionalDividerDragging = false
+                    }
+            )
+    }
+
     // MARK: - Helper Functions
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         calendarVM.events(for: date)

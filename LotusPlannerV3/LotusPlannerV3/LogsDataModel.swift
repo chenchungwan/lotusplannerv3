@@ -144,7 +144,7 @@ struct SleepLogEntry: Identifiable, Codable, Hashable {
     var sleepDurationFormatted: String? {
         guard let duration = sleepDuration else { return nil }
         let decimalHours = duration / 3600
-        return String(format: "%.1f hours", decimalHours)
+        return String(format: "%.1f h", decimalHours)
     }
 }
 

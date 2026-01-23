@@ -355,36 +355,42 @@ extension LogsComponent {
     }
 
     func sleepEntryRow(_ entry: SleepLogEntry) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // Bed Time (shown first)
-            if let bedTime = entry.bedTime {
+        HStack(spacing: 4) {
+            // Bed time - Wake time (duration) all in one line
+            if let bedTime = entry.bedTime, let wakeTime = entry.wakeUpTime {
                 HStack(spacing: 4) {
-                    Image(systemName: "moon.fill")
-                        .font(.caption2)
-                        .foregroundColor(.blue)
+                    Text(formatTime(bedTime))
+                        .font(.caption)
+                        .fontWeight(.medium)
+
+                    Text("-")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text(formatTime(wakeTime))
+                        .font(.caption)
+                        .fontWeight(.medium)
+
+                    if let duration = entry.sleepDurationFormatted {
+                        Text("(\(duration))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } else if let bedTime = entry.bedTime {
+                // Only bed time
+                HStack(spacing: 4) {
                     Text(formatTime(bedTime))
                         .font(.caption)
                         .fontWeight(.medium)
                 }
-            }
-
-            // Wake Up Time (shown second)
-            if let wakeTime = entry.wakeUpTime {
+            } else if let wakeTime = entry.wakeUpTime {
+                // Only wake time
                 HStack(spacing: 4) {
-                    Image(systemName: "sunrise.fill")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
                     Text(formatTime(wakeTime))
                         .font(.caption)
                         .fontWeight(.medium)
                 }
-            }
-
-            // Total sleep duration (shown third)
-            if let duration = entry.sleepDurationFormatted {
-                Text(duration)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
             }
         }
         .padding(.horizontal, 8)
