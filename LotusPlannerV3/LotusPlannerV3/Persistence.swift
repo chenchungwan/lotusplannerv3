@@ -57,24 +57,28 @@ struct PersistenceController {
         // Configure every store description **before** loading the stores.
         for description in container.persistentStoreDescriptions {
             devLog("🗄️ Persistence: Configuring store at URL: \(description.url?.absoluteString ?? "nil")")
-            
+
             // In-memory store for previews/tests.
             if inMemory {
                 devLog("🗄️ Persistence: Setting up IN-MEMORY store (data won't persist!)")
                 description.url = URL(fileURLWithPath: "/dev/null")
+                // Disable CloudKit for in-memory stores
+                description.cloudKitContainerOptions = nil
             } else {
                 devLog("🗄️ Persistence: Using PERSISTENT store at: \(description.url?.path ?? "unknown")")
+
+                // Explicitly configure CloudKit container options for persistent stores
+                // This ensures CloudKit sync is enabled
+                let containerIdentifier = "iCloud.com.chenchungwan.LotusPlannerV3"
+                let options = NSPersistentCloudKitContainerOptions(containerIdentifier: containerIdentifier)
+                description.cloudKitContainerOptions = options
+                devLog("☁️ Persistence: CloudKit container explicitly configured: \(containerIdentifier)")
             }
 
             // Enable history tracking & remote notifications so viewContext
             // receives change merges from CloudKit pushes.
             description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
             description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
-
-            // `NSPersistentCloudKitContainer` already creates appropriate
-            // cloudKitContainerOptions when the capability is enabled in
-            // the project settings, so no extra configuration is required
-            // here.
         }
         
         container.loadPersistentStores(completionHandler: { (storeDescription, error) in

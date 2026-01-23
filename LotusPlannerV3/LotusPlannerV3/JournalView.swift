@@ -85,12 +85,17 @@ struct JournalView: View {
             devLog("⚠️ JournalView: Skipping drawing load - save/load in progress")
             return
         }
-        
+
         isLoadingDrawings = true
         logPerformance("Loading drawing for journal page date: \(currentDate)")
-        
+
         // Ensure we're loading for the correct date
         let targetDate = currentDate
+
+        // Start monitoring file for iCloud changes
+        // Note: Monitoring will post a notification that we listen to below
+        JournalStorageNew.shared.monitorFile(for: targetDate)
+
         if let drawing = await JournalStorageNew.shared.load(for: targetDate) {
             // Double-check we're still on the same date
             if targetDate == currentDate {
@@ -291,15 +296,21 @@ struct JournalView: View {
         guard !isSavingOrLoading else {
             return
         }
-        
+
         isSavingOrLoading = true
-        
+
+        // Stop monitoring the old date
+        JournalStorageNew.shared.stopMonitoring(for: previousDate)
+
         // Save current content before switching dates
         await saveToiCloud()
-        
+
+        // Update previous date
+        previousDate = currentDate
+
         // Load new content from iCloud for the specific date
         await loadFromiCloud(for: newDate)
-        
+
         isSavingOrLoading = false
     }
     
@@ -353,6 +364,16 @@ struct JournalView: View {
                             await switchToDate(currentDate)
                         }
                     }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("JournalFileChangedFromiCloud"))) { notification in
+                        Task { @MainActor in
+                            // Reload drawing when file changes from iCloud
+                            if let changedDate = notification.userInfo?["date"] as? Date,
+                               Calendar.current.isDate(changedDate, inSameDayAs: currentDate) {
+                                devLog("📲 JournalView: Drawing file changed from iCloud for current date, reloading...")
+                                await loadFromiCloud(for: currentDate)
+                            }
+                        }
+                    }
                     .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerJournalAutoSave"))) { notification in
                         Task { @MainActor in
                             // Trigger auto-save when requested by day views
@@ -382,6 +403,16 @@ struct JournalView: View {
                             Task { @MainActor in
                                 // Refresh journal content when notification is received
                                 await switchToDate(currentDate)
+                            }
+                        }
+                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("JournalFileChangedFromiCloud"))) { notification in
+                            Task { @MainActor in
+                                // Reload drawing when file changes from iCloud
+                                if let changedDate = notification.userInfo?["date"] as? Date,
+                                   Calendar.current.isDate(changedDate, inSameDayAs: currentDate) {
+                                    devLog("📲 JournalView: Drawing file changed from iCloud for current date, reloading...")
+                                    await loadFromiCloud(for: currentDate)
+                                }
                             }
                         }
                         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerJournalAutoSave"))) { notification in

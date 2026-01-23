@@ -29,16 +29,48 @@ class CustomLogManager: ObservableObject {
     }
     
     private let persistenceController = PersistenceController.shared
+    private let authManager = GoogleAuthManager.shared
     private var context: NSManagedObjectContext {
         persistenceController.container.viewContext
     }
-    
+
     // NOTE: CloudKit sync is handled automatically by NSPersistentCloudKitContainer
     // Manual CloudKit sync code removed to prevent conflicts with automatic sync
+
+    // MARK: - Helper Methods
+    private func getUserId() -> String {
+        return authManager.getEmail(for: .personal) ?? "default_user"
+    }
 
     private init() {
         cleanupDuplicateCustomLogData()
         loadData()
+        setupiCloudSyncListeners()
+    }
+
+    // MARK: - iCloud Sync Listeners
+    private func setupiCloudSyncListeners() {
+        // Listen for iCloud data change notifications
+        NotificationCenter.default.addObserver(
+            forName: .iCloudDataChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            devLog("☁️ CustomLogManager: iCloud data changed notification received, reloading data...")
+            self?.refreshData()
+        }
+
+        // Listen for Core Data remote change notifications
+        NotificationCenter.default.addObserver(
+            forName: .NSPersistentStoreRemoteChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            devLog("☁️ CustomLogManager: NSPersistentStoreRemoteChange notification received, reloading data...")
+            // Refresh Core Data context to get latest changes from iCloud
+            self?.context.refreshAllObjects()
+            self?.refreshData()
+        }
     }
     
     // MARK: - Data Loading
@@ -98,7 +130,8 @@ class CustomLogManager: ObservableObject {
         entity.displayOrder = Int16(item.displayOrder)
         entity.createdAt = item.createdAt
         entity.updatedAt = item.updatedAt
-        
+        entity.userId = getUserId()
+
         saveContext()
         loadItems()
         updateCustomLogVisibility()
@@ -202,7 +235,7 @@ class CustomLogManager: ObservableObject {
                 date: targetDate,
                 isCompleted: true
             )
-            
+
             let entity = CustomLogEntry(context: context)
             entity.id = entry.id.uuidString
             entity.itemId = entry.itemId.uuidString
@@ -210,7 +243,8 @@ class CustomLogManager: ObservableObject {
             entity.isCompleted = entry.isCompleted
             entity.createdAt = entry.createdAt
             entity.updatedAt = entry.updatedAt
-            
+            entity.userId = getUserId()
+
             saveContext()
             loadEntries()
         }

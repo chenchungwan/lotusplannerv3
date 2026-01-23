@@ -289,9 +289,17 @@ final class iCloudManager: ObservableObject {
 
                 do {
                     try await pollingContext.perform {
-                        let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
-                        request.fetchLimit = 5
-                        _ = try pollingContext.fetch(request)
+                        // Fetch multiple entity types to trigger import
+                        let taskTimeRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+                        taskTimeRequest.fetchLimit = 5
+                        let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
+                        goalRequest.fetchLimit = 5
+                        let goalCategoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
+                        goalCategoryRequest.fetchLimit = 5
+
+                        _ = try pollingContext.fetch(taskTimeRequest)
+                        _ = try pollingContext.fetch(goalRequest)
+                        _ = try pollingContext.fetch(goalCategoryRequest)
                     }
                 } catch {
                     devLog("⚠️ iCloudManager: Poll \(i) failed: \(error)")
@@ -315,8 +323,14 @@ final class iCloudManager: ObservableObject {
                 Task {
                     do {
                         try await freshContext.perform {
-                            let request: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
-                            _ = try freshContext.fetch(request)
+                            // Fetch all entity types to ensure complete merge
+                            let taskTimeRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+                            let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
+                            let goalCategoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
+
+                            _ = try freshContext.fetch(taskTimeRequest)
+                            _ = try freshContext.fetch(goalRequest)
+                            _ = try freshContext.fetch(goalCategoryRequest)
                         }
 
                         await MainActor.run {
@@ -326,6 +340,7 @@ final class iCloudManager: ObservableObject {
                             TaskTimeWindowManager.shared.loadTimeWindows()
                             CustomLogManager.shared.refreshData()
                             LogsViewModel.shared.reloadData()
+                            GoalsManager.shared.refreshData()
 
                             let afterCount = TaskTimeWindowManager.shared.timeWindows.count
 
@@ -601,7 +616,11 @@ final class iCloudManager: ObservableObject {
             // Check if we reloaded recently
             if let lastReload = self.lastReloadDate,
                Date().timeIntervalSince(lastReload) < self.reloadDebounceInterval {
-                // Too soon, skip this reload
+                // Too soon, skip full reload but still post notification for listeners
+                DispatchQueue.main.async {
+                    devLog("⏭️ iCloudManager: Skipping debounced reload (too soon), but posting notification")
+                    NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                }
                 return
             }
 
@@ -618,6 +637,7 @@ final class iCloudManager: ObservableObject {
                     TaskTimeWindowManager.shared.loadTimeWindows()
                     CustomLogManager.shared.refreshData()
                     LogsViewModel.shared.reloadData()
+                    GoalsManager.shared.refreshData()
 
                     let afterCount = TaskTimeWindowManager.shared.timeWindows.count
 
@@ -692,18 +712,24 @@ final class iCloudManager: ObservableObject {
                         let weightRequest: NSFetchRequest<WeightLog> = WeightLog.fetchRequest()
                         let workoutRequest: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
                         let foodRequest: NSFetchRequest<FoodLog> = FoodLog.fetchRequest()
+                        let waterRequest: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
                         let taskTimeRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
                         let customLogEntryRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
                         let customLogItemRequest: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
+                        let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
+                        let goalCategoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
 
                         let weights = try backgroundContext.fetch(weightRequest)
                         let workouts = try backgroundContext.fetch(workoutRequest)
                         let foods = try backgroundContext.fetch(foodRequest)
+                        let waters = try backgroundContext.fetch(waterRequest)
                         let taskTimes = try backgroundContext.fetch(taskTimeRequest)
                         let customLogEntries = try backgroundContext.fetch(customLogEntryRequest)
                         let customLogItems = try backgroundContext.fetch(customLogItemRequest)
+                        let goals = try backgroundContext.fetch(goalRequest)
+                        let goalCategories = try backgroundContext.fetch(goalCategoryRequest)
 
-                        devLog("📡 iCloudManager: Remote changes - \(weights.count) weights, \(workouts.count) workouts, \(foods.count) foods, \(taskTimes.count) task times, \(customLogEntries.count) custom log entries, \(customLogItems.count) custom log items")
+                        devLog("📡 iCloudManager: Remote changes - \(weights.count) weights, \(workouts.count) workouts, \(foods.count) foods, \(waters.count) waters, \(taskTimes.count) task times, \(customLogEntries.count) custom log entries, \(customLogItems.count) custom log items, \(goals.count) goals, \(goalCategories.count) goal categories")
 
                         // Save background context to ensure changes are merged
                         if backgroundContext.hasChanges {

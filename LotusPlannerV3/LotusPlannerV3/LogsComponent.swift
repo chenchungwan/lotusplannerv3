@@ -567,16 +567,16 @@ struct WaterCupsView: View {
 
     private let defaultCupsCount = 4
     private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.fixed(24), spacing: 4),
+        GridItem(.fixed(24), spacing: 4),
+        GridItem(.fixed(24), spacing: 4),
+        GridItem(.fixed(24), spacing: 4)
     ]
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             // Display cups in rows of 4
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 4) {
                 // Show default 4 cups or more if user added more
                 ForEach(0..<max(defaultCupsCount, currentCupsConsumed), id: \.self) { index in
                     Button(action: {

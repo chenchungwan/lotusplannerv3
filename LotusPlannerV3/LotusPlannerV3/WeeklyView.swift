@@ -504,7 +504,7 @@ extension WeeklyView {
             }
             
             // Logs Section (all log types under one collapsible header)
-            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
                 // Divider before logs section
                 Rectangle()
                     .fill(Color(.systemGray3))
@@ -648,14 +648,44 @@ extension WeeklyView {
                                 }
                                 .padding(.all, 8)
                                 .background(Color(.systemGray6).opacity(0.15))
-                                
+
+                                if appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+
+                            // Water Logs Row
+                            if appPrefs.showWaterLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day water log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekWaterLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("water_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+
                                 if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
                                     Rectangle()
                                         .fill(Color(.systemGray3))
                                         .frame(height: 1)
                                 }
                             }
-                            
+
                             // Custom Logs Row
                             if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -874,7 +904,7 @@ extension WeeklyView {
                             }
                             
                             // Logs Columns (no width restrictions - natural sizing)
-                            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
                                 VStack(spacing: 0) {
                                     // Logs column header
                                     VStack(alignment: .center, spacing: 4) {
@@ -1112,10 +1142,27 @@ extension WeeklyView {
                 }
                 .frame(width: logColumnWidth(), alignment: .topLeading)
                 .frame(minHeight: 80)
-                
+
                 Divider()
             }
-            
+
+            // Water Logs
+            if appPrefs.showWaterLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let waterLogsForDate = getWaterLogsForDate(date)
+                        ForEach(waterLogsForDate, id: \.id) { entry in
+                            waterLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+
+                Divider()
+            }
+
             // Custom Logs
             if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                 ScrollView(.vertical, showsIndicators: false) {
@@ -1291,12 +1338,28 @@ extension WeeklyView {
                 .padding(.all, 8)
                 .frame(width: 228.6, alignment: .topLeading)
                 .frame(minHeight: 80)
-                
+
+                Divider()
+            }
+
+            // Water Logs column
+            if appPrefs.showWaterLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let waterLogsForDate = getWaterLogsForDate(date)
+                    ForEach(waterLogsForDate, id: \.id) { entry in
+                        waterLogCard(entry: entry)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(width: 228.6, alignment: .topLeading)
+                .frame(minHeight: 80)
+
                 Divider()
             }
         }
     }
-    
+
     private func weekDayRow(date: Date, isToday: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // Day column - clickable
@@ -1477,10 +1540,23 @@ extension WeeklyView {
                 .padding(.all, 8)
                 .frame(minWidth: 200, maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
             }
+
+            // Water Logs column
+            if appPrefs.showWaterLogs {
+                VStack(alignment: .leading, spacing: 4) {
+                    let waterLogsForDate = getWaterLogsForDate(date)
+                    ForEach(waterLogsForDate, id: \.id) { entry in
+                        waterLogCard(entry: entry)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.all, 8)
+                .frame(minWidth: 200, maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+            }
         }
         .frame(minHeight: 120)
     }
-    
+
     private func rowEventCard(event: GoogleCalendarEvent) -> some View {
         let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
         let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
@@ -1805,7 +1881,11 @@ extension WeeklyView {
     private func getFoodLogsForDate(_ date: Date) -> [FoodLogEntry] {
         logsViewModel.foodLogs(on: date)
     }
-    
+
+    private func getWaterLogsForDate(_ date: Date) -> [WaterLogEntry] {
+        logsViewModel.waterLogs(on: date)
+    }
+
     private func weightLogCard(entry: WeightLogEntry) -> some View {
         HStack(alignment: .top, spacing: 8) {
             // Time
@@ -1874,7 +1954,59 @@ extension WeeklyView {
         }
         .padding(.vertical, 2)
     }
-    
+
+    private func waterLogCard(entry: WaterLogEntry) -> some View {
+        HStack(alignment: .center, spacing: 3) {
+            // Display water drops
+            ForEach(0..<entry.cupsConsumed, id: \.self) { _ in
+                Image(systemName: "drop.fill")
+                    .font(.body)
+                    .foregroundColor(.blue)
+            }
+
+            // Display count
+            Text("(\(entry.cupsConsumed))")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func weekWaterLogColumn(date: Date) -> some View {
+        let waterLogsForDate = getWaterLogsForDate(date)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            ForEach(waterLogsForDate, id: \.id) { entry in
+                weekWaterLogCard(entry: entry)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func weekWaterLogCard(entry: WaterLogEntry) -> some View {
+        HStack(alignment: .center, spacing: 3) {
+            // Display water drops
+            ForEach(0..<entry.cupsConsumed, id: \.self) { _ in
+                Image(systemName: "drop.fill")
+                    .font(.body)
+                    .foregroundColor(.blue)
+            }
+
+            // Display count
+            Text("(\(entry.cupsConsumed))")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+
     private func customLogSummary(items: [CustomLogItemData], date: Date) -> some View {
         let completedCount = items.reduce(0) { count, item in
             count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)

@@ -5,9 +5,76 @@ import PencilKit
 /// No complex monitoring, no refresh loops - just save and load
 class JournalStorageNew {
     static let shared = JournalStorageNew()
-    
+
+    // File presenters to monitor iCloud changes
+    private var filePresenters: [String: JournalFilePresenter] = [:]
+    private let presenterLock = NSLock()
+
     private init() {
         // Initialize storage
+        setupiCloudMonitoring()
+    }
+
+    /// Setup monitoring for iCloud file changes
+    private func setupiCloudMonitoring() {
+        // Listen for iCloud account changes
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name.NSUbiquityIdentityDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            devLog("☁️ JOURNAL STORAGE - iCloud account changed, clearing cache")
+            self?.clearAllCache()
+        }
+    }
+
+    /// Register a file presenter for a specific date to monitor changes
+    func monitorFile(for date: Date) {
+        guard let url = storageURL(for: date) else { return }
+
+        presenterLock.lock()
+        defer { presenterLock.unlock() }
+
+        let key = formatDate(date)
+
+        // Remove existing presenter if any
+        if let existing = filePresenters[key] {
+            NSFileCoordinator.removeFilePresenter(existing)
+        }
+
+        // Create new presenter using existing JournalFilePresenter class
+        let presenter = JournalFilePresenter(presentedItemURL: url) { [weak self] changedURL in
+            // Clear cache when file changes from iCloud
+            self?.clearCache(for: date)
+
+            // Post notification that journal file changed
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: Notification.Name("JournalFileChangedFromiCloud"),
+                    object: nil,
+                    userInfo: ["date": date]
+                )
+            }
+        }
+
+        // Register the file presenter
+        NSFileCoordinator.addFilePresenter(presenter)
+
+        filePresenters[key] = presenter
+        devLog("👀 JOURNAL STORAGE - Monitoring file for date: \(key)")
+    }
+
+    /// Stop monitoring a file
+    func stopMonitoring(for date: Date) {
+        presenterLock.lock()
+        defer { presenterLock.unlock() }
+
+        let key = formatDate(date)
+        if let presenter = filePresenters[key] {
+            NSFileCoordinator.removeFilePresenter(presenter)
+            filePresenters.removeValue(forKey: key)
+            devLog("🚫 JOURNAL STORAGE - Stopped monitoring file for date: \(key)")
+        }
     }
     
     // MARK: - Storage Locations
@@ -79,19 +146,33 @@ class JournalStorageNew {
     /// Save a drawing - writes directly to iCloud if available
     func save(_ drawing: PKDrawing, for date: Date) async throws {
         let data = drawing.dataRepresentation()
-        
+
         guard let url = storageURL(for: date) else {
-            throw NSError(domain: "JournalStorage", code: -1, 
+            throw NSError(domain: "JournalStorage", code: -1,
                          userInfo: [NSLocalizedDescriptionKey: "No storage location available"])
         }
-        
+
         // Check if file already exists (this is an update/overwrite)
         let fileExists = FileManager.default.fileExists(atPath: url.path)
         let existingSize = fileExists ? (try? Data(contentsOf: url))?.count ?? 0 : 0
-        
-        // Write directly to the URL (iCloud or local) - OVERWRITES existing file
-        try data.write(to: url, options: [.atomic])
-        
+
+        // Use NSFileCoordinator for proper iCloud Documents sync
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinatorError: NSError?
+        var writeError: Error?
+
+        coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordinatorError) { newURL in
+            do {
+                try data.write(to: newURL, options: [.atomic])
+            } catch {
+                writeError = error
+            }
+        }
+
+        if let error = coordinatorError ?? writeError {
+            throw error
+        }
+
         // Check if file is in iCloud and wait for upload to complete
         var isUbiquitous: AnyObject?
         try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
@@ -163,22 +244,42 @@ class JournalStorageNew {
                 var isUbiquitous: AnyObject?
                 try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
                 let isInCloud = (isUbiquitous as? Bool) == true
-                
+
                 if isInCloud {
                     // Ensure file is fully downloaded before reading
                     await ensureFileDownloaded(url: url)
                 }
-                
+
                 // Get file modification date to verify freshness
                 var modificationDate: AnyObject?
                 try? (url as NSURL).getResourceValue(&modificationDate, forKey: URLResourceKey.contentModificationDateKey)
                 let modDate = modificationDate as? Date
-                
-                // Try to load the data
-                let data = try Data(contentsOf: url)
-                
+
+                // Use NSFileCoordinator for proper iCloud Documents sync when reading
+                let coordinator = NSFileCoordinator(filePresenter: nil)
+                var coordinatorError: NSError?
+                var data: Data?
+                var readError: Error?
+
+                coordinator.coordinate(readingItemAt: url, options: .withoutChanges, error: &coordinatorError) { newURL in
+                    do {
+                        data = try Data(contentsOf: newURL)
+                    } catch {
+                        readError = error
+                    }
+                }
+
+                if let error = coordinatorError ?? readError {
+                    throw error
+                }
+
+                guard let loadedData = data else {
+                    throw NSError(domain: "JournalStorage", code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "No data loaded"])
+                }
+
                 // Print raw iCloud data information
-                let fileSize = data.count
+                let fileSize = loadedData.count
                 let storageType = isInCloud ? "iCloud" : "Local"
                 devLog("📦 JOURNAL RAW DATA - Drawing file:")
                 devLog("   📍 Location: \(url.path)")
@@ -191,8 +292,8 @@ class JournalStorageNew {
                     formatter.timeStyle = .medium
                     devLog("   🕐 Modified: \(formatter.string(from: modDate))")
                 }
-                
-                let drawing = try PKDrawing(data: data)
+
+                let drawing = try PKDrawing(data: loadedData)
                 
                 // Validate the drawing has content
                 // Cache it
@@ -332,6 +433,15 @@ class JournalStorageNew {
     /// Clear cache for a specific date to force fresh load from iCloud
     func clearCache(for date: Date) {
         setCache(nil, for: date)
+        devLog("🧹 JOURNAL STORAGE - Cleared cache for date: \(formatDate(date))")
+    }
+
+    /// Clear all cached drawings
+    func clearAllCache() {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        cache.removeAll()
+        devLog("🧹 JOURNAL STORAGE - Cleared all cached drawings")
     }
     
     // MARK: - Utilities
