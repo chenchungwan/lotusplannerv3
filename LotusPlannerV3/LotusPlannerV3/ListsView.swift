@@ -631,20 +631,6 @@ struct TasksDetailColumn: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    // Bulk edit button
-                    Button {
-                        bulkEditManager.state.isActive.toggle()
-                        if !bulkEditManager.state.isActive {
-                            // Exit bulk edit mode - clear selections
-                            bulkEditManager.state.selectedTaskIds.removeAll()
-                        }
-                    } label: {
-                        Image(systemName: bulkEditManager.state.isActive ? "checkmark.rectangle.stack.fill" : "checkmark.rectangle.stack")
-                            .font(.title3)
-                            .foregroundColor(bulkEditManager.state.isActive ? accentColor : .secondary)
-                    }
-                    .buttonStyle(.plain)
-
                     Menu {
                         Button(role: .destructive) {
                             showingDeleteCompletedConfirmation = true
@@ -1081,8 +1067,15 @@ struct TasksDetailColumn: View {
                 .padding(.bottom, 16)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleListsBulkEdit"))) { _ in
+            bulkEditManager.state.isActive.toggle()
+            if !bulkEditManager.state.isActive {
+                // Exit bulk edit mode - clear selections
+                bulkEditManager.state.selectedTaskIds.removeAll()
+            }
+        }
     }
-    
+
     private func renameList(listId: String, accountKind: GoogleAuthManager.AccountKind) {
         guard !renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return

@@ -572,6 +572,19 @@ struct GlobalNavBar: View {
                                 .buttonStyle(.plain)
                             }
 
+                            // Bulk edit toggle (in Lists view)
+                            if navigationManager.currentView == .lists {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleListsBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
                             // + menu based on current view
                             if navigationManager.currentView == .journalDayViews {
                                 // In Journal Day Views: menu with Event and Task only
@@ -847,6 +860,19 @@ struct GlobalNavBar: View {
                             if navigationManager.currentView == .tasks {
                                 Button {
                                     NotificationCenter.default.post(name: Notification.Name("ToggleTasksBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            // Bulk edit toggle (in Lists view)
+                            if navigationManager.currentView == .lists {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleListsBulkEdit"), object: nil)
                                 } label: {
                                     Image(systemName: "checkmark.rectangle.stack")
                                         .font(adaptiveIconSize)

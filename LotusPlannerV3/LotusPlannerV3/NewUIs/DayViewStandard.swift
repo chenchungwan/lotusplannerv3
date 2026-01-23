@@ -245,8 +245,9 @@ struct DayViewStandard: View {
             }
             .background(Color(.systemBackground))
 
-            ScrollView(.vertical, showsIndicators: true) {
-                if appPrefs.showEventsAsListInDay {
+            // Timeline has its own ScrollView with auto-scroll, list needs wrapping
+            if appPrefs.showEventsAsListInDay {
+                ScrollView(.vertical, showsIndicators: true) {
                     EventsListComponent(
                         events: filteredEventsForDay(navigationManager.currentDate),
                         personalEvents: calendarVM.personalEvents,
@@ -257,20 +258,21 @@ struct DayViewStandard: View {
                         date: navigationManager.currentDate
                     )
                     .padding(8)
-                } else {
-                    TimelineComponent(
-                        date: navigationManager.currentDate,
-                        events: filteredEventsForDay(navigationManager.currentDate),
-                        personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                        professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                        personalColor: appPrefs.personalColor,
-                        professionalColor: appPrefs.professionalColor,
-                        onEventTap: { event in
-                            onEventTap?(event)
-                        }
-                    )
-                    .padding(8)
                 }
+            } else {
+                // No outer ScrollView - TimelineComponent has its own with auto-scroll
+                TimelineComponent(
+                    date: navigationManager.currentDate,
+                    events: filteredEventsForDay(navigationManager.currentDate),
+                    personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
+                    professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    onEventTap: { event in
+                        onEventTap?(event)
+                    }
+                )
+                .padding(8)
             }
         }
         .background(Color(.systemBackground))
