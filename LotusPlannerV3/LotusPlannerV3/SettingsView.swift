@@ -283,7 +283,38 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(professionalColor.toHex(), forKey: "professionalColor")
         }
     }
-    
+
+    // Custom account names (editable by user)
+    @Published var personalAccountName: String {
+        didSet {
+            let trimmed = String(personalAccountName.prefix(30))
+            if trimmed != personalAccountName {
+                personalAccountName = trimmed
+            }
+            UserDefaults.standard.set(personalAccountName, forKey: "personalAccountName")
+        }
+    }
+
+    @Published var professionalAccountName: String {
+        didSet {
+            let trimmed = String(professionalAccountName.prefix(30))
+            if trimmed != professionalAccountName {
+                professionalAccountName = trimmed
+            }
+            UserDefaults.standard.set(professionalAccountName, forKey: "professionalAccountName")
+        }
+    }
+
+    // Helper function to get account name by kind
+    func accountName(for kind: GoogleAuthManager.AccountKind) -> String {
+        switch kind {
+        case .personal:
+            return personalAccountName
+        case .professional:
+            return professionalAccountName
+        }
+    }
+
     // Hide recurring events setting
     @Published var hideRecurringEventsInMonth: Bool {
         didSet {
@@ -640,7 +671,11 @@ class AppPreferences: ObservableObject {
         
         self.personalColor = Color(hex: personalHex) ?? Color(hex: "#dcd6ff") ?? .purple
         self.professionalColor = Color(hex: professionalHex) ?? Color(hex: "#38eb50") ?? .green
-        
+
+        // Load custom account names or use defaults
+        self.personalAccountName = UserDefaults.standard.string(forKey: "personalAccountName") ?? "Personal"
+        self.professionalAccountName = UserDefaults.standard.string(forKey: "professionalAccountName") ?? "Professional"
+
         // Load divider positions from UserDefaults or use defaults
         self.dayViewCompactTasksHeight = UserDefaults.standard.object(forKey: "dayViewCompactTasksHeight") as? CGFloat ?? 300
         self.dayViewCompactLeftColumnWidth = UserDefaults.standard.object(forKey: "dayViewCompactLeftColumnWidth") as? CGFloat ?? 200
@@ -913,14 +948,14 @@ struct SettingsView: View {
             Form {
                 Section("Linked Accounts") {
                     accountRow(
-                        kind: "Personal", 
+                        kind: appPrefs.personalAccountName,
                         kindEnum: .personal,
                         isVisible: $showPersonalAccount,
                         accountColor: $appPrefs.personalColor,
                         showingColorPicker: $showingPersonalColorPicker
                     )
                     accountRow(
-                        kind: "Professional", 
+                        kind: appPrefs.professionalAccountName,
                         kindEnum: .professional,
                         isVisible: $showProfessionalAccount,
                         accountColor: $appPrefs.professionalColor,
@@ -1351,67 +1386,71 @@ get: { appPrefs.showFoodLogs },
     
     @ViewBuilder
     private func accountRow(
-        kind: String, 
+        kind: String,
         kindEnum: GoogleAuthManager.AccountKind,
         isVisible: Binding<Bool>,
         accountColor: Binding<Color>,
         showingColorPicker: Binding<Bool>
     ) -> some View {
         let isLinked = auth.linkedStates[kindEnum] ?? false
-        HStack(spacing: 16) {
-            // Account icon
-            Image(systemName: "person.circle.fill")
-                .foregroundColor(.secondary)
-                .font(.title2)
-            
-            // Color picker circle
-            Button {
-                showingColorPicker.wrappedValue = true
-            } label: {
-                Circle()
-                    .fill(accountColor.wrappedValue)
-                    .frame(width: 24, height: 24)
-                    .overlay(
-                        Circle()
-                            .stroke(Color(.systemGray4), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .sheet(isPresented: showingColorPicker) {
-                ColorPickerSheet(
-                    title: "\(kind) Account Color",
-                    selectedColor: accountColor,
-                    onColorChange: { color in
-                        switch kindEnum {
-                        case .personal:
-                            appPrefs.updatePersonalColor(color)
-                        case .professional:
-                            appPrefs.updateProfessionalColor(color)
-                        }
-                    }
-                )
-            }
-            
-            // Account info
-            VStack(alignment: .leading, spacing: 2) {
-                Text(kind)
-                    .font(.body)
-                Text(isLinked ? (auth.getEmail(for: kindEnum).isEmpty ? "Linked" : auth.getEmail(for: kindEnum)) : "Not Linked")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-            
-            // Link/Unlink button
-            Button(isLinked ? "Unlink" : "Link") {
-                if isLinked {
-                    pendingUnlink = kindEnum
-                } else {
-                    handleTap(kindEnum)
+        VStack(spacing: 8) {
+            HStack(spacing: 16) {
+                // Account icon
+                Image(systemName: "person.circle.fill")
+                    .foregroundColor(.secondary)
+                    .font(.title2)
+
+                // Color picker circle
+                Button {
+                    showingColorPicker.wrappedValue = true
+                } label: {
+                    Circle()
+                        .fill(accountColor.wrappedValue)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Circle()
+                                .stroke(Color(.systemGray4), lineWidth: 1)
+                        )
                 }
+                .buttonStyle(.plain)
+                .sheet(isPresented: showingColorPicker) {
+                    ColorPickerSheet(
+                        title: "\(kind) Account Color",
+                        selectedColor: accountColor,
+                        onColorChange: { color in
+                            switch kindEnum {
+                            case .personal:
+                                appPrefs.updatePersonalColor(color)
+                            case .professional:
+                                appPrefs.updateProfessionalColor(color)
+                            }
+                        }
+                    )
+                }
+
+                // Account info
+                VStack(alignment: .leading, spacing: 2) {
+                    TextField("Account name", text: kindEnum == .personal ? $appPrefs.personalAccountName : $appPrefs.professionalAccountName)
+                        .font(.body)
+                        .textFieldStyle(.plain)
+                        .frame(maxWidth: 200)
+                    Text(isLinked ? (auth.getEmail(for: kindEnum).isEmpty ? "Linked" : auth.getEmail(for: kindEnum)) : "Not Linked")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                // Link/Unlink button
+                Button(isLinked ? "Unlink" : "Link") {
+                    if isLinked {
+                        pendingUnlink = kindEnum
+                    } else {
+                        handleTap(kindEnum)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
     }
 

@@ -409,7 +409,7 @@ extension WeeklyView {
                             Image(systemName: personalTasksExpanded ? "chevron.down" : "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text("Personal Tasks")
+                            Text("\(appPrefs.personalAccountName) Tasks")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.primary)
@@ -466,7 +466,7 @@ extension WeeklyView {
                             Image(systemName: professionalTasksExpanded ? "chevron.down" : "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text("Professional Tasks")
+                            Text("\(appPrefs.professionalAccountName) Tasks")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.primary)
@@ -778,7 +778,7 @@ extension WeeklyView {
                                 VStack(spacing: 0) {
                                     // Personal Tasks column header
                                     VStack(alignment: .center, spacing: 4) {
-                                        Text("Personal")
+                                        Text(appPrefs.personalAccountName)
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.primary)
@@ -813,7 +813,7 @@ extension WeeklyView {
                                 VStack(spacing: 0) {
                                     // Professional Tasks column header
                                     VStack(alignment: .center, spacing: 4) {
-                                        Text("Professional")
+                                        Text(appPrefs.professionalAccountName)
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.primary)

@@ -274,7 +274,8 @@ struct AllTaskListsColumn: View {
     let hasProfessional: Bool
     let onSelectionChanged: (String, GoogleAuthManager.AccountKind) -> Void
     let initialExpandedAccount: GoogleAuthManager.AccountKind?
-    
+
+    @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
@@ -335,7 +336,7 @@ struct AllTaskListsColumn: View {
                             isPersonalExpanded.toggle()
                         }) {
                             HStack {
-                                Text("Personal")
+                                Text(appPrefs.personalAccountName)
                                     .font(.headline)
                                     .fontWeight(.bold)
                                     .foregroundColor(personalColor)
@@ -381,7 +382,7 @@ struct AllTaskListsColumn: View {
                             isProfessionalExpanded.toggle()
                         }) {
                             HStack {
-                                Text("Professional")
+                                Text(appPrefs.professionalAccountName)
                                     .font(.headline)
                                     .fontWeight(.bold)
                                     .foregroundColor(professionalColor)
@@ -424,6 +425,7 @@ struct AllTaskListsColumn: View {
         }
         .sheet(isPresented: $showingNewListSheet) {
             NewListSheet(
+                appPrefs: appPrefs,
                 accountKind: newListAccountKind,
                 hasPersonal: hasPersonal,
                 hasProfessional: hasProfessional,
@@ -911,6 +913,7 @@ struct TasksDetailColumn: View {
                let listId = selectedListId,
                let accountKind = selectedAccountKind {
                 RenameListSheet(
+                    appPrefs: appPrefs,
                     listName: listTitle,
                     accountKind: accountKind,
                     accentColor: accentColor,
@@ -925,6 +928,7 @@ struct TasksDetailColumn: View {
             if let sourceListId = selectedListId,
                let sourceAccountKind = selectedAccountKind {
                 MoveTasksDestinationPicker(
+                    appPrefs: appPrefs,
                     tasksVM: tasksVM,
                     sourceListId: sourceListId,
                     sourceAccountKind: sourceAccountKind,
@@ -1460,6 +1464,7 @@ struct TaskListRow: View {
 // MARK: - New List Sheet
 struct NewListSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var appPrefs: AppPreferences
     let accountKind: GoogleAuthManager.AccountKind?
     let hasPersonal: Bool
     let hasProfessional: Bool
@@ -1514,7 +1519,7 @@ struct NewListSheet: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "person.circle.fill")
-                                        Text("Personal")
+                                        Text(appPrefs.personalAccountName)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
@@ -1537,7 +1542,7 @@ struct NewListSheet: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "briefcase.circle.fill")
-                                        Text("Professional")
+                                        Text(appPrefs.professionalAccountName)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
@@ -1589,6 +1594,7 @@ struct NewListSheet: View {
 // MARK: - Rename List Sheet
 struct RenameListSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var appPrefs: AppPreferences
     let listName: String
     let accountKind: GoogleAuthManager.AccountKind
     let accentColor: Color
@@ -1612,7 +1618,7 @@ struct RenameListSheet: View {
                     HStack {
                         Image(systemName: accountKind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
                             .foregroundColor(accentColor)
-                        Text(accountKind == .personal ? "Personal" : "Professional")
+                        Text(appPrefs.accountName(for: accountKind))
                             .foregroundColor(accentColor)
                             .fontWeight(.medium)
                     }
@@ -1658,6 +1664,7 @@ struct RenameListSheet: View {
 // MARK: - Move Tasks Destination Picker
 struct MoveTasksDestinationPicker: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var appPrefs: AppPreferences
     @ObservedObject var tasksVM: TasksViewModel
     let sourceListId: String
     let sourceAccountKind: GoogleAuthManager.AccountKind
@@ -1698,7 +1705,7 @@ struct MoveTasksDestinationPicker: View {
                         HStack {
                             Image(systemName: "person.circle.fill")
                                 .foregroundColor(personalColor)
-                            Text("Personal")
+                            Text(appPrefs.personalAccountName)
                         }
                     }
                 }
@@ -1730,7 +1737,7 @@ struct MoveTasksDestinationPicker: View {
                         HStack {
                             Image(systemName: "briefcase.circle.fill")
                                 .foregroundColor(professionalColor)
-                            Text("Professional")
+                            Text(appPrefs.professionalAccountName)
                         }
                     }
                 }

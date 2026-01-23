@@ -721,7 +721,7 @@ struct TaskPickerView: View {
                                 HStack {
                                     Image(systemName: "person.fill")
                                         .foregroundColor(appPrefs.personalColor)
-                                    Text("Personal")
+                                    Text(appPrefs.personalAccountName)
                                         .foregroundColor(.primary)
                                     Spacer()
                                     if selectedAccount == .personal {
@@ -741,7 +741,7 @@ struct TaskPickerView: View {
                                 HStack {
                                     Image(systemName: "briefcase.fill")
                                         .foregroundColor(appPrefs.professionalColor)
-                                    Text("Professional")
+                                    Text(appPrefs.professionalAccountName)
                                         .foregroundColor(.primary)
                                     Spacer()
                                     if selectedAccount == .professional {

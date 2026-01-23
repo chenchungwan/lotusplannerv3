@@ -1757,7 +1757,7 @@ struct TasksView: View {
                 // Personal Tasks Section
                 if authManager.isLinked(kind: .personal) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Personal Tasks")
+                        Text("\(appPrefs.personalAccountName) Tasks")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(appPrefs.personalColor)
@@ -1805,7 +1805,7 @@ struct TasksView: View {
                 // Professional Tasks Section
                 if authManager.isLinked(kind: .professional) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Professional Tasks")
+                        Text("\(appPrefs.professionalAccountName) Tasks")
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(appPrefs.professionalColor)
@@ -2208,7 +2208,7 @@ struct TasksView: View {
             // Personal Tasks
             if authManager.isLinked(kind: .personal) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Personal")
+                    Text(appPrefs.personalAccountName)
                         .font(.headline)
                         .foregroundColor(allSubfilter == .all ? appPrefs.personalColor : .primary)
                         .padding(.horizontal, 12)
@@ -2253,7 +2253,7 @@ struct TasksView: View {
             // Professional Tasks
             if authManager.isLinked(kind: .professional) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Professional")
+                    Text(appPrefs.professionalAccountName)
                         .font(.headline)
                         .foregroundColor(allSubfilter == .all ? appPrefs.professionalColor : .primary)
                         .padding(.horizontal, 12)
@@ -3331,7 +3331,7 @@ struct TaskDetailsView: View {
                                         HStack(spacing: 6) {
                                             Image(systemName: selectedAccountKind == kind ? "largecircle.fill.circle" : "circle")
                                                 .foregroundColor(selectedAccountKind == kind ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .secondary)
-                                            Text((kind == .personal ? "Personal" : "Professional") + ":")
+                                            Text(appPrefs.accountName(for: kind) + ":")
                                         }
                                     }
                                     .buttonStyle(.plain)

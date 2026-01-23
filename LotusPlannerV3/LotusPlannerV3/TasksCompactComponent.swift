@@ -17,7 +17,7 @@ struct TasksCompactComponent: View {
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 // Account title
-                Text(accountType == .personal ? "Personal Tasks" : "Professional Tasks")
+                Text(accountType == .personal ? "\(appPrefs.personalAccountName) Tasks" : "\(appPrefs.professionalAccountName) Tasks")
                     .font(.headline)
                     .foregroundColor(accentColor)
                 

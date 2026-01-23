@@ -48,7 +48,7 @@ struct TasksComponent: View {
     
     // Account-specific title
     private var accountTitle: String {
-        accountType == .personal ? "Personal Tasks" : "Professional Tasks"
+        accountType == .personal ? "\(appPrefs.personalAccountName) Tasks" : "\(appPrefs.professionalAccountName) Tasks"
     }
     
     var body: some View {

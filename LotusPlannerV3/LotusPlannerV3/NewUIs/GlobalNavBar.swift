@@ -1028,6 +1028,7 @@ struct GlobalNavBar: View {
         }
         .sheet(isPresented: $showingAddList) {
             NewListSheet(
+                appPrefs: appPrefs,
                 accountKind: newListAccountKind,
                 hasPersonal: auth.isLinked(kind: .personal),
                 hasProfessional: auth.isLinked(kind: .professional),

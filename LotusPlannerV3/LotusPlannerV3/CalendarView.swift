@@ -5685,7 +5685,7 @@ struct AddItemView: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "person.circle.fill")
-                                        Text("Personal")
+                                        Text(appPrefs.personalAccountName)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
@@ -5716,7 +5716,7 @@ struct AddItemView: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "briefcase.circle.fill")
-                                        Text("Professional")
+                                        Text(appPrefs.professionalAccountName)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
