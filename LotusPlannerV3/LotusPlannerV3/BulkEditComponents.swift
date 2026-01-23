@@ -204,7 +204,7 @@ struct BulkUpdateDueDatePicker: View {
                             }
                         }
                 }
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
             }
         }
         .presentationDetents([.medium, .large])
