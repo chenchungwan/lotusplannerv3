@@ -345,89 +345,100 @@ struct BulkEditToolbarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 20) {
+            HStack(spacing: 12) {
                 // Exit button
                 Button {
                     bulkEditManager.state.isActive = false
                     bulkEditManager.state.selectedTaskIds.removeAll()
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(.systemGray5))
+                        )
                 }
                 .buttonStyle(.plain)
 
                 // Selection count
                 Text("\(bulkEditManager.state.selectedTaskIds.count) selected")
-                    .font(.headline)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
 
                 Spacer()
 
                 // Action buttons
-                HStack(spacing: 16) {
+                HStack(spacing: 8) {
                     // Complete button
                     Button {
                         bulkEditManager.state.showingCompleteConfirmation = true
                     } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle")
-                                .font(.title2)
-                            Text("Complete")
-                                .font(.caption2)
-                        }
+                        Image(systemName: "checkmark.circle")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(bulkEditManager.state.selectedTaskIds.isEmpty ? Color(.systemGray6) : Color(.systemGray5))
+                            )
                     }
                     .buttonStyle(.plain)
                     .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
-                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .green)
 
                     // Due Date button
                     Button {
                         bulkEditManager.state.showingDueDatePicker = true
                     } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                                .font(.title2)
-                            Text("Due Date")
-                                .font(.caption2)
-                        }
+                        Image(systemName: "calendar")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(bulkEditManager.state.selectedTaskIds.isEmpty ? Color(.systemGray6) : Color(.systemGray5))
+                            )
                     }
                     .buttonStyle(.plain)
                     .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
-                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .blue)
 
                     // Move button
                     Button {
                         bulkEditManager.state.showingMoveDestinationPicker = true
                     } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "folder")
-                                .font(.title2)
-                            Text("Move")
-                                .font(.caption2)
-                        }
+                        Image(systemName: "folder")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(bulkEditManager.state.selectedTaskIds.isEmpty ? Color(.systemGray6) : Color(.systemGray5))
+                            )
                     }
                     .buttonStyle(.plain)
                     .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
-                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .orange)
 
                     // Delete button
                     Button {
                         bulkEditManager.state.showingDeleteConfirmation = true
                     } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "trash")
-                                .font(.title2)
-                            Text("Delete")
-                                .font(.caption2)
-                        }
+                        Image(systemName: "trash")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .primary)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(bulkEditManager.state.selectedTaskIds.isEmpty ? Color(.systemGray6) : Color(.systemGray5))
+                            )
                     }
                     .buttonStyle(.plain)
                     .disabled(bulkEditManager.state.selectedTaskIds.isEmpty)
-                    .foregroundColor(bulkEditManager.state.selectedTaskIds.isEmpty ? .secondary : .red)
                 }
             }
-            .padding(12)
-            .background(Color.blue.opacity(0.15))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(.systemBackground))
 
             Divider()
         }
