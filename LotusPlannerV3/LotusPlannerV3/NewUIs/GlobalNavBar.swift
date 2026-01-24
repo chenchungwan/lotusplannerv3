@@ -1202,9 +1202,6 @@ struct GlobalNavBar: View {
 
         // Build sync message
         await MainActor.run {
-            // Always include journal content message since it syncs via iCloud Documents
-            syncedItems.append("Journal content (images & drawings)")
-
             if syncedItems.isEmpty {
                 syncedDataMessage = "No data synced"
             } else {
