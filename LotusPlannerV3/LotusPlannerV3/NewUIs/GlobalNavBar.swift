@@ -1208,14 +1208,6 @@ struct GlobalNavBar: View {
                 syncedDataMessage = "Synced:\n" + syncedItems.joined(separator: "\n")
             }
             showingSyncAlert = true
-
-            // Auto-dismiss after 3 seconds
-            Task {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                await MainActor.run {
-                    showingSyncAlert = false
-                }
-            }
         }
     }
 
