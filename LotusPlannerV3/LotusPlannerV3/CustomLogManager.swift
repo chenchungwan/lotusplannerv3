@@ -39,7 +39,10 @@ class CustomLogManager: ObservableObject {
 
     // MARK: - Helper Methods
     private func getUserId() -> String {
-        return authManager.getEmail(for: .personal) ?? "default_user"
+        // Use a fixed userId for custom logs since CloudKit already scopes data to iCloud account
+        // This ensures all devices using the same iCloud account share the same logs
+        // regardless of which Google account they're logged into
+        return "icloud-user"
     }
 
     private init() {

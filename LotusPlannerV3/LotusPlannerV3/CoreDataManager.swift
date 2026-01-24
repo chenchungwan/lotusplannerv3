@@ -16,6 +16,8 @@ class CoreDataManager: ObservableObject {
         migrateExistingCategories()
         // One-time migration from legacy UserDefaults / iCloud KVS to Core Data
         migrateLegacyStorageIfNeeded()
+        // Migrate userId field to use "icloud-user" for all logs
+        migrateLogUserIds()
     }
     
     private func migrateExistingCategories() {
@@ -406,7 +408,109 @@ class CoreDataManager: ObservableObject {
         
         defaults.set(true, forKey: legacyMigrationFlagKey)
     }
-    
+
+    // MARK: - UserId Migration (email -> "icloud-user")
+    private let userIdMigrationFlagKey = "coreDataUserIdMigrationDone"
+    private func migrateLogUserIds() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: userIdMigrationFlagKey) == false else { return }
+
+        devLog("🔄 CoreDataManager: Starting userId migration to 'icloud-user'...")
+
+        var totalMigrated = 0
+
+        // Migrate WeightLog entries
+        let weightRequest: NSFetchRequest<WeightLog> = WeightLog.fetchRequest()
+        weightRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let weightLogs = try? context.fetch(weightRequest) {
+            for log in weightLogs {
+                log.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(weightLogs.count) WeightLog entries")
+        }
+
+        // Migrate WorkoutLog entries
+        let workoutRequest: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
+        workoutRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let workoutLogs = try? context.fetch(workoutRequest) {
+            for log in workoutLogs {
+                log.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(workoutLogs.count) WorkoutLog entries")
+        }
+
+        // Migrate FoodLog entries
+        let foodRequest: NSFetchRequest<FoodLog> = FoodLog.fetchRequest()
+        foodRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let foodLogs = try? context.fetch(foodRequest) {
+            for log in foodLogs {
+                log.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(foodLogs.count) FoodLog entries")
+        }
+
+        // Migrate WaterLog entries
+        let waterRequest: NSFetchRequest<WaterLog> = WaterLog.fetchRequest()
+        waterRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let waterLogs = try? context.fetch(waterRequest) {
+            for log in waterLogs {
+                log.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(waterLogs.count) WaterLog entries")
+        }
+
+        // Migrate SleepLog entries
+        let sleepRequest: NSFetchRequest<SleepLog> = SleepLog.fetchRequest()
+        sleepRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let sleepLogs = try? context.fetch(sleepRequest) {
+            for log in sleepLogs {
+                log.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(sleepLogs.count) SleepLog entries")
+        }
+
+        // Migrate CustomLogItem entries
+        let customItemRequest: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
+        customItemRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let customItems = try? context.fetch(customItemRequest) {
+            for item in customItems {
+                item.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(customItems.count) CustomLogItem entries")
+        }
+
+        // Migrate CustomLogEntry entries
+        let customEntryRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+        customEntryRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+        if let customEntries = try? context.fetch(customEntryRequest) {
+            for entry in customEntries {
+                entry.userId = "icloud-user"
+                totalMigrated += 1
+            }
+            devLog("  ✅ Migrated \(customEntries.count) CustomLogEntry entries")
+        }
+
+        // Save changes
+        if context.hasChanges {
+            do {
+                try context.save()
+                devLog("✅ CoreDataManager: UserId migration complete! Migrated \(totalMigrated) total entries")
+            } catch {
+                devLog("❌ CoreDataManager: UserId migration save failed: \(error)")
+            }
+        } else {
+            devLog("✅ CoreDataManager: UserId migration complete! No entries needed migration")
+        }
+
+        defaults.set(true, forKey: userIdMigrationFlagKey)
+    }
+
     // MARK: - Task Time Windows
     func saveTaskTimeWindow(_ timeWindow: TaskTimeWindowData) {
         devLog("💾 CoreDataManager: saveTaskTimeWindow called for taskId: \(timeWindow.taskId)")
