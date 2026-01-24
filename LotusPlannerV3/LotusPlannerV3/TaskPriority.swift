@@ -1,134 +1,97 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Priority Style Enum
-enum TaskPriorityDataStyle: String, CaseIterable, Codable {
-    case roadmap = "roadmap"
-    case numeric = "numeric"
-    case alphabetic = "alphabetic"
-    case level = "level"
-
-    var displayName: String {
-        switch self {
-        case .roadmap: return "Roadmap (P0, P1, P2)"
-        case .numeric: return "Numeric (1, 2, 3)"
-        case .alphabetic: return "Alphabetic (A, B, C)"
-        case .level: return "Level (High, Medium, Low)"
-        }
-    }
-
-    /// Get all possible priority values for this style
-    func allValues() -> [String] {
-        switch self {
-        case .roadmap:
-            return ["P0", "P1", "P2", "P3", "P4", "P5"]
-        case .numeric:
-            return ["1", "2", "3", "4", "5", "6"]
-        case .alphabetic:
-            return ["A", "B", "C", "D", "E", "F"]
-        case .level:
-            return ["High", "Medium", "Low"]
-        }
-    }
-
-    /// Get display label for empty/no priority state
-    var noPriorityLabel: String {
-        switch self {
-        case .roadmap: return "No Priority"
-        case .numeric: return "No Priority"
-        case .alphabetic: return "No Priority"
-        case .level: return "No Priority"
-        }
-    }
-
-    /// Get color for a specific priority value (lower values = higher priority = warmer colors)
-    func color(for value: String) -> Color {
-        let values = allValues()
-        guard let index = values.firstIndex(of: value) else { return .gray }
-
-        switch self {
-        case .roadmap, .numeric, .alphabetic:
-            // P0/1/A = red, P1/2/B = orange, P2/3/C = yellow, P3/4/D = green, P4+/5+/E+ = blue
-            switch index {
-            case 0: return .red
-            case 1: return .orange
-            case 2: return .yellow
-            case 3: return .green
-            default: return .blue
-            }
-        case .level:
-            // High = red, Medium = orange, Low = green
-            switch index {
-            case 0: return .red    // High
-            case 1: return .orange // Medium
-            case 2: return .green  // Low
-            default: return .gray
-            }
-        }
-    }
-}
-
 // MARK: - Priority Data Structure
 struct TaskPriorityData: Codable, Equatable, Hashable {
-    let style: TaskPriorityDataStyle
     let value: String
 
-    init(style: TaskPriorityDataStyle, value: String) {
-        self.style = style
+    init(value: String) {
         self.value = value
     }
+
+    /// All possible priority values (Roadmap style: P0, P1, P2, etc.)
+    static let allValues = ["P0", "P1", "P2", "P3", "P4", "P5"]
+
+    /// Display label for empty/no priority state
+    static let noPriorityLabel = "No Priority"
 
     /// Display text for this priority
     var displayText: String {
         return value
     }
 
-    /// Color for this priority
+    /// Color for this priority (lower values = higher priority = warmer colors)
     var color: Color {
-        return style.color(for: value)
+        guard let index = Self.allValues.firstIndex(of: value) else { return .gray }
+
+        // P0 = red, P1 = orange, P2 = yellow, P3 = green, P4+ = blue
+        switch index {
+        case 0: return .red
+        case 1: return .orange
+        case 2: return .yellow
+        case 3: return .green
+        default: return .blue
+        }
     }
 
     /// Encode priority as a tag for storing in task notes
-    /// Format: [PRIORITY:style:value]
+    /// Format: [PRIORITY:value]
     var encodedTag: String {
-        return "[PRIORITY:\(style.rawValue):\(value)]"
+        return "[PRIORITY:\(value)]"
     }
 
     /// Parse priority from task notes
     /// Returns nil if no priority tag found
+    /// Supports both old format [PRIORITY:style:value] and new format [PRIORITY:value]
     static func parse(from notes: String?) -> TaskPriorityData? {
         guard let notes = notes else { return nil }
 
-        // Look for [PRIORITY:style:value] pattern
-        let pattern = "\\[PRIORITY:([a-z]+):([^\\]]+)\\]"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+        // Try new format first: [PRIORITY:value]
+        let newPattern = "\\[PRIORITY:([^:]+)\\]"
+        if let regex = try? NSRegularExpression(pattern: newPattern, options: []) {
+            let matches = regex.matches(in: notes, options: [], range: NSRange(notes.startIndex..., in: notes))
 
-        let nsString = notes as NSString
-        let matches = regex.matches(in: notes, options: [], range: NSRange(location: 0, length: nsString.length))
+            if let match = matches.first,
+               match.numberOfRanges == 2,
+               let valueRange = Range(match.range(at: 1), in: notes) {
+                let valueString = String(notes[valueRange])
+                // Check if this is actually the new format (value should be P0, P1, etc.)
+                if allValues.contains(valueString) {
+                    return TaskPriorityData(value: valueString)
+                }
+            }
+        }
 
-        guard let match = matches.first,
-              match.numberOfRanges == 3 else { return nil }
+        // Fall back to old format: [PRIORITY:style:value]
+        let oldPattern = "\\[PRIORITY:([a-z]+):([^\\]]+)\\]"
+        if let regex = try? NSRegularExpression(pattern: oldPattern, options: []) {
+            let matches = regex.matches(in: notes, options: [], range: NSRange(notes.startIndex..., in: notes))
 
-        let styleString = nsString.substring(with: match.range(at: 1))
-        let valueString = nsString.substring(with: match.range(at: 2))
+            if let match = matches.first,
+               match.numberOfRanges == 3,
+               let valueRange = Range(match.range(at: 2), in: notes) {
+                let valueString = String(notes[valueRange])
+                return TaskPriorityData(value: valueString)
+            }
+        }
 
-        guard let style = TaskPriorityDataStyle(rawValue: styleString) else { return nil }
-
-        return TaskPriorityData(style: style, value: valueString)
+        return nil
     }
 
     /// Remove priority tag from notes string
     /// Returns cleaned notes string
+    /// Supports both old format [PRIORITY:style:value] and new format [PRIORITY:value]
     static func removeTag(from notes: String?) -> String? {
         guard let notes = notes else { return nil }
 
-        let pattern = "\\[PRIORITY:[a-z]+:[^\\]]+\\]\\s*"
+        // This pattern matches both old and new formats
+        let pattern = "\\[PRIORITY:[^\\]]+\\]\\s*"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return notes }
 
         let cleanedNotes = regex.stringByReplacingMatches(
             in: notes,
             options: [],
-            range: NSRange(location: 0, length: notes.count),
+            range: NSRange(notes.startIndex..., in: notes),
             withTemplate: ""
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -157,25 +120,6 @@ struct TaskPriorityData: Codable, Equatable, Hashable {
 
     /// Numerical sort order (lower = higher priority)
     var sortOrder: Int {
-        let values = style.allValues()
-        return values.firstIndex(of: value) ?? 999
-    }
-}
-
-// MARK: - User Preference Helper
-extension UserDefaults {
-    private static let taskPriorityStyleKey = "taskPriorityStyle"
-
-    var taskPriorityStyle: TaskPriorityDataStyle {
-        get {
-            guard let rawValue = string(forKey: Self.taskPriorityStyleKey),
-                  let style = TaskPriorityDataStyle(rawValue: rawValue) else {
-                return .roadmap // Default to roadmap style
-            }
-            return style
-        }
-        set {
-            set(newValue.rawValue, forKey: Self.taskPriorityStyleKey)
-        }
+        return Self.allValues.firstIndex(of: value) ?? 999
     }
 }

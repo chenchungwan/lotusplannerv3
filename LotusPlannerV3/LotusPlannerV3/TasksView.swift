@@ -633,11 +633,14 @@ class TasksViewModel: ObservableObject {
                     // Explicitly clear completed timestamp on the server
                     requestBody["completed"] = NSNull()
                 }
-                
+
                 if let notes = task.notes {
                     requestBody["notes"] = notes
+                } else {
+                    // Explicitly clear notes field on the server
+                    requestBody["notes"] = NSNull()
                 }
-                
+
                 if let due = task.due {
                     // Ensure due date is in RFC 3339 format
                     if due.count == 10 && due.contains("-") && !due.contains("T") {
@@ -3677,30 +3680,27 @@ struct TaskDetailsView: View {
 
                 // Priority Section
                 Section("Priority") {
-                    let priorityStyle = UserDefaults.standard.taskPriorityStyle
-                    let allValues = priorityStyle.allValues()
-
                     Picker("Priority Level", selection: Binding<String?>(
                         get: {
                             selectedPriority?.value
                         },
                         set: { newValue in
                             if let value = newValue {
-                                selectedPriority = TaskPriorityData(style: priorityStyle, value: value)
+                                selectedPriority = TaskPriorityData(value: value)
                             } else {
                                 selectedPriority = nil
                             }
                         }
                     )) {
-                        Text(priorityStyle.noPriorityLabel)
+                        Text(TaskPriorityData.noPriorityLabel)
                             .tag(nil as String?)
 
-                        ForEach(allValues, id: \.self) { value in
+                        ForEach(TaskPriorityData.allValues, id: \.self) { value in
                             HStack {
                                 Text(value)
                                 Spacer()
                                 Circle()
-                                    .fill(priorityStyle.color(for: value))
+                                    .fill(TaskPriorityData(value: value).color)
                                     .frame(width: 10, height: 10)
                             }
                             .tag(value as String?)

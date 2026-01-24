@@ -219,15 +219,6 @@ struct BulkUpdatePriorityPicker: View {
     let onSave: (TaskPriorityData?) -> Void
 
     @State private var selectedPriority: TaskPriorityData?
-    @State private var priorityStyle: TaskPriorityDataStyle
-
-    init(selectedTaskIds: Set<String>, onSave: @escaping (TaskPriorityData?) -> Void) {
-        self.selectedTaskIds = selectedTaskIds
-        self.onSave = onSave
-
-        // Get user's preferred priority style
-        _priorityStyle = State(initialValue: UserDefaults.standard.taskPriorityStyle)
-    }
 
     var body: some View {
         NavigationStack {
@@ -260,20 +251,20 @@ struct BulkUpdatePriorityPicker: View {
                         get: { selectedPriority?.value },
                         set: { newValue in
                             if let value = newValue {
-                                selectedPriority = TaskPriorityData(style: priorityStyle, value: value)
+                                selectedPriority = TaskPriorityData(value: value)
                             } else {
                                 selectedPriority = nil
                             }
                         }
                     )) {
-                        Text(priorityStyle.noPriorityLabel).tag(nil as String?)
+                        Text(TaskPriorityData.noPriorityLabel).tag(nil as String?)
 
-                        ForEach(priorityStyle.allValues(), id: \.self) { value in
+                        ForEach(TaskPriorityData.allValues, id: \.self) { value in
                             HStack {
                                 Text(value)
                                 Spacer()
                                 Circle()
-                                    .fill(priorityStyle.color(for: value))
+                                    .fill(TaskPriorityData(value: value).color)
                                     .frame(width: 10, height: 10)
                             }
                             .tag(value as String?)

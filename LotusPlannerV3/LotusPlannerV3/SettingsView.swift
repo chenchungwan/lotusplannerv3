@@ -1132,8 +1132,6 @@ struct SettingsView: View {
                             appPrefs.updateTasksLayoutHorizontal(true)
                         }
                     }
-
-                    priorityStylePicker
                 }
 
                 Section("Log Preferences") {
@@ -1547,32 +1545,6 @@ get: { appPrefs.showFoodLogs },
         
         showingSyncProgress = isSyncing
         syncButtonDisabled = disabled
-    }
-
-    @ViewBuilder
-    private var priorityStylePicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Task Priority Style")
-                .font(.body)
-                .fontWeight(.medium)
-
-            Picker("Priority Style", selection: Binding(
-                get: { UserDefaults.standard.taskPriorityStyle },
-                set: { newValue in
-                    UserDefaults.standard.taskPriorityStyle = newValue
-                }
-            )) {
-                ForEach(TaskPriorityDataStyle.allCases, id: \.self) { style in
-                    Text(style.displayName).tag(style)
-                }
-            }
-            .pickerStyle(.menu)
-
-            Text("Choose how task priorities are labeled when you set them")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.vertical, 4)
     }
 
     @ViewBuilder

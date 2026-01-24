@@ -23,7 +23,11 @@ struct GlobalNavBar: View {
     @State private var newListName = ""
     @State private var newListAccountKind: GoogleAuthManager.AccountKind?
     @State private var showingAddLog = false
-    
+
+    // Sync alert states
+    @State private var showingSyncAlert = false
+    @State private var syncedDataMessage = ""
+
     // Date picker state
     @State private var selectedDateForPicker = Date()
     
@@ -1073,6 +1077,13 @@ struct GlobalNavBar: View {
         .sheet(isPresented: $showingAddLog) {
             AddLogEntryView(viewModel: logsVM)
         }
+        .alert("Sync Complete", isPresented: $showingSyncAlert) {
+            Button("OK") {
+                showingSyncAlert = false
+            }
+        } message: {
+            Text(syncedDataMessage)
+        }
     }
     
     // MARK: - Create New List Function
@@ -1099,8 +1110,16 @@ struct GlobalNavBar: View {
 
         let currentDate = navigationManager.currentDate
 
+        // Track synced data counts
+        var syncedItems: [String] = []
+
         // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
+        let beforeGoals = DataManager.shared.goalsManager.goals.count
         DataManager.shared.goalsManager.refreshData()
+        let afterGoals = DataManager.shared.goalsManager.goals.count
+        if afterGoals > 0 {
+            syncedItems.append("\(afterGoals) goal\(afterGoals == 1 ? "" : "s")")
+        }
 
         // Reload custom logs data (forceSync removed - NSPersistentCloudKitContainer handles sync)
         DataManager.shared.customLogManager.refreshData()
@@ -1110,15 +1129,19 @@ struct GlobalNavBar: View {
 
         // NOW reload all data from Core Data
         // Reload task time windows
-        await MainActor.run {
+        let timeWindowCount = await MainActor.run { () -> Int in
             let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
             TaskTimeWindowManager.shared.loadTimeWindows()
             let afterCount = TaskTimeWindowManager.shared.timeWindows.count
             if afterCount != beforeCount {
                 devLog("✅ GlobalNavBar: Task time windows changed (\(beforeCount) → \(afterCount))")
             }
+            return afterCount
         }
-        
+        if timeWindowCount > 0 {
+            syncedItems.append("\(timeWindowCount) task time window\(timeWindowCount == 1 ? "" : "s")")
+        }
+
         // Reload calendar events based on current interval
         switch navigationManager.currentInterval {
         case .day:
@@ -1131,24 +1154,69 @@ struct GlobalNavBar: View {
             // For year view, load month data for the specific month
             await calendarVM.loadCalendarDataForMonth(containing: currentDate)
         }
-        
+
+        // Count calendar events
+        let personalEventCount = calendarVM.personalEvents.count
+        let professionalEventCount = calendarVM.professionalEvents.count
+        let totalEvents = personalEventCount + professionalEventCount
+        if totalEvents > 0 {
+            syncedItems.append("\(totalEvents) calendar event\(totalEvents == 1 ? "" : "s")")
+        }
+
         // Reload tasks with forced cache clear
         await tasksVM.loadTasks(forceClear: true)
-        
+
+        // Count tasks
+        let personalTaskCount = tasksVM.personalTasks.values.flatMap { $0 }.count
+        let professionalTaskCount = tasksVM.professionalTasks.values.flatMap { $0 }.count
+        let totalTasks = personalTaskCount + professionalTaskCount
+        if totalTasks > 0 {
+            syncedItems.append("\(totalTasks) task\(totalTasks == 1 ? "" : "s")")
+        }
+
         // Reload logs data
         LogsViewModel.shared.reloadData()
-        
+
+        // Count logs
+        let weightCount = logsVM.weightEntries.count
+        let workoutCount = logsVM.workoutEntries.count
+        let foodCount = logsVM.foodEntries.count
+        let waterCount = logsVM.waterEntries.count
+        let sleepCount = logsVM.sleepEntries.count
+        let totalLogs = weightCount + workoutCount + foodCount + waterCount + sleepCount
+        if totalLogs > 0 {
+            syncedItems.append("\(totalLogs) log entr\(totalLogs == 1 ? "y" : "ies")")
+        }
+
         // Refresh view context
         await MainActor.run {
             let context = PersistenceController.shared.container.viewContext
             context.refreshAllObjects()
         }
-        
+
         // Post notification to refresh journal content
         NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-        
+
         // Update last sync time
         iCloudManager.shared.lastSyncDate = Date()
+
+        // Build sync message
+        await MainActor.run {
+            if syncedItems.isEmpty {
+                syncedDataMessage = "No data synced"
+            } else {
+                syncedDataMessage = "Synced:\n" + syncedItems.joined(separator: "\n")
+            }
+            showingSyncAlert = true
+
+            // Auto-dismiss after 3 seconds
+            Task {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await MainActor.run {
+                    showingSyncAlert = false
+                }
+            }
+        }
     }
 
     private func reloadAllDataForDate(_ date: Date) async {
