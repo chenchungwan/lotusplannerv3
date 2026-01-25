@@ -923,7 +923,7 @@ final class LogsCRUDTests: XCTestCase {
             date: Date(),
             time: Date(),
             weight: 150.5,
-            unit: .lbs,
+            unit: .pounds,
             userId: "icloud-user"
         )
 
@@ -940,7 +940,7 @@ final class LogsCRUDTests: XCTestCase {
             date: Date(),
             time: Date(),
             weight: 160.0,
-            unit: .lbs,
+            unit: .pounds,
             userId: "icloud-user"
         )
 
