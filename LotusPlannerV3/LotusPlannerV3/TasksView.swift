@@ -3680,53 +3680,8 @@ struct TaskDetailsView: View {
 
                 // Priority Section
                 Section("Priority") {
-                    Picker("Priority Level", selection: Binding<String?>(
-                        get: {
-                            selectedPriority?.value
-                        },
-                        set: { newValue in
-                            if let value = newValue {
-                                selectedPriority = TaskPriorityData(value: value)
-                            } else {
-                                selectedPriority = nil
-                            }
-                        }
-                    )) {
-                        Text(TaskPriorityData.noPriorityLabel)
-                            .tag(nil as String?)
-
-                        ForEach(TaskPriorityData.allValues, id: \.self) { value in
-                            HStack {
-                                Text(value)
-                                Spacer()
-                                Circle()
-                                    .fill(TaskPriorityData(value: value).color)
-                                    .frame(width: 10, height: 10)
-                            }
-                            .tag(value as String?)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    if let priority = selectedPriority {
-                        HStack {
-                            Text("Selected:")
-                            Spacer()
-                            HStack(spacing: 4) {
-                                Text(priority.displayText)
-                                    .fontWeight(.semibold)
-                                Circle()
-                                    .fill(priority.color)
-                                    .frame(width: 12, height: 12)
-                            }
-                            .foregroundColor(priority.color)
-                        }
-                        .font(.subheadline)
-                    }
-
-                    Text("Change priority style in Settings")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    PriorityIconSelector(selectedPriority: $selectedPriority)
+                        .frame(maxWidth: .infinity)
                 }
 
                 // Add empty section at bottom to provide space when time pickers are visible

@@ -225,52 +225,8 @@ struct BulkUpdatePriorityPicker: View {
             Form {
                 // Priority Section
                 Section("Priority") {
-                    if let priority = selectedPriority {
-                        // Show current priority with trash can
-                        HStack {
-                            Image(systemName: "flag.fill")
-                                .foregroundColor(priority.color)
-
-                            Text(priority.displayText)
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            Button(action: {
-                                selectedPriority = nil
-                            }) {
-                                Image(systemName: "trash")
-                                    .foregroundColor(.red)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-
-                    // Priority picker
-                    Picker("Priority Level", selection: Binding<String?>(
-                        get: { selectedPriority?.value },
-                        set: { newValue in
-                            if let value = newValue {
-                                selectedPriority = TaskPriorityData(value: value)
-                            } else {
-                                selectedPriority = nil
-                            }
-                        }
-                    )) {
-                        Text(TaskPriorityData.noPriorityLabel).tag(nil as String?)
-
-                        ForEach(TaskPriorityData.allValues, id: \.self) { value in
-                            HStack {
-                                Text(value)
-                                Spacer()
-                                Circle()
-                                    .fill(TaskPriorityData(value: value).color)
-                                    .frame(width: 10, height: 10)
-                            }
-                            .tag(value as String?)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                    PriorityIconSelector(selectedPriority: $selectedPriority)
+                        .frame(maxWidth: .infinity)
                 }
 
                 Section {
