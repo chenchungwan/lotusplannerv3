@@ -33,9 +33,7 @@ struct PersistenceController {
             try viewContext.save()
         } catch {
             // Production-safe error handling for preview data creation
-            #if DEBUG
-            debugPrint("⚠️ Failed to create preview data: \(error.localizedDescription)")
-            #endif
+            devLog("⚠️ Failed to create preview data: \(error.localizedDescription)", level: .warning, category: .general)
             // Continue without sample data rather than crashing
         }
         return result
@@ -95,48 +93,28 @@ struct PersistenceController {
             
             if let error = error as NSError? {
                 // Production-safe error handling for Core Data store loading failures
-                #if DEBUG
-                debugPrint("❌ Core Data Error: Failed to load persistent store")
-                #endif
-                #if DEBUG
-                debugPrint("Store Description: \(storeDescription)")
-                #endif
-                #if DEBUG
-                debugPrint("Error: \(error.localizedDescription)")
-                #endif
-                #if DEBUG
-                debugPrint("Error Info: \(error.userInfo)")
-                #endif
+                devLog("❌ Core Data Error: Failed to load persistent store", level: .error, category: .general)
+                devLog("Store Description: \(storeDescription)", level: .error, category: .general)
+                devLog("Error: \(error.localizedDescription)", level: .error, category: .general)
+                devLog("Error Info: \(error.userInfo)", level: .error, category: .general)
                 
                 // Log specific error types for debugging
                 switch error.code {
                 case NSPersistentStoreIncompatibleVersionHashError:
-                    #if DEBUG
-                    debugPrint("🔄 Migration required - incompatible version")
-                    #endif
+                    devLog("🔄 Migration required - incompatible version", level: .error, category: .general)
                 case NSMigrationMissingSourceModelError:
-                    #if DEBUG
-                    debugPrint("🔄 Migration failed - missing source model")
-                    #endif
+                    devLog("🔄 Migration failed - missing source model", level: .error, category: .general)
                 case NSPersistentStoreOperationError:
-                    #if DEBUG
-                    debugPrint("💾 Store operation failed - check permissions/storage")
-                    #endif
+                    devLog("💾 Store operation failed - check permissions/storage", level: .error, category: .general)
                 case NSValidationMultipleErrorsError, NSValidationMissingMandatoryPropertyError, NSValidationRelationshipLacksMinimumCountError, NSValidationRelationshipExceedsMaximumCountError, NSValidationRelationshipDeniedDeleteError, NSValidationNumberTooLargeError, NSValidationNumberTooSmallError, NSValidationDateTooLateError, NSValidationDateTooSoonError, NSValidationInvalidDateError, NSValidationStringTooLongError, NSValidationStringTooShortError, NSValidationStringPatternMatchingError:
-                    #if DEBUG
-                    debugPrint("✅ Data validation error")
-                    #endif
+                    devLog("✅ Data validation error", level: .error, category: .general)
                 default:
-                    #if DEBUG
-                    debugPrint("❓ Unknown Core Data error code: \(error.code)")
-                    #endif
+                    devLog("❓ Unknown Core Data error code: \(error.code)", level: .error, category: .general)
                 }
                 
                 // Instead of crashing, we'll attempt to create a new store
                 // This allows the app to continue functioning even with data issues
-                #if DEBUG
-                debugPrint("🔧 Attempting to recover by creating new store...")
-                #endif
+                devLog("🔧 Attempting to recover by creating new store...", level: .warning, category: .general)
                 
                 // Note: In production, you might want to:
                 // 1. Show user-friendly error message
@@ -144,9 +122,7 @@ struct PersistenceController {
                 // 3. Send crash report to analytics
                 // 4. Attempt automatic recovery strategies
             } else {
-                #if DEBUG
-                debugPrint("✅ Core Data store loaded successfully")
-                #endif
+                devLog("✅ Core Data store loaded successfully", level: .info, category: .general)
             }
         })
         

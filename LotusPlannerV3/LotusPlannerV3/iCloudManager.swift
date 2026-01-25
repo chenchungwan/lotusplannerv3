@@ -65,62 +65,34 @@ final class iCloudManager: ObservableObject {
                     case .available:
                         self.iCloudAvailable = true
                         self.updateSyncStatus(.available)
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("✅ iCloud available and signed in")
-        #endif
-                        #endif
+                        devLog("✅ iCloud available and signed in", level: .info, category: .cloud)
                     case .noAccount:
                         self.iCloudAvailable = false
                         self.updateSyncStatus(.unavailable)
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("⚠️ No iCloud account signed in")
-        #endif
-                        #endif
+                        devLog("⚠️ No iCloud account signed in", level: .warning, category: .cloud)
                     case .restricted:
                         self.iCloudAvailable = false
                         self.updateSyncStatus(.error("iCloud access restricted"))
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("❌ iCloud access restricted")
-        #endif
-                        #endif
+                        devLog("❌ iCloud access restricted", level: .error, category: .cloud)
                     case .couldNotDetermine:
                         self.iCloudAvailable = false
                         self.updateSyncStatus(.error("Could not determine iCloud status"))
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("❓ Could not determine iCloud status")
-        #endif
-                        #endif
+                        devLog("❓ Could not determine iCloud status", level: .warning, category: .cloud)
                     case .temporarilyUnavailable:
                         self.iCloudAvailable = false
                         self.updateSyncStatus(.error("iCloud temporarily unavailable"))
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("⏳ iCloud temporarily unavailable")
-        #endif
-                        #endif
+                        devLog("⏳ iCloud temporarily unavailable", level: .warning, category: .cloud)
                     @unknown default:
                         self.iCloudAvailable = false
                         self.updateSyncStatus(.unknown)
-                        #if DEBUG
-        #if DEBUG
-                        debugPrint("❓ Unknown iCloud status")
-        #endif
-                        #endif
+                        devLog("❓ Unknown iCloud status", level: .warning, category: .cloud)
                     }
                 }
             } catch {
                 await MainActor.run {
                     self.iCloudAvailable = false
                     self.updateSyncStatus(.error(error.localizedDescription))
-                    #if DEBUG
-        #if DEBUG
-                    debugPrint("❌ iCloud status check failed: \(error.localizedDescription)")
-        #endif
-                    #endif
+                    devLog("❌ iCloud status check failed: \(error.localizedDescription)", level: .error, category: .cloud)
                 }
             }
         }
@@ -129,11 +101,7 @@ final class iCloudManager: ObservableObject {
     // MARK: - CloudKit Sync Methods
     func synchronizeFromiCloud() {
         guard iCloudAvailable else {
-            #if DEBUG
-        #if DEBUG
-            debugPrint("⚠️ iCloud not available for sync")
-        #endif
-            #endif
+            devLog("⚠️ iCloud not available for sync", level: .warning, category: .cloud)
             return
         }
         
@@ -148,29 +116,17 @@ final class iCloudManager: ObservableObject {
                 try context.save()
                 lastSyncDate = Date()
                 updateSyncStatus(.available)
-                #if DEBUG
-        #if DEBUG
-                debugPrint("✅ Local changes synced to iCloud")
-        #endif
-                #endif
+                devLog("✅ Local changes synced to iCloud", level: .info, category: .cloud)
                 
                 // Post notification for UI updates
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
             } catch {
                 updateSyncStatus(.error("Sync failed: \(error.localizedDescription)"))
-                #if DEBUG
-        #if DEBUG
-                debugPrint("❌ Failed to sync to iCloud: \(error.localizedDescription)")
-        #endif
-                #endif
+                devLog("❌ Failed to sync to iCloud: \(error.localizedDescription)", level: .error, category: .cloud)
             }
         } else {
             updateSyncStatus(.available)
-            #if DEBUG
-        #if DEBUG
-            debugPrint("ℹ️ No local changes to sync")
-        #endif
-            #endif
+            devLog("ℹ️ No local changes to sync", level: .info, category: .cloud)
         }
     }
     
@@ -181,11 +137,7 @@ final class iCloudManager: ObservableObject {
         }
         
         updateSyncStatus(.syncing)
-        #if DEBUG
-        #if DEBUG
-        debugPrint("🔄 Force syncing to iCloud...")
-        #endif
-        #endif
+        devLog("🔄 Force syncing to iCloud...", level: .info, category: .cloud)
         
         // Force CloudKit to sync by triggering a context refresh
         let context = persistenceController.container.viewContext
@@ -197,29 +149,17 @@ final class iCloudManager: ObservableObject {
                 try context.save()
                 lastSyncDate = Date()
                 updateSyncStatus(.available)
-                #if DEBUG
-        #if DEBUG
-                debugPrint("✅ Force sync completed")
-        #endif
-                #endif
+                devLog("✅ Force sync completed", level: .info, category: .cloud)
                 
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
             } catch {
                 updateSyncStatus(.error("Force sync failed: \(error.localizedDescription)"))
-                #if DEBUG
-        #if DEBUG
-                debugPrint("❌ Force sync failed: \(error.localizedDescription)")
-        #endif
-                #endif
+                devLog("❌ Force sync failed: \(error.localizedDescription)", level: .error, category: .cloud)
             }
         } else {
             lastSyncDate = Date()
             updateSyncStatus(.available)
-            #if DEBUG
-        #if DEBUG
-            debugPrint("✅ Force sync completed (no changes)")
-        #endif
-            #endif
+            devLog("✅ Force sync completed (no changes)", level: .info, category: .cloud)
         }
     }
     
@@ -228,11 +168,7 @@ final class iCloudManager: ObservableObject {
         
         // Immediate UI feedback
         updateSyncStatus(.syncing)
-        #if DEBUG
-        #if DEBUG
-        debugPrint("🔄 Starting complete sync...")
-        #endif
-        #endif
+        devLog("🔄 Starting complete sync...", level: .info, category: .cloud)
         
         Task {
             // Check iCloud status first
@@ -366,45 +302,27 @@ final class iCloudManager: ObservableObject {
     }
     
     func diagnoseICloudSetup() {
-        #if DEBUG
-        debugPrint("🔍 Diagnosing iCloud Setup...")
-        #endif
-        #if DEBUG
-        debugPrint("Container ID: iCloud.com.chenchungwan.LotusPlannerV3")
-        #endif
-        #if DEBUG
-        debugPrint("iCloud Available: \(iCloudAvailable)")
-        #endif
-        #if DEBUG
-        debugPrint("Sync Status: \(syncStatus.description)")
-        #endif
-        #if DEBUG
-        debugPrint("Last Sync: \(lastSyncDate?.description ?? "Never")")
-        #endif
+        devLog("🔍 Diagnosing iCloud Setup...", level: .info, category: .cloud)
+        devLog("Container ID: iCloud.com.chenchungwan.LotusPlannerV3", level: .info, category: .cloud)
+        devLog("iCloud Available: \(iCloudAvailable)", level: .info, category: .cloud)
+        devLog("Sync Status: \(syncStatus.description)", level: .info, category: .cloud)
+        devLog("Last Sync: \(lastSyncDate?.description ?? "Never")", level: .info, category: .cloud)
         
         Task {
             do {
                 let accountStatus = try await container.accountStatus()
-        #if DEBUG
-                debugPrint("Account Status: \(accountStatus)")
-        #endif
+                devLog("Account Status: \(accountStatus)", level: .info, category: .cloud)
                 
                 // Check if we can access the database
                 let database = container.privateCloudDatabase
-        #if DEBUG
-                debugPrint("Private Database: \(database)")
-        #endif
+                devLog("Private Database: \(database)", level: .info, category: .cloud)
                 
                 await MainActor.run {
-        #if DEBUG
-                    debugPrint("✅ iCloud diagnosis complete")
-        #endif
+                    devLog("✅ iCloud diagnosis complete", level: .info, category: .cloud)
                 }
             } catch {
                 await MainActor.run {
-        #if DEBUG
-                    debugPrint("❌ iCloud diagnosis failed: \(error.localizedDescription)")
-        #endif
+                    devLog("❌ iCloud diagnosis failed: \(error.localizedDescription)", level: .error, category: .cloud)
                 }
             }
         }
@@ -508,15 +426,11 @@ final class iCloudManager: ObservableObject {
     
     func migrateLocalDataToiCloud() {
         guard iCloudAvailable else {
-        #if DEBUG
-            debugPrint("⚠️ Cannot migrate: iCloud not available")
-        #endif
+            devLog("⚠️ Cannot migrate: iCloud not available", level: .warning, category: .cloud)
             return
         }
         
-        #if DEBUG
-        debugPrint("🔄 Migrating local data to iCloud...")
-        #endif
+        devLog("🔄 Migrating local data to iCloud...", level: .info, category: .cloud)
         
         // NSPersistentCloudKitContainer handles migration automatically
         // We just need to ensure all data is saved to trigger CloudKit sync
@@ -526,30 +440,20 @@ final class iCloudManager: ObservableObject {
             do {
                 try context.save()
                 lastSyncDate = Date()
-        #if DEBUG
-                debugPrint("✅ Local data migration to iCloud completed")
-        #endif
+                devLog("✅ Local data migration to iCloud completed", level: .info, category: .cloud)
                 
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
             } catch {
-        #if DEBUG
-                debugPrint("❌ Migration failed: \(error.localizedDescription)")
-        #endif
+                devLog("❌ Migration failed: \(error.localizedDescription)", level: .error, category: .cloud)
             }
         } else {
-        #if DEBUG
-            debugPrint("ℹ️ No local data to migrate")
-        #endif
+            devLog("ℹ️ No local data to migrate", level: .info, category: .cloud)
         }
     }
     
     func clearAllCloudData() {
-        #if DEBUG
-        debugPrint("🗑️ Note: CloudKit data clearing should be done through CloudKit Console")
-        #endif
-        #if DEBUG
-        debugPrint("This method cannot directly clear CloudKit data due to security restrictions")
-        #endif
+        devLog("🗑️ Note: CloudKit data clearing should be done through CloudKit Console", level: .warning, category: .cloud)
+        devLog("This method cannot directly clear CloudKit data due to security restrictions", level: .warning, category: .cloud)
         
         // We can only clear local Core Data, which will eventually sync the deletions
         Task {
@@ -559,13 +463,9 @@ final class iCloudManager: ObservableObject {
                 // This is dangerous - only for development/testing
                 #if DEBUG
                 CoreDataManager.shared.deleteAllLogs()
-        #if DEBUG
-                debugPrint("⚠️ Local data cleared (DEBUG mode only)")
-        #endif
+                devLog("⚠️ Local data cleared (DEBUG mode only)", level: .warning, category: .cloud)
                 #else
-        #if DEBUG
-                debugPrint("❌ Data clearing disabled in production for safety")
-        #endif
+                devLog("❌ Data clearing disabled in production for safety", level: .error, category: .cloud)
                 #endif
             }
         }

@@ -25,9 +25,7 @@ struct LotusPlannerV3App: App {
         configManager.debugPrintConfigurationInfo()
         
         if !configManager.validateConfiguration() {
-            #if DEBUG
-            debugPrint("⚠️ Configuration validation failed")
-            #endif
+            devLog("⚠️ Configuration validation failed", level: .warning, category: .general)
         }
         
         // Force iCloudManager to initialize (this will set up notification observers)

@@ -1588,14 +1588,13 @@ struct CalendarView: View {
     private var finalContent: some View {
         toolbarAndSheetsContent
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleCalendarBulkEdit"))) { _ in
-            print("🟢 CalendarView received ToggleCalendarBulkEdit notification")
-            print("🟢 Current isActive: \(bulkEditManager.state.isActive)")
+            devLog("CalendarView received ToggleCalendarBulkEdit notification, current: \(bulkEditManager.state.isActive)", level: .info, category: .calendar)
             bulkEditManager.state.isActive.toggle()
-            print("🟢 New isActive: \(bulkEditManager.state.isActive)")
+            devLog("Bulk edit toggled, new state: \(bulkEditManager.state.isActive)", level: .info, category: .calendar)
             if !bulkEditManager.state.isActive {
                 // Exit bulk edit mode - clear selections
                 bulkEditManager.state.selectedTaskIds.removeAll()
-                print("🟢 Cleared selections")
+                devLog("Bulk edit selections cleared", level: .info, category: .calendar)
             }
         }
         .onChange(of: authManager.linkedStates) { oldValue, newValue in

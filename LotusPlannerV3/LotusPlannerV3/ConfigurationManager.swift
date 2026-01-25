@@ -115,12 +115,10 @@ class ConfigurationManager {
     
     // MARK: - Debug Information
     func debugPrintConfigurationInfo() {
-        #if DEBUG
-        debugPrint("🔧 Configuration Manager Status:")
-        debugPrint("Environment: \(environment)")
-        debugPrint("Google Client ID configured: \(!googleClientId.isEmpty)")
-        debugPrint("Google Reversed Client ID configured: \(!googleReversedClientId.isEmpty)")
-        debugPrint("Validation passes: \(validateConfiguration())")
-        #endif
+        devLog("🔧 Configuration Manager Status:", level: .info, category: .general)
+        devLog("Environment: \(environment)", level: .info, category: .general)
+        devLog("Google Client ID configured: \(!googleClientId.isEmpty)", level: .info, category: .general)
+        devLog("Google Reversed Client ID configured: \(!googleReversedClientId.isEmpty)", level: .info, category: .general)
+        devLog("Validation passes: \(validateConfiguration())", level: .info, category: .general)
     }
 }
