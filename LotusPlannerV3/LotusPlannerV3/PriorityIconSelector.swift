@@ -6,82 +6,78 @@ struct PriorityIconSelector: View {
     @Binding var selectedPriority: TaskPriorityData?
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 16) {
-                // No Priority
-                PriorityIconButton(
-                    icon: "circle.slash",
-                    label: "None",
-                    isSelected: selectedPriority == nil,
-                    color: .gray
-                ) {
-                    selectedPriority = nil
-                }
-
-                // P0 - Highest Priority
-                PriorityIconButton(
-                    icon: "exclamationmark.3",
-                    label: "P0",
-                    isSelected: selectedPriority?.value == "P0",
-                    color: .red
-                ) {
-                    selectedPriority = TaskPriorityData(value: "P0")
-                }
-
-                // P1
-                PriorityIconButton(
-                    icon: "exclamationmark.2",
-                    label: "P1",
-                    isSelected: selectedPriority?.value == "P1",
-                    color: .red
-                ) {
-                    selectedPriority = TaskPriorityData(value: "P1")
-                }
-
-                // P2
-                PriorityIconButton(
-                    icon: "exclamationmark",
-                    label: "P2",
-                    isSelected: selectedPriority?.value == "P2",
-                    color: .orange
-                ) {
-                    selectedPriority = TaskPriorityData(value: "P2")
-                }
+        HStack(spacing: 8) {
+            // No Priority
+            PriorityIconButton(
+                icon: "circle.slash",
+                label: "None",
+                isSelected: selectedPriority == nil,
+                color: .gray
+            ) {
+                selectedPriority = nil
             }
 
-            HStack(spacing: 16) {
-                // P3
-                PriorityIconButton(
-                    icon: "minus",
-                    label: "P3",
-                    isSelected: selectedPriority?.value == "P3",
-                    color: .yellow
-                ) {
-                    selectedPriority = TaskPriorityData(value: "P3")
-                }
+            // P0 - Highest Priority
+            PriorityIconButton(
+                icon: "0.square",
+                label: "P0",
+                isSelected: selectedPriority?.value == "P0",
+                color: .red
+            ) {
+                selectedPriority = TaskPriorityData(value: "P0")
+            }
 
-                // P4
-                PriorityIconButton(
-                    icon: "equal",
-                    label: "P4",
-                    isSelected: selectedPriority?.value == "P4",
-                    color: .green
-                ) {
-                    selectedPriority = TaskPriorityData(value: "P4")
-                }
+            // P1
+            PriorityIconButton(
+                icon: "1.square",
+                label: "P1",
+                isSelected: selectedPriority?.value == "P1",
+                color: .red
+            ) {
+                selectedPriority = TaskPriorityData(value: "P1")
+            }
 
-                // P5 - Lowest Priority
-                PriorityIconButton(
-                    icon: "line.horizontal.3",
-                    label: "P5",
-                    isSelected: selectedPriority?.value == "P5",
-                    color: .blue
-                ) {
-                    selectedPriority = TaskPriorityData(value: "P5")
-                }
+            // P2
+            PriorityIconButton(
+                icon: "2.square",
+                label: "P2",
+                isSelected: selectedPriority?.value == "P2",
+                color: .orange
+            ) {
+                selectedPriority = TaskPriorityData(value: "P2")
+            }
+
+            // P3
+            PriorityIconButton(
+                icon: "3.square",
+                label: "P3",
+                isSelected: selectedPriority?.value == "P3",
+                color: .yellow
+            ) {
+                selectedPriority = TaskPriorityData(value: "P3")
+            }
+
+            // P4
+            PriorityIconButton(
+                icon: "4.square",
+                label: "P4",
+                isSelected: selectedPriority?.value == "P4",
+                color: .green
+            ) {
+                selectedPriority = TaskPriorityData(value: "P4")
+            }
+
+            // P5 - Lowest Priority
+            PriorityIconButton(
+                icon: "5.square",
+                label: "P5",
+                isSelected: selectedPriority?.value == "P5",
+                color: .blue
+            ) {
+                selectedPriority = TaskPriorityData(value: "P5")
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
 }
 
@@ -95,22 +91,22 @@ private struct PriorityIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Image(systemName: icon)
-                    .font(.system(size: 24))
+                    .font(.system(size: 20))
                     .foregroundColor(isSelected ? color : .gray.opacity(0.3))
-                    .frame(width: 50, height: 50)
+                    .frame(width: 36, height: 36)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 6)
                             .fill(isSelected ? color.opacity(0.1) : Color.clear)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 6)
                             .stroke(isSelected ? color : Color.gray.opacity(0.2), lineWidth: isSelected ? 2 : 1)
                     )
 
                 Text(label)
-                    .font(.caption2)
+                    .font(.system(size: 9))
                     .foregroundColor(isSelected ? color : .gray)
             }
         }
