@@ -32,7 +32,7 @@ struct PriorityIconSelector: View {
                 icon: "1.square",
                 label: "P1",
                 isSelected: selectedPriority?.value == "P1",
-                color: .red
+                color: .orange
             ) {
                 selectedPriority = TaskPriorityData(value: "P1")
             }
@@ -42,7 +42,7 @@ struct PriorityIconSelector: View {
                 icon: "2.square",
                 label: "P2",
                 isSelected: selectedPriority?.value == "P2",
-                color: .orange
+                color: .yellow
             ) {
                 selectedPriority = TaskPriorityData(value: "P2")
             }
@@ -52,29 +52,19 @@ struct PriorityIconSelector: View {
                 icon: "3.square",
                 label: "P3",
                 isSelected: selectedPriority?.value == "P3",
-                color: .yellow
+                color: .green
             ) {
                 selectedPriority = TaskPriorityData(value: "P3")
             }
 
-            // P4
+            // P4 - Lowest Priority
             PriorityIconButton(
                 icon: "4.square",
                 label: "P4",
                 isSelected: selectedPriority?.value == "P4",
-                color: .green
-            ) {
-                selectedPriority = TaskPriorityData(value: "P4")
-            }
-
-            // P5 - Lowest Priority
-            PriorityIconButton(
-                icon: "5.square",
-                label: "P5",
-                isSelected: selectedPriority?.value == "P5",
                 color: .blue
             ) {
-                selectedPriority = TaskPriorityData(value: "P5")
+                selectedPriority = TaskPriorityData(value: "P4")
             }
         }
         .padding(.vertical, 4)
@@ -136,9 +126,6 @@ struct PriorityIconSelector_Previews: PreviewProvider {
 
                 Text("P4 Selected")
                 PriorityIconSelector(selectedPriority: .constant(TaskPriorityData(value: "P4")))
-
-                Text("P5 Selected")
-                PriorityIconSelector(selectedPriority: .constant(TaskPriorityData(value: "P5")))
             }
             .padding()
         }

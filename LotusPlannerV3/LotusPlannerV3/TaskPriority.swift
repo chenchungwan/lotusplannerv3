@@ -10,7 +10,7 @@ struct TaskPriorityData: Codable, Equatable, Hashable {
     }
 
     /// All possible priority values (Roadmap style: P0, P1, P2, etc.)
-    static let allValues = ["P0", "P1", "P2", "P3", "P4", "P5"]
+    static let allValues = ["P0", "P1", "P2", "P3", "P4"]
 
     /// Display label for empty/no priority state
     static let noPriorityLabel = "No Priority"
@@ -24,13 +24,14 @@ struct TaskPriorityData: Codable, Equatable, Hashable {
     var color: Color {
         guard let index = Self.allValues.firstIndex(of: value) else { return .gray }
 
-        // P0 = red, P1 = orange, P2 = yellow, P3 = green, P4+ = blue
+        // P0 = red, P1 = orange, P2 = yellow, P3 = green, P4 = blue
         switch index {
         case 0: return .red
         case 1: return .orange
         case 2: return .yellow
         case 3: return .green
-        default: return .blue
+        case 4: return .blue
+        default: return .gray
         }
     }
 
@@ -102,7 +103,7 @@ struct TaskPriorityData: Codable, Equatable, Hashable {
     /// Returns updated notes string with priority tag
     static func updateNotes(_ notes: String?, with priority: TaskPriorityData?) -> String? {
         // First remove any existing priority tag
-        var cleanedNotes = removeTag(from: notes) ?? ""
+        let cleanedNotes = removeTag(from: notes) ?? ""
 
         // If priority is nil, just return cleaned notes
         guard let priority = priority else {
