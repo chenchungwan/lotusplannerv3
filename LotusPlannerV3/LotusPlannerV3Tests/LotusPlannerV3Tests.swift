@@ -891,3 +891,905 @@ final class RecentFeaturesRegressionTests: XCTestCase {
         XCTAssertFalse(prefs.verboseLoggingEnabled, "Verbose logging should be disabled")
     }
 }
+
+// MARK: - CRUD Tests for Primary Features
+
+/// Comprehensive CRUD tests for all logs (Weight, Workout, Food, Sleep, Water)
+final class LogsCRUDTests: XCTestCase {
+
+    var persistenceController: PersistenceController!
+    var coreDataManager: CoreDataManager!
+    var testContext: NSManagedObjectContext!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        persistenceController = PersistenceController(inMemory: true)
+        testContext = persistenceController.container.viewContext
+        coreDataManager = CoreDataManager.shared
+    }
+
+    override func tearDownWithError() throws {
+        persistenceController = nil
+        coreDataManager = nil
+        testContext = nil
+        try super.tearDownWithError()
+    }
+
+    // MARK: - Weight Log CRUD
+
+    func testWeightLogCreate() throws {
+        let entry = WeightLogEntry(
+            id: "test-weight-1",
+            date: Date(),
+            time: Date(),
+            weight: 150.5,
+            unit: .lbs,
+            userId: "icloud-user"
+        )
+
+        coreDataManager.saveWeightEntry(entry)
+
+        let loaded = coreDataManager.loadWeightEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save weight entry")
+        XCTAssertEqual(loaded.first(where: { $0.id == entry.id })?.weight, 150.5, "Should save correct weight")
+    }
+
+    func testWeightLogDelete() throws {
+        let entry = WeightLogEntry(
+            id: "test-weight-delete",
+            date: Date(),
+            time: Date(),
+            weight: 160.0,
+            unit: .lbs,
+            userId: "icloud-user"
+        )
+
+        coreDataManager.saveWeightEntry(entry)
+        var loaded = coreDataManager.loadWeightEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save before delete")
+
+        coreDataManager.deleteWeightEntry(entry)
+        loaded = coreDataManager.loadWeightEntries()
+        XCTAssertFalse(loaded.contains(where: { $0.id == entry.id }), "Should delete weight entry")
+    }
+
+    // MARK: - Workout Log CRUD
+
+    func testWorkoutLogCreate() throws {
+        let entry = WorkoutLogEntry(
+            id: "test-workout-1",
+            date: Date(),
+            name: "Morning Run",
+            userId: "icloud-user",
+            createdAt: Date()
+        )
+
+        coreDataManager.saveWorkoutEntry(entry)
+
+        let loaded = coreDataManager.loadWorkoutEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save workout entry")
+        XCTAssertEqual(loaded.first(where: { $0.id == entry.id })?.name, "Morning Run", "Should save correct name")
+    }
+
+    func testWorkoutLogDelete() throws {
+        let entry = WorkoutLogEntry(
+            id: "test-workout-delete",
+            date: Date(),
+            name: "Evening Yoga",
+            userId: "icloud-user",
+            createdAt: Date()
+        )
+
+        coreDataManager.saveWorkoutEntry(entry)
+        var loaded = coreDataManager.loadWorkoutEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save before delete")
+
+        coreDataManager.deleteWorkoutEntry(entry)
+        loaded = coreDataManager.loadWorkoutEntries()
+        XCTAssertFalse(loaded.contains(where: { $0.id == entry.id }), "Should delete workout entry")
+    }
+
+    // MARK: - Food Log CRUD
+
+    func testFoodLogCreate() throws {
+        let entry = FoodLogEntry(
+            id: "test-food-1",
+            date: Date(),
+            name: "Breakfast",
+            userId: "icloud-user",
+            createdAt: Date()
+        )
+
+        coreDataManager.saveFoodEntry(entry)
+
+        let loaded = coreDataManager.loadFoodEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save food entry")
+        XCTAssertEqual(loaded.first(where: { $0.id == entry.id })?.name, "Breakfast", "Should save correct name")
+    }
+
+    func testFoodLogDelete() throws {
+        let entry = FoodLogEntry(
+            id: "test-food-delete",
+            date: Date(),
+            name: "Lunch",
+            userId: "icloud-user",
+            createdAt: Date()
+        )
+
+        coreDataManager.saveFoodEntry(entry)
+        var loaded = coreDataManager.loadFoodEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save before delete")
+
+        coreDataManager.deleteFoodEntry(entry)
+        loaded = coreDataManager.loadFoodEntries()
+        XCTAssertFalse(loaded.contains(where: { $0.id == entry.id }), "Should delete food entry")
+    }
+
+    // MARK: - Water Log CRUD
+
+    func testWaterLogCreate() throws {
+        let entry = WaterLogEntry(
+            id: "test-water-1",
+            date: Date(),
+            cupsConsumed: 8,
+            userId: "icloud-user",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        coreDataManager.saveWaterEntry(entry)
+
+        let loaded = coreDataManager.loadWaterEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save water entry")
+        XCTAssertEqual(loaded.first(where: { $0.id == entry.id })?.cupsConsumed, 8, "Should save correct cups")
+    }
+
+    func testWaterLogUpdate() throws {
+        let entry = WaterLogEntry(
+            id: "test-water-update",
+            date: Date(),
+            cupsConsumed: 5,
+            userId: "icloud-user",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        coreDataManager.saveWaterEntry(entry)
+
+        let updated = WaterLogEntry(
+            id: entry.id,
+            date: entry.date,
+            cupsConsumed: 10,
+            userId: entry.userId,
+            createdAt: entry.createdAt,
+            updatedAt: Date()
+        )
+
+        coreDataManager.updateWaterEntry(updated)
+
+        let loaded = coreDataManager.loadWaterEntries()
+        XCTAssertEqual(loaded.first(where: { $0.id == entry.id })?.cupsConsumed, 10, "Should update cups consumed")
+    }
+
+    func testWaterLogDelete() throws {
+        let entry = WaterLogEntry(
+            id: "test-water-delete",
+            date: Date(),
+            cupsConsumed: 6,
+            userId: "icloud-user",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        coreDataManager.saveWaterEntry(entry)
+        var loaded = coreDataManager.loadWaterEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save before delete")
+
+        coreDataManager.deleteWaterEntry(entry)
+        loaded = coreDataManager.loadWaterEntries()
+        XCTAssertFalse(loaded.contains(where: { $0.id == entry.id }), "Should delete water entry")
+    }
+
+    // MARK: - Sleep Log CRUD
+
+    func testSleepLogCreate() throws {
+        let now = Date()
+        let bedTime = now.addingTimeInterval(-28800) // 8 hours ago
+        let wakeTime = now
+
+        let entry = SleepLogEntry(
+            id: "test-sleep-1",
+            date: now,
+            wakeUpTime: wakeTime,
+            bedTime: bedTime,
+            userId: "icloud-user",
+            createdAt: now,
+            updatedAt: now
+        )
+
+        coreDataManager.saveSleepEntry(entry)
+
+        let loaded = coreDataManager.loadSleepEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save sleep entry")
+        XCTAssertNotNil(loaded.first(where: { $0.id == entry.id })?.bedTime, "Should save bed time")
+    }
+
+    func testSleepLogUpdate() throws {
+        let now = Date()
+        let entry = SleepLogEntry(
+            id: "test-sleep-update",
+            date: now,
+            wakeUpTime: now,
+            bedTime: now.addingTimeInterval(-28800),
+            userId: "icloud-user",
+            createdAt: now,
+            updatedAt: now
+        )
+
+        coreDataManager.saveSleepEntry(entry)
+
+        let newWakeTime = now.addingTimeInterval(3600) // 1 hour later
+        let updated = SleepLogEntry(
+            id: entry.id,
+            date: entry.date,
+            wakeUpTime: newWakeTime,
+            bedTime: entry.bedTime,
+            userId: entry.userId,
+            createdAt: entry.createdAt,
+            updatedAt: Date()
+        )
+
+        coreDataManager.updateSleepEntry(updated)
+
+        let loaded = coreDataManager.loadSleepEntries()
+        let loadedEntry = loaded.first(where: { $0.id == entry.id })
+        XCTAssertNotNil(loadedEntry, "Should find updated entry")
+        // Note: Comparing dates with tolerance due to precision
+        XCTAssertTrue(abs((loadedEntry?.wakeUpTime ?? Date()).timeIntervalSince(newWakeTime)) < 1, "Should update wake time")
+    }
+
+    func testSleepLogDelete() throws {
+        let now = Date()
+        let entry = SleepLogEntry(
+            id: "test-sleep-delete",
+            date: now,
+            wakeUpTime: now,
+            bedTime: now.addingTimeInterval(-28800),
+            userId: "icloud-user",
+            createdAt: now,
+            updatedAt: now
+        )
+
+        coreDataManager.saveSleepEntry(entry)
+        var loaded = coreDataManager.loadSleepEntries()
+        XCTAssertTrue(loaded.contains(where: { $0.id == entry.id }), "Should save before delete")
+
+        coreDataManager.deleteSleepEntry(entry)
+        loaded = coreDataManager.loadSleepEntries()
+        XCTAssertFalse(loaded.contains(where: { $0.id == entry.id }), "Should delete sleep entry")
+    }
+}
+
+/// Comprehensive CRUD tests for Goals and Goal Categories
+final class GoalsCRUDTests: XCTestCase {
+
+    var persistenceController: PersistenceController!
+    var testContext: NSManagedObjectContext!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        persistenceController = PersistenceController(inMemory: true)
+        testContext = persistenceController.container.viewContext
+    }
+
+    override func tearDownWithError() throws {
+        persistenceController = nil
+        testContext = nil
+        try super.tearDownWithError()
+    }
+
+    // MARK: - Goal Category CRUD
+
+    @MainActor
+    func testGoalCategoryCreate() async throws {
+        let goalsManager = GoalsManager.shared
+
+        let category = GoalCategoryData(
+            id: UUID(),
+            title: "Health & Fitness",
+            displayPosition: 0,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save to Core Data directly for test
+        let categoryEntity = GoalCategory(context: testContext)
+        categoryEntity.id = category.id.uuidString
+        categoryEntity.title = category.title
+        categoryEntity.displayPosition = Int16(category.displayPosition)
+        categoryEntity.createdAt = category.createdAt
+        categoryEntity.updatedAt = category.updatedAt
+        categoryEntity.userId = "icloud-user"
+
+        try testContext.save()
+
+        // Load categories
+        goalsManager.loadData()
+
+        XCTAssertTrue(goalsManager.categories.contains(where: { $0.id == category.id }), "Should load category")
+    }
+
+    @MainActor
+    func testGoalCategoryUpdate() async throws {
+        let goalsManager = GoalsManager.shared
+
+        var category = GoalCategoryData(
+            id: UUID(),
+            title: "Career",
+            displayPosition: 1,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save initial
+        let categoryEntity = GoalCategory(context: testContext)
+        categoryEntity.id = category.id.uuidString
+        categoryEntity.title = category.title
+        categoryEntity.displayPosition = Int16(category.displayPosition)
+        categoryEntity.createdAt = category.createdAt
+        categoryEntity.updatedAt = category.updatedAt
+        categoryEntity.userId = "icloud-user"
+        try testContext.save()
+
+        // Update
+        category.title = "Professional Development"
+        goalsManager.updateCategory(category)
+
+        goalsManager.loadData()
+
+        let updated = goalsManager.categories.first(where: { $0.id == category.id })
+        XCTAssertEqual(updated?.title, "Professional Development", "Should update category title")
+    }
+
+    @MainActor
+    func testGoalCategoryDelete() async throws {
+        let goalsManager = GoalsManager.shared
+
+        let category = GoalCategoryData(
+            id: UUID(),
+            title: "To Delete",
+            displayPosition: 2,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save
+        let categoryEntity = GoalCategory(context: testContext)
+        categoryEntity.id = category.id.uuidString
+        categoryEntity.title = category.title
+        categoryEntity.displayPosition = Int16(category.displayPosition)
+        categoryEntity.createdAt = category.createdAt
+        categoryEntity.updatedAt = category.updatedAt
+        categoryEntity.userId = "icloud-user"
+        try testContext.save()
+
+        goalsManager.loadData()
+        XCTAssertTrue(goalsManager.categories.contains(where: { $0.id == category.id }), "Should exist before delete")
+
+        // Delete
+        goalsManager.deleteCategory(category.id)
+        goalsManager.loadData()
+
+        XCTAssertFalse(goalsManager.categories.contains(where: { $0.id == category.id }), "Should delete category")
+    }
+
+    // MARK: - Goal CRUD
+
+    @MainActor
+    func testGoalCreate() async throws {
+        let goalsManager = GoalsManager.shared
+
+        let goal = GoalData(
+            id: UUID(),
+            title: "Run Marathon",
+            description: "Complete a full marathon",
+            successMetric: "Finish in under 4 hours",
+            categoryId: UUID(),
+            targetTimeframe: "6 months",
+            dueDate: Date().addingTimeInterval(86400 * 180),
+            isCompleted: false,
+            linkedTasks: [],
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save to Core Data
+        let goalEntity = Goal(context: testContext)
+        goalEntity.id = goal.id.uuidString
+        goalEntity.title = goal.title
+        goalEntity.goalDescription = goal.description
+        goalEntity.successMetric = goal.successMetric
+        goalEntity.categoryId = goal.categoryId?.uuidString
+        goalEntity.targetTimeframe = goal.targetTimeframe
+        goalEntity.dueDate = goal.dueDate
+        goalEntity.isCompleted = goal.isCompleted
+        goalEntity.createdAt = goal.createdAt
+        goalEntity.updatedAt = goal.updatedAt
+        goalEntity.userId = "icloud-user"
+
+        try testContext.save()
+
+        goalsManager.loadData()
+
+        XCTAssertTrue(goalsManager.goals.contains(where: { $0.id == goal.id }), "Should load goal")
+    }
+
+    @MainActor
+    func testGoalUpdate() async throws {
+        let goalsManager = GoalsManager.shared
+
+        var goal = GoalData(
+            id: UUID(),
+            title: "Learn Swift",
+            description: "Master iOS development",
+            successMetric: "Build 3 apps",
+            categoryId: nil,
+            targetTimeframe: "3 months",
+            dueDate: nil,
+            isCompleted: false,
+            linkedTasks: [],
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save initial
+        let goalEntity = Goal(context: testContext)
+        goalEntity.id = goal.id.uuidString
+        goalEntity.title = goal.title
+        goalEntity.goalDescription = goal.description
+        goalEntity.isCompleted = false
+        goalEntity.createdAt = goal.createdAt
+        goalEntity.updatedAt = goal.updatedAt
+        goalEntity.userId = "icloud-user"
+        try testContext.save()
+
+        // Update - mark as completed
+        goal.isCompleted = true
+        goalsManager.updateGoal(goal)
+
+        goalsManager.loadData()
+
+        let updated = goalsManager.goals.first(where: { $0.id == goal.id })
+        XCTAssertEqual(updated?.isCompleted, true, "Should update goal completion status")
+    }
+
+    @MainActor
+    func testGoalDelete() async throws {
+        let goalsManager = GoalsManager.shared
+
+        let goal = GoalData(
+            id: UUID(),
+            title: "Goal to Delete",
+            description: "Test deletion",
+            successMetric: "N/A",
+            categoryId: nil,
+            targetTimeframe: nil,
+            dueDate: nil,
+            isCompleted: false,
+            linkedTasks: [],
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save
+        let goalEntity = Goal(context: testContext)
+        goalEntity.id = goal.id.uuidString
+        goalEntity.title = goal.title
+        goalEntity.isCompleted = false
+        goalEntity.createdAt = goal.createdAt
+        goalEntity.updatedAt = goal.updatedAt
+        goalEntity.userId = "icloud-user"
+        try testContext.save()
+
+        goalsManager.loadData()
+        XCTAssertTrue(goalsManager.goals.contains(where: { $0.id == goal.id }), "Should exist before delete")
+
+        // Delete
+        goalsManager.deleteGoal(goal.id)
+        goalsManager.loadData()
+
+        XCTAssertFalse(goalsManager.goals.contains(where: { $0.id == goal.id }), "Should delete goal")
+    }
+}
+
+/// Comprehensive CRUD tests for Custom Log Items and Entries
+final class CustomLogCRUDTests: XCTestCase {
+
+    var persistenceController: PersistenceController!
+    var testContext: NSManagedObjectContext!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        persistenceController = PersistenceController(inMemory: true)
+        testContext = persistenceController.container.viewContext
+    }
+
+    override func tearDownWithError() throws {
+        persistenceController = nil
+        testContext = nil
+        try super.tearDownWithError()
+    }
+
+    // MARK: - Custom Log Item CRUD
+
+    @MainActor
+    func testCustomLogItemCreate() async throws {
+        let customLogManager = CustomLogManager.shared
+
+        let item = CustomLogItemData(
+            id: UUID(),
+            title: "Meditation",
+            isEnabled: true,
+            displayOrder: 0,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save to Core Data
+        let itemEntity = CustomLogItem(context: testContext)
+        itemEntity.id = item.id.uuidString
+        itemEntity.title = item.title
+        itemEntity.isEnabled = item.isEnabled
+        itemEntity.displayOrder = Int16(item.displayOrder)
+        itemEntity.createdAt = item.createdAt
+        itemEntity.updatedAt = item.updatedAt
+        itemEntity.userId = "icloud-user"
+
+        try testContext.save()
+
+        customLogManager.loadData()
+
+        XCTAssertTrue(customLogManager.items.contains(where: { $0.id == item.id }), "Should load custom log item")
+    }
+
+    @MainActor
+    func testCustomLogItemUpdate() async throws {
+        let customLogManager = CustomLogManager.shared
+
+        var item = CustomLogItemData(
+            id: UUID(),
+            title: "Reading",
+            isEnabled: true,
+            displayOrder: 1,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save initial
+        let itemEntity = CustomLogItem(context: testContext)
+        itemEntity.id = item.id.uuidString
+        itemEntity.title = item.title
+        itemEntity.isEnabled = true
+        itemEntity.displayOrder = Int16(item.displayOrder)
+        itemEntity.createdAt = item.createdAt
+        itemEntity.updatedAt = item.updatedAt
+        itemEntity.userId = "icloud-user"
+        try testContext.save()
+
+        // Update - disable item
+        item.isEnabled = false
+        customLogManager.updateItem(item)
+
+        customLogManager.loadData()
+
+        let updated = customLogManager.items.first(where: { $0.id == item.id })
+        XCTAssertEqual(updated?.isEnabled, false, "Should update item enabled status")
+    }
+
+    @MainActor
+    func testCustomLogItemDelete() async throws {
+        let customLogManager = CustomLogManager.shared
+
+        let item = CustomLogItemData(
+            id: UUID(),
+            title: "Item to Delete",
+            isEnabled: true,
+            displayOrder: 2,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+
+        // Save
+        let itemEntity = CustomLogItem(context: testContext)
+        itemEntity.id = item.id.uuidString
+        itemEntity.title = item.title
+        itemEntity.isEnabled = item.isEnabled
+        itemEntity.displayOrder = Int16(item.displayOrder)
+        itemEntity.createdAt = item.createdAt
+        itemEntity.updatedAt = item.updatedAt
+        itemEntity.userId = "icloud-user"
+        try testContext.save()
+
+        customLogManager.loadData()
+        XCTAssertTrue(customLogManager.items.contains(where: { $0.id == item.id }), "Should exist before delete")
+
+        // Delete
+        customLogManager.deleteItem(item.id)
+        customLogManager.loadData()
+
+        XCTAssertFalse(customLogManager.items.contains(where: { $0.id == item.id }), "Should delete item")
+    }
+
+    // MARK: - Custom Log Entry CRUD
+
+    func testCustomLogEntryCreate() throws {
+        let itemId = UUID()
+        let entry = CustomLogEntry(context: testContext)
+        entry.id = UUID().uuidString
+        entry.itemId = itemId.uuidString
+        entry.date = Date()
+        entry.isCompleted = false
+        entry.userId = "icloud-user"
+        entry.createdAt = Date()
+        entry.updatedAt = Date()
+
+        try testContext.save()
+
+        let fetchRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+        let results = try testContext.fetch(fetchRequest)
+
+        XCTAssertTrue(results.contains(where: { $0.itemId == itemId.uuidString }), "Should save custom log entry")
+    }
+
+    func testCustomLogEntryUpdate() throws {
+        let entry = CustomLogEntry(context: testContext)
+        let entryId = UUID().uuidString
+        entry.id = entryId
+        entry.itemId = UUID().uuidString
+        entry.date = Date()
+        entry.isCompleted = false
+        entry.userId = "icloud-user"
+        entry.createdAt = Date()
+        entry.updatedAt = Date()
+
+        try testContext.save()
+
+        // Update - mark as completed
+        let fetchRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", entryId)
+        let results = try testContext.fetch(fetchRequest)
+
+        if let entryToUpdate = results.first {
+            entryToUpdate.isCompleted = true
+            try testContext.save()
+
+            let updatedResults = try testContext.fetch(fetchRequest)
+            XCTAssertEqual(updatedResults.first?.isCompleted, true, "Should update entry completion")
+        } else {
+            XCTFail("Entry not found for update")
+        }
+    }
+
+    func testCustomLogEntryDelete() throws {
+        let entryId = UUID().uuidString
+        let entry = CustomLogEntry(context: testContext)
+        entry.id = entryId
+        entry.itemId = UUID().uuidString
+        entry.date = Date()
+        entry.isCompleted = false
+        entry.userId = "icloud-user"
+        entry.createdAt = Date()
+        entry.updatedAt = Date()
+
+        try testContext.save()
+
+        // Delete
+        let fetchRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", entryId)
+        let results = try testContext.fetch(fetchRequest)
+
+        results.forEach { testContext.delete($0) }
+        try testContext.save()
+
+        let afterDelete = try testContext.fetch(fetchRequest)
+        XCTAssertEqual(afterDelete.count, 0, "Should delete entry")
+    }
+}
+
+/// Tests for Journal Manager (PDF backgrounds and photo metadata)
+final class JournalCRUDTests: XCTestCase {
+
+    var journalManager: JournalManager!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        journalManager = JournalManager.shared
+    }
+
+    override func tearDownWithError() throws {
+        // Clean up test files
+        journalManager.clearBackgroundPDF(layoutType: .compact)
+        journalManager.clearBackgroundPDF(layoutType: .expanded)
+        journalManager = nil
+        try super.tearDownWithError()
+    }
+
+    // MARK: - PDF Background Management
+
+    func testSavePDFBackground() throws {
+        let testData = Data("Test PDF Content".utf8)
+
+        try journalManager.savePDF(data: testData, layoutType: .compact)
+
+        let loadedData = journalManager.loadPDFData(for: .compact)
+        XCTAssertNotNil(loadedData, "Should save and load PDF data")
+        XCTAssertEqual(loadedData, testData, "Loaded data should match saved data")
+    }
+
+    func testClearPDFBackground() throws {
+        let testData = Data("Test PDF Content".utf8)
+
+        try journalManager.savePDF(data: testData, layoutType: .compact)
+        XCTAssertNotNil(journalManager.loadPDFData(for: .compact), "Should have PDF before clear")
+
+        journalManager.clearBackgroundPDF(layoutType: .compact)
+
+        // After clearing, should fall back to bundled resource or nil
+        let afterClear = journalManager.backgroundPDFURL(for: .compact)
+        // Should either be nil or point to bundled resource
+        XCTAssertTrue(afterClear == nil || afterClear?.path.contains("journal_background.pdf") == true, "Should clear custom PDF")
+    }
+
+    func testMultipleLayoutPDFs() throws {
+        let compactData = Data("Compact Layout PDF".utf8)
+        let expandedData = Data("Expanded Layout PDF".utf8)
+
+        try journalManager.savePDF(data: compactData, layoutType: .compact)
+        try journalManager.savePDF(data: expandedData, layoutType: .expanded)
+
+        let compactLoaded = journalManager.loadPDFData(for: .compact)
+        let expandedLoaded = journalManager.loadPDFData(for: .expanded)
+
+        XCTAssertEqual(compactLoaded, compactData, "Should save compact PDF")
+        XCTAssertEqual(expandedLoaded, expandedData, "Should save expanded PDF")
+        XCTAssertNotEqual(compactLoaded, expandedLoaded, "Should keep layouts separate")
+    }
+
+    // MARK: - Photo Metadata Management
+
+    func testPhotoMetadataURL() {
+        let testDate = Date()
+        let metadataURL = journalManager.metadataURL(for: testDate)
+
+        XCTAssertTrue(metadataURL.path.contains("journal_photos"), "Should be in journal_photos directory")
+        XCTAssertTrue(metadataURL.path.hasSuffix("_photos.json"), "Should be JSON file")
+    }
+
+    func testPhotosDirectoryCreation() {
+        let photosDir = journalManager.photosDirectoryURL
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: photosDir.path), "Should create photos directory")
+    }
+}
+
+/// Integration tests for Task Time Windows (linking tasks to calendar slots)
+final class TaskTimeWindowCRUDTests: XCTestCase {
+
+    var persistenceController: PersistenceController!
+    var testContext: NSManagedObjectContext!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        persistenceController = PersistenceController(inMemory: true)
+        testContext = persistenceController.container.viewContext
+    }
+
+    override func tearDownWithError() throws {
+        persistenceController = nil
+        testContext = nil
+        try super.tearDownWithError()
+    }
+
+    func testTaskTimeWindowCreate() throws {
+        let window = TaskTimeWindow(context: testContext)
+        window.id = UUID().uuidString
+        window.taskId = "test-task-123"
+        window.startTime = Date()
+        window.endTime = Date().addingTimeInterval(3600)
+        window.isAllDay = false
+        window.userId = "icloud-user"
+        window.createdAt = Date()
+        window.updatedAt = Date()
+
+        try testContext.save()
+
+        let fetchRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "taskId == %@", "test-task-123")
+        let results = try testContext.fetch(fetchRequest)
+
+        XCTAssertEqual(results.count, 1, "Should save task time window")
+        XCTAssertEqual(results.first?.taskId, "test-task-123", "Should save correct task ID")
+    }
+
+    func testTaskTimeWindowUpdate() throws {
+        let windowId = UUID().uuidString
+        let window = TaskTimeWindow(context: testContext)
+        window.id = windowId
+        window.taskId = "test-task-456"
+        window.startTime = Date()
+        window.endTime = Date().addingTimeInterval(3600)
+        window.isAllDay = false
+        window.userId = "icloud-user"
+        window.createdAt = Date()
+        window.updatedAt = Date()
+
+        try testContext.save()
+
+        // Update end time
+        let fetchRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", windowId)
+        let results = try testContext.fetch(fetchRequest)
+
+        if let windowToUpdate = results.first {
+            let newEndTime = Date().addingTimeInterval(7200) // 2 hours
+            windowToUpdate.endTime = newEndTime
+            windowToUpdate.updatedAt = Date()
+            try testContext.save()
+
+            let updatedResults = try testContext.fetch(fetchRequest)
+            let timeDiff = abs((updatedResults.first?.endTime ?? Date()).timeIntervalSince(newEndTime))
+            XCTAssertTrue(timeDiff < 1, "Should update end time")
+        } else {
+            XCTFail("Window not found for update")
+        }
+    }
+
+    func testTaskTimeWindowDelete() throws {
+        let windowId = UUID().uuidString
+        let window = TaskTimeWindow(context: testContext)
+        window.id = windowId
+        window.taskId = "test-task-789"
+        window.startTime = Date()
+        window.endTime = Date().addingTimeInterval(3600)
+        window.isAllDay = false
+        window.userId = "icloud-user"
+        window.createdAt = Date()
+        window.updatedAt = Date()
+
+        try testContext.save()
+
+        // Delete
+        let fetchRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", windowId)
+        let results = try testContext.fetch(fetchRequest)
+
+        results.forEach { testContext.delete($0) }
+        try testContext.save()
+
+        let afterDelete = try testContext.fetch(fetchRequest)
+        XCTAssertEqual(afterDelete.count, 0, "Should delete task time window")
+    }
+
+    func testMultipleTaskTimeWindows() throws {
+        // Create multiple windows for same task
+        for i in 0..<3 {
+            let window = TaskTimeWindow(context: testContext)
+            window.id = UUID().uuidString
+            window.taskId = "multi-task-123"
+            window.startTime = Date().addingTimeInterval(Double(i * 3600))
+            window.endTime = Date().addingTimeInterval(Double((i + 1) * 3600))
+            window.isAllDay = false
+            window.userId = "icloud-user"
+            window.createdAt = Date()
+            window.updatedAt = Date()
+        }
+
+        try testContext.save()
+
+        let fetchRequest: NSFetchRequest<TaskTimeWindow> = TaskTimeWindow.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "taskId == %@", "multi-task-123")
+        let results = try testContext.fetch(fetchRequest)
+
+        XCTAssertEqual(results.count, 3, "Should save multiple time windows for same task")
+    }
+}
