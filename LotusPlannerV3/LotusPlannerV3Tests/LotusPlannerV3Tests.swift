@@ -1295,12 +1295,9 @@ final class GoalsCRUDTests: XCTestCase {
             description: "Complete a full marathon",
             successMetric: "Finish in under 4 hours",
             categoryId: UUID(),
-            targetTimeframe: "6 months",
+            targetTimeframe: .month,
             dueDate: Date().addingTimeInterval(86400 * 180),
-            isCompleted: false,
-            linkedTasks: [],
-            createdAt: Date(),
-            updatedAt: Date()
+            isCompleted: false
         )
 
         // Save to Core Data
@@ -1309,8 +1306,8 @@ final class GoalsCRUDTests: XCTestCase {
         goalEntity.title = goal.title
         goalEntity.goalDescription = goal.description
         goalEntity.successMetric = goal.successMetric
-        goalEntity.categoryId = goal.categoryId?.uuidString
-        goalEntity.targetTimeframe = goal.targetTimeframe
+        goalEntity.categoryId = goal.categoryId.uuidString
+        goalEntity.targetTimeframe = goal.targetTimeframe.rawValue
         goalEntity.dueDate = goal.dueDate
         goalEntity.isCompleted = goal.isCompleted
         goalEntity.createdAt = goal.createdAt
