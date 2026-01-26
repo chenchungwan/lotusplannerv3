@@ -1129,7 +1129,6 @@ struct CalendarView: View {
         // Initialize divider positions from AppPreferences
         self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.calendarDayLeftSectionWidth)
         self._dayRightColumn2Width = State(initialValue: AppPreferences.shared.calendarDayRightColumn2Width)
-        self._leftTimelineHeight = State(initialValue: AppPreferences.shared.calendarDayLeftTimelineHeight)
         self._rightSectionTopHeight = State(initialValue: AppPreferences.shared.calendarDayRightSectionTopHeight)
         self._topSectionHeight = State(initialValue: AppPreferences.shared.calendarTopSectionHeight)
         self._verticalTopRowHeight = State(initialValue: AppPreferences.shared.calendarVerticalTopRowHeight)
@@ -1193,9 +1192,8 @@ struct CalendarView: View {
     // Day view vertical slider state
     @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
-    // Left section divider state (timeline vs logs)
-    @State private var leftTimelineHeight: CGFloat
-    @State private var isLeftTimelineDividerDragging = false
+    // Left section logs collapsible state
+    @State private var isLogsSectionCollapsed: Bool = false
     
 
     
@@ -3254,24 +3252,70 @@ struct CalendarView: View {
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Timeline section
-            eventsTimelineCard(height: appPrefs.showAnyLogs ? leftTimelineHeight : nil)
-                .padding(.leading, 16 + geometry.safeAreaInsets.leading)
-                .padding(.trailing, 8)
-                .frame(maxHeight: appPrefs.showAnyLogs ? nil : .infinity)
-                .background(Color(.systemBackground))
-                .clipped()
-                .zIndex(0) // Ensure Events section is below Logs section when overlapping
+            ScrollView(.vertical, showsIndicators: true) {
+                eventsTimelineCard(height: nil)
+                    .padding(.leading, 16 + geometry.safeAreaInsets.leading)
+                    .padding(.trailing, 8)
+                    .padding(.vertical, 8)
+            }
+            .frame(maxHeight: .infinity)
+            .background(Color(.systemBackground))
+            .clipped()
 
-            // Logs section and divider (only if any logs are enabled)
+            // Logs section (collapsible drawer, only if any logs are enabled)
             if appPrefs.showAnyLogs {
-                leftTimelineDivider
-                
-                LogsComponent(currentDate: currentDate, horizontal: false)
-                    .frame(maxHeight: .infinity)
-                    .padding(.all, 8)
+                if !isLogsSectionCollapsed {
+                    // Collapse button
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isLogsSectionCollapsed = true
+                            }
+                        }) {
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(4)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 8)
+                    }
+                    .padding(.vertical, 4)
                     .background(Color(.systemBackground))
-                    .clipped()
-                    .zIndex(1) // Ensure Logs section overrides Events section when overlapping
+                    
+                    // Logs content
+                    ScrollView(.vertical, showsIndicators: true) {
+                        LogsComponent(currentDate: currentDate, horizontal: false)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 8)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    // Expand button when collapsed
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isLogsSectionCollapsed = false
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "chevron.up")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Logs")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemGray6))
+                }
             }
         }
         .frame(height: geometry.size.height, alignment: .top)
@@ -3367,29 +3411,6 @@ struct CalendarView: View {
             )
     }
     
-    private var leftTimelineDivider: some View {
-        Rectangle()
-            .fill(isLeftTimelineDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLeftTimelineDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLeftTimelineDividerDragging = true
-                        let newHeight = leftTimelineHeight + value.translation.height
-                        leftTimelineHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLeftTimelineDividerDragging = false
-                        appPrefs.updateCalendarDayLeftTimelineHeight(leftTimelineHeight)
-                    }
-            )
-    }
     
     private var weekDivider: some View {
         Rectangle()

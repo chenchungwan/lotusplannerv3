@@ -15,8 +15,6 @@ struct DayViewCompact: View {
     @State private var isLeftTimelineDividerDragging = false
     @State private var eventsHeight: CGFloat
     @State private var isEventsTasksDividerDragging = false
-    @State private var logsHeight: CGFloat
-    @State private var isLogsDividerDragging = false
     @State private var isDayVerticalDividerDragging = false
     @State private var isLogsSectionCollapsed: Bool = false
 
@@ -39,7 +37,6 @@ struct DayViewCompact: View {
         self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewCompactLeftColumnWidth)
         self._leftTimelineHeight = State(initialValue: AppPreferences.shared.dayViewCompactLeftTopHeight)
         self._eventsHeight = State(initialValue: AppPreferences.shared.dayViewClassic2EventsHeight)
-        self._logsHeight = State(initialValue: AppPreferences.shared.dayViewClassic2LogsHeight)
     }
     
     var body: some View {
@@ -114,12 +111,9 @@ struct DayViewCompact: View {
             }
             .frame(maxHeight: .infinity)
 
-            // Logs section at the bottom (collapsible, only if any logs are enabled)
+            // Logs section at the bottom (collapsible drawer, only if any logs are enabled)
             if appPrefs.showAnyLogs {
                 if !isLogsSectionCollapsed {
-                    // Draggable divider
-                    logsDivider
-
                     // Collapse button
                     HStack {
                         Spacer()
@@ -145,7 +139,7 @@ struct DayViewCompact: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 8)
                     }
-                    .frame(height: logsHeight)
+                    .frame(maxHeight: .infinity)
                     .background(Color(.systemBackground))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
@@ -381,31 +375,6 @@ struct DayViewCompact: View {
                     )
     }
     
-    private var logsDivider: some View {
-        Rectangle()
-            .fill(isLogsDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isLogsDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isLogsDividerDragging = true
-                        let newHeight = logsHeight - value.translation.height
-                        let minHeight: CGFloat = 100
-                        let maxHeight: CGFloat = 600
-                        logsHeight = max(minHeight, min(maxHeight, newHeight))
-                    }
-                    .onEnded { _ in
-                        isLogsDividerDragging = false
-                        appPrefs.updateDayViewClassic2LogsHeight(logsHeight)
-                    }
-            )
-    }
     
     private var leftTimelineDivider: some View {
         Rectangle()

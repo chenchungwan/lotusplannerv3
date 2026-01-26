@@ -9,16 +9,12 @@ struct DayViewExpanded: View {
     @ObservedObject private var bulkEditManager: BulkEditManager
     private let onEventTap: ((GoogleCalendarEvent) -> Void)?
 
-    // Divider state between top row and logs
-    @State private var topRowHeight: CGFloat
-    @State private var isTopDividerDragging: Bool = false
-
     // Divider state between timeline (left) and tasks (right)
     @State private var leftTimelineWidth: CGFloat
     @State private var isLeftDividerDragging: Bool = false
 
-    // Divider state between logs and notes
-    @State private var logsHeight: CGFloat
+    // Logs collapsible state
+    @State private var isLogsSectionCollapsed: Bool = false
 
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
@@ -36,9 +32,7 @@ struct DayViewExpanded: View {
         self.onEventTap = onEventTap
 
         // Initialize divider positions from AppPreferences
-        self._topRowHeight = State(initialValue: AppPreferences.shared.dayViewExpandedTopRowHeight)
         self._leftTimelineWidth = State(initialValue: AppPreferences.shared.dayViewExpandedLeftTimelineWidth)
-        self._logsHeight = State(initialValue: AppPreferences.shared.dayViewExpandedLogsHeight)
     }
 
     var body: some View {
@@ -231,39 +225,60 @@ struct DayViewExpanded: View {
                                     .padding(.vertical, 8)
                                 }
                                 
-                                // Draggable divider between tasks and logs
+                                // Logs section (collapsible drawer, only if any logs are enabled)
                                 if appPrefs.showAnyLogs {
-                                    Rectangle()
-                                        .fill(isTopDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-                                        .frame(height: 8)
-                                        .overlay(
-                                            Image(systemName: "line.3.horizontal")
-                                                .font(.caption)
-                                                .foregroundColor(isTopDividerDragging ? .white : .gray)
-                                        )
-                                        .contentShape(Rectangle())
-                                        .gesture(
-                                            DragGesture()
-                                                .onChanged { value in
-                                                    isTopDividerDragging = true
-                                                    let newHeight = logsHeight - value.translation.height
-                                                    let minHeight: CGFloat = 100
-                                                    let maxHeight: CGFloat = max(200, geometry.size.height - 300)
-                                                    logsHeight = max(minHeight, min(maxHeight, newHeight))
+                                    if !isLogsSectionCollapsed {
+                                        // Collapse button
+                                        HStack {
+                                            Spacer()
+                                            Button(action: {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    isLogsSectionCollapsed = true
                                                 }
-                                                .onEnded { _ in
-                                                    isTopDividerDragging = false
-                                                    appPrefs.updateDayViewExpandedLogsHeight(logsHeight)
-                                                }
-                                        )
-                                }
-                                
-                                // Logs component below tasks
-                                if appPrefs.showAnyLogs {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                                            }) {
+                                                Image(systemName: "chevron.down")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                    .padding(4)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .padding(.trailing, 8)
+                                        }
+                                        .padding(.vertical, 4)
+                                        .background(Color(.systemBackground))
+                                        
+                                        // Logs content
+                                        ScrollView(.vertical, showsIndicators: true) {
+                                            LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 8)
+                                        }
+                                        .frame(maxHeight: .infinity)
+                                        .background(Color(.systemBackground))
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    } else {
+                                        // Expand button when collapsed
+                                        Button(action: {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isLogsSectionCollapsed = false
+                                            }
+                                        }) {
+                                            HStack {
+                                                Image(systemName: "chevron.up")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text("Logs")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                            }
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .frame(maxWidth: .infinity)
+                                        .background(Color(.systemGray6))
                                     }
-                                    .frame(height: logsHeight)
                                 }
                             }
                             .frame(
