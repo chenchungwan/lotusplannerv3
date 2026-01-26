@@ -269,8 +269,63 @@ If sync still fails after checking everything above:
 
 ## Summary
 
-The code fix (userId "default" → "icloud-user") is now in place for Goals and Goal Categories in version 2.2.5. However, if sync works in development but not production, the most likely cause is:
+✅ **CloudKit schema IS deployed to Production** (verified via schema export)
 
-**CloudKit schema not deployed to Production environment.**
+The code fix (userId "default" → "icloud-user") is now in place for Goals and Goal Categories in version 2.2.5+.
 
-Go to CloudKit Dashboard and deploy your schema from Development → Production immediately.
+### The Real Issue: Existing Production Data
+
+The problem is that **CloudKit already has Goals records with userId="default"** from previous app versions. When devices sync:
+
+1. App installs v2.2.5 with migration
+2. Migration updates local Core Data: "default" → "icloud-user"
+3. Migration triggers CloudKit sync to push changes
+4. BUT CloudKit might still have old records from other devices
+5. Those old records sync DOWN and can cause conflicts
+
+### Recommended Solution Path
+
+**For apps already in production with users:**
+
+1. **Deploy v2.2.5** to App Store (migration is already in the code)
+2. **All devices must update** to v2.2.5 for sync to work
+3. **Migration runs automatically** on each device
+4. **Wait 24-48 hours** for all CloudKit records to migrate
+5. **Old devices** (not updated) will continue using userId="default" and won't sync
+
+**For development/testing or fresh start:**
+
+If you have no users yet or want a clean slate:
+1. Go to CloudKit Dashboard → Production → Admin
+2. Click "Reset Production Environment"
+3. This deletes all CloudKit data
+4. Deploy v2.2.5 - all new data will use "icloud-user"
+5. Perfect sync from day one
+
+### Manual Migration for Existing Users
+
+If users report sync issues after updating to v2.2.5:
+
+1. **Have user sign out and back into iCloud** (Settings → Apple ID → Sign Out → Sign In)
+2. **Delete and reinstall the app** (this clears local Core Data)
+3. **CloudKit will re-download** all data
+4. **Migration runs** on fresh data
+5. **Verify** in app that Goals appear
+
+### Verification Steps
+
+After deploying v2.2.5:
+
+1. Install on Device A from TestFlight/App Store
+2. Create a new Goal "Test Sync"
+3. Wait 30 seconds
+4. Install on Device B (same iCloud account)
+5. Open app, wait 30 seconds
+6. Pull to refresh Goals view
+7. "Test Sync" should appear ✅
+
+If it doesn't appear, check:
+- Both devices on v2.2.5+
+- Both signed into same iCloud account
+- iCloud enabled in Settings → Apple ID → iCloud → Lotus Planner
+- Wait longer (CloudKit can take 2-3 minutes)
