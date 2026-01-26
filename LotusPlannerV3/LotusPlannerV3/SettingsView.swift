@@ -24,29 +24,32 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case mobile = 4
     case timebox = 6
     case standard = 7
+    case newClassic = 8
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.compact, .compactTwo, .defaultNew, .mobile, .standard, .timebox] }
+    static var allCases: [DayViewLayoutOption] { [.newClassic, .timebox, .compact, .mobile] }
 
     var displayName: String {
         switch self {
         case .defaultNew: "Expanded"
-        case .compact: "Classic"
-        case .compactTwo: "Compact"
+        case .compact: "Compact"
+        case .compactTwo: "Compact Two"
         case .mobile: "Mobile"
-        case .timebox: "Timebox"
+        case .timebox: "Expanded"
         case .standard: "Standard"
+        case .newClassic: "Classic"
         }
     }
     
     var description: String {
         switch self {
         case .defaultNew: "Horizontal layout: Timeline & Tasks side-by-side, Logs row, then Journal"
-        case .compact: "Classic layout with Timeline on left, Tasks and Journal on right with adjustable divider"
+        case .compact: "Events and Tasks on left with collapsible logs, Journal on right"
         case .compactTwo: "Events & Logs on left, Tasks (Personal/Professional side-by-side) and Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
-        case .timebox: "Timebox timeline on left, Journal on top right, Logs on bottom right"
+        case .timebox: "Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page)"
         case .standard: "Collapsible Logs row, then Journal on left with Events & Tasks on right"
+        case .newClassic: "Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)"
         }
     }
 }
@@ -636,11 +639,11 @@ class AppPreferences: ObservableObject {
         if AppPreferences.isRunningOniPhone || screenWidth < 768 {
             self.dayViewLayout = .mobile
         } else if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
-            // If no layout has been explicitly chosen (key doesn't exist), use Classic
-            self.dayViewLayout = .compact // Classic layout
+            // If no layout has been explicitly chosen (key doesn't exist), use Classic Day in 1-page
+            self.dayViewLayout = .newClassic // Classic Day in 1-page layout
         } else {
-            // Otherwise use the saved layout or fallback to Classic if invalid
-            self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .compact
+            // Otherwise use the saved layout or fallback to Classic Day in 1-page if invalid
+            self.dayViewLayout = DayViewLayoutOption(rawValue: layoutRaw) ?? .newClassic
         }
         
         // Load events-as-list preference (default false)

@@ -2875,6 +2875,14 @@ struct CalendarView: View {
                     showingEventDetails = true
                 }
             )
+        case .compact:
+            DayViewNewCompact(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
         case .compactTwo:
             DayViewCompact(
                 bulkEditManager: bulkEditManager,
@@ -2900,7 +2908,15 @@ struct CalendarView: View {
                 }
             )
         case .standard:
-            DayViewStandard(
+            DayViewNewCompact(
+                bulkEditManager: bulkEditManager,
+                onEventTap: { ev in
+                    selectedCalendarEvent = ev
+                    showingEventDetails = true
+                }
+            )
+        case .newClassic:
+            DayViewNewClassic(
                 bulkEditManager: bulkEditManager,
                 onEventTap: { ev in
                     selectedCalendarEvent = ev

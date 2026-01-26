@@ -1,13 +1,13 @@
 //
-//  DayViewStandard.swift
+//  DayViewNewCompact.swift
 //  LotusPlannerV3
 //
-//  Standard day view layout with collapsible logs, journal, events, and tasks
+//  Compact day view layout with collapsible logs, journal, events, and tasks
 //
 
 import SwiftUI
 
-struct DayViewStandard: View {
+struct DayViewNewCompact: View {
     @ObservedObject private var navigationManager: NavigationManager
     @ObservedObject private var appPrefs: AppPreferences
     private let calendarVM: CalendarViewModel
@@ -32,6 +32,7 @@ struct DayViewStandard: View {
     @State private var selectedTaskListId: String?
     @State private var selectedTaskAccount: GoogleAuthManager.AccountKind?
     @State private var showingTaskDetails: Bool = false
+    @State private var selectedEvent: GoogleCalendarEvent?
 
     init(bulkEditManager: BulkEditManager, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
         self._navigationManager = ObservedObject(wrappedValue: NavigationManager.shared)
@@ -106,6 +107,22 @@ struct DayViewStandard: View {
                     }
                 )
             }
+        }
+        // Event details sheet
+        .sheet(item: Binding<GoogleCalendarEvent?>(
+            get: { selectedEvent },
+            set: { selectedEvent = $0 }
+        )) { ev in
+            let accountKind: GoogleAuthManager.AccountKind = calendarVM.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            AddItemView(
+                currentDate: ev.startTime ?? Date(),
+                tasksViewModel: tasksVM,
+                calendarViewModel: calendarVM,
+                appPrefs: appPrefs,
+                existingEvent: ev,
+                accountKind: accountKind,
+                showEventOnly: true
+            )
         }
     }
 
@@ -233,47 +250,42 @@ struct DayViewStandard: View {
 
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Events title
-            HStack {
-                Text("Events")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                Spacer()
-            }
-            .background(Color(.systemBackground))
-
-            // Timeline has its own ScrollView with auto-scroll, list needs wrapping
-            if appPrefs.showEventsAsListInDay {
-                ScrollView(.vertical, showsIndicators: true) {
-                    EventsListComponent(
-                        events: filteredEventsForDay(navigationManager.currentDate),
-                        personalEvents: calendarVM.personalEvents,
-                        professionalEvents: calendarVM.professionalEvents,
-                        personalColor: appPrefs.personalColor,
-                        professionalColor: appPrefs.professionalColor,
-                        onEventTap: { ev in onEventTap?(ev) },
-                        date: navigationManager.currentDate
-                    )
-                    .padding(8)
-                }
-            } else {
-                // No outer ScrollView - TimelineComponent has its own with auto-scroll
-                TimelineComponent(
-                    date: navigationManager.currentDate,
-                    events: filteredEventsForDay(navigationManager.currentDate),
-                    personalEvents: filteredPersonalEventsForDay(navigationManager.currentDate),
-                    professionalEvents: filteredProfessionalEventsForDay(navigationManager.currentDate),
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    onEventTap: { event in
-                        onEventTap?(event)
+            // TimeboxComponent
+            TimeboxComponent(
+                date: navigationManager.currentDate,
+                events: filteredEventsForDay(navigationManager.currentDate),
+                personalEvents: calendarVM.personalEvents,
+                professionalEvents: calendarVM.professionalEvents,
+                personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
+                professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
+                personalColor: appPrefs.personalColor,
+                professionalColor: appPrefs.professionalColor,
+                onEventTap: { ev in
+                    if let onEventTap = onEventTap {
+                        onEventTap(ev)
+                    } else {
+                        selectedEvent = ev
                     }
-                )
-                .padding(8)
-            }
+                },
+                onTaskTap: { task, listId in
+                    // Determine account kind
+                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                    selectedTask = task
+                    selectedTaskListId = listId
+                    selectedTaskAccount = accountKind
+                    showingTaskDetails = true
+                },
+                onTaskToggle: { task, listId in
+                    // Determine account kind
+                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                    Task {
+                        await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                    }
+                },
+                showAllDaySection: false
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
         }
         .background(Color(.systemBackground))
     }
@@ -339,6 +351,7 @@ struct DayViewStandard: View {
                             showEmptyState: false,
                             horizontalCards: false,
                             isSingleDayView: true,
+                            showTaskStartTime: true,
                             isBulkEditMode: bulkEditManager.state.isActive,
                             selectedTaskIds: bulkEditManager.state.selectedTaskIds,
                             onTaskSelectionToggle: { taskId in
@@ -378,6 +391,7 @@ struct DayViewStandard: View {
                             showEmptyState: false,
                             horizontalCards: false,
                             isSingleDayView: true,
+                            showTaskStartTime: true,
                             isBulkEditMode: bulkEditManager.state.isActive,
                             selectedTaskIds: bulkEditManager.state.selectedTaskIds,
                             onTaskSelectionToggle: { taskId in
@@ -484,5 +498,5 @@ struct DayViewStandard: View {
 }
 
 #Preview {
-    DayViewStandard(bulkEditManager: BulkEditManager())
+    DayViewNewCompact(bulkEditManager: BulkEditManager())
 }

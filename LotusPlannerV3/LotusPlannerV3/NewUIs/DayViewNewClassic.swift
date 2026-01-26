@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct DayViewTimebox: View {
+struct DayViewNewClassic: View {
     @ObservedObject private var navigationManager: NavigationManager
     @ObservedObject private var appPrefs: AppPreferences
     private let calendarVM: CalendarViewModel
@@ -12,11 +12,9 @@ struct DayViewTimebox: View {
     // MARK: - State Variables
     @State private var dayLeftSectionWidth: CGFloat
     @State private var isDayVerticalDividerDragging = false
-    @State private var tasksSectionHeight: CGFloat = 400
-    @State private var isTasksDividerDragging = false
     @State private var isLogsSectionCollapsed: Bool = false
-    @State private var personalTasksHeight: CGFloat = 300
-    @State private var isPersonalProfessionalDividerDragging = false
+    @State private var rightSectionTopHeight: CGFloat
+    @State private var isRightDividerDragging = false
 
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
@@ -35,40 +33,24 @@ struct DayViewTimebox: View {
         self.onEventTap = onEventTap
         
         // Initialize state variables with stored values from AppPreferences
-        self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.dayViewTimeboxLeftSectionWidth)
-        self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionHeight)
-        self._isTasksDividerDragging = State(initialValue: false)
+        self._dayLeftSectionWidth = State(initialValue: AppPreferences.shared.calendarDayLeftSectionWidth)
         self._isLogsSectionCollapsed = State(initialValue: AppPreferences.shared.dayViewTimeboxLogsSectionCollapsed)
-        self._personalTasksHeight = State(initialValue: 300)
-        self._isPersonalProfessionalDividerDragging = State(initialValue: false)
+        self._rightSectionTopHeight = State(initialValue: AppPreferences.shared.calendarDayRightSectionTopHeight)
     }
     
     var body: some View {
         GeometryReader { geometry in
-            ScrollView(.horizontal, showsIndicators: true) {
-                HStack(spacing: 0) {
-                    // First column: Timeline + Tasks
-                    HStack(alignment: .top, spacing: 0) {
-                        // Left section (dynamic width) - TimeboxComponent and Logs
-                        leftDaySectionWithDivider(geometry: geometry)
-                            .frame(width: dayLeftSectionWidth)
+            HStack(alignment: .top, spacing: 0) {
+                // Left section (dynamic width) - TimeboxComponent and Logs
+                leftDaySectionWithDivider(geometry: geometry)
+                    .frame(width: dayLeftSectionWidth)
 
-                        // Vertical divider
-                        dayVerticalDivider
+                // Vertical divider
+                dayVerticalDivider
 
-                        // Middle section (Tasks only, no journal)
-                        middleDaySectionWithoutJournal(geometry: geometry)
-                            .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
-                    }
-                    .frame(width: geometry.size.width)
-
-                    // Second column: Journal (swipeable)
-                    JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
-                        .id(navigationManager.currentDate)
-                        .frame(width: geometry.size.width * 0.95)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(12)
-                }
+                // Right section - Tasks and Journal
+                rightDaySection(geometry: geometry)
+                    .frame(maxWidth: .infinity)
             }
         }
         // Task details sheet
@@ -132,7 +114,7 @@ struct DayViewTimebox: View {
         }
     }
     
-    // MARK: - Left Section
+    // MARK: - Left Section (from Timebox)
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
             // TimeboxComponent section
@@ -213,25 +195,34 @@ struct DayViewTimebox: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
-    // MARK: - Middle Section (Tasks and Journal)
-    private func middleDaySectionWithoutJournal(geometry: GeometryProxy) -> some View {
+    // MARK: - Right Section (from Classic)
+    private func rightDaySection(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // Tasks section (always visible)
-            tasksSection
-                .frame(maxHeight: .infinity) // Take full height since no journal
-        }
-    }
+            // Top section - Tasks
+            VStack(spacing: 0) {
+                // Bulk Edit Toolbar (shown when in bulk edit mode)
+                if bulkEditManager.state.isActive {
+                    BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                }
 
-    private func middleDaySection(geometry: GeometryProxy) -> some View {
-        VStack(spacing: 0) {
-            // Tasks section (always visible)
-            tasksSection
-                .frame(height: tasksSectionHeight)
-
-            // Draggable divider between Tasks and Journal
-            tasksJournalDivider
-
-            // Journal section (expands to fill remaining space)
+                // Personal & Professional tasks (full width) with vertical scrolling
+                ScrollView(.vertical, showsIndicators: true) {
+                    topDaySection
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 2)
+                }
+            }
+            .frame(height: rightSectionTopHeight, alignment: .top)
+            .padding(.all, 8)
+            .background(Color(.systemBackground))
+            .clipped()
+            .zIndex(0) // Ensure Tasks section is below Journal section when overlapping
+            
+            // Draggable divider
+            rightSectionDivider
+            
+            // Bottom section - Journal
             VStack(alignment: .leading, spacing: 6) {
                 JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .compact)
             }
@@ -240,43 +231,15 @@ struct DayViewTimebox: View {
             .padding(.all, 8)
             .background(Color(.systemBackground))
             .clipped()
+            .zIndex(1) // Ensure Journal section overrides Tasks section when overlapping
         }
     }
     
-    // MARK: - Tasks Section
-    private var tasksSection: some View {
-        VStack(spacing: 0) {
-            // Bulk Edit Toolbar (shown when in bulk edit mode)
-            if bulkEditManager.state.isActive {
-                BulkEditToolbarView(bulkEditManager: bulkEditManager)
-            }
-
-            // Personal Tasks section (top)
-            ScrollView(.vertical, showsIndicators: true) {
-                personalTasksSection
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-            }
-            .frame(height: personalTasksHeight)
-            .background(Color(.systemBackground))
-
-            // Draggable divider between Personal and Professional tasks
-            personalProfessionalTasksDivider
-
-            // Professional Tasks section (bottom)
-            ScrollView(.vertical, showsIndicators: true) {
-                professionalTasksSection
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-            }
-            .frame(maxHeight: .infinity)
-            .background(Color(.systemBackground))
-        }
-    }
-    
-    // MARK: - Task Sections
-    private var personalTasksSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    // MARK: - Task Section
+    @ViewBuilder
+    private var topDaySection: some View {
+        HStack(spacing: 8) {
+            // Personal Tasks
             let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
             if auth.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
                 TasksComponent(
@@ -319,39 +282,27 @@ struct DayViewTimebox: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
-                // Empty state - show link account UI
+                // Empty state in Day view, placed in Tasks area
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 8) {
                         Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 24))
+                            .font(.system(size: 32))
                             .foregroundColor(.secondary)
                         Text("Link Your Google Account")
-                            .font(.subheadline)
+                            .font(.headline)
                             .foregroundColor(.primary)
-                        Text("Connect your Google account to view and manage your tasks")
+                        Text("Connect your Google account to view and manage your calendar events and tasks")
                             .font(.caption)
                             .multilineTextAlignment(.center)
                             .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 24)
                     }
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-                // Account linked but no personal tasks
-                Text("No tasks")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-    
-    private var professionalTasksSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+            
+            // Professional Tasks
             let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
             if auth.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
                 TasksComponent(
@@ -393,19 +344,11 @@ struct DayViewTimebox: View {
                     }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else {
-                // Account linked but no professional tasks
-                Text("No tasks")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
+    // MARK: - Dividers
     private var dayVerticalDivider: some View {
         Rectangle()
             .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
@@ -427,7 +370,33 @@ struct DayViewTimebox: View {
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
-                        appPrefs.updateDayViewTimeboxLeftSectionWidth(dayLeftSectionWidth)
+                        appPrefs.updateCalendarDayLeftSectionWidth(dayLeftSectionWidth)
+                    }
+            )
+    }
+    
+    private var rightSectionDivider: some View {
+        Rectangle()
+            .fill(isRightDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .frame(height: 8)
+            .overlay(
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundColor(isRightDividerDragging ? .white : .gray)
+            )
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isRightDividerDragging = true
+                        let newHeight = rightSectionTopHeight + value.translation.height
+                        let minHeight: CGFloat = 200
+                        let maxHeight: CGFloat = 600
+                        rightSectionTopHeight = max(minHeight, min(maxHeight, newHeight))
+                    }
+                    .onEnded { _ in
+                        isRightDividerDragging = false
+                        appPrefs.updateCalendarDayRightSectionTopHeight(rightSectionTopHeight)
                     }
             )
     }
@@ -456,57 +425,6 @@ struct DayViewTimebox: View {
         .background(Color(.systemGray6))
     }
     
-    private var tasksJournalDivider: some View {
-        Rectangle()
-            .fill(isTasksDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isTasksDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isTasksDividerDragging = true
-                        let newHeight = tasksSectionHeight + value.translation.height
-                        let minHeight: CGFloat = 200
-                        let maxHeight: CGFloat = 800
-                        tasksSectionHeight = max(minHeight, min(maxHeight, newHeight))
-                    }
-                    .onEnded { _ in
-                        isTasksDividerDragging = false
-                        appPrefs.updateDayViewTimeboxTasksSectionHeight(tasksSectionHeight)
-                    }
-            )
-    }
-
-    private var personalProfessionalTasksDivider: some View {
-        Rectangle()
-            .fill(isPersonalProfessionalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
-            .frame(height: 8)
-            .overlay(
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(isPersonalProfessionalDividerDragging ? .white : .gray)
-            )
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        isPersonalProfessionalDividerDragging = true
-                        let newHeight = personalTasksHeight + value.translation.height
-                        let minHeight: CGFloat = 150
-                        let maxHeight: CGFloat = 600
-                        personalTasksHeight = max(minHeight, min(maxHeight, newHeight))
-                    }
-                    .onEnded { _ in
-                        isPersonalProfessionalDividerDragging = false
-                    }
-            )
-    }
-
     // MARK: - Helper Functions
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
         calendarVM.events(for: date)
@@ -549,6 +467,5 @@ struct DayViewTimebox: View {
 }
 
 #Preview {
-    DayViewTimebox(bulkEditManager: BulkEditManager())
+    DayViewNewClassic(bulkEditManager: BulkEditManager())
 }
-
