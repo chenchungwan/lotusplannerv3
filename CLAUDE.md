@@ -27,6 +27,8 @@ LotusPlannerV3/
 ├── CLAUDE.md                      # This file
 ├── TASKS_COMPONENT_CUSTOMIZATION.md  # TasksComponent usage guide
 ├── APP_STORE_SUBMISSION_GUIDE.md  # App Store deployment guide
+├── DAY_VIEW_LAYOUTS.md            # Visual guide for 4 day view layouts
+├── ICLOUD_SYNC_DIAGNOSTIC.md      # iCloud sync troubleshooting guide
 ├── validate_security.sh           # Security validation script
 └── ExportOptions.plist            # Xcode export configuration
 ```
@@ -208,13 +210,21 @@ The app has a modular view structure with specialized day views:
   - Location: `LotusPlannerV3/LotusPlannerV3/SettingsView.swift`
 
 #### Specialized Day Views (in `NewUIs/` directory)
-- **`DayViewCompact`** - Compact single-day layout
-- **`DayViewExpanded`** - Expanded single-day layout
-- **`DayViewMobile`** - Mobile-optimized day view
-- **`DayViewTimebox`** - Time-boxed day view with scheduling
+
+The app offers 4 active day view layouts (configurable in Settings):
+
+- **`DayViewNewClassic`** - Classic: Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)
+- **`DayViewCompact`** - Compact: Events and Tasks on left with collapsible logs, Journal on right
+- **`DayViewTimebox`** - Expanded: Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page with tasks)
+- **`DayViewMobile`** - Mobile: Single column vertical layout (Events, Personal Tasks, Professional Tasks, Logs, Journal)
 - **`GlobalNavBar`** - Shared navigation bar component
 
+Additional legacy views (not in active rotation):
+- **`DayViewExpanded`**, **`DayViewNewCompact`**
+
 All located in: `LotusPlannerV3/LotusPlannerV3/NewUIs/`
+
+See `DAY_VIEW_LAYOUTS.md` for visual diagrams and detailed comparison of the 4 active layouts.
 
 ### Reusable Components
 
@@ -317,6 +327,8 @@ await iCloudManager.shared.diagnoseCloudKitData()  // Check CloudKit records
 iCloudManager.shared.forceCompleteSync()           // Force full sync
 ```
 
+See `ICLOUD_SYNC_DIAGNOSTIC.md` for comprehensive troubleshooting guide, especially for production sync issues.
+
 ### Testing
 - No test files currently present
 - Manual testing required
@@ -329,9 +341,10 @@ iCloudManager.shared.forceCompleteSync()           // Force full sync
 - Date formatting uses `Locale(identifier: "en_US_POSIX")` for consistency
 
 ### State Management
-- Global app preferences in `AppPreferences.shared` (referenced but not shown in files)
+- Global app preferences in `AppPreferences.shared` (stores user settings like day view layout preference)
 - Navigation state in `NavigationManager.shared` (referenced in RootView)
 - Most managers use `@Published` for reactive UI updates
+- Day view layout selection: `AppPreferences.shared.dayViewLayout` (DayViewLayoutOption enum)
 
 ### iCloud Sync Timing
 - CloudKit imports can take 10-15 seconds after changes

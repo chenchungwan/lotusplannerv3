@@ -40,6 +40,7 @@ struct DayViewCompact: View {
     }
     
     var body: some View {
+        let _ = print("🎨 Rendering DayViewCompact.swift (showEventsAsListInDay: \(appPrefs.showEventsAsListInDay))")
         GeometryReader { geometry in
             HStack(alignment: .top, spacing: 0) {
                 // Left section (dynamic width)
@@ -223,9 +224,41 @@ struct DayViewCompact: View {
     // MARK: - Components
     
     private var leftTimelineSection: some View {
-        // Always show events as a list in compact view
-        dayEventsList
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        // Show events as list or timeline based on user preference
+        Group {
+            if appPrefs.showEventsAsListInDay {
+                dayEventsList
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            } else {
+                TimeboxComponent(
+                    date: navigationManager.currentDate,
+                    events: getAllEventsForDate(navigationManager.currentDate),
+                    personalEvents: calendarVM.personalEvents,
+                    professionalEvents: calendarVM.professionalEvents,
+                    personalTasks: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate),
+                    professionalTasks: filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate),
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    onEventTap: { ev in
+                        onEventTap?(ev)
+                    },
+                    onTaskTap: { task, listId in
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedTaskAccount = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                        showingTaskDetails = true
+                    },
+                    onTaskToggle: { task, listId in
+                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                        Task {
+                            await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                        }
+                    },
+                    showAllDaySection: false
+                )
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
     }
     
     // Shared Events timeline card used by all layouts
@@ -243,6 +276,7 @@ struct DayViewCompact: View {
         .padding(.top, 4)
         .padding(.bottom, 0)
         .padding(.leading, 8)
+        .id("eventsCard-\(appPrefs.showEventsAsListInDay)")
     }
     
     private var dayEventsList: some View {

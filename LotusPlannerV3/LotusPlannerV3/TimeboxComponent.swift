@@ -19,7 +19,7 @@ struct TimeboxComponent: View {
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
     
-    private let hourHeight: CGFloat = 100
+    private let hourHeight: CGFloat = 60
     private let startHour = 0
     private let endHour = 24
     private let timeColumnWidth: CGFloat = 28
@@ -225,14 +225,14 @@ struct TimeboxComponent: View {
     
     private func allDayEventBlock(event: GoogleCalendarEvent, isPersonal: Bool) -> some View {
         let itemColor = isPersonal ? personalColor : professionalColor
-        
+
         return HStack(spacing: 8) {
             Circle()
                 .fill(itemColor)
-                .frame(width: 8, height: 8)
-            
+                .frame(width: 6, height: 6)
+
             Text(event.summary)
-                .font(.body)
+                .font(.callout)
                 .fontWeight(.medium)
                 .foregroundColor(.primary)
                 .lineLimit(1)
@@ -253,19 +253,19 @@ struct TimeboxComponent: View {
     
     private func allDayTaskBlock(task: GoogleTask, listId: String, isPersonal: Bool) -> some View {
         let itemColor = isPersonal ? personalColor : professionalColor
-        
+
         return HStack(spacing: 8) {
                     Button(action: {
                         onTaskToggle?(task, listId)
                     }) {
                         Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.body)
+                            .font(.callout)
                             .foregroundColor(task.isCompleted ? itemColor : .secondary)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    
+
                     Text(task.title)
-                        .font(.body)
+                        .font(.callout)
                         .fontWeight(.medium)
                         .foregroundColor(task.isCompleted ? .secondary : .primary)
                         .strikethrough(task.isCompleted)
@@ -376,14 +376,14 @@ struct TimeboxComponent: View {
                     onTaskToggle?(task, listId)
                 }) {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.body)
+                        .font(.callout)
                         .foregroundColor(task.isCompleted ? accentColor : .secondary)
                 }
                 .buttonStyle(PlainButtonStyle())
-                
+
                 // Task title
                 Text(task.title)
-                    .font(.body)
+                    .font(.callout)
                     .fontWeight(.medium)
                     .foregroundColor(task.isCompleted ? .secondary : .primary)
                     .strikethrough(task.isCompleted)
@@ -410,23 +410,23 @@ struct TimeboxComponent: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
-                        .font(.caption2)
+                        .font(.system(size: 9))
                         .foregroundColor(.white.opacity(0.8))
-                    
+
                     Text(layout.title)
-                        .font(.body)
+                        .font(.callout)
                         .fontWeight(.medium)
                         .foregroundColor(.white)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(layout.height > 40 ? 3 : 2)
+                        .lineLimit(layout.height > 24 ? 2 : 1)
                 }
-                
-                if layout.height > 40, let event = layout.item as? GoogleCalendarEvent, let startTime = event.startTime {
+
+                if layout.height > 24, let event = layout.item as? GoogleCalendarEvent, let startTime = event.startTime {
                     let calendar = Calendar.current
                     let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
                     if let startHour = startComponents.hour, let startMinute = startComponents.minute {
                         Text("\(String(format: "%02d:%02d", startHour, startMinute))")
-                            .font(.caption)
+                            .font(.system(size: 10))
                             .foregroundColor(.white.opacity(0.8))
                     }
                 }
@@ -460,12 +460,12 @@ struct TimeboxComponent: View {
         return HStack(spacing: 0) {
             Circle()
                 .fill(Color.red)
-                .frame(width: 8, height: 8)
-                .offset(x: timeColumnWidth - 4)
-            
+                .frame(width: 6, height: 6)
+                .offset(x: timeColumnWidth - 3)
+
             Rectangle()
                 .fill(Color.red)
-                .frame(height: 2)
+                .frame(height: 1.5)
                 .offset(x: timeColumnWidth + 1)
         }
         .offset(y: yOffset)

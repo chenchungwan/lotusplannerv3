@@ -44,6 +44,7 @@ struct DayViewTimebox: View {
     }
     
     var body: some View {
+        let _ = print("🎨 Rendering DayViewTimebox.swift (showEventsAsListInDay: \(appPrefs.showEventsAsListInDay))")
         GeometryReader { geometry in
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 0) {
@@ -135,43 +136,83 @@ struct DayViewTimebox: View {
     // MARK: - Left Section
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
-            // TimeboxComponent section
-            TimeboxComponent(
-                date: navigationManager.currentDate,
-                events: getAllEventsForDate(navigationManager.currentDate),
-                personalEvents: calendarVM.personalEvents,
-                professionalEvents: calendarVM.professionalEvents,
-                personalTasks: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate),
-                professionalTasks: filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate),
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                onEventTap: { ev in
-                    if let onEventTap = onEventTap {
-                        onEventTap(ev)
-                    } else {
-                        selectedEvent = ev
+            // Events section - TimeboxComponent or EventsListComponent based on user preference
+            Group {
+                if appPrefs.showEventsAsListInDay {
+                // Show events as list
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Events")
+                            .font(.headline)
+                        Spacer()
                     }
-                },
-                onTaskTap: { task, listId in
-                    // Determine account kind
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedTaskAccount = accountKind
-                    showingTaskDetails = true
-                },
-                onTaskToggle: { task, listId in
-                    // Determine account kind
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    Task {
-                        await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                    .padding(.horizontal, 8)
+
+                    ScrollView(.vertical, showsIndicators: true) {
+                        EventsListComponent(
+                            events: getAllEventsForDate(navigationManager.currentDate).sorted { (a, b) in
+                                let aDate = a.startTime ?? Date.distantPast
+                                let bDate = b.startTime ?? Date.distantPast
+                                return aDate < bDate
+                            },
+                            personalEvents: calendarVM.personalEvents,
+                            professionalEvents: calendarVM.professionalEvents,
+                            personalColor: appPrefs.personalColor,
+                            professionalColor: appPrefs.professionalColor,
+                            onEventTap: { ev in
+                                if let onEventTap = onEventTap {
+                                    onEventTap(ev)
+                                } else {
+                                    selectedEvent = ev
+                                }
+                            },
+                            date: navigationManager.currentDate
+                        )
                     }
-                },
-                showAllDaySection: false
-            )
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+            } else {
+                // Show events in 24-hour timeline (TimeboxComponent)
+                TimeboxComponent(
+                    date: navigationManager.currentDate,
+                    events: getAllEventsForDate(navigationManager.currentDate),
+                    personalEvents: calendarVM.personalEvents,
+                    professionalEvents: calendarVM.professionalEvents,
+                    personalTasks: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate),
+                    professionalTasks: filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate),
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    onEventTap: { ev in
+                        if let onEventTap = onEventTap {
+                            onEventTap(ev)
+                        } else {
+                            selectedEvent = ev
+                        }
+                    },
+                    onTaskTap: { task, listId in
+                        // Determine account kind
+                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedTaskAccount = accountKind
+                        showingTaskDetails = true
+                    },
+                    onTaskToggle: { task, listId in
+                        // Determine account kind
+                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                        Task {
+                            await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                        }
+                    },
+                    showAllDaySection: false
+                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+                }
+            }
+            .id("eventsDisplay-\(appPrefs.showEventsAsListInDay)")
+
             // Logs section (collapsible)
             if appPrefs.showAnyLogs {
                 if !isLogsSectionCollapsed {
