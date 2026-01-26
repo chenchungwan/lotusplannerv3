@@ -707,6 +707,22 @@ class GoalsManager: ObservableObject {
             devLog("❌ Error migrating goals: \(error)", level: .error, category: .general)
         }
 
+        // Force CloudKit to sync the migrated data
+        Task { @MainActor in
+            do {
+                // Wait a moment for Core Data to process the changes
+                try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+
+                // Force a sync to push changes to CloudKit
+                devLog("🔄 Forcing CloudKit sync after migration...", level: .info, category: .general)
+                iCloudManager.shared.forceSyncToiCloud()
+
+                devLog("✅ CloudKit sync triggered after migration", level: .info, category: .general)
+            } catch {
+                devLog("⚠️ Error during post-migration sync: \(error)", level: .warning, category: .general)
+            }
+        }
+
         // Mark migration as complete
         UserDefaults.standard.set(true, forKey: migrationKey)
         devLog("✅ Goals userId migration completed", level: .info, category: .general)
