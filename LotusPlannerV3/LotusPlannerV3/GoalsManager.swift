@@ -41,6 +41,7 @@ class GoalsManager: ObservableObject {
     // Manual CloudKit sync code removed to prevent conflicts with automatic sync
 
     private init() {
+        migrateGoalsUserIds() // Migrate existing goals from "default" to "icloud-user"
         loadData()
         setupiCloudSync()
     }
@@ -287,8 +288,8 @@ class GoalsManager: ObservableObject {
             entity.title = category.title
             entity.displayPosition = Int16(category.displayPosition)
             entity.updatedAt = category.updatedAt
-            entity.userId = "default" // You might want to use actual user ID
-            
+            entity.userId = "icloud-user" // Fixed userId for CloudKit sync across devices
+
             saveContext()
         } catch {
             devLog("Error saving category to Core Data: \(error)")
@@ -355,7 +356,7 @@ class GoalsManager: ObservableObject {
             entity.dueDate = goal.dueDate
             entity.isCompleted = goal.isCompleted
             entity.updatedAt = goal.updatedAt
-            entity.userId = "default" // You might want to use actual user ID
+            entity.userId = "icloud-user" // Fixed userId for CloudKit sync across devices
 
             // Serialize linked tasks to JSON
             if !goal.linkedTasks.isEmpty {
@@ -654,6 +655,63 @@ class GoalsManager: ObservableObject {
     */ // END DISABLED - Manual CloudKit Sync
 
     // MARK: - iCloud Sync Notifications
+    // MARK: - Migration
+    private func migrateGoalsUserIds() {
+        let migrationKey = "goalsUserIdMigrationDone"
+
+        // Check if migration has already been performed
+        if UserDefaults.standard.bool(forKey: migrationKey) {
+            devLog("Goals userId migration already completed", level: .info, category: .general)
+            return
+        }
+
+        devLog("🔄 Starting Goals userId migration from 'default' to 'icloud-user'", level: .info, category: .general)
+
+        // Migrate Goal Categories
+        let categoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
+        categoryRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+
+        do {
+            let categories = try context.fetch(categoryRequest)
+            devLog("Found \(categories.count) goal categories to migrate", level: .info, category: .general)
+
+            for category in categories {
+                category.userId = "icloud-user"
+            }
+
+            if !categories.isEmpty {
+                try context.save()
+                devLog("✅ Migrated \(categories.count) goal categories to icloud-user", level: .info, category: .general)
+            }
+        } catch {
+            devLog("❌ Error migrating goal categories: \(error)", level: .error, category: .general)
+        }
+
+        // Migrate Goals
+        let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
+        goalRequest.predicate = NSPredicate(format: "userId != %@", "icloud-user")
+
+        do {
+            let goals = try context.fetch(goalRequest)
+            devLog("Found \(goals.count) goals to migrate", level: .info, category: .general)
+
+            for goal in goals {
+                goal.userId = "icloud-user"
+            }
+
+            if !goals.isEmpty {
+                try context.save()
+                devLog("✅ Migrated \(goals.count) goals to icloud-user", level: .info, category: .general)
+            }
+        } catch {
+            devLog("❌ Error migrating goals: \(error)", level: .error, category: .general)
+        }
+
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        devLog("✅ Goals userId migration completed", level: .info, category: .general)
+    }
+
     private func setupiCloudSync() {
         // Listen for iCloud data change notifications
         NotificationCenter.default.addObserver(
