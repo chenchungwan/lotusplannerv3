@@ -107,7 +107,6 @@ class NavigationManager: ObservableObject {
         case journal
         case journalDayViews
         case weeklyView
-        case simpleWeekView
         case gWeekView
         case yearlyCalendar
         case timebox
@@ -175,13 +174,6 @@ class NavigationManager: ObservableObject {
         currentView = .weeklyView
         showTasksView = false
         currentInterval = .week // WeeklyView is always week view
-    }
-    
-    func switchToSimpleWeekView() {
-        currentView = .simpleWeekView
-        showTasksView = false
-        currentInterval = .week // SimpleWeekView is always week view
-        currentDate = Date() // Refresh to current week
     }
     
     func switchToYearlyCalendar() {

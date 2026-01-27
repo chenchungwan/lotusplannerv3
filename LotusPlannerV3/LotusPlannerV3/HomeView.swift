@@ -76,8 +76,6 @@ struct ContentView: View {
                 JournalDayViews()
             case .weeklyView:
                 WeeklyView(bulkEditManager: weeklyBulkEditManager)
-            case .simpleWeekView:
-                SimpleWeekView()
             case .gWeekView:
                 CalendarView()
             case .yearlyCalendar:

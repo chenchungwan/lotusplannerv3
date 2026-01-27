@@ -365,8 +365,8 @@ struct GlobalNavBar: View {
                         // Show interval buttons in single row on all devices
                         // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Simple Week View or Timebox View, show all buttons but highlight appropriate circle
-                                if navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .timebox {
+                                // In Timebox View, show all buttons but highlight appropriate circle
+                                if navigationManager.currentView == .timebox {
                                     if navigationManager.currentView != .goals {
                                         Button {
                                             handleTimeIntervalChange(.day)
@@ -422,10 +422,10 @@ struct GlobalNavBar: View {
                                             // In other views: handle week interval change
                                             handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                         }
                                     }
                                     if navigationManager.currentView != .goals {
@@ -470,8 +470,8 @@ struct GlobalNavBar: View {
                             // Only show action buttons in first row if NOT using two-row layout
                             if !shouldShowTwoRows {
                             
-                            // Hide ellipsis.circle in calendar views, lists view, journal day views, simple week view, and timebox view
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView && navigationManager.currentView != .timebox {
+                            // Hide ellipsis.circle in calendar views, lists view, journal day views, and timebox view
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .timebox {
                                 if navigationManager.currentView == .goals {
                                     Button {
                                         navigationManager.updateInterval(.day, date: Date())
@@ -676,8 +676,8 @@ struct GlobalNavBar: View {
                         HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
                             // Hide navigation buttons in Lists view and Journal Day Views
                             if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Simple Week View or Timebox View, show all buttons but highlight appropriate circle
-                                if navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .timebox {
+                                // In Timebox View, show all buttons but highlight appropriate circle
+                                if navigationManager.currentView == .timebox {
                                     if navigationManager.currentView != .goals {
                                         Button {
                                         handleTimeIntervalChange(.day)
@@ -733,10 +733,10 @@ struct GlobalNavBar: View {
                                             // In other views: handle week interval change
                                             handleTimeIntervalChange(.week)
                                         } label: {
-                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .simpleWeekView || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
+                                            Image(systemName: (navigationManager.currentView == .calendar || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && navigationManager.currentView != .simpleWeekView ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
                                         }
                                     }
                                     if navigationManager.currentView != .goals {
@@ -779,8 +779,8 @@ struct GlobalNavBar: View {
                              
                             Spacer()
                             
-                            // Hide ellipsis.circle in calendar views, lists view, journal day views, simple week view, and timebox view
-                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .simpleWeekView && navigationManager.currentView != .timebox {
+                            // Hide ellipsis.circle in calendar views, lists view, journal day views, and timebox view
+                            if navigationManager.currentView != .calendar && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .timebox {
                                 if navigationManager.currentView == .goals {
                                     Button {
                                         navigationManager.updateInterval(.day, date: Date())
