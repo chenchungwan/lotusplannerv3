@@ -2434,6 +2434,8 @@ struct CalendarView: View {
         }
     }
     
+    // MARK: - Timeline Calculation Methods
+
     private func getTimelineEvents(date: Date) -> [TimelineEvent] {
         var timelineEvents: [TimelineEvent] = []
         let calendar = Calendar.current
@@ -2610,6 +2612,8 @@ struct CalendarView: View {
 
     
     // Group month events by date for the MonthTimelineComponent
+    // MARK: - Event Query Methods
+
     private func getMonthEventsGroupedByDate() -> [Date: [GoogleCalendarEvent]] {
         let monthDates = getMonthDates()
         var eventsGroupedByDate: [Date: [GoogleCalendarEvent]] = [:]
@@ -2890,6 +2894,8 @@ struct CalendarView: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+    // MARK: - Task Card Views
+
     }
     
 
@@ -3159,6 +3165,8 @@ struct CalendarView: View {
             }
         }
     }
+    // MARK: - Task Management Methods
+
     
 
     
@@ -3220,6 +3228,8 @@ struct CalendarView: View {
         updateMonthCachedTasks() // Also update month cached tasks
     }
     
+
+    // MARK: - Task Filtering Methods
 
     
     private func updateMonthCachedTasks() {
