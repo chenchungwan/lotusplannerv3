@@ -19,11 +19,8 @@ extension DateFormatter {
 // MARK: - Day View Layout Option Enum
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case compact = 0
-    case compactTwo = 1
-    case defaultNew = 3
     case mobile = 4
     case timebox = 6
-    case standard = 7
     case newClassic = 8
 
     var id: Int { rawValue }
@@ -31,24 +28,18 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .defaultNew: "Expanded"
         case .compact: "Compact"
-        case .compactTwo: "Compact Two"
         case .mobile: "Mobile"
         case .timebox: "Expanded"
-        case .standard: "Standard"
         case .newClassic: "Classic"
         }
     }
     
     var description: String {
         switch self {
-        case .defaultNew: "Horizontal layout: Timeline & Tasks side-by-side, Logs row, then Journal"
         case .compact: "Events and Tasks on left with collapsible logs, Journal on right"
-        case .compactTwo: "Events & Logs on left, Tasks (Personal/Professional side-by-side) and Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .timebox: "Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page)"
-        case .standard: "Collapsible Logs row, then Journal on left with Events & Tasks on right"
         case .newClassic: "Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)"
         }
     }

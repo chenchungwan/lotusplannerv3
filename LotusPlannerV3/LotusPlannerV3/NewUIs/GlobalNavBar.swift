@@ -302,7 +302,7 @@ struct GlobalNavBar: View {
                                 Button(action: {
                                     navigationManager.switchToGoals()
                                 }) {
-                                    Label("Goals", systemImage: "target")
+                                    Label("Goals (Beta)", systemImage: "target")
                                 }
                             }
                             Divider()

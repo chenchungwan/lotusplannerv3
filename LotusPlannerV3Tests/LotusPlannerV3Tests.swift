@@ -345,12 +345,12 @@ final class LotusPlannerV3Tests: XCTestCase {
     
     func testAppPreferencesDayViewLayout() {
         let prefs = AppPreferences.shared
-        
+
         prefs.updateDayViewLayout(.compact)
         XCTAssertEqual(prefs.dayViewLayout, .compact, "Day view layout should update")
-        
-        prefs.updateDayViewLayout(.defaultNew)
-        XCTAssertEqual(prefs.dayViewLayout, .defaultNew, "Day view layout should update to expanded")
+
+        prefs.updateDayViewLayout(.timebox)
+        XCTAssertEqual(prefs.dayViewLayout, .timebox, "Day view layout should update to timebox")
     }
     
     func testAppPreferencesLogsVisibility() {
@@ -399,17 +399,17 @@ final class LotusPlannerV3Tests: XCTestCase {
     // MARK: - Enum Tests
     
     func testDayViewLayoutOptions() {
-        XCTAssertEqual(DayViewLayoutOption.compact.displayName, "Classic")
-        XCTAssertEqual(DayViewLayoutOption.compactTwo.displayName, "Compact")
-        XCTAssertEqual(DayViewLayoutOption.defaultNew.displayName, "Expanded")
+        XCTAssertEqual(DayViewLayoutOption.compact.displayName, "Compact")
         XCTAssertEqual(DayViewLayoutOption.mobile.displayName, "Mobile")
-        XCTAssertEqual(DayViewLayoutOption.timebox.displayName, "Timebox")
-        XCTAssertEqual(DayViewLayoutOption.standard.displayName, "Standard")
-        
+        XCTAssertEqual(DayViewLayoutOption.timebox.displayName, "Expanded")
+        XCTAssertEqual(DayViewLayoutOption.newClassic.displayName, "Classic")
+
         let allCases = DayViewLayoutOption.allCases
+        XCTAssertEqual(allCases.count, 4, "Should have exactly 4 active layouts")
         XCTAssertTrue(allCases.contains(.compact), "Should include compact")
-        XCTAssertTrue(allCases.contains(.standard), "Should include standard")
         XCTAssertTrue(allCases.contains(.timebox), "Should include timebox")
+        XCTAssertTrue(allCases.contains(.mobile), "Should include mobile")
+        XCTAssertTrue(allCases.contains(.newClassic), "Should include newClassic")
     }
     
     func testTimelineInterval() {
@@ -599,19 +599,17 @@ final class RecentChangesRegressionTests: XCTestCase {
     }
     
     // MARK: - Day View Layout Changes
-    
-    func testStandardBeforeTimeboxOrder() {
+
+    func testDayViewLayoutOrder() {
         let allCases = DayViewLayoutOption.allCases
-        
-        guard let standardIndex = allCases.firstIndex(of: .standard),
-              let timeboxIndex = allCases.firstIndex(of: .timebox) else {
-            XCTFail("Standard and Timebox should exist in allCases")
-            return
-        }
-        
-        XCTAssertLessThan(standardIndex, timeboxIndex, "Standard should come before Timebox")
+
+        // Verify the order: Classic, Compact, Expanded (Timebox), Mobile
+        XCTAssertEqual(allCases[0], .newClassic, "First should be Classic")
+        XCTAssertEqual(allCases[1], .compact, "Second should be Compact")
+        XCTAssertEqual(allCases[2], .timebox, "Third should be Expanded")
+        XCTAssertEqual(allCases[3], .mobile, "Fourth should be Mobile")
     }
-    
+
     // MARK: - Expanded View Timeline
     
     func testExpandedViewAlwaysShowsTimeline() {
