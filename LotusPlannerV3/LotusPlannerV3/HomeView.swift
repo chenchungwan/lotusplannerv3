@@ -12,6 +12,8 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @StateObject private var weeklyBulkEditManager = BulkEditManager()
+    @StateObject private var timeboxBulkEditManager = BulkEditManager()
 
     var body: some View {
         NavigationStack {
@@ -35,7 +37,7 @@ struct ContentView: View {
             } else {
                 // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
-                    WeeklyView()
+                    WeeklyView(bulkEditManager: weeklyBulkEditManager)
                         .id("WeeklyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 } else {
                     CalendarView()
@@ -49,7 +51,7 @@ struct ContentView: View {
             } else {
                 // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
-                    WeeklyView()
+                    WeeklyView(bulkEditManager: weeklyBulkEditManager)
                         .id("WeeklyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 } else {
                     CalendarView()
@@ -73,7 +75,7 @@ struct ContentView: View {
             case .journalDayViews:
                 JournalDayViews()
             case .weeklyView:
-                WeeklyView()
+                WeeklyView(bulkEditManager: weeklyBulkEditManager)
             case .simpleWeekView:
                 SimpleWeekView()
             case .gWeekView:
@@ -82,7 +84,7 @@ struct ContentView: View {
                 CalendarYearlyView()
                     .id("CalendarYearlyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
             case .timebox:
-                TimeboxView()
+                TimeboxView(bulkEditManager: timeboxBulkEditManager)
                     .id("TimeboxView-\(navigationManager.currentDate)")
         }
     }

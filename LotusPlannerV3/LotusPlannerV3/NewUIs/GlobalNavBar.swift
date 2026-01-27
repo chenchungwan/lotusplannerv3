@@ -562,6 +562,19 @@ struct GlobalNavBar: View {
                                 .buttonStyle(.plain)
                             }
 
+                            // Bulk edit toggle (in Calendar week view)
+                            if navigationManager.currentView == .calendar && navigationManager.currentInterval == .week {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
                             // Bulk edit toggle (in Tasks view)
                             if navigationManager.currentView == .tasks {
                                 Button {
@@ -849,6 +862,19 @@ struct GlobalNavBar: View {
                             if navigationManager.currentView == .calendar && navigationManager.currentInterval == .day {
                                 Button {
                                     NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                                } label: {
+                                    Image(systemName: "checkmark.rectangle.stack")
+                                        .font(adaptiveIconSize)
+                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            // Bulk edit toggle (in Calendar week view)
+                            if navigationManager.currentView == .calendar && navigationManager.currentInterval == .week {
+                                Button {
+                                    NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
                                 } label: {
                                     Image(systemName: "checkmark.rectangle.stack")
                                         .font(adaptiveIconSize)

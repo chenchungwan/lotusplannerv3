@@ -1300,25 +1300,23 @@ struct CalendarView: View {
         .confirmationDialog("Complete Tasks", isPresented: $bulkEditManager.state.showingCompleteConfirmation) {
             Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
                 Task {
-                    // Get all selected tasks from both accounts
                     let allTasks = getAllTasksForBulkEdit()
-                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+                    await bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                        bulkEditManager.state.undoAction = .complete
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
 
-                    // Group tasks by list+account
-                    let grouped = Dictionary(grouping: selectedTasks) { "\($0.listId)-\($0.accountKind)" }
+                        // Update cached tasks
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
 
-                    // Complete each group
-                    for (_, group) in grouped {
-                        guard let first = group.first else { continue }
-                        await bulkEditManager.bulkComplete(
-                            tasks: group.map { $0.task },
-                            in: first.listId,
-                            for: first.accountKind,
-                            tasksVM: tasksViewModel
-                        ) { undoData in
-                            // Success - update cached tasks
-                            updateCachedTasks()
-                            updateMonthCachedTasks()
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .complete {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
                         }
                     }
                 }
@@ -1329,22 +1327,22 @@ struct CalendarView: View {
             Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+                    await bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                        bulkEditManager.state.undoAction = .delete
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
 
-                    // Group tasks by list+account
-                    let grouped = Dictionary(grouping: selectedTasks) { "\($0.listId)-\($0.accountKind)" }
+                        // Update cached tasks
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
 
-                    // Delete each group
-                    for (_, group) in grouped {
-                        guard let first = group.first else { continue }
-                        await bulkEditManager.bulkDelete(
-                            tasks: group.map { $0.task },
-                            in: first.listId,
-                            for: first.accountKind,
-                            tasksVM: tasksViewModel
-                        ) { undoData in
-                            updateCachedTasks()
-                            updateMonthCachedTasks()
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .delete {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
                         }
                     }
                 }
@@ -1359,30 +1357,33 @@ struct CalendarView: View {
             BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+                    await bulkEditManager.bulkUpdateDueDate(
+                        tasks: allTasks,
+                        dueDate: date,
+                        isAllDay: isAllDay,
+                        startTime: startTime,
+                        endTime: endTime,
+                        tasksVM: tasksViewModel
+                    ) { undoData in
+                        bulkEditManager.state.undoAction = .updateDueDate
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
 
-                    // Group tasks by list+account
-                    let grouped = Dictionary(grouping: selectedTasks) { "\($0.listId)-\($0.accountKind)" }
+                        // Update cached tasks
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
 
-                    // Update due date for each group
-                    for (_, group) in grouped {
-                        guard let first = group.first else { continue }
-                        await bulkEditManager.bulkUpdateDueDate(
-                            tasks: group.map { $0.task },
-                            in: first.listId,
-                            for: first.accountKind,
-                            dueDate: date,
-                            isAllDay: isAllDay,
-                            startTime: startTime,
-                            endTime: endTime,
-                            tasksVM: tasksViewModel
-                        ) { undoData in
-                            updateCachedTasks()
-                            updateMonthCachedTasks()
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .updateDueDate {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
                         }
                     }
+                    bulkEditManager.state.showingDueDatePicker = false
                 }
-                bulkEditManager.state.showingDueDatePicker = false
             }
         }
         .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
@@ -1392,24 +1393,27 @@ struct CalendarView: View {
                 onSelect: { targetAccount, targetListId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
-                        let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+                        await bulkEditManager.bulkMove(
+                            tasks: allTasks,
+                            to: targetListId,
+                            destinationAccountKind: targetAccount,
+                            tasksVM: tasksViewModel
+                        ) { undoData in
+                            bulkEditManager.state.undoAction = .move
+                            bulkEditManager.state.undoData = undoData
+                            bulkEditManager.state.showingUndoToast = true
 
-                        // Group tasks by source list+account
-                        let grouped = Dictionary(grouping: selectedTasks) { "\($0.listId)-\($0.accountKind)" }
+                            // Update cached tasks
+                            updateCachedTasks()
+                            updateMonthCachedTasks()
 
-                        // Move each group
-                        for (_, group) in grouped {
-                            guard let first = group.first else { continue }
-                            await bulkEditManager.bulkMove(
-                                tasks: group.map { $0.task },
-                                from: first.listId,
-                                sourceAccountKind: first.accountKind,
-                                to: targetListId,
-                                destinationAccountKind: targetAccount,
-                                tasksVM: tasksViewModel
-                            ) { undoData in
-                                updateCachedTasks()
-                                updateMonthCachedTasks()
+                            // Auto-dismiss toast after 5 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                if bulkEditManager.state.undoAction == .move {
+                                    bulkEditManager.state.showingUndoToast = false
+                                    bulkEditManager.state.undoAction = nil
+                                    bulkEditManager.state.undoData = nil
+                                }
                             }
                         }
                     }
@@ -1421,27 +1425,56 @@ struct CalendarView: View {
             BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    let selectedTasks = allTasks.filter { bulkEditManager.state.selectedTaskIds.contains($0.task.id) }
+                    await bulkEditManager.bulkUpdatePriority(
+                        tasks: allTasks,
+                        priority: priority,
+                        tasksVM: tasksViewModel
+                    ) { undoData in
+                        bulkEditManager.state.undoAction = .updatePriority
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
 
-                    // Group tasks by list+account
-                    let grouped = Dictionary(grouping: selectedTasks) { "\($0.listId)-\($0.accountKind)" }
+                        // Update cached tasks
+                        updateCachedTasks()
+                        updateMonthCachedTasks()
 
-                    // Update priority for each group
-                    for (_, group) in grouped {
-                        guard let first = group.first else { continue }
-                        await bulkEditManager.bulkUpdatePriority(
-                            tasks: group.map { $0.task },
-                            in: first.listId,
-                            for: first.accountKind,
-                            priority: priority,
-                            tasksVM: tasksViewModel
-                        ) { undoData in
-                            updateCachedTasks()
-                            updateMonthCachedTasks()
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .updatePriority {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
                         }
                     }
+                    bulkEditManager.state.showingPriorityPicker = false
                 }
-                bulkEditManager.state.showingPriorityPicker = false
+            }
+        }
+        // Undo Toast
+        .overlay(alignment: .bottom) {
+            if bulkEditManager.state.showingUndoToast,
+               let action = bulkEditManager.state.undoAction,
+               let undoData = bulkEditManager.state.undoData {
+                UndoToast(
+                    action: action,
+                    count: undoData.count,
+                    accentColor: appPrefs.personalColor,
+                    onUndo: {
+                        performUndo(action: action, data: undoData)
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
+                    },
+                    onDismiss: {
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
+                    }
+                )
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: bulkEditManager.state.showingUndoToast)
             }
         }
     }
@@ -2868,7 +2901,7 @@ struct CalendarView: View {
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         switch appPrefs.dayViewLayout {
         case .defaultNew:
-            DayViewExpanded(
+            DayViewNewExpanded(
                 bulkEditManager: bulkEditManager,
                 onEventTap: { ev in
                     selectedCalendarEvent = ev
@@ -2884,7 +2917,7 @@ struct CalendarView: View {
                 }
             )
         case .compactTwo:
-            DayViewCompact(
+            DayViewNewCompact(
                 bulkEditManager: bulkEditManager,
                 onEventTap: { ev in
                     selectedCalendarEvent = ev
@@ -2900,7 +2933,7 @@ struct CalendarView: View {
                 }
             )
         case .timebox:
-            DayViewTimebox(
+            DayViewNewExpanded(
                 bulkEditManager: bulkEditManager,
                 onEventTap: { ev in
                     selectedCalendarEvent = ev
@@ -5016,6 +5049,25 @@ struct CalendarView: View {
         }
 
         return allTasks
+    }
+
+    private func performUndo(action: BulkEditAction, data: BulkEditUndoData) {
+        switch action {
+        case .complete:
+            bulkEditManager.undoComplete(data: data, tasksVM: tasksViewModel)
+        case .delete:
+            bulkEditManager.undoDelete(data: data, tasksVM: tasksViewModel)
+        case .move:
+            bulkEditManager.undoMove(data: data, tasksVM: tasksViewModel)
+        case .updateDueDate:
+            bulkEditManager.undoUpdateDueDate(data: data, tasksVM: tasksViewModel)
+        case .updatePriority:
+            bulkEditManager.undoUpdatePriority(data: data, tasksVM: tasksViewModel)
+        }
+
+        // Update cached tasks after undo
+        updateCachedTasks()
+        updateMonthCachedTasks()
     }
 
     private func updateCachedTasks() {

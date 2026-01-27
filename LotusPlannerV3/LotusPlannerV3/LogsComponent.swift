@@ -17,7 +17,7 @@ struct LogsComponent: View {
     
     var body: some View {
         if appPrefs.showAnyLogs {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
                 // Header with + button
                 HStack {
                     Text("Logs")
@@ -43,9 +43,9 @@ struct LogsComponent: View {
                         compactHorizontalLayout
                     } else if horizontal {
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 // First row: Sleep and Weight
-                                HStack(alignment: .top, spacing: 16) {
+                                HStack(alignment: .top, spacing: 8) {
                                     if appPrefs.showSleepLogs {
                                         sleepSection
                                     }
@@ -58,7 +58,7 @@ struct LogsComponent: View {
                                 }
 
                                 // Second row: Workout and Food
-                                HStack(alignment: .top, spacing: 16) {
+                                HStack(alignment: .top, spacing: 8) {
                                     if appPrefs.showWorkoutLogs {
                                         workoutSection
                                     }
@@ -71,7 +71,7 @@ struct LogsComponent: View {
                                 }
 
                                 // Third row: Water
-                                HStack(alignment: .top, spacing: 16) {
+                                HStack(alignment: .top, spacing: 8) {
                                     if appPrefs.showWaterLogs {
                                         waterSection
                                     }
@@ -81,7 +81,7 @@ struct LogsComponent: View {
 
                                 // Fourth row: Custom Logs (same width as other logs)
                                 if appPrefs.showCustomLogs {
-                                    HStack(alignment: .top, spacing: 16) {
+                                    HStack(alignment: .top, spacing: 8) {
                                         customLogSectionHorizontal
                                         Spacer()
                                     }
@@ -90,7 +90,7 @@ struct LogsComponent: View {
                         }
                     } else {
                         // Vertical layout - conditionally scrollable based on allowInternalScrolling
-                        let content = VStack(spacing: 16) {
+                        let content = VStack(spacing: 8) {
                             // Sleep Section
                             if appPrefs.showSleepLogs {
                                 sleepSection
@@ -143,9 +143,10 @@ struct LogsComponent: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: compactHorizontal ? nil : .infinity, alignment: .topLeading)
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(Color(.tertiarySystemBackground))
-            .cornerRadius(12)
+            .cornerRadius(8)
             .sheet(isPresented: $viewModel.showingAddLogSheet) {
                 AddLogEntryView(viewModel: viewModel)
             }
@@ -177,7 +178,7 @@ struct LogsComponent: View {
 // MARK: - Log Section Views
 extension LogsComponent {
     var weightSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: "scalemass")
                     .foregroundColor(viewModel.accentColor)
@@ -186,13 +187,13 @@ extension LogsComponent {
                     .fontWeight(.semibold)
                 Spacer()
             }
-            
+
             if viewModel.filteredWeightEntries.isEmpty {
                 Text("No entries")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                    .padding(.vertical, 8)
             } else {
                 ForEach(viewModel.filteredWeightEntries) { entry in
                     weightEntryRow(entry)
@@ -200,7 +201,8 @@ extension LogsComponent {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
@@ -210,7 +212,7 @@ extension LogsComponent {
     }
     
     var workoutSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: "figure.run")
                     .foregroundColor(viewModel.accentColor)
@@ -219,13 +221,13 @@ extension LogsComponent {
                     .fontWeight(.semibold)
                 Spacer()
             }
-            
+
             if viewModel.filteredWorkoutEntries.isEmpty {
                 Text("No entries")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                    .padding(.vertical, 8)
             } else {
                 ForEach(viewModel.filteredWorkoutEntries) { entry in
                     workoutEntryRow(entry)
@@ -233,7 +235,8 @@ extension LogsComponent {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
@@ -243,7 +246,7 @@ extension LogsComponent {
     }
     
     var foodSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: "fork.knife")
                     .foregroundColor(viewModel.accentColor)
@@ -258,7 +261,7 @@ extension LogsComponent {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                    .padding(.vertical, 8)
             } else {
                 ForEach(viewModel.filteredFoodEntries) { entry in
                     foodEntryRow(entry)
@@ -266,7 +269,8 @@ extension LogsComponent {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
@@ -276,7 +280,7 @@ extension LogsComponent {
     }
 
     var waterSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: "drop.fill")
                     .foregroundColor(viewModel.accentColor)
@@ -296,7 +300,8 @@ extension LogsComponent {
             )
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
@@ -366,7 +371,7 @@ extension LogsComponent {
     }
 
     var sleepSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: "bed.double.fill")
                     .foregroundColor(viewModel.accentColor)
@@ -381,7 +386,7 @@ extension LogsComponent {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                    .padding(.vertical, 8)
             } else {
                 ForEach(viewModel.filteredSleepEntries) { entry in
                     sleepEntryRow(entry)
@@ -389,7 +394,8 @@ extension LogsComponent {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
@@ -462,11 +468,12 @@ extension LogsComponent {
                     .fontWeight(.semibold)
                 Spacer()
             }
-            
+
             CustomLogView()
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
@@ -489,7 +496,8 @@ extension LogsComponent {
             CustomLogView()
         }
         .frame(alignment: .topLeading)
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(

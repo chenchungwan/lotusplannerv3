@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+#if os(iOS)
+import UIKit
+#endif
 
 struct TimeboxView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
@@ -7,7 +10,8 @@ struct TimeboxView: View {
     @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
-    
+    @ObservedObject private var bulkEditManager: BulkEditManager
+
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
@@ -65,21 +69,29 @@ struct TimeboxView: View {
     }
     
     private func visibleDaysCount(for geometry: GeometryProxy) -> Int {
+        let w = geometry.size.width
+        let h = geometry.size.height
+        let isLandscape = w > h
+
         if isCompact {
             // iPhone: 1 day in portrait, 2 in landscape
-            let isLandscape = geometry.size.width > geometry.size.height
             return isLandscape ? 2 : 1
-        } else {
-            // For screens larger than iPad (laptops): Show all 7 days
-            // iPad Pro 12.9" landscape is ~1024 points, laptops typically 1280+
-            if geometry.size.width > 1200 {
-                return 7
-            }
-            // iPad: Show 3 days in portrait, 5 in landscape
-            // Detect landscape by checking if width > height
-            let isLandscape = geometry.size.width > geometry.size.height
-            return isLandscape ? 5 : 3
         }
+
+        // For screens larger than iPad (laptops): show all 7 days
+        if w > 1200 {
+            return 7
+        }
+
+#if os(iOS)
+        // iPad: 4 columns in portrait (fit across width), 7 in landscape (full week fits)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return isLandscape ? 7 : 4
+        }
+#endif
+
+        // Other (e.g. Mac): 3 portrait, 5 landscape
+        return isLandscape ? 5 : 3
     }
     
     private func dayColumnWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
@@ -164,9 +176,18 @@ struct TimeboxView: View {
         formatter.dateFormat = "M/d"
         return formatter.string(from: date)
     }
-    
-    var body: some View {
+
+    init(bulkEditManager: BulkEditManager) {
+        self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
+    }
+
+    private var baseView: some View {
         VStack(spacing: 0) {
+            // Bulk Edit Toolbar (shown when in bulk edit mode)
+            if bulkEditManager.state.isActive {
+                BulkEditToolbarView(bulkEditManager: bulkEditManager)
+            }
+
             // Global Navigation Bar
             GlobalNavBar()
                 .background(.ultraThinMaterial)
@@ -240,9 +261,17 @@ struct TimeboxView: View {
                 }
             }
         }
+    }
+
+    private var baseViewWithNavigation: some View {
+        baseView
         .sidebarToggleHidden()
         .navigationTitle("")
         .toolbarTitleDisplayMode(.inline)
+    }
+
+    private var baseViewWithLifecycle: some View {
+        baseViewWithNavigation
         .task {
             // Load calendar data for the current week
             await calendarVM.loadCalendarDataForWeek(containing: navigationManager.currentDate)
@@ -324,7 +353,218 @@ struct TimeboxView: View {
             )
         }
     }
-    
+
+    var body: some View {
+        baseViewWithLifecycle
+        .onAppear {
+            // Listen for bulk edit toggle notification
+            NotificationCenter.default.addObserver(
+                forName: Notification.Name("ToggleTimeboxBulkEdit"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                bulkEditManager.state.isActive.toggle()
+                if !bulkEditManager.state.isActive {
+                    bulkEditManager.state.selectedTaskIds.removeAll()
+                }
+            }
+        }
+        // Bulk edit confirmation dialogs
+        .confirmationDialog("Complete Tasks", isPresented: $bulkEditManager.state.showingCompleteConfirmation) {
+            Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    await bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksVM) { undoData in
+                        bulkEditManager.state.undoAction = .complete
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
+
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .complete {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
+                        }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete Tasks", isPresented: $bulkEditManager.state.showingDeleteConfirmation) {
+            Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    await bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksVM) { undoData in
+                        bulkEditManager.state.undoAction = .delete
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
+
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .delete {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
+                        }
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        // Bulk edit sheets
+        .sheet(isPresented: $bulkEditManager.state.showingDueDatePicker) {
+            BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    await bulkEditManager.bulkUpdateDueDate(
+                        tasks: allTasks,
+                        dueDate: date,
+                        isAllDay: isAllDay,
+                        startTime: startTime,
+                        endTime: endTime,
+                        tasksVM: tasksVM
+                    ) { undoData in
+                        bulkEditManager.state.undoAction = .updateDueDate
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
+
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .updateDueDate {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
+                        }
+                    }
+                    bulkEditManager.state.showingDueDatePicker = false
+                }
+            }
+        }
+        .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
+            BulkMoveDestinationPicker(
+                personalTaskLists: tasksVM.personalTaskLists,
+                professionalTaskLists: tasksVM.professionalTaskLists,
+                onSelect: { accountKind, listId in
+                    Task {
+                        let allTasks = getAllTasksForBulkEdit()
+                        await bulkEditManager.bulkMove(
+                            tasks: allTasks,
+                            to: listId,
+                            destinationAccountKind: accountKind,
+                            tasksVM: tasksVM
+                        ) { undoData in
+                            bulkEditManager.state.undoAction = .move
+                            bulkEditManager.state.undoData = undoData
+                            bulkEditManager.state.showingUndoToast = true
+
+                            // Auto-dismiss toast after 5 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                if bulkEditManager.state.undoAction == .move {
+                                    bulkEditManager.state.showingUndoToast = false
+                                    bulkEditManager.state.undoAction = nil
+                                    bulkEditManager.state.undoData = nil
+                                }
+                            }
+                        }
+                        bulkEditManager.state.showingMoveDestinationPicker = false
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $bulkEditManager.state.showingPriorityPicker) {
+            BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
+                Task {
+                    let allTasks = getAllTasksForBulkEdit()
+                    await bulkEditManager.bulkUpdatePriority(
+                        tasks: allTasks,
+                        priority: priority,
+                        tasksVM: tasksVM
+                    ) { undoData in
+                        bulkEditManager.state.undoAction = .updatePriority
+                        bulkEditManager.state.undoData = undoData
+                        bulkEditManager.state.showingUndoToast = true
+
+                        // Auto-dismiss toast after 5 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                            if bulkEditManager.state.undoAction == .updatePriority {
+                                bulkEditManager.state.showingUndoToast = false
+                                bulkEditManager.state.undoAction = nil
+                                bulkEditManager.state.undoData = nil
+                            }
+                        }
+                    }
+                    bulkEditManager.state.showingPriorityPicker = false
+                }
+            }
+        }
+        // Undo Toast
+        .overlay(alignment: .bottom) {
+            if bulkEditManager.state.showingUndoToast,
+               let action = bulkEditManager.state.undoAction,
+               let undoData = bulkEditManager.state.undoData {
+                UndoToast(
+                    action: action,
+                    count: undoData.count,
+                    accentColor: appPrefs.personalColor,
+                    onUndo: {
+                        performUndo(action: action, data: undoData)
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
+                    },
+                    onDismiss: {
+                        bulkEditManager.state.showingUndoToast = false
+                        bulkEditManager.state.undoAction = nil
+                        bulkEditManager.state.undoData = nil
+                    }
+                )
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: bulkEditManager.state.showingUndoToast)
+            }
+        }
+    }
+
+    // MARK: - Bulk Edit Helper
+    private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+
+        // Add personal tasks
+        for (listId, tasks) in tasksVM.personalTasks {
+            for task in tasks {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+
+        // Add professional tasks
+        for (listId, tasks) in tasksVM.professionalTasks {
+            for task in tasks {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+
+        return allTasks
+    }
+
+    private func performUndo(action: BulkEditAction, data: BulkEditUndoData) {
+        switch action {
+        case .complete:
+            bulkEditManager.undoComplete(data: data, tasksVM: tasksVM)
+        case .delete:
+            bulkEditManager.undoDelete(data: data, tasksVM: tasksVM)
+        case .move:
+            bulkEditManager.undoMove(data: data, tasksVM: tasksVM)
+        case .updateDueDate:
+            bulkEditManager.undoUpdateDueDate(data: data, tasksVM: tasksVM)
+        case .updatePriority:
+            bulkEditManager.undoUpdatePriority(data: data, tasksVM: tasksVM)
+        }
+    }
+
     private func formatDateTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium

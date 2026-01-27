@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct DayViewTimebox: View {
+struct DayViewNewExpanded: View {
     @ObservedObject private var navigationManager: NavigationManager
     @ObservedObject private var appPrefs: AppPreferences
     private let calendarVM: CalendarViewModel
@@ -44,7 +44,6 @@ struct DayViewTimebox: View {
     }
     
     var body: some View {
-        let _ = print("🎨 Rendering DayViewTimebox.swift (showEventsAsListInDay: \(appPrefs.showEventsAsListInDay))")
         GeometryReader { geometry in
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 0) {
@@ -240,7 +239,7 @@ struct DayViewTimebox: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 4)
                     }
                     .frame(maxHeight: .infinity)
                     .background(Color(.systemBackground))
@@ -590,6 +589,6 @@ struct DayViewTimebox: View {
 }
 
 #Preview {
-    DayViewTimebox(bulkEditManager: BulkEditManager())
+    DayViewNewExpanded(bulkEditManager: BulkEditManager())
 }
 

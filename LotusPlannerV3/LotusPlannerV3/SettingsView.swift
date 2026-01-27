@@ -1251,7 +1251,7 @@ get: { appPrefs.showFoodLogs },
                 }
                 
                 // Goal Preferences section
-                Section("Goal Preferences") {
+                Section {
                     Toggle(isOn: Binding(
                         get: { !appPrefs.hideGoals },
                         set: { appPrefs.updateHideGoals(!$0) }
@@ -1274,6 +1274,20 @@ get: { appPrefs.showFoodLogs },
                             .padding(.leading, 20)
                             .padding(.top, 8)
                     }
+                } header: {
+                    HStack(spacing: 8) {
+                        Text("Goal Preferences")
+                        Text("Beta")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                } footer: {
+                    Text("Goal features are still in beta. We're actively improving them.")
                 }
                 
                 Section("App Preferences") {

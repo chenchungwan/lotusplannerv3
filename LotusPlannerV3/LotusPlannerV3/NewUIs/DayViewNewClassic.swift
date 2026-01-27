@@ -39,7 +39,6 @@ struct DayViewNewClassic: View {
     }
     
     var body: some View {
-        let _ = print("🎨 Rendering DayViewNewClassic.swift (showEventsAsListInDay: \(appPrefs.showEventsAsListInDay))")
         GeometryReader { geometry in
             HStack(alignment: .top, spacing: 0) {
                 // Left section (dynamic width) - TimeboxComponent and Logs
@@ -222,7 +221,7 @@ struct DayViewNewClassic: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 4)
                     }
                     .frame(maxHeight: .infinity)
                     .background(Color(.systemBackground))

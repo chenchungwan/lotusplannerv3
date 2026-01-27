@@ -157,9 +157,9 @@ struct DayViewNewCompact: View {
                 ScrollView(.vertical, showsIndicators: true) {
                     LogsComponent(currentDate: navigationManager.currentDate, horizontal: false)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 4)
                 }
-                .frame(height: 200)
+                .frame(maxHeight: .infinity)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 // Expand button when collapsed
@@ -250,42 +250,79 @@ struct DayViewNewCompact: View {
 
     private var eventsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // TimeboxComponent
-            TimeboxComponent(
-                date: navigationManager.currentDate,
-                events: filteredEventsForDay(navigationManager.currentDate),
-                personalEvents: calendarVM.personalEvents,
-                professionalEvents: calendarVM.professionalEvents,
-                personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
-                professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                onEventTap: { ev in
-                    if let onEventTap = onEventTap {
-                        onEventTap(ev)
-                    } else {
-                        selectedEvent = ev
+            Group {
+                if appPrefs.showEventsAsListInDay {
+                    // Show EventsListComponent (list view)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Events")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.top, 8)
+
+                        ScrollView(.vertical, showsIndicators: true) {
+                            EventsListComponent(
+                                events: filteredEventsForDay(navigationManager.currentDate).sorted { (e1, e2) in
+                                    guard let t1 = e1.startTime, let t2 = e2.startTime else { return false }
+                                    return t1 < t2
+                                },
+                                personalEvents: calendarVM.personalEvents,
+                                professionalEvents: calendarVM.professionalEvents,
+                                personalColor: appPrefs.personalColor,
+                                professionalColor: appPrefs.professionalColor,
+                                onEventTap: { ev in
+                                    if let onEventTap = onEventTap {
+                                        onEventTap(ev)
+                                    } else {
+                                        selectedEvent = ev
+                                    }
+                                },
+                                date: navigationManager.currentDate
+                            )
+                        }
                     }
-                },
-                onTaskTap: { task, listId in
-                    // Determine account kind
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedTaskAccount = accountKind
-                    showingTaskDetails = true
-                },
-                onTaskToggle: { task, listId in
-                    // Determine account kind
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    Task {
-                        await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
-                    }
-                },
-                showAllDaySection: false
-            )
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+                } else {
+                    // Show TimeboxComponent (timeline view)
+                    TimeboxComponent(
+                        date: navigationManager.currentDate,
+                        events: filteredEventsForDay(navigationManager.currentDate),
+                        personalEvents: calendarVM.personalEvents,
+                        professionalEvents: calendarVM.professionalEvents,
+                        personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
+                        professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
+                        personalColor: appPrefs.personalColor,
+                        professionalColor: appPrefs.professionalColor,
+                        onEventTap: { ev in
+                            if let onEventTap = onEventTap {
+                                onEventTap(ev)
+                            } else {
+                                selectedEvent = ev
+                            }
+                        },
+                        onTaskTap: { task, listId in
+                            // Determine account kind
+                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                            selectedTask = task
+                            selectedTaskListId = listId
+                            selectedTaskAccount = accountKind
+                            showingTaskDetails = true
+                        },
+                        onTaskToggle: { task, listId in
+                            // Determine account kind
+                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                            Task {
+                                await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                            }
+                        },
+                        showAllDaySection: false
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                }
+            }
+            .id("eventsDisplay-\(appPrefs.showEventsAsListInDay)")
         }
         .background(Color(.systemBackground))
     }

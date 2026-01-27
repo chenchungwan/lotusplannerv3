@@ -38,7 +38,6 @@ struct DayViewMobile: View {
     }
     
     var body: some View {
-        let _ = print("🎨 Rendering DayViewMobile.swift (showEventsAsListInDay: \(appPrefs.showEventsAsListInDay))")
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 // Bulk Edit Toolbar (shown when in bulk edit mode)
