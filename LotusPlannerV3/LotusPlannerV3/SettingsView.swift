@@ -1322,6 +1322,54 @@ struct SettingsView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .padding(.top, 2)
+
+                    // CloudKit Diagnostics
+                    Button(action: {
+                        devLog("🔍 Running CloudKit diagnostics...")
+                        iCloudManagerInstance.diagnoseICloudSetup()
+                        Task {
+                            await iCloudManagerInstance.diagnoseCloudKitData()
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Run CloudKit Diagnostics")
+                                    .font(.body)
+                                Text("Check CloudKit setup and data (view in Console.app)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    // CloudKit Container Info
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.secondary)
+                            Text("CloudKit Container")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Text("iCloud.com.chenchungwan.LotusPlannerV3")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 20)
+
+                        #if DEBUG
+                        Text("Environment: Development")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                            .padding(.leading, 20)
+                        #else
+                        Text("Environment: Production")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                            .padding(.leading, 20)
+                        #endif
+                    }
                 }
                 
                 // Components Visibility section removed: Logs and Journal are always visible

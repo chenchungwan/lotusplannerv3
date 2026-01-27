@@ -45,7 +45,15 @@ enum DevLogger {
             return UserDefaults.standard.bool(forKey: verboseLoggingDefaultsKey)
         }
 #else
-        return false
+        // In production, allow verbose logging if enabled via UserDefaults
+        // This helps diagnose production CloudKit sync issues
+        let verboseEnabled = UserDefaults.standard.bool(forKey: verboseLoggingDefaultsKey)
+        switch level {
+        case .error, .warning:
+            return true  // Always log errors and warnings in production
+        case .info, .debug:
+            return verboseEnabled  // Only log info/debug if explicitly enabled
+        }
 #endif
     }
 
@@ -74,7 +82,6 @@ enum DevLogger {
         file: String = #fileID,
         line: Int = #line
     ) {
-#if DEBUG
         let resolvedLevel = inferredLevel(from: message, default: level)
         guard shouldLog(level: resolvedLevel) else { return }
 
@@ -91,7 +98,6 @@ enum DevLogger {
         case .error:
             logger.error("\(formatted)")
         }
-#endif
     }
 }
 
@@ -104,10 +110,8 @@ func devLog(
     file: String = #fileID,
     line: Int = #line
 ) {
-#if DEBUG
     guard !items.isEmpty else { return }
     let message = items.map { "\($0)" }.joined(separator: separator) + terminator
     DevLogger.log(message, level: level, category: category, file: file, line: line)
-#endif
 }
 
