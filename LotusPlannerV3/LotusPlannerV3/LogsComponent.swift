@@ -44,10 +44,23 @@ struct LogsComponent: View {
                     } else if horizontal {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 8) {
-                                // First row: Sleep and Weight
+                                // First row: Food and Sleep
                                 HStack(alignment: .top, spacing: 8) {
+                                    if appPrefs.showFoodLogs {
+                                        foodSection
+                                    }
+
                                     if appPrefs.showSleepLogs {
                                         sleepSection
+                                    }
+
+                                    Spacer()
+                                }
+
+                                // Second row: Water and Weight
+                                HStack(alignment: .top, spacing: 8) {
+                                    if appPrefs.showWaterLogs {
+                                        waterSection
                                     }
 
                                     if appPrefs.showWeightLogs {
@@ -57,23 +70,10 @@ struct LogsComponent: View {
                                     Spacer()
                                 }
 
-                                // Second row: Workout and Food
+                                // Third row: Workout
                                 HStack(alignment: .top, spacing: 8) {
                                     if appPrefs.showWorkoutLogs {
                                         workoutSection
-                                    }
-
-                                    if appPrefs.showFoodLogs {
-                                        foodSection
-                                    }
-
-                                    Spacer()
-                                }
-
-                                // Third row: Water
-                                HStack(alignment: .top, spacing: 8) {
-                                    if appPrefs.showWaterLogs {
-                                        waterSection
                                     }
 
                                     Spacer()
@@ -91,9 +91,19 @@ struct LogsComponent: View {
                     } else {
                         // Vertical layout - conditionally scrollable based on allowInternalScrolling
                         let content = VStack(spacing: 8) {
+                            // Food Section
+                            if appPrefs.showFoodLogs {
+                                foodSection
+                            }
+
                             // Sleep Section
                             if appPrefs.showSleepLogs {
                                 sleepSection
+                            }
+
+                            // Water Section
+                            if appPrefs.showWaterLogs {
+                                waterSection
                             }
 
                             // Weight Section
@@ -104,16 +114,6 @@ struct LogsComponent: View {
                             // Workout Section
                             if appPrefs.showWorkoutLogs {
                                 workoutSection
-                            }
-
-                            // Food Section
-                            if appPrefs.showFoodLogs {
-                                foodSection
-                            }
-
-                            // Water Section
-                            if appPrefs.showWaterLogs {
-                                waterSection
                             }
 
                             // Custom Log Section
@@ -522,8 +522,16 @@ extension LogsComponent {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: spacing) {
+                    if appPrefs.showFoodLogs {
+                        compactLogCard(section: foodSection, width: cardWidth)
+                    }
+
                     if appPrefs.showSleepLogs {
                         compactLogCard(section: sleepSection, width: cardWidth)
+                    }
+
+                    if appPrefs.showWaterLogs {
+                        compactLogCard(section: waterSection, width: cardWidth)
                     }
 
                     if appPrefs.showWeightLogs {
@@ -532,14 +540,6 @@ extension LogsComponent {
 
                     if appPrefs.showWorkoutLogs {
                         compactLogCard(section: workoutSection, width: cardWidth)
-                    }
-
-                    if appPrefs.showFoodLogs {
-                        compactLogCard(section: foodSection, width: cardWidth)
-                    }
-
-                    if appPrefs.showWaterLogs {
-                        compactLogCard(section: waterSection, width: cardWidth)
                     }
 
                     if appPrefs.showCustomLogs {

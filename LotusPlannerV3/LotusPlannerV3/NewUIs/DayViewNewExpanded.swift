@@ -291,26 +291,65 @@ struct DayViewNewExpanded: View {
                 BulkEditToolbarView(bulkEditManager: bulkEditManager)
             }
 
-            // Personal Tasks section (top)
-            ScrollView(.vertical, showsIndicators: true) {
-                personalTasksSection
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-            }
-            .frame(height: personalTasksHeight)
-            .background(Color(.systemBackground))
+            // Show different layouts based on which accounts are linked
+            if auth.isLinked(kind: .personal) && auth.isLinked(kind: .professional) {
+                // Both accounts linked - show split view with divider
+                // Personal Tasks section (top)
+                ScrollView(.vertical, showsIndicators: true) {
+                    personalTasksSection
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                }
+                .frame(height: personalTasksHeight)
+                .background(Color(.systemBackground))
 
-            // Draggable divider between Personal and Professional tasks
-            personalProfessionalTasksDivider
+                // Draggable divider between Personal and Professional tasks
+                personalProfessionalTasksDivider
 
-            // Professional Tasks section (bottom)
-            ScrollView(.vertical, showsIndicators: true) {
-                professionalTasksSection
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
+                // Professional Tasks section (bottom)
+                ScrollView(.vertical, showsIndicators: true) {
+                    professionalTasksSection
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                }
+                .frame(maxHeight: .infinity)
+                .background(Color(.systemBackground))
+            } else if auth.isLinked(kind: .personal) {
+                // Only personal account linked - take full height
+                ScrollView(.vertical, showsIndicators: true) {
+                    personalTasksSection
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                }
+                .frame(maxHeight: .infinity)
+                .background(Color(.systemBackground))
+            } else if auth.isLinked(kind: .professional) {
+                // Only professional account linked - take full height
+                ScrollView(.vertical, showsIndicators: true) {
+                    professionalTasksSection
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                }
+                .frame(maxHeight: .infinity)
+                .background(Color(.systemBackground))
+            } else {
+                // No accounts linked - show empty state
+                VStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 32))
+                        .foregroundColor(.secondary)
+                    Text("Link Your Google Account")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Text("Connect your Google account to view and manage your tasks")
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 24)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
             }
-            .frame(maxHeight: .infinity)
-            .background(Color(.systemBackground))
         }
     }
     
@@ -318,7 +357,7 @@ struct DayViewNewExpanded: View {
     private var personalTasksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
+            if auth.isLinked(kind: .personal) {
                 TasksComponent(
                     taskLists: tasksVM.personalTaskLists,
                     tasksDict: personalFiltered,
@@ -345,6 +384,9 @@ struct DayViewNewExpanded: View {
                             await tasksVM.updateTaskListOrder(newOrder, for: .personal)
                         }
                     },
+                    hideDueDateTag: false,
+                    showEmptyState: true,
+                    horizontalCards: false,
                     isSingleDayView: true,
                     showTaskStartTime: true,
                     isBulkEditMode: bulkEditManager.state.isActive,
@@ -358,33 +400,6 @@ struct DayViewNewExpanded: View {
                     }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
-                // Empty state - show link account UI
-                Button(action: { NavigationManager.shared.showSettings() }) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.system(size: 24))
-                            .foregroundColor(.secondary)
-                        Text("Link Your Google Account")
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                        Text("Connect your Google account to view and manage your tasks")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .center)
-            } else {
-                // Account linked but no personal tasks
-                Text("No tasks")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -393,7 +408,7 @@ struct DayViewNewExpanded: View {
     private var professionalTasksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
+            if auth.isLinked(kind: .professional) {
                 TasksComponent(
                     taskLists: tasksVM.professionalTaskLists,
                     tasksDict: professionalFiltered,
@@ -420,6 +435,9 @@ struct DayViewNewExpanded: View {
                             await tasksVM.updateTaskListOrder(newOrder, for: .professional)
                         }
                     },
+                    hideDueDateTag: false,
+                    showEmptyState: true,
+                    horizontalCards: false,
                     isSingleDayView: true,
                     showTaskStartTime: true,
                     isBulkEditMode: bulkEditManager.state.isActive,
@@ -433,14 +451,6 @@ struct DayViewNewExpanded: View {
                     }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else {
-                // Account linked but no professional tasks
-                Text("No tasks")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)

@@ -1122,6 +1122,57 @@ struct SettingsView: View {
 
                 Section("Log Preferences") {
                     Toggle(isOn: Binding(
+                        get: { appPrefs.showFoodLogs },
+                        set: { appPrefs.showFoodLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "fork.knife")
+                                .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Food Logs")
+                                    .font(.body)
+                                Text("Show food tracking in day views")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showSleepLogs },
+                        set: { appPrefs.showSleepLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "bed.double.fill")
+                                .foregroundColor(appPrefs.showSleepLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sleep Logs")
+                                    .font(.body)
+                                Text("Track wake up time and bed time")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showWaterLogs },
+                        set: { appPrefs.showWaterLogs = $0 }
+                    )) {
+                        HStack {
+                            Image(systemName: "drop.fill")
+                                .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Water Logs")
+                                    .font(.body)
+                                Text("Track daily water intake in cups")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    Toggle(isOn: Binding(
                         get: { appPrefs.showWeightLogs },
                         set: { appPrefs.showWeightLogs = $0 }
                     )) {
@@ -1149,57 +1200,6 @@ struct SettingsView: View {
                                 Text("Workout Logs")
                                     .font(.body)
                                 Text("Show workout tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    
-                    Toggle(isOn: Binding(
-get: { appPrefs.showFoodLogs },
-                        set: { appPrefs.showFoodLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "fork.knife")
-                                .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Food Logs")
-                                    .font(.body)
-                                Text("Show food tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showWaterLogs },
-                        set: { appPrefs.showWaterLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "drop.fill")
-                                .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Water Logs")
-                                    .font(.body)
-                                Text("Track daily water intake in cups")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showSleepLogs },
-                        set: { appPrefs.showSleepLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "bed.double.fill")
-                                .foregroundColor(appPrefs.showSleepLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Sleep Logs")
-                                    .font(.body)
-                                Text("Track wake up time and bed time")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }

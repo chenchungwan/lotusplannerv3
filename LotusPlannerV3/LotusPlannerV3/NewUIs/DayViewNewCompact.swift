@@ -363,7 +363,7 @@ struct DayViewNewCompact: View {
                 VStack(alignment: .leading, spacing: 12) {
                     // Personal Tasks
                     let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
-                    if auth.isLinked(kind: .personal) && !personalTasks.isEmpty {
+                    if auth.isLinked(kind: .personal) {
                         TasksComponent(
                             taskLists: tasksVM.personalTaskLists,
                             tasksDict: personalTasks,
@@ -385,7 +385,7 @@ struct DayViewNewCompact: View {
                                 Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
                             },
                             hideDueDateTag: false,
-                            showEmptyState: false,
+                            showEmptyState: true,
                             horizontalCards: false,
                             isSingleDayView: true,
                             showTaskStartTime: true,
@@ -403,7 +403,7 @@ struct DayViewNewCompact: View {
 
                     // Professional Tasks
                     let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
-                    if auth.isLinked(kind: .professional) && !professionalTasks.isEmpty {
+                    if auth.isLinked(kind: .professional) {
                         TasksComponent(
                             taskLists: tasksVM.professionalTaskLists,
                             tasksDict: professionalTasks,
@@ -425,7 +425,7 @@ struct DayViewNewCompact: View {
                                 Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
                             },
                             hideDueDateTag: false,
-                            showEmptyState: false,
+                            showEmptyState: true,
                             horizontalCards: false,
                             isSingleDayView: true,
                             showTaskStartTime: true,
@@ -441,35 +441,25 @@ struct DayViewNewCompact: View {
                         )
                     }
 
-                    // Empty state if no tasks
-                    if (!auth.isLinked(kind: .personal) || personalTasks.isEmpty) &&
-                       (!auth.isLinked(kind: .professional) || professionalTasks.isEmpty) {
-                        if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
-                            // No accounts linked
-                            Button(action: { NavigationManager.shared.showSettings() }) {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "person.crop.circle.badge.plus")
-                                        .font(.system(size: 32))
-                                        .foregroundColor(.secondary)
-                                    Text("Link Your Google Account")
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                    Text("Connect to view and manage tasks")
-                                        .font(.caption)
-                                        .multilineTextAlignment(.center)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(24)
+                    // Empty state if no accounts linked
+                    if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
+                        Button(action: { NavigationManager.shared.showSettings() }) {
+                            VStack(spacing: 8) {
+                                Image(systemName: "person.crop.circle.badge.plus")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.secondary)
+                                Text("Link Your Google Account")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Connect to view and manage tasks")
+                                    .font(.caption)
+                                    .multilineTextAlignment(.center)
+                                    .foregroundColor(.secondary)
                             }
-                            .buttonStyle(.plain)
-                            .frame(maxWidth: .infinity)
-                        } else {
-                            Text("No tasks for today")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .padding(24)
-                                .frame(maxWidth: .infinity)
+                            .padding(24)
                         }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(8)

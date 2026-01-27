@@ -64,9 +64,10 @@ struct TasksComponent: View {
                         .foregroundColor(accentColor)
                         .padding(.horizontal, 8)
                 }
-                
+
                 contentView
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .onAppear {
                 // Sync local copy with upstream lists on first render
                 localTaskLists = taskLists
@@ -155,14 +156,23 @@ extension TasksComponent {
 
     @ViewBuilder
     private var horizontalCardsView: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 3) {
-                ForEach(localTaskLists, id: \.id) { list in
-                    card(for: list, enableScroll: true, maxHeight: 300) // Use reasonable default height
-                        .frame(width: 200, alignment: .top) // Use reasonable default width
+        if showEmptyState && noVisibleTasks {
+            Text("No tasks")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .italic()
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 20)
+        } else {
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 3) {
+                    ForEach(localTaskLists, id: \.id) { list in
+                        card(for: list, enableScroll: true, maxHeight: 300) // Use reasonable default height
+                            .frame(width: 200, alignment: .top) // Use reasonable default width
+                    }
                 }
+                .padding(.horizontal, 3)
             }
-            .padding(.horizontal, 3)
         }
     }
 

@@ -65,31 +65,44 @@ struct DayViewMobile: View {
                 
                         // Personal tasks
                         let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
-                        TasksCompactComponent(
-                            taskLists: tasksVM.personalTaskLists,
-                            tasksDict: personalTasks,
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
-                            onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedTaskAccount = .personal
-                                showingTaskDetails = true
-                            },
-                            isBulkEditMode: bulkEditManager.state.isActive,
-                            selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                            onTaskSelectionToggle: { taskId in
-                                if bulkEditManager.state.selectedTaskIds.contains(taskId) {
-                                    bulkEditManager.state.selectedTaskIds.remove(taskId)
-                                } else {
-                                    bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        if auth.isLinked(kind: .personal) {
+                            TasksComponent(
+                                taskLists: tasksVM.personalTaskLists,
+                                tasksDict: personalTasks,
+                                accentColor: appPrefs.personalColor,
+                                accountType: .personal,
+                                onTaskToggle: { task, listId in
+                                    Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
+                                },
+                                onTaskDetails: { task, listId in
+                                    selectedTask = task
+                                    selectedTaskListId = listId
+                                    selectedTaskAccount = .personal
+                                    showingTaskDetails = true
+                                },
+                                onListRename: { listId, newName in
+                                    Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                                },
+                                onOrderChanged: { newOrder in
+                                    Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
+                                },
+                                hideDueDateTag: false,
+                                showEmptyState: true,
+                                horizontalCards: false,
+                                isSingleDayView: true,
+                                showTaskStartTime: true,
+                                isBulkEditMode: bulkEditManager.state.isActive,
+                                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                                onTaskSelectionToggle: { taskId in
+                                    if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                        bulkEditManager.state.selectedTaskIds.remove(taskId)
+                                    } else {
+                                        bulkEditManager.state.selectedTaskIds.insert(taskId)
+                                    }
                                 }
-                            }
-                        )
-                        .padding(.horizontal, adaptivePadding)
+                            )
+                            .padding(.horizontal, adaptivePadding)
+                        }
 
 
                         // Empty state for no accounts (shown only once)
@@ -118,31 +131,44 @@ struct DayViewMobile: View {
 
                         // Professional tasks
                         let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
-                        TasksCompactComponent(
-                            taskLists: tasksVM.professionalTaskLists,
-                            tasksDict: professionalTasks,
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
-                            onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
-                            },
-                            onTaskDetails: { task, listId in
-                                selectedTask = task
-                                selectedTaskListId = listId
-                                selectedTaskAccount = .professional
-                                showingTaskDetails = true
-                            },
-                            isBulkEditMode: bulkEditManager.state.isActive,
-                            selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                            onTaskSelectionToggle: { taskId in
-                                if bulkEditManager.state.selectedTaskIds.contains(taskId) {
-                                    bulkEditManager.state.selectedTaskIds.remove(taskId)
-                                } else {
-                                    bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        if auth.isLinked(kind: .professional) {
+                            TasksComponent(
+                                taskLists: tasksVM.professionalTaskLists,
+                                tasksDict: professionalTasks,
+                                accentColor: appPrefs.professionalColor,
+                                accountType: .professional,
+                                onTaskToggle: { task, listId in
+                                    Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
+                                },
+                                onTaskDetails: { task, listId in
+                                    selectedTask = task
+                                    selectedTaskListId = listId
+                                    selectedTaskAccount = .professional
+                                    showingTaskDetails = true
+                                },
+                                onListRename: { listId, newName in
+                                    Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                                },
+                                onOrderChanged: { newOrder in
+                                    Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
+                                },
+                                hideDueDateTag: false,
+                                showEmptyState: true,
+                                horizontalCards: false,
+                                isSingleDayView: true,
+                                showTaskStartTime: true,
+                                isBulkEditMode: bulkEditManager.state.isActive,
+                                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                                onTaskSelectionToggle: { taskId in
+                                    if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                                        bulkEditManager.state.selectedTaskIds.remove(taskId)
+                                    } else {
+                                        bulkEditManager.state.selectedTaskIds.insert(taskId)
+                                    }
                                 }
-                            }
-                        )
-                        .padding(.horizontal, adaptivePadding)
+                            )
+                            .padding(.horizontal, adaptivePadding)
+                        }
 
                         // Logs (only if any logs are enabled)
                         if appPrefs.showAnyLogs {

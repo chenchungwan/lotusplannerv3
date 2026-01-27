@@ -780,96 +780,6 @@ extension WeeklyView {
                     // Logs content (collapsible)
                     if logsExpanded {
                         VStack(spacing: 0) {
-                            // Sleep Logs Row
-                            if appPrefs.showSleepLogs {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    // Fixed-width 7-day sleep log columns
-                                    HStack(spacing: 0) {
-                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                            weekSleepLogColumn(date: date)
-                                                .frame(width: dayColumnWidth)
-                                                .background(Color(.systemBackground))
-                                                .overlay(
-                                                    Rectangle()
-                                                        .fill(Color(.systemGray4))
-                                                        .frame(width: 0.5),
-                                                    alignment: .trailing
-                                                )
-                                                .id("sleep_day_\(index)")
-                                        }
-                                    }
-                                    .frame(width: fixedWidth)
-                                }
-                                .padding(.all, 8)
-                                .background(Color(.systemGray6).opacity(0.15))
-
-                                if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
-                                    Rectangle()
-                                        .fill(Color(.systemGray3))
-                                        .frame(height: 1)
-                                }
-                            }
-
-                            // Weight Logs Row
-                            if appPrefs.showWeightLogs {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    // Fixed-width 7-day weight log columns
-                                    HStack(spacing: 0) {
-                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                            weekWeightLogColumn(date: date)
-                                                .frame(width: dayColumnWidth)
-                                                .background(Color(.systemBackground))
-                                                .overlay(
-                                                    Rectangle()
-                                                        .fill(Color(.systemGray4))
-                                                        .frame(width: 0.5),
-                                                    alignment: .trailing
-                                                )
-                                                .id("weight_day_\(index)")
-                                        }
-                                    }
-                                    .frame(width: fixedWidth)
-                                }
-                                .padding(.all, 8)
-                                .background(Color(.systemGray6).opacity(0.15))
-                                
-                                if appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
-                                    Rectangle()
-                                        .fill(Color(.systemGray3))
-                                        .frame(height: 1)
-                                }
-                            }
-                            
-                            // Workout Logs Row
-                            if appPrefs.showWorkoutLogs {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    // Fixed-width 7-day workout log columns
-                                    HStack(spacing: 0) {
-                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                            weekWorkoutLogColumn(date: date)
-                                                .frame(width: dayColumnWidth)
-                                                .background(Color(.systemBackground))
-                                                .overlay(
-                                                    Rectangle()
-                                                        .fill(Color(.systemGray4))
-                                                        .frame(width: 0.5),
-                                                    alignment: .trailing
-                                                )
-                                                .id("workout_day_\(index)")
-                                        }
-                                    }
-                                    .frame(width: fixedWidth)
-                                }
-                                .padding(.all, 8)
-                                .background(Color(.systemGray6).opacity(0.15))
-                                
-                                if appPrefs.showFoodLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
-                                    Rectangle()
-                                        .fill(Color(.systemGray3))
-                                        .frame(height: 1)
-                                }
-                            }
-                            
                             // Food Logs Row
                             if appPrefs.showFoodLogs {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -893,7 +803,37 @@ extension WeeklyView {
                                 .padding(.all, 8)
                                 .background(Color(.systemGray6).opacity(0.15))
 
-                                if appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                if appPrefs.showSleepLogs || appPrefs.showWaterLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+
+                            // Sleep Logs Row
+                            if appPrefs.showSleepLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day sleep log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekSleepLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("sleep_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+
+                                if appPrefs.showWaterLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
                                     Rectangle()
                                         .fill(Color(.systemGray3))
                                         .frame(height: 1)
@@ -930,6 +870,66 @@ extension WeeklyView {
                                 }
                             }
 
+                            // Weight Logs Row
+                            if appPrefs.showWeightLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day weight log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekWeightLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("weight_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                                
+                                if appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+                            
+                            // Workout Logs Row
+                            if appPrefs.showWorkoutLogs {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Fixed-width 7-day workout log columns
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                            weekWorkoutLogColumn(date: date)
+                                                .frame(width: dayColumnWidth)
+                                                .background(Color(.systemBackground))
+                                                .overlay(
+                                                    Rectangle()
+                                                        .fill(Color(.systemGray4))
+                                                        .frame(width: 0.5),
+                                                    alignment: .trailing
+                                                )
+                                                .id("workout_day_\(index)")
+                                        }
+                                    }
+                                    .frame(width: fixedWidth)
+                                }
+                                .padding(.all, 8)
+                                .background(Color(.systemGray6).opacity(0.15))
+                                
+                                if appPrefs.showWorkoutLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                                    Rectangle()
+                                        .fill(Color(.systemGray3))
+                                        .frame(height: 1)
+                                }
+                            }
+                            
                             // Custom Logs Row
                             if appPrefs.showCustomLogs && hasCustomLogsForWeek() {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -1340,6 +1340,23 @@ extension WeeklyView {
     
     private func weekDayRowLogsColumn(date: Date) -> some View {
         HStack(alignment: .top, spacing: 0) {
+            // Food Logs
+            if appPrefs.showFoodLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let foodLogsForDate = getFoodLogsForDate(date)
+                        ForEach(foodLogsForDate, id: \.id) { entry in
+                            foodLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+
+                Divider()
+            }
+
             // Sleep Logs
             if appPrefs.showSleepLogs {
                 ScrollView(.vertical, showsIndicators: false) {
@@ -1347,6 +1364,23 @@ extension WeeklyView {
                         let sleepLogsForDate = getSleepLogsForDate(date)
                         ForEach(sleepLogsForDate, id: \.id) { entry in
                             sleepLogCard(entry: entry)
+                        }
+                    }
+                    .padding(.all, 8)
+                }
+                .frame(width: logColumnWidth(), alignment: .topLeading)
+                .frame(minHeight: 80)
+
+                Divider()
+            }
+
+            // Water Logs
+            if appPrefs.showWaterLogs {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        let waterLogsForDate = getWaterLogsForDate(date)
+                        ForEach(waterLogsForDate, id: \.id) { entry in
+                            waterLogCard(entry: entry)
                         }
                     }
                     .padding(.all, 8)
@@ -1391,40 +1425,6 @@ extension WeeklyView {
                 Divider()
             }
             
-            // Food Logs
-            if appPrefs.showFoodLogs {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        let foodLogsForDate = getFoodLogsForDate(date)
-                        ForEach(foodLogsForDate, id: \.id) { entry in
-                            foodLogCard(entry: entry)
-                        }
-                    }
-                    .padding(.all, 8)
-                }
-                .frame(width: logColumnWidth(), alignment: .topLeading)
-                .frame(minHeight: 80)
-
-                Divider()
-            }
-
-            // Water Logs
-            if appPrefs.showWaterLogs {
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        let waterLogsForDate = getWaterLogsForDate(date)
-                        ForEach(waterLogsForDate, id: \.id) { entry in
-                            waterLogCard(entry: entry)
-                        }
-                    }
-                    .padding(.all, 8)
-                }
-                .frame(width: logColumnWidth(), alignment: .topLeading)
-                .frame(minHeight: 80)
-
-                Divider()
-            }
-
             // Custom Logs
             if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                 ScrollView(.vertical, showsIndicators: false) {

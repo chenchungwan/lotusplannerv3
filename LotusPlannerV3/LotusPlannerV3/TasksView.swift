@@ -2239,92 +2239,80 @@ struct TasksView: View {
         VStack(spacing: 0) {
             // Personal Tasks
             if authManager.isLinked(kind: .personal) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(appPrefs.personalAccountName)
-                        .font(.headline)
-                        .foregroundColor(allSubfilter == .all ? appPrefs.personalColor : .primary)
-                        .padding(.horizontal, 12)
-                    TasksComponent(
-                        taskLists: viewModel.personalTaskLists,
-                        tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
-                        accentColor: appPrefs.personalColor,
-                        accountType: .personal,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
-                        },
-                        onListRename: { listId, newName in
-                            Task {
-                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
-                            }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task {
-                                await viewModel.updateTaskListOrder(newOrder, for: .personal)
-                            }
-                        },
-                        horizontalCards: true,
-                        isSingleDayView: selectedFilter == .day,
-                        isBulkEditMode: bulkEditManager.state.isActive,
-                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                        onTaskSelectionToggle: { taskId in
-                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
-                                bulkEditManager.state.selectedTaskIds.remove(taskId)
-                            } else {
-                                bulkEditManager.state.selectedTaskIds.insert(taskId)
-                            }
+                TasksComponent(
+                    taskLists: viewModel.personalTaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
+                    accentColor: appPrefs.personalColor,
+                    accountType: .personal,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
                         }
-                    )
-                }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                        }
+                    },
+                    horizontalCards: true,
+                    isSingleDayView: selectedFilter == .day,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
+                )
             }
-            
+
             // Professional Tasks
             if authManager.isLinked(kind: .professional) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(appPrefs.professionalAccountName)
-                        .font(.headline)
-                        .foregroundColor(allSubfilter == .all ? appPrefs.professionalColor : .primary)
-                        .padding(.horizontal, 12)
-                    TasksComponent(
-                        taskLists: viewModel.professionalTaskLists,
-                        tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
-                        accentColor: appPrefs.professionalColor,
-                        accountType: .professional,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
-                        },
-                        onListRename: { listId, newName in
-                            Task {
-                                await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
-                            }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task {
-                                await viewModel.updateTaskListOrder(newOrder, for: .professional)
-                            }
-                        },
-                        horizontalCards: true,
-                        isSingleDayView: selectedFilter == .day,
-                        isBulkEditMode: bulkEditManager.state.isActive,
-                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                        onTaskSelectionToggle: { taskId in
-                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
-                                bulkEditManager.state.selectedTaskIds.remove(taskId)
-                            } else {
-                                bulkEditManager.state.selectedTaskIds.insert(taskId)
-                            }
+                TasksComponent(
+                    taskLists: viewModel.professionalTaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
+                    accentColor: appPrefs.professionalColor,
+                    accountType: .professional,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
                         }
-                    )
-                }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                        }
+                    },
+                    horizontalCards: true,
+                    isSingleDayView: selectedFilter == .day,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
+                )
             }
         }
         .padding(.horizontal, 0)
