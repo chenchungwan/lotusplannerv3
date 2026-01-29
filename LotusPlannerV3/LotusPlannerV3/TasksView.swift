@@ -3091,6 +3091,7 @@ struct TaskDetailsView: View {
     @State private var isCreatingNewList = false
     @State private var showingDeleteAlert = false
     @State private var showingDatePicker = false
+    @State private var showingEndTimePicker = false
     @State private var isSaving = false
     @State private var tempSelectedDate = Date()
     @State private var startTime: Date = Date()
@@ -3453,69 +3454,24 @@ struct TaskDetailsView: View {
                     
                     // Start and End time pickers (only show if not all-day)
                     if !isAllDay {
-                        DatePicker("Start Time", selection: Binding(
+                        DatePicker("Start", selection: Binding(
                             get: { startTime },
                             set: { newValue in
-                                // When editing an existing timed task, preserve the date component but use the new time
-                                if !isNew && !isAllDay {
-                                    let calendar = Calendar.current
-                                    // Extract the date from the current startTime
-                                    let currentDate = calendar.startOfDay(for: startTime)
-                                    // Extract the time components from the newValue (what user selected)
-                                    let newTimeComponents = calendar.dateComponents([.hour, .minute], from: newValue)
-                                    if let hour = newTimeComponents.hour, let minute = newTimeComponents.minute {
-                                        // Use the new time on the current date
-                                        startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: currentDate) ?? newValue
-                                    } else {
-                                        startTime = newValue
-                                    }
-                                } else {
-                                    startTime = newValue
-                                }
+                                startTime = newValue
                             }
-                        ), displayedComponents: [.hourAndMinute])
-                            .onChange(of: editedDueDate) { oldValue, newValue in
-                                // Update start time to match new due date, preserving time component
-                                if let newDueDate = newValue {
-                                    let calendar = Calendar.current
-                                    let components = calendar.dateComponents([.hour, .minute], from: startTime)
-                                    if let hour = components.hour, let minute = components.minute {
-                                        startTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDueDate) ?? newDueDate
-                                    }
-                                }
+                        ), displayedComponents: [.date, .hourAndMinute])
+
+                        // Custom end time picker (same as events)
+                        HStack {
+                            Text("End")
+                            Spacer()
+                            Button(action: {
+                                showingEndTimePicker = true
+                            }) {
+                                Text(formatEndTime(endTime))
+                                    .foregroundColor(.primary)
                             }
-                        
-                        DatePicker("End Time", selection: Binding(
-                            get: { endTime },
-                            set: { newValue in
-                                // When editing an existing timed task, preserve the date component but use the new time
-                                if !isNew && !isAllDay {
-                                    let calendar = Calendar.current
-                                    // Extract the date from the current endTime
-                                    let currentDate = calendar.startOfDay(for: endTime)
-                                    // Extract the time components from the newValue (what user selected)
-                                    let newTimeComponents = calendar.dateComponents([.hour, .minute], from: newValue)
-                                    if let hour = newTimeComponents.hour, let minute = newTimeComponents.minute {
-                                        // Use the new time on the current date
-                                        endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: currentDate) ?? newValue
-                                    } else {
-                                        endTime = newValue
-                                    }
-                                } else {
-                                    endTime = newValue
-                                }
-                            }
-                        ), displayedComponents: [.hourAndMinute])
-                            .onChange(of: editedDueDate) { oldValue, newValue in
-                                // Update end time to match new due date, preserving time component
-                                if let newDueDate = newValue {
-                                    let calendar = Calendar.current
-                                    let components = calendar.dateComponents([.hour, .minute], from: endTime)
-                                    if let hour = components.hour, let minute = components.minute {
-                                        endTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDueDate) ?? newDueDate
-                                    }
-                                }
-                            }
+                        }
 
                         // Validation message for invalid time range
                         if endTime <= startTime {
@@ -3799,8 +3755,37 @@ struct TaskDetailsView: View {
             }
             .presentationDetents([.large])
         }
+        .onChange(of: startTime) { oldValue, newValue in
+            // Preserve duration when start time changes (same as events)
+            let duration = oldValue.distance(to: endTime)
+            if duration > 0 {
+                endTime = newValue.addingTimeInterval(duration)
+            } else {
+                endTime = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue.addingTimeInterval(1800)
+            }
+
+            // Sync due date if the date component changed
+            let calendar = Calendar.current
+            if let dueDate = editedDueDate, !calendar.isDate(newValue, inSameDayAs: dueDate) {
+                editedDueDate = newValue
+            }
+        }
+        .sheet(isPresented: $showingEndTimePicker) {
+            EndTimePickerView(
+                startTime: startTime,
+                endTime: $endTime,
+                onDismiss: { showingEndTimePicker = false }
+            )
+        }
     }
-    
+
+    private func formatEndTime(_ time: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: time)
+    }
+
     private func saveTask() {
         isSaving = true
         

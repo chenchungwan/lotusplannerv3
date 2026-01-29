@@ -4,6 +4,7 @@ struct AddLogEntryView: View {
     @ObservedObject var viewModel: LogsViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var showingWakeTimePicker = false
     
     private func getFirstAvailableLogType() -> LogType {
         if appPrefs.showFoodLogs { return .food }
@@ -120,6 +121,18 @@ struct AddLogEntryView: View {
             viewModel.waterCupsConsumed = 4  // Default to 4 cups
             viewModel.sleepDate = currentDateTime
         }
+        .sheet(isPresented: $showingWakeTimePicker) {
+            EndTimePickerView(
+                startTime: viewModel.sleepBedTime ?? defaultBedTime,
+                endTime: Binding(
+                    get: { viewModel.sleepWakeUpTime ?? defaultWakeTime },
+                    set: { viewModel.sleepWakeUpTime = $0 }
+                ),
+                onDismiss: { showingWakeTimePicker = false },
+                title: "Wake Up Time",
+                maxMinutes: 720
+            )
+        }
     }
     
     private var weightForm: some View {
@@ -168,68 +181,47 @@ struct AddLogEntryView: View {
         Section("Sleep Details") {
             DatePicker("Date", selection: $viewModel.sleepDate, displayedComponents: [.date])
 
+            // Bed Time - inline DatePicker (like event Start time)
+            DatePicker("Bed Time", selection: Binding(
+                get: { viewModel.sleepBedTime ?? defaultBedTime },
+                set: { viewModel.sleepBedTime = $0 }
+            ), displayedComponents: [.date, .hourAndMinute])
+
+            // Wake Up Time - button opening preset picker (like event End time)
             HStack {
-                Text("Bed Time")
+                Text("Wake Up")
                 Spacer()
-                if let bedTime = viewModel.sleepBedTime {
-                    Text(formatDateTime(bedTime))
-                        .foregroundColor(.secondary)
-                    Button(action: {
-                        viewModel.sleepBedTime = nil
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                } else {
-                    Button("Set") {
-                        // Set to 11 PM on the day before sleepDate
-                        let calendar = Calendar.current
-                        let dayBefore = calendar.date(byAdding: .day, value: -1, to: viewModel.sleepDate) ?? viewModel.sleepDate
-                        viewModel.sleepBedTime = calendar.date(bySettingHour: 23, minute: 0, second: 0, of: dayBefore) ?? Date()
-                    }
+                Button(action: { showingWakeTimePicker = true }) {
+                    Text(formatDateTime(viewModel.sleepWakeUpTime ?? defaultWakeTime))
+                        .foregroundColor(.primary)
                 }
-            }
-
-            if viewModel.sleepBedTime != nil {
-                DatePicker("", selection: Binding(
-                    get: { viewModel.sleepBedTime ?? Date() },
-                    set: { viewModel.sleepBedTime = $0 }
-                ), displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
-            }
-
-            HStack {
-                Text("Wake Up Time")
-                Spacer()
-                if let wakeTime = viewModel.sleepWakeUpTime {
-                    Text(formatDateTime(wakeTime))
-                        .foregroundColor(.secondary)
-                    Button(action: {
-                        viewModel.sleepWakeUpTime = nil
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                } else {
-                    Button("Set") {
-                        // Set to 7 AM on sleepDate
-                        viewModel.sleepWakeUpTime = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: viewModel.sleepDate) ?? Date()
-                    }
-                }
-            }
-
-            if viewModel.sleepWakeUpTime != nil {
-                DatePicker("", selection: Binding(
-                    get: { viewModel.sleepWakeUpTime ?? Date() },
-                    set: { viewModel.sleepWakeUpTime = $0 }
-                ), displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
             }
         }
+        .onAppear {
+            if viewModel.sleepBedTime == nil {
+                viewModel.sleepBedTime = defaultBedTime
+            }
+            if viewModel.sleepWakeUpTime == nil {
+                viewModel.sleepWakeUpTime = defaultWakeTime
+            }
+        }
+        .onChange(of: viewModel.sleepBedTime) { oldValue, newValue in
+            guard let old = oldValue, let new = newValue, let wake = viewModel.sleepWakeUpTime else { return }
+            let duration = old.distance(to: wake)
+            if duration > 0 {
+                viewModel.sleepWakeUpTime = new.addingTimeInterval(duration)
+            }
+        }
+    }
+
+    private var defaultBedTime: Date {
+        let calendar = Calendar.current
+        let dayBefore = calendar.date(byAdding: .day, value: -1, to: viewModel.sleepDate) ?? viewModel.sleepDate
+        return calendar.date(bySettingHour: 23, minute: 0, second: 0, of: dayBefore) ?? Date()
+    }
+
+    private var defaultWakeTime: Date {
+        Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: viewModel.sleepDate) ?? Date()
     }
 
     private func formatTime(_ date: Date) -> String {

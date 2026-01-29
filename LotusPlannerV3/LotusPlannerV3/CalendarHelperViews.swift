@@ -387,6 +387,8 @@ struct EndTimePickerView: View {
     let startTime: Date
     @Binding var endTime: Date
     let onDismiss: () -> Void
+    var title: String = "End Time"
+    var maxMinutes: Int = 480
 
     @Environment(\.dismiss) private var dismiss
     @State private var showingCustomPicker = false
@@ -406,7 +408,7 @@ struct EndTimePickerView: View {
         fullFormatter.dateStyle = .short
         fullFormatter.timeStyle = .short
 
-        for minutes in stride(from: 0, through: 480, by: 15) {
+        for minutes in stride(from: 0, through: maxMinutes, by: 15) {
             if let optionTime = calendar.date(byAdding: .minute, value: minutes, to: startTime) {
                 let durationMinutes = minutes
                 let durationText: String
@@ -473,7 +475,7 @@ struct EndTimePickerView: View {
                     }
                 }
             }
-            .navigationTitle("End Time")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -486,10 +488,10 @@ struct EndTimePickerView: View {
             .sheet(isPresented: $showingCustomPicker) {
                 NavigationStack {
                     Form {
-                        DatePicker("End Time", selection: $endTime, in: startTime..., displayedComponents: [.date, .hourAndMinute])
+                        DatePicker(title, selection: $endTime, in: startTime..., displayedComponents: [.date, .hourAndMinute])
                             .environment(\.calendar, Calendar.mondayFirst)
                     }
-                    .navigationTitle("Custom End Time")
+                    .navigationTitle("Custom \(title)")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
