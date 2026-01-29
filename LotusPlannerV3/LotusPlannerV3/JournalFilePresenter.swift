@@ -16,9 +16,7 @@ class JournalFilePresenter: NSObject, NSFilePresenter {
     private func handleChange(for url: URL) {
         do {
             try changeHandler(url)
-        } catch {
-            devLog("📝 Error handling file change: \(error)")
-        }
+        } catch { }
     }
     
     func presentedItemDidChange() {

@@ -5,13 +5,13 @@ import Foundation
 // Remove this file in production
 
 extension GoalsManager {
-    
+
     /// Create sample data for testing
     func createSampleData() {
         // Clear existing data
         categories.removeAll()
         goals.removeAll()
-        
+
         // Create sample categories
         let sampleCategories = [
             GoalCategoryData(title: "Health & Fitness", displayPosition: 0),
@@ -21,16 +21,16 @@ extension GoalsManager {
             GoalCategoryData(title: "Finance", displayPosition: 4),
             GoalCategoryData(title: "Hobbies", displayPosition: 5)
         ]
-        
+
         for category in sampleCategories {
             addCategory(title: category.title, displayPosition: category.displayPosition)
         }
-        
+
         // Create sample goals
         let healthCategoryId = categories.first { $0.title == "Health & Fitness" }?.id ?? UUID()
         let careerCategoryId = categories.first { $0.title == "Career" }?.id ?? UUID()
         let personalCategoryId = categories.first { $0.title == "Personal Growth" }?.id ?? UUID()
-        
+
         let sampleGoals = [
             GoalData(
                 title: "Run 5K",
@@ -65,61 +65,46 @@ extension GoalsManager {
                 dueDate: GoalData.calculateDueDate(for: .month)
             )
         ]
-        
+
         for goal in sampleGoals {
             addGoal(goal)
         }
     }
-    
+
     /// Print current data for debugging
     func printCurrentData() {
-        devLog("=== GOALS DATA ===")
-        devLog("Categories (\(categories.count)):")
         for category in categories.sorted(by: { $0.displayPosition < $1.displayPosition }) {
-            devLog("  [\(category.displayPosition)] \(category.title)")
         }
-        
-        devLog("\nGoals (\(goals.count)):")
+
         for goal in goals {
             let categoryName = getCategoryById(goal.categoryId)?.title ?? "Unknown"
             let status = goal.isCompleted ? "✅" : "⭕"
             let timeframe = goal.targetTimeframe.displayName
-            devLog("  \(status) \(goal.title) (\(categoryName), \(timeframe))")
             if !goal.description.isEmpty {
-                devLog("    Description: \(goal.description)")
             }
             if !goal.successMetric.isEmpty {
-                devLog("    Success Metric: \(goal.successMetric)")
             }
-            devLog("    Due: \(goal.dueDate.formatted(date: .abbreviated, time: .omitted))")
             if goal.isOverdue {
-                devLog("    ⚠️ OVERDUE")
             } else if goal.daysRemaining > 0 {
-                devLog("    Days remaining: \(goal.daysRemaining)")
             }
         }
-        devLog("==================")
     }
-    
+
     /// Test data model functionality
     func runTests() {
-        devLog("🧪 Running Goals Data Model Tests...")
-        
+
         // Test 1: Create sample data
-        devLog("\n1. Creating sample data...")
         createSampleData()
         printCurrentData()
-        
+
         // Test 2: Update a goal
-        devLog("\n2. Updating a goal...")
         if let firstGoal = goals.first {
             var updatedGoal = firstGoal
             updatedGoal.isCompleted = true
             updateGoal(updatedGoal)
         }
-        
+
         // Test 3: Add a new goal
-        devLog("\n3. Adding a new goal...")
         if let healthCategory = categories.first(where: { $0.title == "Health & Fitness" }) {
             let newGoal = GoalData(
                 title: "Drink 8 Glasses of Water Daily",
@@ -131,15 +116,12 @@ extension GoalsManager {
             )
             addGoal(newGoal)
         }
-        
+
         // Test 4: Reorder categories
-        devLog("\n4. Reordering categories...")
         categories = categories.shuffled()
         reorderCategories()
-        
+
         printCurrentData()
-        
-        devLog("\n✅ Tests completed!")
     }
 }
 

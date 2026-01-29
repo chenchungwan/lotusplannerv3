@@ -77,9 +77,7 @@ class GoalsManager: ObservableObject {
                 )
             }
             categories = deduplicatedCategories(from: mappedCategories)
-        } catch {
-            devLog("Error loading categories from Core Data: \(error)")
-        }
+        } catch { }
         
         // Load goals
         let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
@@ -94,9 +92,7 @@ class GoalsManager: ObservableObject {
                    let jsonData = linkedTasksJSON.data(using: .utf8) {
                     do {
                         linkedTasks = try JSONDecoder().decode([LinkedTaskData].self, from: jsonData)
-                    } catch {
-                        devLog("Error decoding linked tasks JSON: \(error)")
-                    }
+                    } catch { }
                 }
 
                 return GoalData(
@@ -114,9 +110,7 @@ class GoalsManager: ObservableObject {
                 )
             }
             goals = deduplicatedGoals(from: mappedGoals)
-        } catch {
-            devLog("Error loading goals from Core Data: \(error)")
-        }
+        } catch { }
     }
     
     // MARK: - Category Management
@@ -127,13 +121,11 @@ class GoalsManager: ObservableObject {
     func addCategory(title: String, displayPosition: Int? = nil) {
         // Check if we've reached the maximum number of categories
         guard canAddCategory else {
-            devLog("Cannot add category: Maximum of \(GoalsManager.maxCategories) categories reached")
             return
         }
         
         let normalizedTitle = normalizeCategoryTitle(title)
         guard !categories.contains(where: { normalizeCategoryTitle($0.title) == normalizedTitle }) else {
-            devLog("Cannot add category: A category with the same name already exists")
             return
         }
         
@@ -291,11 +283,9 @@ class GoalsManager: ObservableObject {
             entity.userId = "icloud-user" // Fixed userId for CloudKit sync across devices
 
             saveContext()
-        } catch {
-            devLog("Error saving category to Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func updateCategoryInCoreData(_ category: GoalCategoryData) {
         let request: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", category.id.uuidString)
@@ -308,11 +298,9 @@ class GoalsManager: ObservableObject {
                 entity.updatedAt = category.updatedAt
                 saveContext()
             }
-        } catch {
-            devLog("Error updating category in Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func deleteCategoryFromCoreData(_ categoryId: UUID) {
         let request: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", categoryId.uuidString)
@@ -323,11 +311,9 @@ class GoalsManager: ObservableObject {
                 context.delete(entity)
             }
             saveContext()
-        } catch {
-            devLog("Error deleting category from Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func saveGoalToCoreData(_ goal: GoalData) {
         // Check if goal already exists
         let request: NSFetchRequest<Goal> = Goal.fetchRequest()
@@ -364,7 +350,6 @@ class GoalsManager: ObservableObject {
                     let jsonData = try JSONEncoder().encode(goal.linkedTasks)
                     entity.linkedTasksJSON = String(data: jsonData, encoding: .utf8)
                 } catch {
-                    devLog("Error encoding linked tasks to JSON: \(error)")
                     entity.linkedTasksJSON = nil
                 }
             } else {
@@ -372,11 +357,9 @@ class GoalsManager: ObservableObject {
             }
 
             saveContext()
-        } catch {
-            devLog("Error saving goal to Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func updateGoalInCoreData(_ goal: GoalData) {
         let request: NSFetchRequest<Goal> = Goal.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", goal.id.uuidString)
@@ -399,7 +382,6 @@ class GoalsManager: ObservableObject {
                         let jsonData = try JSONEncoder().encode(goal.linkedTasks)
                         entity.linkedTasksJSON = String(data: jsonData, encoding: .utf8)
                     } catch {
-                        devLog("Error encoding linked tasks to JSON: \(error)")
                         entity.linkedTasksJSON = nil
                     }
                 } else {
@@ -408,11 +390,9 @@ class GoalsManager: ObservableObject {
 
                 saveContext()
             }
-        } catch {
-            devLog("Error updating goal in Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func deleteGoalFromCoreData(_ goalId: UUID) {
         let request: NSFetchRequest<Goal> = Goal.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", goalId.uuidString)
@@ -423,11 +403,9 @@ class GoalsManager: ObservableObject {
                 context.delete(entity)
             }
             saveContext()
-        } catch {
-            devLog("Error deleting goal from Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func deleteGoalsFromCoreData(categoryId: UUID) {
         let request: NSFetchRequest<Goal> = Goal.fetchRequest()
         request.predicate = NSPredicate(format: "categoryId == %@", categoryId.uuidString)
@@ -438,18 +416,14 @@ class GoalsManager: ObservableObject {
                 context.delete(entity)
             }
             saveContext()
-        } catch {
-            devLog("Error deleting goals from Core Data: \(error)")
-        }
+        } catch { }
     }
-    
+
     private func saveContext() {
         if context.hasChanges {
             do {
                 try context.save()
-            } catch {
-                devLog("Error saving context: \(error)")
-            }
+            } catch { }
         }
     }
     
@@ -481,15 +455,12 @@ class GoalsManager: ObservableObject {
             // Save to trigger CloudKit export of deletions
             try context.save()
 
-            devLog("✅ GoalsManager: Deleted \(allCategories.count) categories and \(allGoals.count) goals from Core Data")
             devLog("☁️ GoalsManager: CloudKit will automatically sync deletions via NSPersistentCloudKitContainer")
 
             // Note: Manual CloudKit deletion removed - NSPersistentCloudKitContainer handles this automatically
             // The manual CloudKit records (GoalsData) will be handled separately if needed
 
-        } catch {
-            devLog("❌ GoalsManager: Error deleting all goals data: \(error)")
-        }
+        } catch { }
     }
     
     // MARK: - iCloud Sync

@@ -27,20 +27,15 @@ struct LotusPlannerV3App: App {
         UserDefaults.standard.set(true, forKey: "verboseLoggingEnabled")
         #endif
 
-        devLog("🚀 App: Initializing LotusPlannerV3...")
-
         // Validate configuration on app launch
         let configManager = ConfigurationManager.shared
         configManager.debugPrintConfigurationInfo()
 
         if !configManager.validateConfiguration() {
-            devLog("⚠️ Configuration validation failed", level: .warning, category: .general)
         }
 
         // Force iCloudManager to initialize (this will set up notification observers)
         _ = iCloudManager.shared
-
-        devLog("✅ App: Initialization complete")
     }
 
     var body: some Scene {

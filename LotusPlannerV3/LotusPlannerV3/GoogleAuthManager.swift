@@ -60,7 +60,6 @@ final class GoogleAuthManager: ObservableObject {
             // Fallback to UserDefaults for development (should be removed in production)
             #if DEBUG
             UserDefaults.standard.set(token, forKey: key)
-            devLog("⚠️ Failed to save to Keychain, fell back to UserDefaults: \(error)", level: .warning, category: .auth)
             #endif
         }
     }

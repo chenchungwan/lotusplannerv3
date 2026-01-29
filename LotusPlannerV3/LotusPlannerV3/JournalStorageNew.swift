@@ -61,7 +61,6 @@ class JournalStorageNew {
         NSFileCoordinator.addFilePresenter(presenter)
 
         filePresenters[key] = presenter
-        devLog("👀 JOURNAL STORAGE - Monitoring file for date: \(key)")
     }
 
     /// Stop monitoring a file
@@ -73,7 +72,6 @@ class JournalStorageNew {
         if let presenter = filePresenters[key] {
             NSFileCoordinator.removeFilePresenter(presenter)
             filePresenters.removeValue(forKey: key)
-            devLog("🚫 JOURNAL STORAGE - Stopped monitoring file for date: \(key)")
         }
     }
     
@@ -154,7 +152,6 @@ class JournalStorageNew {
 
         // Check if file already exists (this is an update/overwrite)
         let fileExists = FileManager.default.fileExists(atPath: url.path)
-        let existingSize = fileExists ? (try? Data(contentsOf: url))?.count ?? 0 : 0
 
         // Use NSFileCoordinator for proper iCloud Documents sync
         let coordinator = NSFileCoordinator(filePresenter: nil)
@@ -183,22 +180,11 @@ class JournalStorageNew {
             await ensureFileUploaded(url: url)
         }
         
-        // Print save information
-        let operation = fileExists ? "OVERWRITE" : "CREATE"
-        devLog("💾 JOURNAL SAVE - \(operation) drawing file:")
-        devLog("   📍 Location: \(url.path)")
-        devLog("   📅 Date: \(formatDate(date))")
         devLog("   ☁️ Storage: \(isInCloud ? "iCloud" : "Local")")
-        devLog("   ✏️ Strokes: \(drawing.strokes.count)")
-        devLog("   📏 New size: \(data.count) bytes (\(String(format: "%.2f", Double(data.count) / 1024.0)) KB)")
         if fileExists {
-            devLog("   ⚠️ Previous size: \(existingSize) bytes (\(String(format: "%.2f", Double(existingSize) / 1024.0)) KB)")
-            devLog("   🔄 File overwritten (previous data replaced)")
             if isInCloud {
                 devLog("   ☁️ Waiting for iCloud upload to complete...")
             }
-        } else {
-            devLog("   ✨ New file created")
         }
         
         // Cache it
@@ -216,8 +202,6 @@ class JournalStorageNew {
     
     /// Load a drawing from storage with robust iCloud sync
     func load(for date: Date) async -> PKDrawing? {
-        let dateKey = formatDate(date)
-        
         // Check cache first
         if let cached = getCached(date) {
             return cached
@@ -250,11 +234,6 @@ class JournalStorageNew {
                     await ensureFileDownloaded(url: url)
                 }
 
-                // Get file modification date to verify freshness
-                var modificationDate: AnyObject?
-                try? (url as NSURL).getResourceValue(&modificationDate, forKey: URLResourceKey.contentModificationDateKey)
-                let modDate = modificationDate as? Date
-
                 // Use NSFileCoordinator for proper iCloud Documents sync when reading
                 let coordinator = NSFileCoordinator(filePresenter: nil)
                 var coordinatorError: NSError?
@@ -278,28 +257,13 @@ class JournalStorageNew {
                                 userInfo: [NSLocalizedDescriptionKey: "No data loaded"])
                 }
 
-                // Print raw iCloud data information
-                let fileSize = loadedData.count
                 let storageType = isInCloud ? "iCloud" : "Local"
-                devLog("📦 JOURNAL RAW DATA - Drawing file:")
-                devLog("   📍 Location: \(url.path)")
                 devLog("   ☁️ Storage: \(storageType)")
-                devLog("   📏 File size: \(fileSize) bytes (\(String(format: "%.2f", Double(fileSize) / 1024.0)) KB)")
-                devLog("   📅 Date: \(formatDate(date))")
-                if let modDate = modDate {
-                    let formatter = DateFormatter()
-                    formatter.dateStyle = .medium
-                    formatter.timeStyle = .medium
-                    devLog("   🕐 Modified: \(formatter.string(from: modDate))")
-                }
 
                 let drawing = try PKDrawing(data: loadedData)
-                
-                // Validate the drawing has content
+
                 // Cache it
                 setCache(drawing, for: date)
-                
-                devLog("   ✏️ Strokes: \(drawing.strokes.count)")
                 
                 return drawing
                 
@@ -433,7 +397,6 @@ class JournalStorageNew {
     /// Clear cache for a specific date to force fresh load from iCloud
     func clearCache(for date: Date) {
         setCache(nil, for: date)
-        devLog("🧹 JOURNAL STORAGE - Cleared cache for date: \(formatDate(date))")
     }
 
     /// Clear all cached drawings
@@ -441,7 +404,6 @@ class JournalStorageNew {
         cacheLock.lock()
         defer { cacheLock.unlock() }
         cache.removeAll()
-        devLog("🧹 JOURNAL STORAGE - Cleared all cached drawings")
     }
     
     // MARK: - Utilities

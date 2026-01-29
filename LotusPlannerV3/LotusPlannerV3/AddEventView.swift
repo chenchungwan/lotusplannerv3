@@ -644,20 +644,10 @@ struct AddItemView: View {
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw PlannerCalendarError.invalidResponse
                 }
-                
-                
+
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-            if let responseString = String(data: data, encoding: .utf8) {
-                devLog("   - ❌ Error response: \(responseString)")
-            }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
-        
-        // Log successful creation
-        if let responseString = String(data: data, encoding: .utf8) {
-            devLog("   - ✅ Success! Response: \(responseString.prefix(500))")
-        }
-        devLog("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
 
         // Refresh the current view to reflect changes
         Task {
@@ -683,58 +673,19 @@ struct AddItemView: View {
         guard let ev = existingEvent else { return }
         guard let originalAccountKind = existingEventAccountKind else { return }
         let targetAccountKind = selectedAccountKind ?? originalAccountKind
-        
-        // Log existing event details
-        let calendar = Calendar.current
-        let existingStartTime = ev.startTime ?? Date()
-        let existingEndTime = ev.endTime ?? (ev.startTime ?? Date()).addingTimeInterval(1800)
-        let existingStartHour = calendar.component(.hour, from: existingStartTime)
-        let existingStartMinute = calendar.component(.minute, from: existingStartTime)
-        let existingEndHour = calendar.component(.hour, from: existingEndTime)
-        let existingEndMinute = calendar.component(.minute, from: existingEndTime)
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .short
-        dateFormatter.timeStyle = .short
-        
-        devLog("📅 EVENT UPDATE - Existing Event Details:")
-        devLog("   - Event ID: \(ev.id)")
-        devLog("   - Title: \(ev.summary)")
-        devLog("   - isAllDay: \(ev.isAllDay)")
-        devLog("   - Start Time: \(dateFormatter.string(from: existingStartTime)) (\(existingStartHour):\(String(format: "%02d", existingStartMinute)))")
-        devLog("   - End Time: \(dateFormatter.string(from: existingEndTime)) (\(existingEndHour):\(String(format: "%02d", existingEndMinute)))")
-        devLog("   - Original Account: \(originalAccountKind)")
-        devLog("   - Target Account: \(targetAccountKind)")
-        
-        // Log current state values
-        let currentStartHour = calendar.component(.hour, from: eventStart)
-        let currentStartMinute = calendar.component(.minute, from: eventStart)
-        let currentEndHour = calendar.component(.hour, from: eventEnd)
-        let currentEndMinute = calendar.component(.minute, from: eventEnd)
-        
-        devLog("📅 EVENT UPDATE - Current State Values:")
-        devLog("   - isAllDay: \(isAllDay)")
-        devLog("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(currentStartHour):\(String(format: "%02d", currentStartMinute)))")
-        devLog("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(currentEndHour):\(String(format: "%02d", currentEndMinute)))")
-        devLog("   - originalIsAllDay: \(originalIsAllDay)")
-        devLog("   - originalEventStart: \(dateFormatter.string(from: originalEventStart))")
-        devLog("   - originalEventEnd: \(dateFormatter.string(from: originalEventEnd))")
-        
+
         isCreating = true
 
         Task {
             do {
                 // Check if we're moving between accounts
                 if originalAccountKind != targetAccountKind {
-                    devLog("📅 EVENT UPDATE - Moving between accounts")
-                    
                     // First create the event in the new account
                     try await createEventInAccount(targetAccountKind)
-                    
+
                     // Then delete the event from the original account
                     try await deleteEventFromAccount(ev, from: originalAccountKind, viewModel: calendarViewModel)
-                    
                 } else {
-                    devLog("📅 EVENT UPDATE - Updating in same account")
                     // Same account - just update the existing event
                     try await updateEventInSameAccount(ev, accountKind: originalAccountKind)
                 }
@@ -752,23 +703,6 @@ struct AddItemView: View {
     }
     
     private func createEventInAccount(_ accountKind: GoogleAuthManager.AccountKind) async throws {
-        
-        // Log what's being sent to API
-        let calendar = Calendar.current
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .short
-        dateFormatter.timeStyle = .short
-        let startHour = calendar.component(.hour, from: eventStart)
-        let startMinute = calendar.component(.minute, from: eventStart)
-        let endHour = calendar.component(.hour, from: eventEnd)
-        let endMinute = calendar.component(.minute, from: eventEnd)
-        
-        devLog("📅 CREATE EVENT IN ACCOUNT - Sending to API:")
-        devLog("   - Account: \(accountKind)")
-        devLog("   - isAllDay: \(isAllDay)")
-        devLog("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
-        devLog("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
-        
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
         var request = URLRequest(url: url)
@@ -788,15 +722,11 @@ struct AddItemView: View {
             let (startDate, exclusiveEndDate) = normalizedAllDayDateRange(using: calendar)
             startDict["date"] = dateFormatter.string(from: startDate)
             endDict["date"] = dateFormatter.string(from: exclusiveEndDate)
-            devLog("   - Start dict (all-day): \(startDict)")
-            devLog("   - End dict (all-day): \(endDict)")
         } else {
             startDict["dateTime"] = isoFormatter.string(from: eventStart)
             endDict["dateTime"] = isoFormatter.string(from: eventEnd)
             startDict["timeZone"] = TimeZone.current.identifier
             endDict["timeZone"] = TimeZone.current.identifier
-            devLog("   - Start dict (timed): \(startDict)")
-            devLog("   - End dict (timed): \(endDict)")
         }
 
         var body: [String: Any] = [
@@ -805,10 +735,6 @@ struct AddItemView: View {
             "end": endDict
         ]
         if !itemNotes.isEmpty { body["description"] = itemNotes }
-        
-        devLog("   - Start dict: \(startDict)")
-        devLog("   - End dict: \(endDict)")
-        devLog("   - Body being sent: \(body)")
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -816,58 +742,10 @@ struct AddItemView: View {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlannerCalendarError.invalidResponse
         }
-        
-        
+
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-            if let responseString = String(data: data, encoding: .utf8) {
-                devLog("   - ❌ Error response: \(responseString)")
-            }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
-        
-        // Log successful creation and parse response to see what was saved
-        if let responseString = String(data: data, encoding: .utf8),
-           let responseData = responseString.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
-            
-            devLog("   - ✅ Success! Response received")
-            
-            // Parse response to see what was saved
-            if let startDict = json["start"] as? [String: Any] {
-                devLog("   - Response start: \(startDict)")
-            }
-            if let endDict = json["end"] as? [String: Any] {
-                devLog("   - Response end: \(endDict)")
-            }
-            
-            // Extract dates from response
-            if let startDict = json["start"] as? [String: Any],
-               let dateTimeStr = startDict["dateTime"] as? String {
-                let isoFormatter = ISO8601DateFormatter()
-                if let savedStartTime = isoFormatter.date(from: dateTimeStr) {
-                    let savedFormatter = DateFormatter()
-                    savedFormatter.dateStyle = .short
-                    savedFormatter.timeStyle = .short
-                    let savedStartHour = calendar.component(.hour, from: savedStartTime)
-                    let savedStartMinute = calendar.component(.minute, from: savedStartTime)
-                    devLog("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
-                }
-            }
-            if let endDict = json["end"] as? [String: Any],
-               let dateTimeStr = endDict["dateTime"] as? String {
-                let isoFormatter = ISO8601DateFormatter()
-                if let savedEndTime = isoFormatter.date(from: dateTimeStr) {
-                    let savedFormatter = DateFormatter()
-                    savedFormatter.dateStyle = .short
-                    savedFormatter.timeStyle = .short
-                    let savedEndHour = calendar.component(.hour, from: savedEndTime)
-                    let savedEndMinute = calendar.component(.minute, from: savedEndTime)
-                    devLog("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
-                }
-            }
-        }
-        devLog("📅 CREATE EVENT IN ACCOUNT - Event created successfully")
-        
     }
     
     private func deleteEventFromAccount(_ event: GoogleCalendarEvent, from accountKind: GoogleAuthManager.AccountKind, viewModel: CalendarViewModel) async throws {
@@ -882,39 +760,17 @@ struct AddItemView: View {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("*", forHTTPHeaderField: "If-Match")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlannerCalendarError.invalidResponse
         }
-        
-        
+
         guard httpResponse.statusCode == 204 || httpResponse.statusCode == 200 else {
-            if let responseString = String(data: data, encoding: .utf8) {
-            }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
-        
     }
     
     private func updateEventInSameAccount(_ event: GoogleCalendarEvent, accountKind: GoogleAuthManager.AccountKind) async throws {
-        
-        // Log what's being sent to API
-        let calendar = Calendar.current
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .short
-        dateFormatter.timeStyle = .short
-        let startHour = calendar.component(.hour, from: eventStart)
-        let startMinute = calendar.component(.minute, from: eventStart)
-        let endHour = calendar.component(.hour, from: eventEnd)
-        let endMinute = calendar.component(.minute, from: eventEnd)
-        
-        devLog("📅 UPDATE EVENT IN SAME ACCOUNT - Sending to API:")
-        devLog("   - Event ID: \(event.id)")
-        devLog("   - Account: \(accountKind)")
-        devLog("   - isAllDay: \(isAllDay)")
-        devLog("   - eventStart: \(dateFormatter.string(from: eventStart)) (\(startHour):\(String(format: "%02d", startMinute)))")
-        devLog("   - eventEnd: \(dateFormatter.string(from: eventEnd)) (\(endHour):\(String(format: "%02d", endMinute)))")
-        
         let accessToken = try await authManager.getAccessToken(for: accountKind)
         let calId = event.calendarId ?? "primary"
         let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
@@ -963,10 +819,6 @@ struct AddItemView: View {
             // Always include description so clearing notes works
             "description": itemNotes
         ]
-        
-        devLog("   - Start dict: \(startDict)")
-        devLog("   - End dict: \(endDict)")
-        devLog("   - Body being sent: \(body)")
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -974,58 +826,10 @@ struct AddItemView: View {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlannerCalendarError.invalidResponse
         }
-        
-        
+
         guard httpResponse.statusCode == 200 else {
-            if let responseString = String(data: data, encoding: .utf8) {
-                devLog("   - ❌ Error response: \(responseString)")
-            }
             throw CalendarManager.shared.handleHttpError(httpResponse.statusCode)
         }
-        
-        // Log successful update and parse response to see what was saved
-        if let responseString = String(data: data, encoding: .utf8),
-           let responseData = responseString.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] {
-            
-            devLog("   - ✅ Success! Response received")
-            
-            // Parse response to see what was saved
-            if let startDict = json["start"] as? [String: Any] {
-                devLog("   - Response start: \(startDict)")
-            }
-            if let endDict = json["end"] as? [String: Any] {
-                devLog("   - Response end: \(endDict)")
-            }
-            
-            // Extract dates from response
-            if let startDict = json["start"] as? [String: Any],
-               let dateTimeStr = startDict["dateTime"] as? String {
-                let isoFormatter = ISO8601DateFormatter()
-                if let savedStartTime = isoFormatter.date(from: dateTimeStr) {
-                    let savedFormatter = DateFormatter()
-                    savedFormatter.dateStyle = .short
-                    savedFormatter.timeStyle = .short
-                    let savedStartHour = calendar.component(.hour, from: savedStartTime)
-                    let savedStartMinute = calendar.component(.minute, from: savedStartTime)
-                    devLog("   - 📅 Saved Start Time: \(savedFormatter.string(from: savedStartTime)) (\(savedStartHour):\(String(format: "%02d", savedStartMinute)))")
-                }
-            }
-            if let endDict = json["end"] as? [String: Any],
-               let dateTimeStr = endDict["dateTime"] as? String {
-                let isoFormatter = ISO8601DateFormatter()
-                if let savedEndTime = isoFormatter.date(from: dateTimeStr) {
-                    let savedFormatter = DateFormatter()
-                    savedFormatter.dateStyle = .short
-                    savedFormatter.timeStyle = .short
-                    let savedEndHour = calendar.component(.hour, from: savedEndTime)
-                    let savedEndMinute = calendar.component(.minute, from: savedEndTime)
-                    devLog("   - 📅 Saved End Time: \(savedFormatter.string(from: savedEndTime)) (\(savedEndHour):\(String(format: "%02d", savedEndMinute)))")
-                }
-            }
-        }
-        devLog("📅 UPDATE EVENT IN SAME ACCOUNT - Update completed")
-        
     }
     
     // MARK: - Delete Event

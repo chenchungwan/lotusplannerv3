@@ -1191,12 +1191,7 @@ struct GlobalNavBar: View {
         // NOW reload all data from Core Data
         // Reload task time windows
         await MainActor.run {
-            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
             TaskTimeWindowManager.shared.loadTimeWindows()
-            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-            if afterCount != beforeCount {
-                devLog("✅ GlobalNavBar: Task time windows changed (\(beforeCount) → \(afterCount))")
-            }
         }
 
         // Reload calendar events based on current interval
@@ -1255,14 +1250,9 @@ struct GlobalNavBar: View {
         // NOW reload all data from Core Data
         // Reload task time windows
         await MainActor.run {
-            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
             TaskTimeWindowManager.shared.loadTimeWindows()
-            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-            if afterCount != beforeCount {
-                devLog("✅ GlobalNavBar: Task time windows changed (\(beforeCount) → \(afterCount))")
-            }
         }
-        
+
         // Reload calendar events based on current interval
         switch navigationManager.currentInterval {
         case .day:
@@ -1293,8 +1283,6 @@ struct GlobalNavBar: View {
         
         // Update last sync time
         iCloudManager.shared.lastSyncDate = Date()
-        
-        devLog("✅ NAV BAR SYNC (for date): Completed successfully!")
     }
     
 }

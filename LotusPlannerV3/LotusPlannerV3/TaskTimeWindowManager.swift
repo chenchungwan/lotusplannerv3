@@ -6,12 +6,12 @@ import SwiftUI
 @MainActor
 class TaskTimeWindowManager: ObservableObject {
     static let shared = TaskTimeWindowManager()
-    
+
     @Published private(set) var timeWindows: [TaskTimeWindowData] = []
-    
+
     private let coreDataManager = CoreDataManager.shared
     private let authManager = GoogleAuthManager.shared
-    
+
     private init() {
         loadTimeWindows()
         cleanupInvalidTimeWindows()
@@ -21,27 +21,18 @@ class TaskTimeWindowManager: ObservableObject {
     /// Remove time windows marked as all-day (these should not exist)
     /// This is a one-time cleanup for data created before the fix
     private func cleanupInvalidTimeWindows() {
-        devLog("🧹 TaskTimeWindowManager: Cleaning up invalid time windows...")
         let invalidWindows = timeWindows.filter { $0.isAllDay }
 
         if !invalidWindows.isEmpty {
-            devLog("🧹 Found \(invalidWindows.count) time windows marked as all-day (these should not exist)")
             for window in invalidWindows {
-                devLog("🧹 Deleting time window for task \(window.taskId) (isAllDay=true)")
                 deleteTimeWindow(for: window.taskId)
             }
-            devLog("✅ TaskTimeWindowManager: Cleanup complete")
-        } else {
-            devLog("✅ TaskTimeWindowManager: No invalid time windows found")
         }
     }
 
     /// Clean up time windows for tasks that are all-day (based on task data)
     /// Call this after tasks are loaded to remove time windows for all-day tasks
     func cleanupTimeWindowsForAllDayTasks(tasks: [GoogleTask]) {
-        devLog("🧹 TaskTimeWindowManager: Checking for time windows on all-day tasks...")
-        devLog("🧹 Total tasks to check: \(tasks.count)")
-        devLog("🧹 Current time windows count: \(timeWindows.count)")
         var deletedCount = 0
 
         for task in tasks {
@@ -49,7 +40,6 @@ class TaskTimeWindowManager: ObservableObject {
             if let due = task.due, due.count == 10 {
                 // This is an all-day task - it should not have a time window
                 if getTimeWindow(for: task.id) != nil {
-                    devLog("🧹 Deleting time window for all-day task: \(task.id) (due: \(due), title: \(task.title))")
                     deleteTimeWindow(for: task.id)
                     deletedCount += 1
                 }
@@ -57,42 +47,35 @@ class TaskTimeWindowManager: ObservableObject {
         }
 
         if deletedCount > 0 {
-            devLog("✅ TaskTimeWindowManager: Deleted \(deletedCount) time windows from all-day tasks")
-            devLog("✅ Remaining time windows count: \(timeWindows.count)")
             // Force UI update by triggering objectWillChange
             objectWillChange.send()
-        } else {
-            devLog("✅ TaskTimeWindowManager: No time windows found on all-day tasks")
         }
     }
-    
+
     // MARK: - Load Time Windows
     func loadTimeWindows() {
-        devLog("📖 TaskTimeWindowManager: loadTimeWindows() called")
         // Don't filter by userId - CloudKit already scopes data to the iCloud account
         // This ensures task times sync across all devices using the same iCloud account
-        devLog("📖 TaskTimeWindowManager: Loading ALL time windows (no userId filter)")
         timeWindows = coreDataManager.loadAllTaskTimeWindows(for: nil)
-        devLog("📖 TaskTimeWindowManager: Loaded \(timeWindows.count) time windows")
     }
-    
+
     // MARK: - Get Time Window
     /// Get the time window for a specific task ID
     func getTimeWindow(for taskId: String) -> TaskTimeWindowData? {
         return timeWindows.first { $0.taskId == taskId }
     }
-    
+
     /// Get time window for a task, or create a default one if it doesn't exist
     func getOrCreateTimeWindow(for taskId: String, dueDate: Date) -> TaskTimeWindowData {
         if let existing = getTimeWindow(for: taskId) {
             return existing
         }
-        
+
         // Create a default time window (all-day)
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: dueDate)
         let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dueDate) ?? startOfDay
-        
+
         return TaskTimeWindowData(
             taskId: taskId,
             startTime: startOfDay,
@@ -101,12 +84,10 @@ class TaskTimeWindowManager: ObservableObject {
             userId: getUserId()
         )
     }
-    
+
     // MARK: - Save Time Window
     /// Save or update a time window for a task
     func saveTimeWindow(_ timeWindow: TaskTimeWindowData) {
-        devLog("📝 TaskTimeWindowManager: saveTimeWindow(TaskTimeWindowData) called")
-        
         // Create updated version with current timestamp
         let updatedWindow = TaskTimeWindowData(
             id: timeWindow.id,
@@ -118,22 +99,17 @@ class TaskTimeWindowManager: ObservableObject {
             createdAt: timeWindow.createdAt,
             updatedAt: Date()
         )
-        
-        devLog("📝 TaskTimeWindowManager: Calling coreDataManager.saveTaskTimeWindow...")
+
         coreDataManager.saveTaskTimeWindow(updatedWindow)
-        
+
         // Update local cache
         if let index = timeWindows.firstIndex(where: { $0.taskId == updatedWindow.taskId }) {
-            devLog("📝 TaskTimeWindowManager: Updating existing time window in cache")
             timeWindows[index] = updatedWindow
         } else {
-            devLog("📝 TaskTimeWindowManager: Adding new time window to cache")
             timeWindows.append(updatedWindow)
         }
-        
-        devLog("✅ TaskTimeWindowManager: Time window saved successfully")
     }
-    
+
     /// Save time window from components
     func saveTimeWindow(
         taskId: String,
@@ -141,16 +117,8 @@ class TaskTimeWindowManager: ObservableObject {
         endTime: Date,
         isAllDay: Bool = false
     ) {
-        devLog("📝 TaskTimeWindowManager: saveTimeWindow called")
-        devLog("📝   taskId: \(taskId)")
-        devLog("📝   startTime: \(startTime)")
-        devLog("📝   endTime: \(endTime)")
-        devLog("📝   isAllDay: \(isAllDay)")
-
         // CRITICAL: Never save time windows for all-day tasks
         if isAllDay {
-            devLog("⚠️ TaskTimeWindowManager: Refusing to save time window with isAllDay=true for task \(taskId)")
-            devLog("⚠️ TaskTimeWindowManager: Time windows should only exist for timed tasks")
             // Delete any existing time window instead
             deleteTimeWindow(for: taskId)
             return
@@ -159,7 +127,6 @@ class TaskTimeWindowManager: ObservableObject {
         // Validate that start and end are on the same day
         let calendar = Calendar.current
         guard calendar.isDate(startTime, inSameDayAs: endTime) else {
-            devLog("⚠️ TaskTimeWindowManager: Start and end times must be on the same day")
             return
         }
 
@@ -174,17 +141,16 @@ class TaskTimeWindowManager: ObservableObject {
             updatedAt: Date()
         )
 
-        devLog("📝 TaskTimeWindowManager: Calling saveTimeWindow(timeWindow)...")
         saveTimeWindow(timeWindow)
     }
-    
+
     // MARK: - Delete Time Window
     /// Delete the time window for a task
     func deleteTimeWindow(for taskId: String) {
         coreDataManager.deleteTaskTimeWindow(for: taskId)
         timeWindows.removeAll { $0.taskId == taskId }
     }
-    
+
     // MARK: - Helper Methods
     private func getUserId() -> String {
         // Use a fixed userId for TaskTimeWindows since CloudKit already scopes data to iCloud account
@@ -192,27 +158,26 @@ class TaskTimeWindowManager: ObservableObject {
         // regardless of which Google account they're logged into
         return "icloud-user"
     }
-    
+
     // MARK: - Query Methods
     /// Get all time windows for a specific date
     func getTimeWindows(for date: Date) -> [TaskTimeWindowData] {
         let calendar = Calendar.current
         let targetDay = calendar.startOfDay(for: date)
-        
+
         return timeWindows.filter { window in
             let windowDay = calendar.startOfDay(for: window.startTime)
             return windowDay == targetDay
         }
     }
-    
+
     /// Get all time windows for tasks that are all-day
     func getAllDayTimeWindows() -> [TaskTimeWindowData] {
         return timeWindows.filter { $0.isAllDay }
     }
-    
+
     /// Get all time windows for tasks that have specific times
     func getTimedTimeWindows() -> [TaskTimeWindowData] {
         return timeWindows.filter { !$0.isAllDay }
     }
 }
-

@@ -98,9 +98,7 @@ class CustomLogManager: ObservableObject {
                     updatedAt: entity.updatedAt ?? Date()
                 )
             }
-        } catch {
-            devLog("Error loading custom log items: \(error)")
-        }
+        } catch { }
     }
     
     private func loadEntries() {
@@ -119,9 +117,7 @@ class CustomLogManager: ObservableObject {
                     updatedAt: entity.updatedAt ?? Date()
                 )
             }
-        } catch {
-            devLog("Error loading custom log entries: \(error)")
-        }
+        } catch { }
     }
     
     // MARK: - Item Management
@@ -157,9 +153,7 @@ class CustomLogManager: ObservableObject {
                 loadItems()
                 // CloudKit sync handled automatically by NSPersistentCloudKitContainer
             }
-        } catch {
-            devLog("Error updating custom log item: \(error)")
-        }
+        } catch { }
     }
     
     func deleteItem(_ itemId: UUID) {
@@ -172,9 +166,7 @@ class CustomLogManager: ObservableObject {
             for entity in entities {
                 context.delete(entity)
             }
-        } catch {
-            devLog("Error deleting custom log item: \(error)")
-        }
+        } catch { }
         
         // Delete all entries for this item
         let entryRequest: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
@@ -185,9 +177,7 @@ class CustomLogManager: ObservableObject {
             for entity in entities {
                 context.delete(entity)
             }
-        } catch {
-            devLog("Error deleting custom log entries: \(error)")
-        }
+        } catch { }
         
         saveContext()
         loadData()
@@ -228,9 +218,7 @@ class CustomLogManager: ObservableObject {
                     saveContext()
                     loadEntries()
                 }
-            } catch {
-                devLog("Error updating entry: \(error)")
-            }
+            } catch { }
         } else {
             // Create new entry
             let entry = CustomLogEntryData(
@@ -280,9 +268,7 @@ class CustomLogManager: ObservableObject {
         if context.hasChanges {
             do {
                 try context.save()
-            } catch {
-                devLog("Error saving custom log context: \(error)")
-            }
+            } catch { }
         }
     }
     
@@ -323,15 +309,12 @@ class CustomLogManager: ObservableObject {
             // Save to trigger CloudKit export of deletions
             try context.save()
 
-            devLog("✅ CustomLogManager: Deleted \(allItems.count) items and \(allEntries.count) entries from Core Data")
             devLog("☁️ CustomLogManager: CloudKit will automatically sync deletions via NSPersistentCloudKitContainer")
 
             // Update visibility
             updateCustomLogVisibility()
 
-        } catch {
-            devLog("❌ CustomLogManager: Error deleting all custom log data: \(error)")
-        }
+        } catch { }
     }
     
     // MARK: - Visibility Management
@@ -363,7 +346,6 @@ class CustomLogManager: ObservableObject {
             for item in allItems {
                 // Use UUID id as the unique key (not title)
                 guard let itemId = item.id else {
-                    devLog("⚠️ CustomLogManager: Found item with nil id, deleting...")
                     duplicates.append(item)
                     continue
                 }
@@ -387,11 +369,8 @@ class CustomLogManager: ObservableObject {
             if !duplicates.isEmpty {
                 duplicates.forEach { context.delete($0) }
                 saveContext()
-                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log item(s) with same UUID")
             }
-        } catch {
-            devLog("❌ CustomLogManager: Failed to cleanup duplicate items: \(error)")
-        }
+        } catch { }
     }
     
     private func cleanupDuplicateEntries() {
@@ -406,7 +385,6 @@ class CustomLogManager: ObservableObject {
             for entry in allEntries {
                 // Use UUID id as the unique key (not itemId+date)
                 guard let entryId = entry.id else {
-                    devLog("⚠️ CustomLogManager: Found entry with nil id, deleting...")
                     duplicates.append(entry)
                     continue
                 }
@@ -430,10 +408,7 @@ class CustomLogManager: ObservableObject {
             if !duplicates.isEmpty {
                 duplicates.forEach { context.delete($0) }
                 saveContext()
-                devLog("🧹 CustomLogManager: Removed \(duplicates.count) duplicate custom log entry/entries with same UUID")
             }
-        } catch {
-            devLog("❌ CustomLogManager: Failed to cleanup duplicate entries: \(error)")
-        }
+        } catch { }
     }
 }

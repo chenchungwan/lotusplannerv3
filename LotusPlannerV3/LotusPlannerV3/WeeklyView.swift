@@ -2518,13 +2518,11 @@ extension WeeklyView {
         let weekStart = weekInterval.start
         let weekEnd = weekInterval.end
         let result = selectedDate >= weekStart && selectedDate < weekEnd
-        devLog("📅 isCurrentWeek check: selectedDate=\(selectedDate), weekStart=\(weekStart), weekEnd=\(weekEnd), result=\(result)")
         return result
     }
     
     private func scrollToCurrentDay() {
         // Trigger scroll by toggling the state
-        devLog("🔄 scrollToCurrentDay() called, toggling scroll triggers...")
         scrollToCurrentDayTrigger.toggle()
         scrollToCurrentDayHorizontalTrigger.toggle()
         scrollToCurrentDayRowTrigger.toggle()
@@ -2565,20 +2563,16 @@ extension WeeklyView {
             let today = Date()
             if let index = weekDates.firstIndex(where: { calendar.isDate($0, inSameDayAs: today) }) {
                 dayIndex = index
-                devLog("📍 [Column View] Scrolling to current day: index \(dayIndex)")
             } else {
                 // Fallback to Monday if today not found
                 dayIndex = 0
-                devLog("📍 [Column View] Today not found in weekDates, defaulting to Monday")
             }
         } else {
             // Default to Monday (index 0) for non-current weeks
             dayIndex = 0
-            devLog("📍 [Column View] Scrolling to Monday (not current week)")
         }
-        
+
         // Scroll to the current day column horizontally
-        devLog("📍 [Column View] Attempting to scroll to ID: day_\(dayIndex)")
         proxy.scrollTo("day_\(dayIndex)", anchor: .leading)
     }
     
@@ -2594,20 +2588,16 @@ extension WeeklyView {
             let today = Date()
             if let index = weekDates.firstIndex(where: { calendar.isDate($0, inSameDayAs: today) }) {
                 dayIndex = index
-                devLog("📍 [Row View] Scrolling to current day: index \(dayIndex)")
             } else {
                 // Fallback to Monday if today not found
                 dayIndex = 0
-                devLog("📍 [Row View] Today not found in weekDates, defaulting to Monday")
             }
         } else {
             // Default to Monday (index 0) for non-current weeks
             dayIndex = 0
-            devLog("📍 [Row View] Scrolling to Monday (not current week)")
         }
-        
+
         // Scroll to the current day row vertically
-        devLog("📍 [Row View] Attempting to scroll to ID: day_row_\(dayIndex)")
         proxy.scrollTo("day_row_\(dayIndex)", anchor: .top)
     }
 

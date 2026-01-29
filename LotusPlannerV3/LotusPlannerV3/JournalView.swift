@@ -84,7 +84,6 @@ struct JournalView: View {
     
     private func loadDrawingAsync() async {
         guard !isSavingOrLoading else {
-            devLog("⚠️ JournalView: Skipping drawing load - save/load in progress")
             return
         }
 
@@ -138,16 +137,6 @@ struct JournalView: View {
             
             saveStatus = .saved
             
-            // Print detailed save information
-            devLog("💾 JOURNAL EXIT - Saving content for date: \(formatDateForDisplay(saveDate))")
-            devLog("💾 JOURNAL EXIT - Drawing strokes: \(canvasView.drawing.strokes.count)")
-            devLog("💾 JOURNAL EXIT - Photos count: \(photos.count)")
-            if !photos.isEmpty {
-                for (index, photo) in photos.enumerated() {
-                    devLog("💾 JOURNAL EXIT - Photo \(index + 1): \(photo.id) (\(Int(photo.size.width))x\(Int(photo.size.height)))")
-                }
-            }
-            
             // Clear save status after 2 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 if case .saved = saveStatus {
@@ -157,7 +146,6 @@ struct JournalView: View {
             
         } catch {
             saveStatus = .error(error.localizedDescription)
-            devLog("❌ JOURNAL EXIT - Save failed: \(error.localizedDescription)")
         }
         
         isSavingOrLoading = false
@@ -190,27 +178,6 @@ struct JournalView: View {
         
         loadedDate = targetDate
         contentDate = targetDate  // Set the content date to the loaded date
-        
-        // Print detailed render information with raw iCloud data
-        devLog("📖 JOURNAL RENDER - Loading content for date: \(formatDateForDisplay(targetDate))")
-        
-        // Print drawing data summary
-        let drawingData = canvasView.drawing.dataRepresentation()
-        devLog("📖 JOURNAL RENDER - Drawing:")
-        devLog("   ✏️ Strokes: \(canvasView.drawing.strokes.count)")
-        devLog("   📏 Data size: \(drawingData.count) bytes (\(String(format: "%.2f", Double(drawingData.count) / 1024.0)) KB)")
-        
-        // Print photos data summary
-        devLog("📖 JOURNAL RENDER - Photos count: \(photos.count)")
-        if !photos.isEmpty {
-            for (index, photo) in photos.enumerated() {
-                let photoDataSize = photo.image.pngData()?.count ?? 0
-                devLog("📖 JOURNAL RENDER - Photo \(index + 1):")
-                devLog("   🆔 ID: \(photo.id)")
-                devLog("   📐 Size: \(Int(photo.size.width))x\(Int(photo.size.height))")
-                devLog("   📏 PNG data size: \(photoDataSize) bytes (\(String(format: "%.2f", Double(photoDataSize) / 1024.0)) KB)")
-            }
-        }
         
         isSavingOrLoading = false
     }
@@ -610,7 +577,6 @@ struct JournalView: View {
                     onDrawingChanged: {
                         // Update content date to current date when user draws
                         contentDate = currentDate
-                        devLog("🔄 JournalView: Drawing changed for date: \(currentDate)")
                     }
                 )
                 .overlay(
@@ -669,9 +635,6 @@ struct JournalView: View {
                         .foregroundColor(.primary)
                     
                     Text("Your journal content couldn't be downloaded. This might be due to network issues or iCloud sync problems.")
-                        .onAppear {
-                            devLog("📝 JournalView: Drawing content for date: \(currentDate)")
-                        }
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -704,20 +667,10 @@ struct JournalView: View {
                 if canvasSize != newSize {
                     canvasSize = newSize
                 }
-                devLog("🖼️ Canvas onAppear: photos count = \(photos.count)")
-                for (idx, photo) in photos.enumerated() {
-                    devLog("🖼️ Photo \(idx): position = \(photo.position), size = \(photo.size)")
-                }
             }
             .onChange(of: newSize) { size in
                 // Update size and reflow when layout changes
-                let oldSize = canvasSize
                 canvasSize = size
-                
-                // Debug: Log when canvas size changes
-                if oldSize.width != size.width || oldSize.height != size.height {
-                    devLog("📐 Canvas size changed: \(oldSize) -> \(size), photos count: \(photos.count)")
-                }
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -757,12 +710,6 @@ struct JournalView: View {
                             },
                             canvasSize: canvasSize
                         )
-                        .onAppear {
-                            devLog("🖼️ DraggablePhotoView created:")
-                            devLog("  - Photo position: \(photos[idx].position)")
-                            devLog("  - Photo size: \(photos[idx].size)")
-                            devLog("  - Canvas size: \(canvasSize)")
-                        }
                     }
                 }
             )
@@ -852,8 +799,7 @@ struct JournalView: View {
                 let id = photo.id.uuidString
                 let fileName = id + ".png"
                 let fileURL = photoDir.appendingPathComponent(fileName)
-                
-                
+
                 if let data = photo.image.pngData() {
                     try data.write(to: fileURL, options: .atomic)
                 }
@@ -912,11 +858,9 @@ struct JournalView: View {
         for attempt in 1...maxRetries {
             do {
                 let url = metadataURL(for: date)
-                devLog("📸 Loading photos for date: \(formatDateForDisplay(date)) (attempt \(attempt)/\(maxRetries))")
-                
+
                 // Check if metadata file exists
                 guard FileManager.default.fileExists(atPath: url.path) else {
-                    devLog("❌ Photo metadata file does not exist: \(url.lastPathComponent)")
                     return
                 }
                 
@@ -928,30 +872,8 @@ struct JournalView: View {
                     try Data(contentsOf: url)
                 }
                 
-                // Print raw photo metadata JSON data
-                let metadataSize = data.count
-                devLog("📦 JOURNAL RAW DATA - Photo metadata file:")
-                devLog("   📍 Location: \(url.path)")
-                devLog("   📏 File size: \(metadataSize) bytes (\(String(format: "%.2f", Double(metadataSize) / 1024.0)) KB)")
-                
-                // Print JSON string if available
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    devLog("   📄 JSON content: \(jsonString)")
-                }
-                
                 let metas = try JSONDecoder().decode([PhotoMeta].self, from: data)
-                devLog("📋 Found \(metas.count) photo metadata entries")
-                
-                // Print each photo metadata entry
-                for (index, meta) in metas.enumerated() {
-                    devLog("   📸 Photo \(index + 1) metadata:")
-                    devLog("      ID: \(meta.id)")
-                    devLog("      File: \(meta.fileName)")
-                    devLog("      Position: (\(Int(meta.x)), \(Int(meta.y)))")
-                    devLog("      Size: \(Int(meta.width))x\(Int(meta.height))")
-                    devLog("      Rotation: \(String(format: "%.2f", meta.rotation)) radians")
-                }
-                
+
                 // If no photos found in iCloud, check local storage as fallback
                 if metas.isEmpty {
                     devLog("🔍 No photos in iCloud, checking local storage...")
@@ -962,8 +884,7 @@ struct JournalView: View {
                                 try Data(contentsOf: localURL)
                             }
                             let localMetas = try JSONDecoder().decode([PhotoMeta].self, from: localData)
-                            devLog("📁 Found \(localMetas.count) photos in local storage")
-                            
+
                             // Copy to iCloud for future use
                             try localData.write(to: url, options: .atomic)
                             devLog("💾 Copied local photos to iCloud")
@@ -971,14 +892,8 @@ struct JournalView: View {
                             // Load photos in parallel for better performance
                             let loadedPhotos = await loadPhotosInParallel(metas: localMetas)
                             photos = loadedPhotos
-                            devLog("✅ Loaded \(loadedPhotos.count) photos from local storage")
                             return
-                        } catch {
-                            devLog("❌ Failed to load from local storage: \(error.localizedDescription)")
-                            // Continue to next attempt
-                        }
-                    } else {
-                        devLog("❌ No local photos found either")
+                        } catch { }
                     }
                 } else {
                     // Load photos in parallel for better performance
@@ -990,14 +905,10 @@ struct JournalView: View {
                 }
                 
             } catch {
-                devLog("❌ Photo loading attempt \(attempt) failed: \(error.localizedDescription)")
                 if attempt < maxRetries {
                     // Exponential backoff: 1s, 2s
                     let delay = UInt64(pow(2.0, Double(attempt - 1)) * 1_000_000_000)
-                    devLog("⏳ Waiting \(delay / 1_000_000_000) seconds before retry...")
                     try? await Task.sleep(nanoseconds: delay)
-                } else {
-                    devLog("❌ All photo loading attempts failed")
                 }
             }
         }
@@ -1009,11 +920,8 @@ struct JournalView: View {
         
         for attempt in 1...maxRetries {
             do {
-                devLog("🖼️ Loading photo: \(meta.fileName) (attempt \(attempt)/\(maxRetries))")
-                
                 // Check if file exists
                 guard FileManager.default.fileExists(atPath: fileURL.path) else {
-                    devLog("❌ Photo file does not exist: \(meta.fileName)")
                     return nil
                 }
                 
@@ -1025,19 +933,7 @@ struct JournalView: View {
                     try Data(contentsOf: fileURL)
                 }
                 
-                // Print raw photo file data information
-                var isUbiquitous: AnyObject?
-                try? (fileURL as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-                let isInCloud = (isUbiquitous as? Bool) == true
-                let storageType = isInCloud ? "iCloud" : "Local"
-                devLog("📦 JOURNAL RAW DATA - Photo file:")
-                devLog("   📍 Location: \(fileURL.path)")
-                devLog("   ☁️ Storage: \(storageType)")
-                devLog("   📏 File size: \(data.count) bytes (\(String(format: "%.2f", Double(data.count) / 1024.0)) KB)")
-                devLog("   🖼️ Format: PNG")
-                
                 guard let uiImg = UIImage(data: data) else {
-                    devLog("❌ Failed to create UIImage from data for: \(meta.fileName)")
                     return nil
                 }
                 
@@ -1076,18 +972,12 @@ struct JournalView: View {
                     rotation: Angle(radians: meta.rotation)
                 )
                 
-                devLog("✅ Photo loaded successfully: \(meta.fileName) - position (\(validPosX), \(validPosY)), size (\(validWidth)x\(validHeight))")
-                
                 return photo
                 
             } catch {
-                devLog("❌ Photo loading attempt \(attempt) failed for \(meta.fileName): \(error.localizedDescription)")
                 if attempt < maxRetries {
                     let delay = UInt64(500_000_000) // 0.5 seconds
-                    devLog("⏳ Waiting 0.5 seconds before retry...")
                     try? await Task.sleep(nanoseconds: delay)
-                } else {
-                    devLog("❌ All attempts failed for photo: \(meta.fileName)")
                 }
             }
         }
@@ -1169,8 +1059,6 @@ struct JournalView: View {
     
     /// Load multiple photos in parallel for better performance with caching
     private func loadPhotosInParallel(metas: [PhotoMeta]) async -> [JournalPhoto] {
-        devLog("🔄 Starting parallel load of \(metas.count) photos...")
-        
         return await withTaskGroup(of: JournalPhoto?.self) { group in
             for meta in metas {
                 group.addTask {
@@ -1179,19 +1067,13 @@ struct JournalView: View {
             }
             
             var loadedPhotos: [JournalPhoto] = []
-            var successCount = 0
-            var failureCount = 0
-            
+
             for await photo in group {
                 if let photo = photo {
                     loadedPhotos.append(photo)
-                    successCount += 1
-                } else {
-                    failureCount += 1
                 }
             }
-            
-            devLog("📊 Parallel photo loading complete: \(successCount) successful, \(failureCount) failed")
+
             return loadedPhotos
         }
     }
@@ -1366,9 +1248,7 @@ struct JournalView: View {
             await savePhotos(for: targetDate) // Save to the journal page date, not current system date
         }
     }
-    
-    
-    
+
     // MARK: - Photo model & view
     struct JournalPhoto: Identifiable {
         let id: UUID
@@ -1377,8 +1257,7 @@ struct JournalView: View {
         var size: CGSize
         var rotation: Angle
     }
-    
-    
+
     struct DraggablePhotoView: View {
         @Binding var photo: JournalPhoto
         var onDelete: () -> Void
@@ -1437,15 +1316,8 @@ struct JournalView: View {
                     let newY = photo.position.y + value.translation.height
                     
                     // Allow photo to move freely - no bounds restrictions
-                    let finalX = newX
-                    let finalY = newY
-                    
-                    devLog("🖼️ Photo drag: from (\(photo.position.x), \(photo.position.y)) to (\(finalX), \(finalY))")
-                    devLog("🖼️ Free movement: newY=\(newY), finalY=\(finalY)")
-                    devLog("🖼️ Canvas size: \(canvasSize), Photo size: \(photo.size), Scale: \(scale)")
-                    
-                    photo.position.x = finalX
-                    photo.position.y = finalY
+                    photo.position.x = newX
+                    photo.position.y = newY
                     
                     dragOffset = .zero
                     onChanged()
@@ -1479,8 +1351,6 @@ struct JournalView: View {
     }
     
 }
-
-
 
 #Preview {
     JournalView(currentDate: .constant(Date()))

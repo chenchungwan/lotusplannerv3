@@ -508,13 +508,10 @@ struct CalendarView: View {
     private var finalContent: some View {
         toolbarAndSheetsContent
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleCalendarBulkEdit"))) { _ in
-            devLog("CalendarView received ToggleCalendarBulkEdit notification, current: \(bulkEditManager.state.isActive)", level: .info, category: .calendar)
             bulkEditManager.state.isActive.toggle()
-            devLog("Bulk edit toggled, new state: \(bulkEditManager.state.isActive)", level: .info, category: .calendar)
             if !bulkEditManager.state.isActive {
                 // Exit bulk edit mode - clear selections
                 bulkEditManager.state.selectedTaskIds.removeAll()
-                devLog("Bulk edit selections cleared", level: .info, category: .calendar)
             }
         }
         .onChange(of: authManager.linkedStates) { oldValue, newValue in
@@ -824,27 +821,15 @@ struct CalendarView: View {
         Group {
             if navigationManager.currentInterval == .year {
                 yearView
-                    .onAppear {
-                        devLog("📅 CalendarView: Rendering YEAR view")
-                    }
             } else if navigationManager.currentInterval == .month {
                 monthView
-                    .onAppear {
-                        devLog("📅 CalendarView: Rendering MONTH view")
-                    }
             } else if navigationManager.currentInterval == .day {
                 AnyView(setupDayView())
-                    .onAppear {
-                        devLog("📅 CalendarView: Rendering DAY view")
-                    }
             } else {
                 Text("Calendar View")
                     .font(.largeTitle)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemBackground))
-                    .onAppear {
-                        devLog("📅 CalendarView: Rendering DEFAULT/OTHER view")
-                    }
             }
         }
         .id("mainContent-\(currentDate)-\(navigationManager.currentInterval)")

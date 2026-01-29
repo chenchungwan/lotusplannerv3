@@ -79,17 +79,6 @@ class CalendarViewModel: ObservableObject {
             }
         }
 
-        if appPrefs.verboseLoggingEnabled {
-            let formatter = ISO8601DateFormatter()
-            let keyString = formatter.string(from: key)
-            let summaries = result.filter { $0.isAllDay }.map { $0.summary }.joined(separator: ", ")
-            devLog(
-                "📅 events(for:) \(keyString) account=\(account?.rawValue ?? "both") count=\(result.count) allDay=[\(summaries)]",
-                level: .info,
-                category: .calendar
-            )
-        }
-
         return result
     }
 
@@ -125,19 +114,6 @@ class CalendarViewModel: ObservableObject {
                 lastInclusiveDay = calendar.date(byAdding: .day, value: -1, to: exclusiveEndDay) ?? startDay
             } else {
                 lastInclusiveDay = startDay
-            }
-            if appPrefs.verboseLoggingEnabled {
-                let formatter = ISO8601DateFormatter()
-                devLog(
-                    "📅 enumerateDays all-day",
-                    event.summary,
-                    "start:", formatter.string(from: startDay),
-                    "rawEnd:", formatter.string(from: rawEnd),
-                    "exclusiveEnd:", formatter.string(from: exclusiveEndDay),
-                    "lastInclusive:", formatter.string(from: lastInclusiveDay),
-                    level: .info,
-                    category: .calendar
-                )
             }
             var current = startDay
             while current <= lastInclusiveDay {
