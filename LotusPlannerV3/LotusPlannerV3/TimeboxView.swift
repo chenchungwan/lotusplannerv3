@@ -388,6 +388,9 @@ struct TimeboxView: View {
                             }
                         }
                     }
+
+                    // Force refresh caches after bulk complete
+                    refreshWeekCaches(force: true)
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -410,6 +413,9 @@ struct TimeboxView: View {
                             }
                         }
                     }
+
+                    // Force refresh caches after bulk delete
+                    refreshWeekCaches(force: true)
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -440,6 +446,10 @@ struct TimeboxView: View {
                             }
                         }
                     }
+
+                    // Force refresh caches after bulk due date update to reflect time window changes
+                    refreshWeekCaches(force: true)
+
                     bulkEditManager.state.showingDueDatePicker = false
                 }
             }
@@ -470,6 +480,10 @@ struct TimeboxView: View {
                                 }
                             }
                         }
+
+                        // Force refresh caches after bulk move
+                        refreshWeekCaches(force: true)
+
                         bulkEditManager.state.showingMoveDestinationPicker = false
                     }
                 }
@@ -497,6 +511,10 @@ struct TimeboxView: View {
                             }
                         }
                     }
+
+                    // Force refresh caches after bulk priority update
+                    refreshWeekCaches(force: true)
+
                     bulkEditManager.state.showingPriorityPicker = false
                 }
             }
@@ -563,6 +581,9 @@ struct TimeboxView: View {
         case .updatePriority:
             bulkEditManager.undoUpdatePriority(data: data, tasksVM: tasksVM)
         }
+
+        // Force refresh caches after undo to reflect time window changes
+        refreshWeekCaches(force: true)
     }
 
     private func formatDateTime(_ date: Date) -> String {
@@ -678,7 +699,16 @@ struct TimeboxView: View {
                         await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
                     }
                 },
-                showAllDaySection: false
+                showAllDaySection: false,
+                isBulkEditMode: bulkEditManager.state.isActive,
+                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                onTaskSelectionToggle: { task in
+                    if bulkEditManager.state.selectedTaskIds.contains(task.id) {
+                        bulkEditManager.state.selectedTaskIds.remove(task.id)
+                    } else {
+                        bulkEditManager.state.selectedTaskIds.insert(task.id)
+                    }
+                }
             )
             .frame(width: columnWidth)
         }
@@ -748,21 +778,37 @@ struct TimeboxView: View {
                         let color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
                         
                         HStack(spacing: 8) {
-                            // Checkmark circle button - tappable to toggle completion
-                            Button(action: {
-                                // Determine account kind
-                                let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
-                                let listId = findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks)
-                                Task {
-                                    await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                            if bulkEditManager.state.isActive {
+                                // Bulk edit selection checkbox
+                                Button(action: {
+                                    if bulkEditManager.state.selectedTaskIds.contains(task.id) {
+                                        bulkEditManager.state.selectedTaskIds.remove(task.id)
+                                    } else {
+                                        bulkEditManager.state.selectedTaskIds.insert(task.id)
+                                    }
+                                }) {
+                                    Image(systemName: bulkEditManager.state.selectedTaskIds.contains(task.id) ? "checkmark.square.fill" : "square")
+                                        .font(.body)
+                                        .foregroundColor(bulkEditManager.state.selectedTaskIds.contains(task.id) ? .accentColor : .secondary)
                                 }
-                            }) {
-                                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .font(.body)
-                                    .foregroundColor(task.isCompleted ? color : .secondary)
+                                .buttonStyle(PlainButtonStyle())
+                            } else {
+                                // Normal completion checkbox
+                                Button(action: {
+                                    // Determine account kind
+                                    let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+                                    let listId = findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks)
+                                    Task {
+                                        await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
+                                    }
+                                }) {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.body)
+                                        .foregroundColor(task.isCompleted ? color : .secondary)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            
+
                             Text(task.title)
                                 .font(.body)
                                 .fontWeight(.medium)
@@ -770,7 +816,7 @@ struct TimeboxView: View {
                                 .strikethrough(task.isCompleted)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                            
+
                             Spacer()
                         }
                         .padding(.horizontal, 12)
@@ -781,14 +827,22 @@ struct TimeboxView: View {
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            // Determine account kind
-                            let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
-                            taskSheetSelection = TimeboxTaskSelection(
-                                id: task.id,
-                                task: task,
-                                listId: findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks),
-                                accountKind: accountKind
-                            )
+                            if bulkEditManager.state.isActive {
+                                if bulkEditManager.state.selectedTaskIds.contains(task.id) {
+                                    bulkEditManager.state.selectedTaskIds.remove(task.id)
+                                } else {
+                                    bulkEditManager.state.selectedTaskIds.insert(task.id)
+                                }
+                            } else {
+                                // Determine account kind
+                                let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+                                taskSheetSelection = TimeboxTaskSelection(
+                                    id: task.id,
+                                    task: task,
+                                    listId: findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks),
+                                    accountKind: accountKind
+                                )
+                            }
                         }
                     }
                 }

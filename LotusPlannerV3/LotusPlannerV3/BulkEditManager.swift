@@ -521,18 +521,23 @@ class BulkEditManager: ObservableObject {
 
                 await tasksVM.updateTask(restoredTask, in: listId, for: accountKind)
 
-                // Restore time window if it existed
-                if let originalTimeWindows = data.originalTimeWindows,
-                   let timeWindowData = originalTimeWindows[task.id] {
-                    if let timeWindow = timeWindowData {
-                        TaskTimeWindowManager.shared.saveTimeWindow(
-                            taskId: task.id,
-                            startTime: timeWindow.startTime,
-                            endTime: timeWindow.endTime,
-                            isAllDay: timeWindow.isAllDay
-                        )
-                    } else {
-                        TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                // Restore time window if it existed, or delete if it didn't
+                if let originalTimeWindows = data.originalTimeWindows {
+                    // Check if we have stored info about this task's time window
+                    if originalTimeWindows.keys.contains(task.id) {
+                        // Key exists, check if there was a time window
+                        if let timeWindow = originalTimeWindows[task.id], let window = timeWindow {
+                            // Restore the original time window
+                            TaskTimeWindowManager.shared.saveTimeWindow(
+                                taskId: task.id,
+                                startTime: window.startTime,
+                                endTime: window.endTime,
+                                isAllDay: window.isAllDay
+                            )
+                        } else {
+                            // Task had no time window originally, delete any existing one
+                            TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+                        }
                     }
                 }
             }

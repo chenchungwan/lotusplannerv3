@@ -12,7 +12,10 @@ struct TimeboxComponent: View {
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onTaskTap: ((GoogleTask, String) -> Void)?
     let onTaskToggle: ((GoogleTask, String) -> Void)?
-    
+    let isBulkEditMode: Bool
+    let selectedTaskIds: Set<String>
+    let onTaskSelectionToggle: ((GoogleTask) -> Void)?
+
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     
@@ -51,7 +54,10 @@ struct TimeboxComponent: View {
         onEventTap: ((GoogleCalendarEvent) -> Void)? = nil,
         onTaskTap: ((GoogleTask, String) -> Void)? = nil,
         onTaskToggle: ((GoogleTask, String) -> Void)? = nil,
-        showAllDaySection: Bool = true
+        showAllDaySection: Bool = true,
+        isBulkEditMode: Bool = false,
+        selectedTaskIds: Set<String> = [],
+        onTaskSelectionToggle: ((GoogleTask) -> Void)? = nil
     ) {
         self.date = date
         self.events = events
@@ -65,6 +71,9 @@ struct TimeboxComponent: View {
         self.onTaskTap = onTaskTap
         self.onTaskToggle = onTaskToggle
         self.showAllDaySection = showAllDaySection
+        self.isBulkEditMode = isBulkEditMode
+        self.selectedTaskIds = selectedTaskIds
+        self.onTaskSelectionToggle = onTaskSelectionToggle
     }
     
     var body: some View {
@@ -253,16 +262,30 @@ struct TimeboxComponent: View {
     
     private func allDayTaskBlock(task: GoogleTask, listId: String, isPersonal: Bool) -> some View {
         let itemColor = isPersonal ? personalColor : professionalColor
+        let isSelected = selectedTaskIds.contains(task.id)
 
         return HStack(spacing: 8) {
-                    Button(action: {
-                        onTaskToggle?(task, listId)
-                    }) {
-                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .font(.callout)
-                            .foregroundColor(task.isCompleted ? itemColor : .secondary)
+                    if isBulkEditMode {
+                        // Bulk edit selection checkbox
+                        Button(action: {
+                            onTaskSelectionToggle?(task)
+                        }) {
+                            Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                                .font(.callout)
+                                .foregroundColor(isSelected ? .accentColor : .secondary)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        // Normal completion checkbox
+                        Button(action: {
+                            onTaskToggle?(task, listId)
+                        }) {
+                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .font(.callout)
+                                .foregroundColor(task.isCompleted ? itemColor : .secondary)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
 
                     Text(task.title)
                         .font(.callout)
@@ -271,7 +294,7 @@ struct TimeboxComponent: View {
                         .strikethrough(task.isCompleted)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal, 12)
@@ -282,7 +305,11 @@ struct TimeboxComponent: View {
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    onTaskTap?(task, listId)
+                    if isBulkEditMode {
+                        onTaskSelectionToggle?(task)
+                    } else {
+                        onTaskTap?(task, listId)
+                    }
         }
     }
     
@@ -369,17 +396,30 @@ struct TimeboxComponent: View {
             // Task style matching all-day task style (light tinted background)
             let (listId, _) = findTaskListAndKind(for: task)
             let accentColor = layout.isPersonal ? personalColor : professionalColor
-            
+            let isSelected = selectedTaskIds.contains(task.id)
+
             HStack(spacing: 6) {
-                // Checkmark circle button - tappable to toggle completion
-                Button(action: {
-                    onTaskToggle?(task, listId)
-                }) {
-                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.callout)
-                        .foregroundColor(task.isCompleted ? accentColor : .secondary)
+                if isBulkEditMode {
+                    // Bulk edit selection checkbox
+                    Button(action: {
+                        onTaskSelectionToggle?(task)
+                    }) {
+                        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                            .font(.callout)
+                            .foregroundColor(isSelected ? .accentColor : .secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    // Normal completion checkbox
+                    Button(action: {
+                        onTaskToggle?(task, listId)
+                    }) {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .font(.callout)
+                            .foregroundColor(task.isCompleted ? accentColor : .secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
 
                 // Task title
                 Text(task.title)
@@ -389,7 +429,7 @@ struct TimeboxComponent: View {
                     .strikethrough(task.isCompleted)
                     .lineLimit(layout.height > 30 ? 2 : 1)
                     .truncationMode(.tail)
-                
+
                 Spacer()
             }
             .padding(.horizontal, 6)
@@ -401,7 +441,11 @@ struct TimeboxComponent: View {
             )
             .contentShape(Rectangle())
             .onTapGesture {
-                onTaskTap?(task, listId)
+                if isBulkEditMode {
+                    onTaskSelectionToggle?(task)
+                } else {
+                    onTaskTap?(task, listId)
+                }
             }
             .offset(x: layout.xOffset, y: layout.startOffset)
             .allowsHitTesting(true)
