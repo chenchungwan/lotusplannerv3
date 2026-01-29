@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import CloudKit
 #if os(iOS)
 import UIKit
 #endif
@@ -1302,6 +1303,68 @@ struct SettingsView: View {
                 }
                 
                 Section("Diagnostics") {
+                    // Quick Status Overview for TestFlight
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "info.circle.fill")
+                                .foregroundColor(.blue)
+                            Text("TestFlight Testing Status")
+                                .font(.headline)
+                        }
+
+                        Divider()
+
+                        // iCloud Available Status
+                        HStack {
+                            Text("iCloud Available:")
+                            Spacer()
+                            Text(iCloudManagerInstance.iCloudAvailable ? "✅ Yes" : "❌ No")
+                                .foregroundColor(iCloudManagerInstance.iCloudAvailable ? .green : .red)
+                                .bold()
+                        }
+
+                        // Sync Status
+                        HStack {
+                            Text("Status:")
+                            Spacer()
+                            Text(iCloudManagerInstance.syncStatus.description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Last Sync
+                        HStack {
+                            Text("Last Sync:")
+                            Spacer()
+                            if let lastSync = iCloudManagerInstance.lastSyncDate {
+                                Text(lastSync.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption)
+                            } else {
+                                Text("Never")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Environment
+                        HStack {
+                            Text("Environment:")
+                            Spacer()
+                            #if DEBUG
+                            Text("🔧 Development")
+                                .foregroundColor(.orange)
+                                .bold()
+                            #else
+                            Text("🚀 Production")
+                                .foregroundColor(.green)
+                                .bold()
+                            #endif
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    Divider()
+
                     Toggle(isOn: Binding(
                         get: { appPrefs.verboseLoggingEnabled },
                         set: { appPrefs.updateVerboseLogging($0) }
@@ -1318,7 +1381,7 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    Text("When disabled, only warnings and errors are logged.")
+                    Text("When disabled, only warnings and errors are logged. Enable to see detailed CloudKit sync logs in Console.app.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .padding(.top, 2)
@@ -1337,12 +1400,93 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Run CloudKit Diagnostics")
                                     .font(.body)
-                                Text("Check CloudKit setup and data (view in Console.app)")
+                                Text("Check CloudKit setup and data (view output in Console.app)")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                         }
                     }
+
+                    Text("Connect device via USB → Open Console.app on Mac → Filter by 'LotusPlannerV3' → Tap this button → Look for 🔍 DIAGNOSTICS logs")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 2)
+
+                    Divider()
+
+                    // Comprehensive Sync Diagnostics
+                    Button(action: {
+                        checkAllDataUserIds()
+                    }) {
+                        HStack {
+                            Image(systemName: "list.bullet.clipboard")
+                                .foregroundColor(.purple)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Check ALL Data userId Values")
+                                    .font(.body)
+                                Text("Shows userId for Goals, Logs, Task Windows")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Button(action: {
+                        fixAllDataUserIds()
+                    }) {
+                        HStack {
+                            Image(systemName: "wrench.and.screwdriver")
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Fix ALL Data userId Values")
+                                    .font(.body)
+                                Text("Sets userId='icloud-user' on ALL entities")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Button(action: {
+                        Task {
+                            await checkCloudKitRawData()
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "cloud.fill")
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Query CloudKit Directly")
+                                    .font(.body)
+                                Text("Check what's actually in CloudKit Production")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Button(action: {
+                        forceExportToCloudKit()
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.up.to.line.compact")
+                                .foregroundColor(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Force Export to CloudKit")
+                                    .font(.body)
+                                Text("Touch all entities to trigger CloudKit upload")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    Text("DEV→PROD sync issue: Fix ALL Data → Force Export → Sync Now → Wait 2 min → Query CloudKit → Check if counts increased")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 2)
+
+                    Divider()
 
                     // CloudKit Container Info
                     VStack(alignment: .leading, spacing: 4) {
@@ -1357,18 +1501,6 @@ struct SettingsView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(.leading, 20)
-
-                        #if DEBUG
-                        Text("Environment: Development")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                            .padding(.leading, 20)
-                        #else
-                        Text("Environment: Production")
-                            .font(.caption2)
-                            .foregroundColor(.green)
-                            .padding(.leading, 20)
-                        #endif
                     }
                 }
                 
@@ -1689,7 +1821,302 @@ struct SettingsView: View {
         // Update last sync time
         iCloudManagerInstance.lastSyncDate = Date()
     }
-    
+
+    private func checkAllDataUserIds() {
+        let context = PersistenceController.shared.container.viewContext
+
+        devLog("🔍 ========== COMPREHENSIVE DATA CHECK ==========")
+        devLog("🔍 Checking userId values for ALL Core Data entities...")
+
+        // Check Goals
+        checkEntityUserId(Goal.self, entityName: "Goals", context: context)
+
+        // Check Goal Categories
+        checkEntityUserId(GoalCategory.self, entityName: "Goal Categories", context: context)
+
+        // Check Task Time Windows
+        checkEntityUserId(TaskTimeWindow.self, entityName: "Task Time Windows", context: context)
+
+        // Check Weight Logs
+        checkEntityUserId(WeightLog.self, entityName: "Weight Logs", context: context)
+
+        // Check Workout Logs
+        checkEntityUserId(WorkoutLog.self, entityName: "Workout Logs", context: context)
+
+        // Check Food Logs
+        checkEntityUserId(FoodLog.self, entityName: "Food Logs", context: context)
+
+        // Check Water Logs
+        checkEntityUserId(WaterLog.self, entityName: "Water Logs", context: context)
+
+        // Check Custom Log Items
+        checkEntityUserId(CustomLogItem.self, entityName: "Custom Log Items", context: context)
+
+        // Check Custom Log Entries
+        checkEntityUserId(CustomLogEntry.self, entityName: "Custom Log Entries", context: context)
+
+        devLog("🔍 ============================================")
+        devLog("💡 Check Console.app to see full results (filter by 'LotusPlannerV3')")
+    }
+
+    private func checkEntityUserId<T: NSManagedObject>(_ type: T.Type, entityName: String, context: NSManagedObjectContext) {
+        let request = NSFetchRequest<T>(entityName: String(describing: type))
+
+        do {
+            let entities = try context.fetch(request)
+            devLog("🔍 \(entityName): Found \(entities.count) total")
+
+            if entities.isEmpty {
+                devLog("   ℹ️ No data to check")
+                return
+            }
+
+            var defaultCount = 0
+            var icloudCount = 0
+            var nilCount = 0
+            var otherCount = 0
+
+            for entity in entities {
+                if let userIdValue = entity.value(forKey: "userId") as? String {
+                    if userIdValue == "default" {
+                        defaultCount += 1
+                    } else if userIdValue == "icloud-user" {
+                        icloudCount += 1
+                    } else {
+                        otherCount += 1
+                    }
+                } else {
+                    nilCount += 1
+                }
+            }
+
+            devLog("   - icloud-user: \(icloudCount) \(icloudCount == entities.count ? "✅" : "⚠️")")
+            devLog("   - default: \(defaultCount) \(defaultCount > 0 ? "❌" : "")")
+            devLog("   - nil: \(nilCount) \(nilCount > 0 ? "❌" : "")")
+            devLog("   - other: \(otherCount) \(otherCount > 0 ? "❓" : "")")
+
+        } catch {
+            devLog("❌ Error checking \(entityName): \(error)")
+        }
+    }
+
+    private func fixAllDataUserIds() {
+        let context = PersistenceController.shared.container.viewContext
+
+        devLog("🔧 ========== FIXING ALL DATA USERIDS ==========")
+        devLog("🔧 Setting userId='icloud-user' on ALL entities...")
+
+        var totalFixed = 0
+
+        // Fix Goals
+        totalFixed += fixEntityUserId(Goal.self, entityName: "Goals", context: context)
+
+        // Fix Goal Categories
+        totalFixed += fixEntityUserId(GoalCategory.self, entityName: "Goal Categories", context: context)
+
+        // Fix Task Time Windows
+        totalFixed += fixEntityUserId(TaskTimeWindow.self, entityName: "Task Time Windows", context: context)
+
+        // Fix Weight Logs
+        totalFixed += fixEntityUserId(WeightLog.self, entityName: "Weight Logs", context: context)
+
+        // Fix Workout Logs
+        totalFixed += fixEntityUserId(WorkoutLog.self, entityName: "Workout Logs", context: context)
+
+        // Fix Food Logs
+        totalFixed += fixEntityUserId(FoodLog.self, entityName: "Food Logs", context: context)
+
+        // Fix Water Logs
+        totalFixed += fixEntityUserId(WaterLog.self, entityName: "Water Logs", context: context)
+
+        // Fix Custom Log Items
+        totalFixed += fixEntityUserId(CustomLogItem.self, entityName: "Custom Log Items", context: context)
+
+        // Fix Custom Log Entries
+        totalFixed += fixEntityUserId(CustomLogEntry.self, entityName: "Custom Log Entries", context: context)
+
+        // Save changes
+        if context.hasChanges {
+            do {
+                try context.save()
+                devLog("✅ Fixed \(totalFixed) entities - changes saved to Core Data")
+                devLog("☁️ Changes will sync to CloudKit automatically")
+
+                // Trigger immediate sync
+                Task {
+                    await MainActor.run {
+                        iCloudManagerInstance.forceCompleteSync()
+                        devLog("🔄 Triggered CloudKit sync")
+                        devLog("💡 Now:")
+                        devLog("   1. Wait 90 seconds")
+                        devLog("   2. Tap 'Sync Now' on OTHER device")
+                        devLog("   3. Check if data appears")
+                    }
+                }
+            } catch {
+                devLog("❌ Error saving changes: \(error)")
+            }
+        } else {
+            devLog("ℹ️ No changes needed - all data already correct")
+        }
+
+        devLog("🔧 ============================================")
+    }
+
+    private func fixEntityUserId<T: NSManagedObject>(_ type: T.Type, entityName: String, context: NSManagedObjectContext) -> Int {
+        let request = NSFetchRequest<T>(entityName: String(describing: type))
+
+        do {
+            let entities = try context.fetch(request)
+            var fixedCount = 0
+
+            for entity in entities {
+                let currentUserId = entity.value(forKey: "userId") as? String
+                if currentUserId != "icloud-user" {
+                    entity.setValue("icloud-user", forKey: "userId")
+                    fixedCount += 1
+                }
+            }
+
+            if fixedCount > 0 {
+                devLog("🔧 \(entityName): Fixed \(fixedCount)/\(entities.count)")
+            } else {
+                devLog("✅ \(entityName): All correct (\(entities.count) entities)")
+            }
+
+            return fixedCount
+        } catch {
+            devLog("❌ Error fixing \(entityName): \(error)")
+            return 0
+        }
+    }
+
+    private func checkCloudKitRawData() async {
+        devLog("☁️ ========== QUERYING CLOUDKIT PRODUCTION ==========")
+        devLog("☁️ Directly querying CloudKit to see what's stored...")
+
+        let container = CKContainer(identifier: "iCloud.com.chenchungwan.LotusPlannerV3")
+        let database = container.privateCloudDatabase
+
+        // Check account status first
+        do {
+            let status = try await container.accountStatus()
+            devLog("☁️ Account Status: \(status.rawValue) \(status == .available ? "✅" : "❌")")
+
+            guard status == .available else {
+                devLog("❌ Cannot query CloudKit - account not available")
+                return
+            }
+        } catch {
+            devLog("❌ Error checking account: \(error)")
+            return
+        }
+
+        // Query different record types
+        let recordTypes = ["CD_Goal", "CD_GoalCategory", "CD_TaskTimeWindow", "CD_WeightLog", "CD_WorkoutLog", "CD_FoodLog"]
+
+        for recordType in recordTypes {
+            let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
+
+            do {
+                let (results, _) = try await database.records(matching: query, resultsLimit: 100)
+
+                var successCount = 0
+                var failCount = 0
+
+                for (_, result) in results {
+                    switch result {
+                    case .success:
+                        successCount += 1
+                    case .failure:
+                        failCount += 1
+                    }
+                }
+
+                devLog("☁️ \(recordType): \(successCount) records in CloudKit \(successCount > 0 ? "✅" : "⚠️")")
+                if failCount > 0 {
+                    devLog("   ⚠️ \(failCount) failed to fetch")
+                }
+
+            } catch {
+                devLog("❌ Error querying \(recordType): \(error)")
+            }
+        }
+
+        devLog("☁️ ============================================")
+        devLog("💡 Compare CloudKit counts with local Core Data counts")
+        devLog("💡 If CloudKit has data but local doesn't: import problem")
+        devLog("💡 If local has data but CloudKit doesn't: export problem")
+    }
+
+    private func forceExportToCloudKit() {
+        devLog("📤 ========== FORCE EXPORT TO CLOUDKIT ==========")
+        devLog("📤 Triggering CloudKit export by touching all entities...")
+
+        let context = PersistenceController.shared.container.viewContext
+
+        var totalTouched = 0
+
+        // Touch all entities by updating their updatedAt timestamp
+        totalTouched += touchAllEntities(Goal.self, entityName: "Goals", context: context)
+        totalTouched += touchAllEntities(GoalCategory.self, entityName: "Goal Categories", context: context)
+        totalTouched += touchAllEntities(TaskTimeWindow.self, entityName: "Task Time Windows", context: context)
+        totalTouched += touchAllEntities(WeightLog.self, entityName: "Weight Logs", context: context)
+        totalTouched += touchAllEntities(WorkoutLog.self, entityName: "Workout Logs", context: context)
+        totalTouched += touchAllEntities(FoodLog.self, entityName: "Food Logs", context: context)
+        totalTouched += touchAllEntities(WaterLog.self, entityName: "Water Logs", context: context)
+        totalTouched += touchAllEntities(CustomLogItem.self, entityName: "Custom Log Items", context: context)
+        totalTouched += touchAllEntities(CustomLogEntry.self, entityName: "Custom Log Entries", context: context)
+
+        // Save to trigger CloudKit export
+        if context.hasChanges {
+            do {
+                try context.save()
+                devLog("✅ Touched \(totalTouched) entities and saved")
+                devLog("☁️ NSPersistentCloudKitContainer will now export to CloudKit")
+                devLog("💡 Wait 2 minutes, then tap 'Query CloudKit' to verify")
+
+                // Trigger sync
+                Task {
+                    await MainActor.run {
+                        iCloudManagerInstance.forceCompleteSync()
+                    }
+                }
+            } catch {
+                devLog("❌ Error saving: \(error)")
+            }
+        } else {
+            devLog("ℹ️ No changes to save")
+        }
+
+        devLog("📤 ============================================")
+    }
+
+    private func touchAllEntities<T: NSManagedObject>(_ type: T.Type, entityName: String, context: NSManagedObjectContext) -> Int {
+        let request = NSFetchRequest<T>(entityName: String(describing: type))
+
+        do {
+            let entities = try context.fetch(request)
+
+            // Update updatedAt timestamp to trigger export
+            for entity in entities {
+                // Check if entity has updatedAt property
+                if entity.responds(to: Selector(("setUpdatedAt:"))) {
+                    entity.setValue(Date(), forKey: "updatedAt")
+                }
+            }
+
+            if !entities.isEmpty {
+                devLog("📤 \(entityName): Touched \(entities.count) entities")
+            }
+
+            return entities.count
+        } catch {
+            devLog("❌ Error touching \(entityName): \(error)")
+            return 0
+        }
+    }
+
     private func refreshAllViewsAfterDelete() async {
         let currentDate = NavigationManager.shared.currentDate
         

@@ -182,6 +182,7 @@ extension LogsComponent {
             HStack {
                 Image(systemName: "scalemass")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Weight")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -216,6 +217,7 @@ extension LogsComponent {
             HStack {
                 Image(systemName: "figure.run")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Workout")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -250,6 +252,7 @@ extension LogsComponent {
             HStack {
                 Image(systemName: "fork.knife")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Food")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -284,6 +287,7 @@ extension LogsComponent {
             HStack {
                 Image(systemName: "drop.fill")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Water")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -373,8 +377,9 @@ extension LogsComponent {
     var sleepSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "bed.double.fill")
+                Image(systemName: "zzz")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Sleep")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -463,6 +468,7 @@ extension LogsComponent {
             HStack {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Custom Logs")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -487,6 +493,7 @@ extension LogsComponent {
             HStack {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundColor(viewModel.accentColor)
+                    .frame(width: 20, alignment: .leading)
                 Text("Custom Logs")
                     .font(.subheadline)
                     .fontWeight(.semibold)

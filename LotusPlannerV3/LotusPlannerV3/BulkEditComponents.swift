@@ -204,6 +204,7 @@ struct BulkUpdateDueDatePicker: View {
                             }
                         }
                 }
+                .environment(\.calendar, Calendar.mondayFirst)
                 .presentationDetents([.large])
             }
         }

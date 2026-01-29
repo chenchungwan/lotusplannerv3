@@ -735,9 +735,18 @@ class GoalsManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            devLog("🎯 GoalsManager: Received .iCloudDataChanged notification - reloading data")
             // Reload data when iCloud sync completes
             Task { @MainActor in
+                let beforeGoalsCount = self?.goals.count ?? 0
+                let beforeCategoriesCount = self?.categories.count ?? 0
+
                 self?.loadFromCoreData()
+
+                let afterGoalsCount = self?.goals.count ?? 0
+                let afterCategoriesCount = self?.categories.count ?? 0
+
+                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(afterGoalsCount), Categories: \(beforeCategoriesCount) → \(afterCategoriesCount)")
             }
         }
 
@@ -747,9 +756,18 @@ class GoalsManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            devLog("🎯 GoalsManager: Received .NSPersistentStoreRemoteChange notification - reloading data")
             // Reload data when CloudKit changes are received
             Task { @MainActor in
+                let beforeGoalsCount = self?.goals.count ?? 0
+                let beforeCategoriesCount = self?.categories.count ?? 0
+
                 self?.loadFromCoreData()
+
+                let afterGoalsCount = self?.goals.count ?? 0
+                let afterCategoriesCount = self?.categories.count ?? 0
+
+                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(afterGoalsCount), Categories: \(beforeCategoriesCount) → \(afterCategoriesCount)")
             }
         }
 

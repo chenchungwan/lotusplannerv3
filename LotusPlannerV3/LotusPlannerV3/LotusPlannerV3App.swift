@@ -18,19 +18,28 @@ struct LotusPlannerV3App: App {
     @StateObject private var appPrefs = AppPreferences.shared
 
     init() {
+        // Enable verbose logging for TestFlight/Production debugging
+        // TODO: Disable this after confirming iCloud sync works in production
+        #if DEBUG
+        UserDefaults.standard.set(true, forKey: "verboseLoggingEnabled")
+        #else
+        // Enable for TestFlight testing - helps diagnose iCloud sync issues
+        UserDefaults.standard.set(true, forKey: "verboseLoggingEnabled")
+        #endif
+
         devLog("🚀 App: Initializing LotusPlannerV3...")
-        
+
         // Validate configuration on app launch
         let configManager = ConfigurationManager.shared
         configManager.debugPrintConfigurationInfo()
-        
+
         if !configManager.validateConfiguration() {
             devLog("⚠️ Configuration validation failed", level: .warning, category: .general)
         }
-        
+
         // Force iCloudManager to initialize (this will set up notification observers)
         _ = iCloudManager.shared
-        
+
         devLog("✅ App: Initialization complete")
     }
 

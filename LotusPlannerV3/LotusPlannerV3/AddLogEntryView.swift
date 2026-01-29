@@ -6,12 +6,12 @@ struct AddLogEntryView: View {
     @Environment(\.dismiss) private var dismiss
     
     private func getFirstAvailableLogType() -> LogType {
+        if appPrefs.showFoodLogs { return .food }
+        if appPrefs.showSleepLogs { return .sleep }
+        if appPrefs.showWaterLogs { return .water }
         if appPrefs.showWeightLogs { return .weight }
         if appPrefs.showWorkoutLogs { return .workout }
-        if appPrefs.showFoodLogs { return .food }
-        if appPrefs.showWaterLogs { return .water }
-        if appPrefs.showSleepLogs { return .sleep }
-        return .weight // Fallback, though this case shouldn't happen as the + button should be hidden
+        return .food // Fallback, though this case shouldn't happen as the + button should be hidden
     }
     
     var body: some View {
@@ -23,22 +23,34 @@ struct AddLogEntryView: View {
                         set: { newValue in
                             // Only set if the corresponding log type is enabled
                             switch newValue {
+                            case .food where appPrefs.showFoodLogs:
+                                viewModel.selectedLogType = .food
+                            case .sleep where appPrefs.showSleepLogs:
+                                viewModel.selectedLogType = .sleep
+                            case .water where appPrefs.showWaterLogs:
+                                viewModel.selectedLogType = .water
                             case .weight where appPrefs.showWeightLogs:
                                 viewModel.selectedLogType = .weight
                             case .workout where appPrefs.showWorkoutLogs:
                                 viewModel.selectedLogType = .workout
-                            case .food where appPrefs.showFoodLogs:
-                                viewModel.selectedLogType = .food
-                            case .water where appPrefs.showWaterLogs:
-                                viewModel.selectedLogType = .water
-                            case .sleep where appPrefs.showSleepLogs:
-                                viewModel.selectedLogType = .sleep
                             default:
                                 // If trying to select a disabled type, select the first available one
                                 viewModel.selectedLogType = getFirstAvailableLogType()
                             }
                         }
                     )) {
+                        if appPrefs.showFoodLogs {
+                            Label(LogType.food.displayName, systemImage: LogType.food.icon)
+                                .tag(LogType.food)
+                        }
+                        if appPrefs.showSleepLogs {
+                            Label(LogType.sleep.displayName, systemImage: LogType.sleep.icon)
+                                .tag(LogType.sleep)
+                        }
+                        if appPrefs.showWaterLogs {
+                            Label(LogType.water.displayName, systemImage: LogType.water.icon)
+                                .tag(LogType.water)
+                        }
                         if appPrefs.showWeightLogs {
                             Label(LogType.weight.displayName, systemImage: LogType.weight.icon)
                                 .tag(LogType.weight)
@@ -47,28 +59,16 @@ struct AddLogEntryView: View {
                             Label(LogType.workout.displayName, systemImage: LogType.workout.icon)
                                 .tag(LogType.workout)
                         }
-                        if appPrefs.showFoodLogs {
-                            Label(LogType.food.displayName, systemImage: LogType.food.icon)
-                                .tag(LogType.food)
-                        }
-                        if appPrefs.showWaterLogs {
-                            Label(LogType.water.displayName, systemImage: LogType.water.icon)
-                                .tag(LogType.water)
-                        }
-                        if appPrefs.showSleepLogs {
-                            Label(LogType.sleep.displayName, systemImage: LogType.sleep.icon)
-                                .tag(LogType.sleep)
-                        }
                     }
                     .pickerStyle(SegmentedPickerStyle())
                     .onAppear {
                         // When view appears, make sure selected type is available
                         switch viewModel.selectedLogType {
-                        case .weight where !appPrefs.showWeightLogs,
-                             .workout where !appPrefs.showWorkoutLogs,
-                             .food where !appPrefs.showFoodLogs,
+                        case .food where !appPrefs.showFoodLogs,
+                             .sleep where !appPrefs.showSleepLogs,
                              .water where !appPrefs.showWaterLogs,
-                             .sleep where !appPrefs.showSleepLogs:
+                             .weight where !appPrefs.showWeightLogs,
+                             .workout where !appPrefs.showWorkoutLogs:
                             viewModel.selectedLogType = getFirstAvailableLogType()
                         default:
                             break
@@ -77,16 +77,16 @@ struct AddLogEntryView: View {
                 }
 
                 // Form fields based on log type and visibility settings
-                if case .weight = viewModel.selectedLogType, appPrefs.showWeightLogs {
+                if case .food = viewModel.selectedLogType, appPrefs.showFoodLogs {
+                    foodForm
+                } else if case .sleep = viewModel.selectedLogType, appPrefs.showSleepLogs {
+                    sleepForm
+                } else if case .water = viewModel.selectedLogType, appPrefs.showWaterLogs {
+                    waterForm
+                } else if case .weight = viewModel.selectedLogType, appPrefs.showWeightLogs {
                     weightForm
                 } else if case .workout = viewModel.selectedLogType, appPrefs.showWorkoutLogs {
                     workoutForm
-                } else if case .food = viewModel.selectedLogType, appPrefs.showFoodLogs {
-                    foodForm
-                } else if case .water = viewModel.selectedLogType, appPrefs.showWaterLogs {
-                    waterForm
-                } else if case .sleep = viewModel.selectedLogType, appPrefs.showSleepLogs {
-                    sleepForm
                 }
             }
             .navigationTitle("Add \(viewModel.selectedLogType.displayName)")

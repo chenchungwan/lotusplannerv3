@@ -36,6 +36,8 @@ struct JournalView: View {
     @State private var isLoadingPhotos = false
     /// Prevents concurrent save/load operations
     @State private var isSavingOrLoading = false
+    /// Sync state for refresh button
+    @State private var isSyncing = false
     /// Tracks the currently loaded date to prevent stale data
     @State private var loadedDate: Date?
     /// The date that the current content actually belongs to (not the view date)
@@ -282,13 +284,20 @@ struct JournalView: View {
     
     /// Refresh journal content from iCloud
     private func refreshFromiCloud() async {
+        // Start sync indicator
+        isSyncing = true
+
         let hasChanges = await hasUnsavedChanges()
         if hasChanges {
             showUnsavedChangesAlert = true
+            isSyncing = false
             return
         }
-        
+
         await loadFromiCloud(for: currentDate)
+
+        // Stop sync indicator
+        isSyncing = false
     }
     
     /// Date switching - saves current content then loads new content
@@ -545,11 +554,18 @@ struct JournalView: View {
                         await refreshFromiCloud()
                     }
                 }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.accentColor)
+                    if isSyncing {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .frame(width: 16, height: 16)
+                    } else {
+                        Image(systemName: "arrow.trianglehead.clockwise.icloud")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.accentColor)
+                    }
                 }
-                .disabled(isSavingOrLoading)
+                .disabled(isSavingOrLoading || isSyncing)
+                .id(isSyncing)
                 
                 Button(action: { showToolPicker.toggle() }) {
                     Image(systemName: "pencil.and.scribble")
