@@ -181,11 +181,24 @@ struct AddLogEntryView: View {
         Section("Sleep Details") {
             DatePicker("Date", selection: $viewModel.sleepDate, displayedComponents: [.date])
 
-            // Bed Time - inline DatePicker (like event Start time)
-            DatePicker("Bed Time", selection: Binding(
-                get: { viewModel.sleepBedTime ?? defaultBedTime },
-                set: { viewModel.sleepBedTime = $0 }
-            ), displayedComponents: [.date, .hourAndMinute])
+            // Bed Time - optional toggle with DatePicker
+            Toggle("Bed Time", isOn: Binding(
+                get: { viewModel.sleepBedTime != nil },
+                set: { enabled in
+                    if enabled {
+                        viewModel.sleepBedTime = defaultBedTime
+                    } else {
+                        viewModel.sleepBedTime = nil
+                    }
+                }
+            ))
+
+            if viewModel.sleepBedTime != nil {
+                DatePicker("", selection: Binding(
+                    get: { viewModel.sleepBedTime ?? defaultBedTime },
+                    set: { viewModel.sleepBedTime = $0 }
+                ), displayedComponents: [.date, .hourAndMinute])
+            }
 
             // Wake Up Time - button opening preset picker (like event End time)
             HStack {
@@ -198,9 +211,6 @@ struct AddLogEntryView: View {
             }
         }
         .onAppear {
-            if viewModel.sleepBedTime == nil {
-                viewModel.sleepBedTime = defaultBedTime
-            }
             if viewModel.sleepWakeUpTime == nil {
                 viewModel.sleepWakeUpTime = defaultWakeTime
             }
