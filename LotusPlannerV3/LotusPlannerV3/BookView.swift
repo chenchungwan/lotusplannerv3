@@ -284,7 +284,7 @@ struct BookView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .bookViewNavigateToWeek)) { notification in
             if let date = notification.object as? Date {
-                navigateToPage(.weekTimebox(date))
+                navigateToPage(.weekCalendar(date))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .bookViewNavigateToMonth)) { notification in
