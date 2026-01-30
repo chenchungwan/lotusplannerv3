@@ -102,8 +102,11 @@ struct WeeklyView: View {
         return contentColumnWidth()
     }
 
-    init(bulkEditManager: BulkEditManager) {
+    private let hideNavBar: Bool
+
+    init(bulkEditManager: BulkEditManager, hideNavBar: Bool = false) {
         self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
+        self.hideNavBar = hideNavBar
     }
 
     private var baseView: some View {
@@ -113,8 +116,10 @@ struct WeeklyView: View {
                 BulkEditToolbarView(bulkEditManager: bulkEditManager)
             }
 
-            GlobalNavBar()
-                .background(.ultraThinMaterial)
+            if !hideNavBar {
+                GlobalNavBar()
+                    .background(.ultraThinMaterial)
+            }
 
             mainContent
         }

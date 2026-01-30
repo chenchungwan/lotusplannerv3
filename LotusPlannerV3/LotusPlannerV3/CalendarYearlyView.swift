@@ -4,22 +4,27 @@ struct CalendarYearlyView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var currentYear: Int
     @State private var selectedDate: Date
-    
+    private let hideNavBar: Bool
+
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
-    
-    init() {
+
+    init(hideNavBar: Bool = false, overrideYear: Int? = nil) {
         let today = Date()
-        self._currentYear = State(initialValue: Calendar.current.component(.year, from: today))
+        let year = overrideYear ?? Calendar.current.component(.year, from: today)
+        self._currentYear = State(initialValue: year)
         self._selectedDate = State(initialValue: today)
+        self.hideNavBar = hideNavBar
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Global navigation bar
-            GlobalNavBar()
-            
+            if !hideNavBar {
+                GlobalNavBar()
+            }
+
             GeometryReader { geometry in
                 // 12-month grid
                 monthsGrid(geometry: geometry)
@@ -115,19 +120,31 @@ struct CalendarYearlyView: View {
                             verticalSizeClass: verticalSizeClass,
                             onDayTap: { date in
                                 selectedDate = date
-                                navigationManager.updateInterval(.day, date: date)
-                                navigationManager.switchToCalendar()
+                                if hideNavBar {
+                                    NotificationCenter.default.post(name: .bookViewNavigateToDay, object: date)
+                                } else {
+                                    navigationManager.updateInterval(.day, date: date)
+                                    navigationManager.switchToCalendar()
+                                }
                             },
                             onMonthTap: {
                                 let monthDate = Calendar.mondayFirst.date(from: DateComponents(year: currentYear, month: month, day: 1))!
                                 selectedDate = monthDate
-                                navigationManager.updateInterval(.month, date: monthDate)
-                                navigationManager.switchToCalendar()
+                                if hideNavBar {
+                                    NotificationCenter.default.post(name: .bookViewNavigateToMonth, object: [month, currentYear])
+                                } else {
+                                    navigationManager.updateInterval(.month, date: monthDate)
+                                    navigationManager.switchToCalendar()
+                                }
                             },
                             onWeekTap: { date in
                                 selectedDate = date
-                                navigationManager.updateInterval(.week, date: date)
-                                navigationManager.switchToCalendar()
+                                if hideNavBar {
+                                    NotificationCenter.default.post(name: .bookViewNavigateToWeek, object: date)
+                                } else {
+                                    navigationManager.updateInterval(.week, date: date)
+                                    navigationManager.switchToCalendar()
+                                }
                             }
                         )
                         .frame(height: monthCardHeight)

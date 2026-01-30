@@ -111,6 +111,7 @@ class NavigationManager: ObservableObject {
         case gWeekView
         case yearlyCalendar
         case timebox
+        case bookView
     }
     
     @Published var currentView: CurrentView = .calendar
@@ -187,7 +188,12 @@ class NavigationManager: ObservableObject {
         showTasksView = false
         currentInterval = .week // Timebox is a weekly 7-column view
     }
-    
+
+    func switchToBookView() {
+        currentView = .bookView
+        showTasksView = false
+    }
+
     func showSettings() {
         showingSettings = true
     }

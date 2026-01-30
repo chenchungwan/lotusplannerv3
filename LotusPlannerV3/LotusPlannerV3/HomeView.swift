@@ -84,6 +84,9 @@ struct ContentView: View {
             case .timebox:
                 TimeboxView(bulkEditManager: timeboxBulkEditManager)
                     .id("TimeboxView-\(navigationManager.currentDate)")
+            case .bookView:
+                BookView()
+                    .id("BookView")
         }
     }
 }

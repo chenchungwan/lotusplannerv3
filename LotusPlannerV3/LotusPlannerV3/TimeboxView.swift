@@ -177,8 +177,11 @@ struct TimeboxView: View {
         return formatter.string(from: date)
     }
 
-    init(bulkEditManager: BulkEditManager) {
+    private let hideNavBar: Bool
+
+    init(bulkEditManager: BulkEditManager, hideNavBar: Bool = false) {
         self._bulkEditManager = ObservedObject(wrappedValue: bulkEditManager)
+        self.hideNavBar = hideNavBar
     }
 
     private var baseView: some View {
@@ -189,8 +192,10 @@ struct TimeboxView: View {
             }
 
             // Global Navigation Bar
-            GlobalNavBar()
-                .background(.ultraThinMaterial)
+            if !hideNavBar {
+                GlobalNavBar()
+                    .background(.ultraThinMaterial)
+            }
             
             GeometryReader { geometry in
                 let availableWidth = geometry.size.width

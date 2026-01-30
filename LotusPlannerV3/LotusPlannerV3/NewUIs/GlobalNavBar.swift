@@ -296,7 +296,13 @@ struct GlobalNavBar: View {
                             }) {
                                 Label("Journals", systemImage: "book")
                             }
-                            
+
+                            Button(action: {
+                                navigationManager.switchToBookView()
+                            }) {
+                                Label("Book View (Beta)", systemImage: "book.pages")
+                            }
+
                             if !appPrefs.hideGoals {
                                 Button(action: {
                                     navigationManager.switchToGoals()
