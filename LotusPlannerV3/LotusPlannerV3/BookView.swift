@@ -8,6 +8,9 @@ extension Notification.Name {
     static let bookViewNavigateToDay = Notification.Name("BookViewNavigateToDay")
     static let bookViewNavigateToWeek = Notification.Name("BookViewNavigateToWeek")
     static let bookViewNavigateToMonth = Notification.Name("BookViewNavigateToMonth")
+    static let bookViewNavigateToYear = Notification.Name("BookViewNavigateToYear")
+    static let bookViewNavigateToTimebox = Notification.Name("BookViewNavigateToTimebox")
+    static let toggleBookViewBulkEdit = Notification.Name("ToggleBookViewBulkEdit")
 }
 
 // MARK: - Book Page Content Enum
@@ -233,8 +236,6 @@ struct BookView: View {
     private let startYear: Int
     private let numberOfYears: Int
 
-    @State private var showingSettings = false
-
     init() {
         let year = Calendar.current.component(.year, from: Date())
         let numYears = 2
@@ -249,34 +250,28 @@ struct BookView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ZStack {
-                #if os(iOS)
-                BookPageViewController(
-                    pages: pages,
-                    currentPage: $currentPage,
-                    pageViewBuilder: { page in
-                        AnyView(pageView(for: page))
-                    }
-                )
-                .ignoresSafeArea(edges: .bottom)
-                #endif
-
-                // Floating navigation overlay
-                VStack {
-                    bookNavOverlay
-                    Spacer()
+        ZStack {
+            #if os(iOS)
+            BookPageViewController(
+                pages: pages,
+                currentPage: $currentPage,
+                pageViewBuilder: { page in
+                    AnyView(pageView(for: page))
                 }
-            }
-
-            // Right sidebar
-            BookSidebar(
-                startYear: startYear,
-                numberOfYears: numberOfYears,
-                activePage: pages.indices.contains(currentPage) ? pages[currentPage] : .year(startYear),
-                onYearTap: { year in navigateToPage(.year(year)) },
-                onMonthTap: { month, year in navigateToPage(.month(month, year)) }
             )
+            .ignoresSafeArea(edges: .bottom)
+            #endif
+
+            // Navigation bar + tab bar overlay
+            VStack(spacing: 0) {
+                GlobalNavBar()
+                    .background(.ultraThinMaterial)
+                BookTabBar(
+                    activePage: pages.indices.contains(currentPage) ? pages[currentPage] : .year(startYear),
+                    onTabTap: { target in navigateToPage(target) }
+                )
+                Spacer()
+            }
         }
         .onChange(of: currentPage) { oldValue, newValue in
             guard newValue >= 0 && newValue < pages.count else { return }
@@ -297,8 +292,21 @@ struct BookView: View {
                 navigateToPage(.month(values[0], values[1]))
             }
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
+        .onReceive(NotificationCenter.default.publisher(for: .bookViewNavigateToYear)) { notification in
+            if let year = notification.object as? Int {
+                navigateToPage(.year(year))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .bookViewNavigateToTimebox)) { notification in
+            if let date = notification.object as? Date {
+                navigateToPage(.weekTimebox(date))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleBookViewBulkEdit)) { _ in
+            bulkEditManager.state.isActive.toggle()
+            if !bulkEditManager.state.isActive {
+                bulkEditManager.state.selectedTaskIds.removeAll()
+            }
         }
     }
 }
@@ -389,224 +397,128 @@ extension BookView {
     }
 }
 
-// MARK: - Floating Navigation Overlay
-extension BookView {
-    var bookNavOverlay: some View {
-        HStack(spacing: 12) {
-            // Hamburger menu
-            Menu {
-                Button(action: { navigationManager.switchToCalendar() }) {
-                    Label("Calendar", systemImage: "calendar")
-                }
-                Button(action: { navigationManager.switchToTasks() }) {
-                    Label("Tasks", systemImage: "checklist")
-                }
-                Button(action: { navigationManager.switchToLists() }) {
-                    Label("Lists", systemImage: "list.bullet")
-                }
-                Button(action: { navigationManager.switchToJournalDayViews() }) {
-                    Label("Journals", systemImage: "book")
-                }
-                if !appPrefs.hideGoals {
-                    Button(action: { navigationManager.switchToGoals() }) {
-                        Label("Goals (Beta)", systemImage: "target")
-                    }
-                }
-                Divider()
-                Button("Settings") { showingSettings = true }
-            } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.body)
-                    .frame(minWidth: 36, minHeight: 36)
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.borderless)
 
-            // Current page label
-            Text(pageLabel(for: pages[currentPage]))
-                .font(.headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-
-            Spacer()
-
-            // Today button
-            Button("Today") {
-                currentPage = todayIndex
-            }
-            .font(.subheadline)
-            .foregroundColor(.accentColor)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-    }
-
-    private func pageLabel(for page: BookPageContent) -> String {
-        switch page {
-        case .year(let year):
-            return "\(year)"
-        case .month(let month, let year):
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM yyyy"
-            let date = Calendar.current.date(from: DateComponents(year: year, month: month)) ?? Date()
-            return formatter.string(from: date)
-        case .weekTimebox(let monday):
-            let calendar = Calendar.mondayFirst
-            let weekNum = calendar.component(.weekOfYear, from: monday)
-            let formatter = DateFormatter()
-            formatter.dateFormat = "M/d"
-            let startStr = formatter.string(from: monday)
-            let sunday = calendar.date(byAdding: .day, value: 6, to: monday) ?? monday
-            let endStr = formatter.string(from: sunday)
-            return "W\(weekNum) Timebox: \(startStr) - \(endStr)"
-        case .weekCalendar(let monday):
-            let calendar = Calendar.mondayFirst
-            let weekNum = calendar.component(.weekOfYear, from: monday)
-            let formatter = DateFormatter()
-            formatter.dateFormat = "M/d"
-            let startStr = formatter.string(from: monday)
-            let sunday = calendar.date(byAdding: .day, value: 6, to: monday) ?? monday
-            let endStr = formatter.string(from: sunday)
-            return "W\(weekNum) Weekly: \(startStr) - \(endStr)"
-        case .day(let date):
-            let dayFormatter = DateFormatter()
-            dayFormatter.dateFormat = "EEE"
-            let dayOfWeek = dayFormatter.string(from: date).uppercased()
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "M/d/yy"
-            return "\(dayOfWeek) \(dateFormatter.string(from: date))"
-        }
-    }
-}
-
-// MARK: - Book Sidebar
-struct BookSidebar: View {
-    let startYear: Int
-    let numberOfYears: Int
+// MARK: - Book Tab Bar
+struct BookTabBar: View {
     let activePage: BookPageContent
-    let onYearTap: (Int) -> Void
-    let onMonthTap: (Int, Int) -> Void
+    let onTabTap: (BookPageContent) -> Void
 
-    // Pastel colors for each month (matching the reference image)
-    private static let monthColors: [Color] = [
-        Color(red: 0.85, green: 0.85, blue: 0.95),  // Jan - light lavender
-        Color(red: 0.90, green: 0.90, blue: 0.90),  // Feb - light gray
-        Color(red: 0.85, green: 0.93, blue: 0.85),  // Mar - light green
-        Color(red: 0.95, green: 0.90, blue: 0.80),  // Apr - light peach
-        Color(red: 0.90, green: 0.95, blue: 0.80),  // May - light lime
-        Color(red: 0.80, green: 0.90, blue: 0.85),  // Jun - light teal
-        Color(red: 0.85, green: 0.90, blue: 0.80),  // Jul - light sage
-        Color(red: 0.95, green: 0.88, blue: 0.78),  // Aug - light tan
-        Color(red: 0.90, green: 0.85, blue: 0.80),  // Sep - light brown
-        Color(red: 0.80, green: 0.88, blue: 0.95),  // Oct - light blue
-        Color(red: 0.88, green: 0.82, blue: 0.90),  // Nov - light purple
-        Color(red: 0.90, green: 0.82, blue: 0.85),  // Dec - light rose
-    ]
+    private static let tabCount = 10
 
-    private static let monthAbbreviations = [
-        "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-        "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
-    ]
+    private enum TabKind {
+        case today
+        case week
+        case month
+        case year
+        case blank(Int)
+    }
 
-    /// Determine which year and month (0=year tab, 1-12=month) is active
-    private var activeYearMonth: (year: Int, month: Int) {
-        let calendar = Calendar.current
-        switch activePage {
-        case .year(let y):
-            return (y, 0)
-        case .month(let m, let y):
-            return (y, m)
-        case .weekTimebox(let date), .weekCalendar(let date):
-            let y = calendar.component(.year, from: date)
-            let m = calendar.component(.month, from: date)
-            return (y, m)
-        case .day(let date):
-            let y = calendar.component(.year, from: date)
-            let m = calendar.component(.month, from: date)
-            return (y, m)
+    private var tabs: [TabKind] {
+        [.today, .week, .month, .year,
+         .blank(5), .blank(6), .blank(7), .blank(8), .blank(9), .blank(10)]
+    }
+
+    private func tabLabel(for tab: TabKind) -> String {
+        switch tab {
+        case .today: return "TODAY"
+        case .week: return "WEEK"
+        case .month: return "MONTH"
+        case .year: return "YEAR"
+        case .blank: return ""
         }
     }
+
+    private func tabTarget(for tab: TabKind) -> BookPageContent? {
+        let calendar = Calendar.current
+        let now = Date()
+        switch tab {
+        case .today:
+            return .day(now)
+        case .week:
+            return .weekTimebox(now)
+        case .month:
+            let m = calendar.component(.month, from: now)
+            let y = calendar.component(.year, from: now)
+            return .month(m, y)
+        case .year:
+            let y = calendar.component(.year, from: now)
+            return .year(y)
+        case .blank:
+            return nil
+        }
+    }
+
+    private func isTabActive(_ tab: TabKind) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        switch tab {
+        case .today:
+            if case .day(let date) = activePage {
+                return calendar.isDate(date, inSameDayAs: now)
+            }
+            return false
+        case .week:
+            switch activePage {
+            case .weekTimebox(let date), .weekCalendar(let date):
+                let weekEnd = calendar.date(byAdding: .day, value: 6, to: date) ?? date
+                return now >= date && now <= weekEnd
+            default:
+                return false
+            }
+        case .month:
+            if case .month(let m, let y) = activePage {
+                return m == calendar.component(.month, from: now)
+                    && y == calendar.component(.year, from: now)
+            }
+            return false
+        case .year:
+            if case .year(let y) = activePage {
+                return y == calendar.component(.year, from: now)
+            }
+            return false
+        case .blank:
+            return false
+        }
+    }
+
+    private static let tabColors: [Color] = [
+        Color(red: 0.85, green: 0.85, blue: 0.95),  // Today - light lavender
+        Color(red: 0.85, green: 0.93, blue: 0.85),  // Week - light green
+        Color(red: 0.95, green: 0.90, blue: 0.80),  // Month - light peach
+        Color(red: 0.80, green: 0.88, blue: 0.95),  // Year - light blue
+    ]
 
     var body: some View {
-        GeometryReader { geometry in
-            let totalHeight = geometry.size.height
-            // 13 tabs per year (1 year + 12 months), filling the full height
-            let tabHeight = totalHeight / 13
-
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        ForEach(0..<numberOfYears, id: \.self) { yearOffset in
-                            let year = startYear + yearOffset
-                            yearSection(year: year, tabHeight: tabHeight)
-                                .id(year)
-                        }
-                    }
-                }
-                .onAppear {
-                    proxy.scrollTo(activeYearMonth.year, anchor: .top)
-                }
-                .onChange(of: activeYearMonth.year) { _, newYear in
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(newYear, anchor: .top)
-                    }
-                }
-            }
-        }
-        .frame(width: 40)
-        .background(Color(.systemBackground))
-    }
-
-    private func yearSection(year: Int, tabHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            // Year tab
-            let isActiveYear = activeYearMonth.year == year && activeYearMonth.month == 0
-            Button {
-                onYearTap(year)
-            } label: {
-                Text(String(format: "%d", year))
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(isActiveYear ? .white : .primary)
-                    .rotationEffect(.degrees(90))
-                    .fixedSize()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(isActiveYear ? Color.accentColor : Color(.systemGray5))
-                    .clipShape(UnevenRoundedRectangle(
-                        topLeadingRadius: 6, bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0, topTrailingRadius: 6
-                    ))
-            }
-            .frame(height: tabHeight)
-            .buttonStyle(.plain)
-
-            // 12 month tabs
-            ForEach(0..<12, id: \.self) { monthIndex in
-                let month = monthIndex + 1
-                let isActive = activeYearMonth.year == year && activeYearMonth.month == month
-                let bgColor = Self.monthColors[monthIndex]
+        HStack(spacing: 0) {
+            ForEach(0..<tabs.count, id: \.self) { index in
+                let tab = tabs[index]
+                let isActive = isTabActive(tab)
+                let label = tabLabel(for: tab)
+                let target = tabTarget(for: tab)
+                let bgColor: Color = index < Self.tabColors.count
+                    ? Self.tabColors[index]
+                    : Color(.systemGray6)
 
                 Button {
-                    onMonthTap(month, year)
+                    if let target = target {
+                        onTabTap(target)
+                    }
                 } label: {
-                    Text(Self.monthAbbreviations[monthIndex])
+                    Text(label)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(isActive ? .white : .primary.opacity(0.8))
-                        .rotationEffect(.degrees(90))
-                        .fixedSize()
+                        .foregroundColor(isActive ? .white : (label.isEmpty ? .clear : .primary.opacity(0.8)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(isActive ? Color.accentColor : bgColor)
-                        .clipShape(UnevenRoundedRectangle(
-                            topLeadingRadius: monthIndex == 0 ? 0 : 4,
-                            bottomLeadingRadius: monthIndex == 11 ? 6 : 4,
-                            bottomTrailingRadius: monthIndex == 11 ? 6 : 4,
-                            topTrailingRadius: monthIndex == 0 ? 0 : 4
-                        ))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
-                .frame(height: tabHeight)
+                .frame(height: 28)
                 .buttonStyle(.plain)
+                .disabled(target == nil)
             }
         }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -697,25 +609,175 @@ struct BookMonthPage: View {
 struct BookDayPage: View {
     @ObservedObject var bulkEditManager: BulkEditManager
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
     @State private var selectedEvent: GoogleCalendarEvent?
 
     var body: some View {
-        VStack(spacing: 0) {
-            dayViewContent
-        }
-        .sheet(item: $selectedEvent) { event in
-            let calendarVM = DataManager.shared.calendarViewModel
-            let accountKind: GoogleAuthManager.AccountKind =
-                calendarVM.personalEvents.contains(where: { $0.id == event.id }) ? .personal : .professional
-            AddItemView(
-                currentDate: event.startTime ?? Date(),
-                tasksViewModel: DataManager.shared.tasksViewModel,
-                calendarViewModel: calendarVM,
-                appPrefs: appPrefs,
-                existingEvent: event,
-                accountKind: accountKind,
-                showEventOnly: true
-            )
+        ZStack {
+            VStack(spacing: 0) {
+                dayViewContent
+            }
+            .sheet(item: $selectedEvent) { event in
+                let calendarVM = DataManager.shared.calendarViewModel
+                let accountKind: GoogleAuthManager.AccountKind =
+                    calendarVM.personalEvents.contains(where: { $0.id == event.id }) ? .personal : .professional
+                AddItemView(
+                    currentDate: event.startTime ?? Date(),
+                    tasksViewModel: DataManager.shared.tasksViewModel,
+                    calendarViewModel: calendarVM,
+                    appPrefs: appPrefs,
+                    existingEvent: event,
+                    accountKind: accountKind,
+                    showEventOnly: true
+                )
+            }
+            .confirmationDialog("Complete Tasks", isPresented: $bulkEditManager.state.showingCompleteConfirmation) {
+                Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
+                    Task {
+                        let allTasks = getAllTasksForBulkEdit()
+                        await bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                            bulkEditManager.state.undoAction = .complete
+                            bulkEditManager.state.undoData = undoData
+                            bulkEditManager.state.showingUndoToast = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                if bulkEditManager.state.undoAction == .complete {
+                                    bulkEditManager.state.showingUndoToast = false
+                                    bulkEditManager.state.undoAction = nil
+                                    bulkEditManager.state.undoData = nil
+                                }
+                            }
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .confirmationDialog("Delete Tasks", isPresented: $bulkEditManager.state.showingDeleteConfirmation) {
+                Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
+                    Task {
+                        let allTasks = getAllTasksForBulkEdit()
+                        await bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                            bulkEditManager.state.undoAction = .delete
+                            bulkEditManager.state.undoData = undoData
+                            bulkEditManager.state.showingUndoToast = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                if bulkEditManager.state.undoAction == .delete {
+                                    bulkEditManager.state.showingUndoToast = false
+                                    bulkEditManager.state.undoAction = nil
+                                    bulkEditManager.state.undoData = nil
+                                }
+                            }
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(isPresented: $bulkEditManager.state.showingDueDatePicker) {
+                BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
+                    Task {
+                        let allTasks = getAllTasksForBulkEdit()
+                        await bulkEditManager.bulkUpdateDueDate(
+                            tasks: allTasks,
+                            dueDate: date,
+                            isAllDay: isAllDay,
+                            startTime: startTime,
+                            endTime: endTime,
+                            tasksVM: tasksViewModel
+                        ) { undoData in
+                            bulkEditManager.state.undoAction = .updateDueDate
+                            bulkEditManager.state.undoData = undoData
+                            bulkEditManager.state.showingUndoToast = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                if bulkEditManager.state.undoAction == .updateDueDate {
+                                    bulkEditManager.state.showingUndoToast = false
+                                    bulkEditManager.state.undoAction = nil
+                                    bulkEditManager.state.undoData = nil
+                                }
+                            }
+                        }
+                        bulkEditManager.state.showingDueDatePicker = false
+                    }
+                }
+            }
+            .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
+                BulkMoveDestinationPicker(
+                    personalTaskLists: tasksViewModel.personalTaskLists,
+                    professionalTaskLists: tasksViewModel.professionalTaskLists,
+                    onSelect: { accountKind, listId in
+                        Task {
+                            let allTasks = getAllTasksForBulkEdit()
+                            await bulkEditManager.bulkMove(
+                                tasks: allTasks,
+                                to: listId,
+                                destinationAccountKind: accountKind,
+                                tasksVM: tasksViewModel
+                            ) { undoData in
+                                bulkEditManager.state.undoAction = .move
+                                bulkEditManager.state.undoData = undoData
+                                bulkEditManager.state.showingUndoToast = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                    if bulkEditManager.state.undoAction == .move {
+                                        bulkEditManager.state.showingUndoToast = false
+                                        bulkEditManager.state.undoAction = nil
+                                        bulkEditManager.state.undoData = nil
+                                    }
+                                }
+                            }
+                            bulkEditManager.state.showingMoveDestinationPicker = false
+                        }
+                    }
+                )
+            }
+            .sheet(isPresented: $bulkEditManager.state.showingPriorityPicker) {
+                BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
+                    Task {
+                        let allTasks = getAllTasksForBulkEdit()
+                        await bulkEditManager.bulkUpdatePriority(
+                            tasks: allTasks,
+                            priority: priority,
+                            tasksVM: tasksViewModel
+                        ) { undoData in
+                            bulkEditManager.state.undoAction = .updatePriority
+                            bulkEditManager.state.undoData = undoData
+                            bulkEditManager.state.showingUndoToast = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                if bulkEditManager.state.undoAction == .updatePriority {
+                                    bulkEditManager.state.showingUndoToast = false
+                                    bulkEditManager.state.undoAction = nil
+                                    bulkEditManager.state.undoData = nil
+                                }
+                            }
+                        }
+                        bulkEditManager.state.showingPriorityPicker = false
+                    }
+                }
+            }
+
+            // Undo toast overlay
+            if bulkEditManager.state.showingUndoToast, let action = bulkEditManager.state.undoAction {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text(undoMessage(for: action))
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button("Undo") {
+                            Task {
+                                await performUndo()
+                            }
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.yellow)
+                    }
+                    .padding()
+                    .background(Color.black.opacity(0.85))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut, value: bulkEditManager.state.showingUndoToast)
+            }
         }
     }
 
@@ -748,5 +810,59 @@ struct BookDayPage: View {
                 onEventTap: { ev in selectedEvent = ev }
             )
         }
+    }
+
+    // MARK: - Bulk Edit Helpers
+
+    private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
+        var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
+        for (listId, tasks) in tasksViewModel.personalTasks {
+            for task in tasks {
+                allTasks.append((task: task, listId: listId, accountKind: .personal))
+            }
+        }
+        for (listId, tasks) in tasksViewModel.professionalTasks {
+            for task in tasks {
+                allTasks.append((task: task, listId: listId, accountKind: .professional))
+            }
+        }
+        return allTasks
+    }
+
+    private func undoMessage(for action: BulkEditAction) -> String {
+        switch action {
+        case .complete:
+            return "Tasks marked complete"
+        case .delete:
+            return "Tasks deleted"
+        case .move:
+            return "Tasks moved"
+        case .updateDueDate:
+            return "Due dates updated"
+        case .updatePriority:
+            return "Priorities updated"
+        }
+    }
+
+    private func performUndo() async {
+        guard let action = bulkEditManager.state.undoAction,
+              let undoData = bulkEditManager.state.undoData else { return }
+
+        switch action {
+        case .complete:
+            await bulkEditManager.undoComplete(data: undoData, tasksVM: tasksViewModel)
+        case .delete:
+            await bulkEditManager.undoDelete(data: undoData, tasksVM: tasksViewModel)
+        case .move:
+            await bulkEditManager.undoMove(data: undoData, tasksVM: tasksViewModel)
+        case .updateDueDate:
+            await bulkEditManager.undoUpdateDueDate(data: undoData, tasksVM: tasksViewModel)
+        case .updatePriority:
+            await bulkEditManager.undoUpdatePriority(data: undoData, tasksVM: tasksViewModel)
+        }
+
+        bulkEditManager.state.showingUndoToast = false
+        bulkEditManager.state.undoAction = nil
+        bulkEditManager.state.undoData = nil
     }
 }
