@@ -278,7 +278,7 @@ struct DayViewNewClassic: View {
     // MARK: - Task Section
     @ViewBuilder
     private var topDaySection: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             // Personal Tasks
             let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
             if auth.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
