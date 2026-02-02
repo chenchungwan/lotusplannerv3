@@ -175,7 +175,7 @@ struct GlobalNavBar: View {
         if navigationManager.currentView == .goals {
             navigationManager.updateInterval(interval, date: Date())
         } else if navigationManager.currentView == .bookView {
-            // In Book View: navigate to the applicable book page
+            // In Book View: always navigate to the current (today's) page
             let now = Date()
             let calendar = Calendar.current
             navigationManager.updateInterval(interval, date: now)
@@ -342,10 +342,12 @@ struct GlobalNavBar: View {
                                 Label("Journals", systemImage: "book")
                             }
 
-                            Button(action: {
-                                navigationManager.switchToBookView()
-                            }) {
-                                Label("Book View (Beta)", systemImage: "book.pages")
+                            if !appPrefs.hideBookView {
+                                Button(action: {
+                                    navigationManager.switchToBookView()
+                                }) {
+                                    Label("Book View (Beta)", systemImage: "book.pages")
+                                }
                             }
 
                             if !appPrefs.hideGoals {
@@ -475,7 +477,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && !navigationManager.isShowingTimebox ? .accentColor : .secondary)))
                                         }
                                     }
                                     if navigationManager.currentView != .goals {
@@ -484,7 +486,7 @@ struct GlobalNavBar: View {
                                                 // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
                                             } else if navigationManager.currentView == .bookView {
-                                                // In Book View: navigate to timebox week page
+                                                // In Book View: navigate to current week's timebox page
                                                 navigationManager.updateInterval(.week, date: Date())
                                                 NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
                                             } else if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
@@ -498,7 +500,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -599,52 +601,41 @@ struct GlobalNavBar: View {
                             .disabled(isSyncing)
                             .id(isSyncing)
                             
-                            // Hide completed tasks toggle (in Tasks, Lists, Calendar day/week views, and Timebox view)
-                            if navigationManager.currentView == .tasks || navigationManager.currentView == .lists || 
-                               (isCalendarLikeView && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) ||
+                            // Hide completed tasks toggle — shown but disabled in month/year views
+                            if navigationManager.currentView == .tasks || navigationManager.currentView == .lists ||
+                               isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ||
                                navigationManager.currentView == .timebox {
+                                let eyeInactive = (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year)
                                 Button {
                                     appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
                                 } label: {
                                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(eyeInactive ? .secondary.opacity(0.4) : .accentColor)
                                 }
+                                .disabled(eyeInactive)
                             }
 
-                            // Bulk edit toggle (in Calendar/Book day view)
-                            if isCalendarLikeView && navigationManager.currentInterval == .day {
+                            // Bulk edit toggle — shown but disabled in month/year views
+                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
+                                let bulkInactive = navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
                                 Button {
                                     if navigationManager.currentView == .bookView {
                                         NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
-                                    } else {
+                                    } else if navigationManager.currentInterval == .day {
                                         NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
-                                    }
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle (in Calendar/Book week view)
-                            if isCalendarLikeView && navigationManager.currentInterval == .week {
-                                Button {
-                                    if navigationManager.currentView == .bookView {
-                                        NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
-                                    } else {
+                                    } else if navigationManager.currentInterval == .week {
                                         NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
                                     }
                                 } label: {
                                     Image(systemName: "checkmark.rectangle.stack")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(bulkInactive ? .secondary.opacity(0.4) : .accentColor)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(bulkInactive)
                             }
 
                             // Bulk edit toggle (in Tasks view)
@@ -821,7 +812,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && !navigationManager.isShowingTimebox ? .accentColor : .secondary)))
                                         }
                                     }
                                     if navigationManager.currentView != .goals {
@@ -830,7 +821,7 @@ struct GlobalNavBar: View {
                                                 // In Tasks view with All Tasks filter: send notification to ensure proper update
                                                 NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
                                             } else if navigationManager.currentView == .bookView {
-                                                // In Book View: navigate to timebox week page
+                                                // In Book View: navigate to current week's timebox page
                                                 navigationManager.updateInterval(.week, date: Date())
                                                 NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
                                             } else if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
@@ -844,7 +835,7 @@ struct GlobalNavBar: View {
                                             Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
                                                 .font(adaptiveIconSize)
                                                 .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox ? .accentColor : .secondary)))
+                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary)))
                                         }
                                     }
                                 }
@@ -943,52 +934,41 @@ struct GlobalNavBar: View {
                             .disabled(isSyncing)
                             .id(isSyncing)
                             
-                            // Hide completed tasks toggle (in Tasks, Lists, Calendar day/week views, and Timebox view)
-                            if navigationManager.currentView == .tasks || navigationManager.currentView == .lists || 
-                               (isCalendarLikeView && (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)) ||
+                            // Hide completed tasks toggle — shown but disabled in month/year views
+                            if navigationManager.currentView == .tasks || navigationManager.currentView == .lists ||
+                               isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ||
                                navigationManager.currentView == .timebox {
+                                let eyeInactive = (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year)
                                 Button {
                                     appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
                                 } label: {
                                     Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(eyeInactive ? .secondary.opacity(0.4) : .accentColor)
                                 }
+                                .disabled(eyeInactive)
                             }
 
-                            // Bulk edit toggle (in Calendar/Book day view)
-                            if isCalendarLikeView && navigationManager.currentInterval == .day {
+                            // Bulk edit toggle — shown but disabled in month/year views
+                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
+                                let bulkInactive = navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
                                 Button {
                                     if navigationManager.currentView == .bookView {
                                         NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
-                                    } else {
+                                    } else if navigationManager.currentInterval == .day {
                                         NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
-                                    }
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle (in Calendar/Book week view)
-                            if isCalendarLikeView && navigationManager.currentInterval == .week {
-                                Button {
-                                    if navigationManager.currentView == .bookView {
-                                        NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
-                                    } else {
+                                    } else if navigationManager.currentInterval == .week {
                                         NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
                                     }
                                 } label: {
                                     Image(systemName: "checkmark.rectangle.stack")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
+                                        .foregroundColor(bulkInactive ? .secondary.opacity(0.4) : .accentColor)
                                 }
                                 .buttonStyle(.plain)
+                                .disabled(bulkInactive)
                             }
 
                             // Bulk edit toggle (in Tasks view)

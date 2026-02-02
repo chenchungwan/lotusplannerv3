@@ -62,11 +62,8 @@ enum BookPageContent: Hashable {
 
 // MARK: - Page Generator
 struct BookPageGenerator {
-    /// Generates pages in chronological order per year:
-    ///   Year overview → then day-by-day with month/week views interleaved:
-    ///     - Month view inserted before the 1st of each month
-    ///     - Week timebox + weekly views inserted before each Monday
-    ///     - Day view for every day
+    /// Generates pages grouped by type per year:
+    ///   Year overview → 12 Month pages → All Week pages → All Day pages
     static func generatePages(startYear: Int, numberOfYears: Int = 2) -> [BookPageContent] {
         let calendar = Calendar.mondayFirst
         var pages: [BookPageContent] = []
@@ -74,34 +71,46 @@ struct BookPageGenerator {
         for yearOffset in 0..<numberOfYears {
             let year = startYear + yearOffset
 
-            // Year overview page
+            // 1. Year overview page
             pages.append(.year(year))
 
             guard let jan1 = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
                   let dec31 = calendar.date(from: DateComponents(year: year, month: 12, day: 31)) else { continue }
 
-            // Walk day-by-day, inserting month and week pages at the right spots
+            // 2. All 12 month pages
+            for month in 1...12 {
+                pages.append(.month(month, year))
+            }
+
+            // 3. All week pages — from week containing Jan 1 through week containing Dec 31
+            // Find Monday of the week containing Jan 1
+            var firstMonday: Date = jan1
+            let jan1Weekday = calendar.component(.weekday, from: jan1)
+            // In Calendar.mondayFirst: Sunday=1, Monday=2, ..., Saturday=7
+            if jan1Weekday != 2 {
+                // Go back to the previous Monday
+                let daysBack = (jan1Weekday == 1) ? 6 : (jan1Weekday - 2)
+                firstMonday = calendar.date(byAdding: .day, value: -daysBack, to: jan1) ?? jan1
+            }
+            // Find Monday of the week containing Dec 31
+            var lastMonday: Date = dec31
+            let dec31Weekday = calendar.component(.weekday, from: dec31)
+            if dec31Weekday != 2 {
+                let daysBack = (dec31Weekday == 1) ? 6 : (dec31Weekday - 2)
+                lastMonday = calendar.date(byAdding: .day, value: -daysBack, to: dec31) ?? dec31
+            }
+            var monday = firstMonday
+            while monday <= lastMonday {
+                pages.append(.weekCalendar(monday))
+                pages.append(.weekTimebox(monday))
+                guard let nextMonday = calendar.date(byAdding: .day, value: 7, to: monday) else { break }
+                monday = nextMonday
+            }
+
+            // 4. All day pages
             var currentDay = jan1
             while currentDay <= dec31 {
-                let dayOfMonth = calendar.component(.day, from: currentDay)
-                let weekday = calendar.component(.weekday, from: currentDay)
-                let isMonday = weekday == 2 // Calendar.mondayFirst: Sunday=1, Monday=2
-
-                // Insert month view before the 1st of each month
-                if dayOfMonth == 1 {
-                    let month = calendar.component(.month, from: currentDay)
-                    pages.append(.month(month, year))
-                }
-
-                // Insert week timebox + weekly views before each Monday
-                if isMonday {
-                    pages.append(.weekTimebox(currentDay))
-                    pages.append(.weekCalendar(currentDay))
-                }
-
-                // Day view
                 pages.append(.day(currentDay))
-
                 guard let nextDay = calendar.date(byAdding: .day, value: 1, to: currentDay) else { break }
                 currentDay = nextDay
             }
@@ -127,6 +136,7 @@ struct BookPageGenerator {
 struct BookPageViewController: UIViewControllerRepresentable {
     let pages: [BookPageContent]
     @Binding var currentPage: Int
+    let refreshToken: UUID
     let pageViewBuilder: (BookPageContent) -> AnyView
 
     func makeCoordinator() -> Coordinator {
@@ -148,7 +158,16 @@ struct BookPageViewController: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ pvc: UIPageViewController, context: Context) {
-        // Only update if programmatic jump (not from swipe)
+        // Keep parent reference current so pageViewBuilder closure is fresh
+        context.coordinator.parent = self
+
+        // If data changed (refreshToken updated), force rebuild the visible page
+        if context.coordinator.lastRefreshToken != refreshToken {
+            context.coordinator.lastRefreshToken = refreshToken
+            context.coordinator.forceRebuildVisiblePage(pvc)
+        }
+
+        // Handle programmatic page jump (not from swipe)
         guard context.coordinator.lastReportedIndex != currentPage else { return }
         let direction: UIPageViewController.NavigationDirection =
             currentPage > context.coordinator.lastReportedIndex ? .forward : .reverse
@@ -160,12 +179,29 @@ struct BookPageViewController: UIViewControllerRepresentable {
     class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
         var parent: BookPageViewController
         var lastReportedIndex: Int
+        var lastRefreshToken: UUID
         private var cachedControllers: [Int: UIHostingController<AnyView>] = [:]
         private let cacheRadius = 3
 
         init(_ parent: BookPageViewController) {
             self.parent = parent
             self.lastReportedIndex = parent.currentPage
+            self.lastRefreshToken = parent.refreshToken
+        }
+
+        /// Clear cached controllers around the current page and display a fresh one.
+        /// Called when underlying data (events/tasks) has changed.
+        func forceRebuildVisiblePage(_ pvc: UIPageViewController) {
+            let center = lastReportedIndex
+            // Clear cached controllers so they get rebuilt with fresh data
+            for offset in -2...2 {
+                let index = center + offset
+                cachedControllers.removeValue(forKey: index)
+            }
+            // Create a fresh controller for the current page and display it
+            guard center >= 0 && center < parent.pages.count else { return }
+            let vc = viewController(for: center)
+            pvc.setViewControllers([vc], direction: .forward, animated: false)
         }
 
         func viewController(for index: Int) -> UIViewController {
@@ -232,6 +268,7 @@ struct BookView: View {
 
     let pages: [BookPageContent]
     @State private var currentPage: Int
+    @State private var refreshToken = UUID()
     private let todayIndex: Int
     private let startYear: Int
     private let numberOfYears: Int
@@ -249,12 +286,23 @@ struct BookView: View {
         self.numberOfYears = numYears
     }
 
+    private var currentPageIsWeekly: Bool {
+        guard currentPage >= 0 && currentPage < pages.count else { return false }
+        switch pages[currentPage] {
+        case .weekTimebox, .weekCalendar:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some View {
         ZStack {
             #if os(iOS)
             BookPageViewController(
                 pages: pages,
                 currentPage: $currentPage,
+                refreshToken: refreshToken,
                 pageViewBuilder: { page in
                     AnyView(pageView(for: page))
                 }
@@ -308,6 +356,24 @@ struct BookView: View {
                 bulkEditManager.state.selectedTaskIds.removeAll()
             }
         }
+        // Force page rebuild when calendar or task data changes.
+        // Debounce to collapse rapid changes (e.g. isLoading + events + isLoading)
+        // into a single rebuild after data settles.
+        // Skip for weekly/timebox pages — they observe ViewModels directly and
+        // rebuilding them triggers a new .task that reloads data, causing an
+        // infinite refresh loop.
+        .onReceive(
+            calendarVM.objectWillChange
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+        ) { _ in
+            if !currentPageIsWeekly { refreshToken = UUID() }
+        }
+        .onReceive(
+            tasksVM.objectWillChange
+                .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+        ) { _ in
+            if !currentPageIsWeekly { refreshToken = UUID() }
+        }
     }
 }
 
@@ -318,13 +384,20 @@ extension BookView {
         case .year(let year):
             let date = Calendar.current.date(from: DateComponents(year: year, month: 1, day: 1)) ?? Date()
             navigationManager.updateInterval(.year, date: date)
+            navigationManager.isShowingTimebox = false
         case .month(let month, let year):
             let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) ?? Date()
             navigationManager.updateInterval(.month, date: date)
-        case .weekTimebox(let monday), .weekCalendar(let monday):
+            navigationManager.isShowingTimebox = false
+        case .weekTimebox(let monday):
             navigationManager.updateInterval(.week, date: monday)
+            navigationManager.isShowingTimebox = true
+        case .weekCalendar(let monday):
+            navigationManager.updateInterval(.week, date: monday)
+            navigationManager.isShowingTimebox = false
         case .day(let date):
             navigationManager.updateInterval(.day, date: date)
+            navigationManager.isShowingTimebox = false
         }
     }
 }
@@ -368,18 +441,22 @@ extension BookView {
                 return false
             })
         case .weekTimebox(let targetDate):
+            let targetDay = calendar.startOfDay(for: targetDate)
             return pages.firstIndex(where: {
                 if case .weekTimebox(let monday) = $0 {
-                    let weekEnd = calendar.date(byAdding: .day, value: 6, to: monday) ?? monday
-                    return targetDate >= monday && targetDate <= weekEnd
+                    let startOfMonday = calendar.startOfDay(for: monday)
+                    let weekEnd = calendar.date(byAdding: .day, value: 6, to: startOfMonday) ?? startOfMonday
+                    return targetDay >= startOfMonday && targetDay <= weekEnd
                 }
                 return false
             })
         case .weekCalendar(let targetDate):
+            let targetDay = calendar.startOfDay(for: targetDate)
             return pages.firstIndex(where: {
                 if case .weekCalendar(let monday) = $0 {
-                    let weekEnd = calendar.date(byAdding: .day, value: 6, to: monday) ?? monday
-                    return targetDate >= monday && targetDate <= weekEnd
+                    let startOfMonday = calendar.startOfDay(for: monday)
+                    let weekEnd = calendar.date(byAdding: .day, value: 6, to: startOfMonday) ?? startOfMonday
+                    return targetDay >= startOfMonday && targetDay <= weekEnd
                 }
                 return false
             })

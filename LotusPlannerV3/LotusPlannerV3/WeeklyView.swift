@@ -243,17 +243,11 @@ struct WeeklyView: View {
             // Initialize selectedDate from navigation manager if available
             selectedDate = navigationManager.currentDate
             regenerateWeekDates(for: selectedDate)
-            
-            // Clear caches and load fresh data
-            calendarViewModel.clearAllData()
-            await tasksViewModel.loadTasks(forceClear: true)
+
+            // Load data for the week (no clearing — avoids blank flash and
+            // prevents infinite refresh loops when embedded in BookView)
+            await tasksViewModel.loadTasks()
             await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
-            
-            await MainActor.run {
-                // Force view updates
-                calendarViewModel.objectWillChange.send()
-                tasksViewModel.objectWillChange.send()
-            }
         }
         .onChange(of: selectedDate) { newValue in
             regenerateWeekDates(for: newValue)
@@ -264,43 +258,9 @@ struct WeeklyView: View {
             scrollToCurrentDayTrigger.toggle()
             scrollToCurrentDayHorizontalTrigger.toggle()
             scrollToCurrentDayRowTrigger.toggle()
-            
+
             Task {
-                // Clear caches and load fresh data
-                calendarViewModel.clearAllData()
-                await tasksViewModel.loadTasks(forceClear: true)
                 await calendarViewModel.loadCalendarDataForWeek(containing: newValue)
-                
-                await MainActor.run {
-                    // Force view updates
-                    calendarViewModel.objectWillChange.send()
-                    tasksViewModel.objectWillChange.send()
-                }
-            }
-        }
-        .onChange(of: navigationManager.currentInterval) { oldValue, newValue in
-            Task {
-                // Clear caches and load fresh data
-                calendarViewModel.clearAllData()
-                await tasksViewModel.loadTasks(forceClear: true)
-                
-                // Load data based on interval
-                switch newValue {
-                case .day:
-                    await calendarViewModel.loadCalendarData(for: selectedDate)
-                case .week:
-                    await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
-                case .month:
-                    await calendarViewModel.loadCalendarDataForMonth(containing: selectedDate)
-                case .year:
-                    await calendarViewModel.loadCalendarDataForMonth(containing: selectedDate)
-                }
-                
-                await MainActor.run {
-                    // Force view updates
-                    calendarViewModel.objectWillChange.send()
-                    tasksViewModel.objectWillChange.send()
-                }
             }
         }
         .onAppear {
@@ -2390,7 +2350,12 @@ extension WeeklyView {
             // Update the selected date
             selectedDate = date
             // Navigate to day view for the selected date
-            navigationManager.updateInterval(.day, date: date)
+            if hideNavBar {
+                // Inside BookView: use notification so currentView stays .bookView
+                NotificationCenter.default.post(name: .bookViewNavigateToDay, object: date)
+            } else {
+                navigationManager.updateInterval(.day, date: date)
+            }
         }
     }
     

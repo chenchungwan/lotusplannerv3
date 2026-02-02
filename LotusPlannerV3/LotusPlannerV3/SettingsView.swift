@@ -120,7 +120,8 @@ class NavigationManager: ObservableObject {
     @Published var currentDate: Date = Date()
     @Published var showingSettings = false
     @Published var showingAllTasks = false
-    
+    @Published var isShowingTimebox = false
+
     private init() {}
     
     func switchToCalendar() {
@@ -190,6 +191,10 @@ class NavigationManager: ObservableObject {
     }
 
     func switchToBookView() {
+        if AppPreferences.shared.hideBookView {
+            switchToCalendar()
+            return
+        }
         currentView = .bookView
         showTasksView = false
     }
@@ -359,6 +364,13 @@ class AppPreferences: ObservableObject {
     @Published var hideGoals: Bool {
         didSet {
             UserDefaults.standard.set(hideGoals, forKey: "hideGoals")
+        }
+    }
+
+    // Hide book view
+    @Published var hideBookView: Bool {
+        didSet {
+            UserDefaults.standard.set(hideBookView, forKey: "hideBookView")
         }
     }
     
@@ -658,7 +670,8 @@ class AppPreferences: ObservableObject {
         self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
-        self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? false
+        self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
+        self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
         self.verboseLoggingEnabled = UserDefaults.standard.object(forKey: DevLogger.verboseLoggingDefaultsKey) as? Bool ?? false
         
         
@@ -741,7 +754,11 @@ class AppPreferences: ObservableObject {
     func updateHideGoals(_ value: Bool) {
         hideGoals = value
     }
-    
+
+    func updateHideBookView(_ value: Bool) {
+        hideBookView = value
+    }
+
     func updateHideRecurringEventsInMonth(_ value: Bool) {
         hideRecurringEventsInMonth = value
     }
@@ -934,6 +951,7 @@ struct SettingsView: View {
     @State private var syncButtonDisabled = false
     @State private var showingSyncProgress = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
+    @State private var diagnosticsExpanded = false
     
     // Check if device forces stacked layout (iPhone portrait)
     private var shouldUseStackedLayout: Bool {
@@ -1279,7 +1297,41 @@ struct SettingsView: View {
                 } footer: {
                     Text("Goal features are still in beta. We're actively improving them.")
                 }
-                
+
+                // Book View Preferences section
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { !appPrefs.hideBookView },
+                        set: { appPrefs.updateHideBookView(!$0) }
+                    )) {
+                        HStack {
+                            Image(systemName: "book.pages")
+                                .foregroundColor(appPrefs.hideBookView ? .secondary : .accentColor)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Enable Book View")
+                                    .font(.body)
+                                Text("Show Book View option in navigation menu")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 8) {
+                        Text("Book View")
+                        Text("Beta")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                } footer: {
+                    Text("Book View lets you swipe through your planner like a book. This feature is still in beta.")
+                }
+
                 Section("App Preferences") {
                     HStack {
                         Image(systemName: "moon.fill")
@@ -1308,205 +1360,209 @@ struct SettingsView: View {
                     iCloudSyncSection()
                 }
                 
-                Section("Diagnostics") {
-                    // Quick Status Overview for TestFlight
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "info.circle.fill")
-                                .foregroundColor(.blue)
-                            Text("TestFlight Testing Status")
-                                .font(.headline)
+                Section {
+                    DisclosureGroup(isExpanded: $diagnosticsExpanded) {
+                        // Quick Status Overview for TestFlight
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.blue)
+                                Text("TestFlight Testing Status")
+                                    .font(.headline)
+                            }
+
+                            Divider()
+
+                            // iCloud Available Status
+                            HStack {
+                                Text("iCloud Available:")
+                                Spacer()
+                                Text(iCloudManagerInstance.iCloudAvailable ? "✅ Yes" : "❌ No")
+                                    .foregroundColor(iCloudManagerInstance.iCloudAvailable ? .green : .red)
+                                    .bold()
+                            }
+
+                            // Sync Status
+                            HStack {
+                                Text("Status:")
+                                Spacer()
+                                Text(iCloudManagerInstance.syncStatus.description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            // Last Sync
+                            HStack {
+                                Text("Last Sync:")
+                                Spacer()
+                                if let lastSync = iCloudManagerInstance.lastSyncDate {
+                                    Text(lastSync.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption)
+                                } else {
+                                    Text("Never")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            // Environment
+                            HStack {
+                                Text("Environment:")
+                                Spacer()
+                                #if DEBUG
+                                Text("🔧 Development")
+                                    .foregroundColor(.orange)
+                                    .bold()
+                                #else
+                                Text("🚀 Production")
+                                    .foregroundColor(.green)
+                                    .bold()
+                                #endif
+                            }
                         }
+                        .padding(.vertical, 4)
 
                         Divider()
 
-                        // iCloud Available Status
-                        HStack {
-                            Text("iCloud Available:")
-                            Spacer()
-                            Text(iCloudManagerInstance.iCloudAvailable ? "✅ Yes" : "❌ No")
-                                .foregroundColor(iCloudManagerInstance.iCloudAvailable ? .green : .red)
-                                .bold()
-                        }
-
-                        // Sync Status
-                        HStack {
-                            Text("Status:")
-                            Spacer()
-                            Text(iCloudManagerInstance.syncStatus.description)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        // Last Sync
-                        HStack {
-                            Text("Last Sync:")
-                            Spacer()
-                            if let lastSync = iCloudManagerInstance.lastSyncDate {
-                                Text(lastSync.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption)
-                            } else {
-                                Text("Never")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                        Toggle(isOn: Binding(
+                            get: { appPrefs.verboseLoggingEnabled },
+                            set: { appPrefs.updateVerboseLogging($0) }
+                        )) {
+                            HStack {
+                                Image(systemName: "terminal.fill")
+                                    .foregroundColor(appPrefs.verboseLoggingEnabled ? .accentColor : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Verbose Console Logging")
+                                        .font(.body)
+                                    Text("Adds detailed console output for troubleshooting")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
-
-                        // Environment
-                        HStack {
-                            Text("Environment:")
-                            Spacer()
-                            #if DEBUG
-                            Text("🔧 Development")
-                                .foregroundColor(.orange)
-                                .bold()
-                            #else
-                            Text("🚀 Production")
-                                .foregroundColor(.green)
-                                .bold()
-                            #endif
-                        }
-                    }
-                    .padding(.vertical, 4)
-
-                    Divider()
-
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.verboseLoggingEnabled },
-                        set: { appPrefs.updateVerboseLogging($0) }
-                    )) {
-                        HStack {
-                            Image(systemName: "terminal.fill")
-                                .foregroundColor(appPrefs.verboseLoggingEnabled ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Verbose Console Logging")
-                                    .font(.body)
-                                Text("Adds detailed console output for troubleshooting")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    Text("When disabled, only warnings and errors are logged. Enable to see detailed CloudKit sync logs in Console.app.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 2)
-
-                    // CloudKit Diagnostics
-                    Button(action: {
-                        devLog("🔍 Running CloudKit diagnostics...")
-                        iCloudManagerInstance.diagnoseICloudSetup()
-                        Task {
-                            await iCloudManagerInstance.diagnoseCloudKitData()
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "cloud.fill")
-                                .foregroundColor(.blue)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Run CloudKit Diagnostics")
-                                    .font(.body)
-                                Text("Check CloudKit setup and data (view output in Console.app)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Text("Connect device via USB → Open Console.app on Mac → Filter by 'LotusPlannerV3' → Tap this button → Look for 🔍 DIAGNOSTICS logs")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 2)
-
-                    Divider()
-
-                    // Comprehensive Sync Diagnostics
-                    Button(action: {
-                        checkAllDataUserIds()
-                    }) {
-                        HStack {
-                            Image(systemName: "list.bullet.clipboard")
-                                .foregroundColor(.purple)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Check ALL Data userId Values")
-                                    .font(.body)
-                                Text("Shows userId for Goals, Logs, Task Windows")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Button(action: {
-                        fixAllDataUserIds()
-                    }) {
-                        HStack {
-                            Image(systemName: "wrench.and.screwdriver")
-                                .foregroundColor(.orange)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Fix ALL Data userId Values")
-                                    .font(.body)
-                                Text("Sets userId='icloud-user' on ALL entities")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Button(action: {
-                        Task {
-                            await checkCloudKitRawData()
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "cloud.fill")
-                                .foregroundColor(.blue)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Query CloudKit Directly")
-                                    .font(.body)
-                                Text("Check what's actually in CloudKit Production")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Button(action: {
-                        forceExportToCloudKit()
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.up.to.line.compact")
-                                .foregroundColor(.green)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Force Export to CloudKit")
-                                    .font(.body)
-                                Text("Touch all entities to trigger CloudKit upload")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Text("DEV→PROD sync issue: Fix ALL Data → Force Export → Sync Now → Wait 2 min → Query CloudKit → Check if counts increased")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 2)
-
-                    Divider()
-
-                    // CloudKit Container Info
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Image(systemName: "info.circle")
-                                .foregroundColor(.secondary)
-                            Text("CloudKit Container")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Text("iCloud.com.chenchungwan.LotusPlannerV3")
+                        Text("When disabled, only warnings and errors are logged. Enable to see detailed CloudKit sync logs in Console.app.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
-                            .padding(.leading, 20)
+                            .padding(.top, 2)
+
+                        // CloudKit Diagnostics
+                        Button(action: {
+                            devLog("🔍 Running CloudKit diagnostics...")
+                            iCloudManagerInstance.diagnoseICloudSetup()
+                            Task {
+                                await iCloudManagerInstance.diagnoseCloudKitData()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "cloud.fill")
+                                    .foregroundColor(.blue)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Run CloudKit Diagnostics")
+                                        .font(.body)
+                                    Text("Check CloudKit setup and data (view output in Console.app)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        Text("Connect device via USB → Open Console.app on Mac → Filter by 'LotusPlannerV3' → Tap this button → Look for 🔍 DIAGNOSTICS logs")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
+
+                        Divider()
+
+                        // Comprehensive Sync Diagnostics
+                        Button(action: {
+                            checkAllDataUserIds()
+                        }) {
+                            HStack {
+                                Image(systemName: "list.bullet.clipboard")
+                                    .foregroundColor(.purple)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Check ALL Data userId Values")
+                                        .font(.body)
+                                    Text("Shows userId for Goals, Logs, Task Windows")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        Button(action: {
+                            fixAllDataUserIds()
+                        }) {
+                            HStack {
+                                Image(systemName: "wrench.and.screwdriver")
+                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Fix ALL Data userId Values")
+                                        .font(.body)
+                                    Text("Sets userId='icloud-user' on ALL entities")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        Button(action: {
+                            Task {
+                                await checkCloudKitRawData()
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "cloud.fill")
+                                    .foregroundColor(.blue)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Query CloudKit Directly")
+                                        .font(.body)
+                                    Text("Check what's actually in CloudKit Production")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        Button(action: {
+                            forceExportToCloudKit()
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.up.to.line.compact")
+                                    .foregroundColor(.green)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Force Export to CloudKit")
+                                        .font(.body)
+                                    Text("Touch all entities to trigger CloudKit upload")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        Text("DEV→PROD sync issue: Fix ALL Data → Force Export → Sync Now → Wait 2 min → Query CloudKit → Check if counts increased")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
+
+                        Divider()
+
+                        // CloudKit Container Info
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.secondary)
+                                Text("CloudKit Container")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Text("iCloud.com.chenchungwan.LotusPlannerV3")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 20)
+                        }
+                    } label: {
+                        Text("Diagnostics")
                     }
                 }
                 

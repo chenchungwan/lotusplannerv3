@@ -160,8 +160,13 @@ struct TimeboxView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             // Navigate to the selected day's day view
-            navigationManager.switchToCalendar()
-            navigationManager.updateInterval(.day, date: date)
+            if hideNavBar {
+                // Inside BookView: use notification so currentView stays .bookView
+                NotificationCenter.default.post(name: .bookViewNavigateToDay, object: date)
+            } else {
+                navigationManager.switchToCalendar()
+                navigationManager.updateInterval(.day, date: date)
+            }
         }
     }
     

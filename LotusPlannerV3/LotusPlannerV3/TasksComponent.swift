@@ -194,7 +194,6 @@ extension TasksComponent {
                         .padding(.vertical, 20)
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .top)
         } else {
             // In other views, use ScrollView with LazyVStack for better performance
             VStack(alignment: .leading, spacing: 3) {
