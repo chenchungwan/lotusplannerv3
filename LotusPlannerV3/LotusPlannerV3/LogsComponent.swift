@@ -44,42 +44,17 @@ struct LogsComponent: View {
                     } else if horizontal {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 8) {
-                                // First row: Food and Sleep
-                                HStack(alignment: .top, spacing: 8) {
-                                    if appPrefs.showFoodLogs {
-                                        foodSection
+                                let visibleLogs = appPrefs.logDisplayOrder.filter { isLogVisible($0) }
+                                ForEach(stride(from: 0, to: visibleLogs.count, by: 2).map({ $0 }), id: \.self) { index in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        builtInLogSection(for: visibleLogs[index])
+                                        if index + 1 < visibleLogs.count {
+                                            builtInLogSection(for: visibleLogs[index + 1])
+                                        }
+                                        Spacer()
                                     }
-
-                                    if appPrefs.showSleepLogs {
-                                        sleepSection
-                                    }
-
-                                    Spacer()
                                 }
 
-                                // Second row: Water and Weight
-                                HStack(alignment: .top, spacing: 8) {
-                                    if appPrefs.showWaterLogs {
-                                        waterSection
-                                    }
-
-                                    if appPrefs.showWeightLogs {
-                                        weightSection
-                                    }
-
-                                    Spacer()
-                                }
-
-                                // Third row: Workout
-                                HStack(alignment: .top, spacing: 8) {
-                                    if appPrefs.showWorkoutLogs {
-                                        workoutSection
-                                    }
-
-                                    Spacer()
-                                }
-
-                                // Fourth row: Custom Logs (same width as other logs)
                                 if appPrefs.showCustomLogs {
                                     HStack(alignment: .top, spacing: 8) {
                                         customLogSectionHorizontal
@@ -91,29 +66,10 @@ struct LogsComponent: View {
                     } else {
                         // Vertical layout - conditionally scrollable based on allowInternalScrolling
                         let content = VStack(spacing: 8) {
-                            // Food Section
-                            if appPrefs.showFoodLogs {
-                                foodSection
-                            }
-
-                            // Sleep Section
-                            if appPrefs.showSleepLogs {
-                                sleepSection
-                            }
-
-                            // Water Section
-                            if appPrefs.showWaterLogs {
-                                waterSection
-                            }
-
-                            // Weight Section
-                            if appPrefs.showWeightLogs {
-                                weightSection
-                            }
-
-                            // Workout Section
-                            if appPrefs.showWorkoutLogs {
-                                workoutSection
+                            ForEach(appPrefs.logDisplayOrder) { logType in
+                                if isLogVisible(logType) {
+                                    builtInLogSection(for: logType)
+                                }
                             }
 
                             // Custom Log Section
@@ -529,24 +485,10 @@ extension LogsComponent {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: spacing) {
-                    if appPrefs.showFoodLogs {
-                        compactLogCard(section: foodSection, width: cardWidth)
-                    }
-
-                    if appPrefs.showSleepLogs {
-                        compactLogCard(section: sleepSection, width: cardWidth)
-                    }
-
-                    if appPrefs.showWaterLogs {
-                        compactLogCard(section: waterSection, width: cardWidth)
-                    }
-
-                    if appPrefs.showWeightLogs {
-                        compactLogCard(section: weightSection, width: cardWidth)
-                    }
-
-                    if appPrefs.showWorkoutLogs {
-                        compactLogCard(section: workoutSection, width: cardWidth)
+                    ForEach(appPrefs.logDisplayOrder) { logType in
+                        if isLogVisible(logType) {
+                            compactLogCard(section: builtInLogSection(for: logType), width: cardWidth)
+                        }
                     }
 
                     if appPrefs.showCustomLogs {
@@ -561,6 +503,27 @@ extension LogsComponent {
     private func compactLogCard<Content: View>(section: Content, width: CGFloat) -> some View {
         section
             .frame(width: width, alignment: .top)
+    }
+
+    private func isLogVisible(_ logType: BuiltInLogType) -> Bool {
+        switch logType {
+        case .food: return appPrefs.showFoodLogs
+        case .sleep: return appPrefs.showSleepLogs
+        case .water: return appPrefs.showWaterLogs
+        case .weight: return appPrefs.showWeightLogs
+        case .workout: return appPrefs.showWorkoutLogs
+        }
+    }
+
+    @ViewBuilder
+    private func builtInLogSection(for logType: BuiltInLogType) -> some View {
+        switch logType {
+        case .food: foodSection
+        case .sleep: sleepSection
+        case .water: waterSection
+        case .weight: weightSection
+        case .workout: workoutSection
+        }
     }
 
 }

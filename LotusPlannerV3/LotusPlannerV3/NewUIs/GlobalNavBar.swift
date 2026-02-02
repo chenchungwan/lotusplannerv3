@@ -601,11 +601,11 @@ struct GlobalNavBar: View {
                             .disabled(isSyncing)
                             .id(isSyncing)
                             
-                            // Hide completed tasks toggle — shown but disabled in month/year views
+                            // Hide completed tasks toggle — shown but disabled in month/year views and journal day views
                             if navigationManager.currentView == .tasks || navigationManager.currentView == .lists ||
                                isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ||
-                               navigationManager.currentView == .timebox {
-                                let eyeInactive = (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year)
+                               navigationManager.currentView == .timebox || navigationManager.currentView == .journalDayViews {
+                                let eyeInactive = navigationManager.currentView == .journalDayViews || ((isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year))
                                 Button {
                                     appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
                                 } label: {
@@ -617,9 +617,9 @@ struct GlobalNavBar: View {
                                 .disabled(eyeInactive)
                             }
 
-                            // Bulk edit toggle — shown but disabled in month/year views
-                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
-                                let bulkInactive = navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
+                            // Bulk edit toggle — shown but disabled in month/year views and journal day views
+                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews {
+                                let bulkInactive = navigationManager.currentView == .journalDayViews || navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
                                 Button {
                                     if navigationManager.currentView == .bookView {
                                         NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
@@ -934,11 +934,11 @@ struct GlobalNavBar: View {
                             .disabled(isSyncing)
                             .id(isSyncing)
                             
-                            // Hide completed tasks toggle — shown but disabled in month/year views
+                            // Hide completed tasks toggle — shown but disabled in month/year views and journal day views
                             if navigationManager.currentView == .tasks || navigationManager.currentView == .lists ||
                                isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ||
-                               navigationManager.currentView == .timebox {
-                                let eyeInactive = (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year)
+                               navigationManager.currentView == .timebox || navigationManager.currentView == .journalDayViews {
+                                let eyeInactive = navigationManager.currentView == .journalDayViews || ((isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year))
                                 Button {
                                     appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
                                 } label: {
@@ -950,9 +950,9 @@ struct GlobalNavBar: View {
                                 .disabled(eyeInactive)
                             }
 
-                            // Bulk edit toggle — shown but disabled in month/year views
-                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
-                                let bulkInactive = navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
+                            // Bulk edit toggle — shown but disabled in month/year views and journal day views
+                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews {
+                                let bulkInactive = navigationManager.currentView == .journalDayViews || navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
                                 Button {
                                     if navigationManager.currentView == .bookView {
                                         NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)

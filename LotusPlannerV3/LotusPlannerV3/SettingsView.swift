@@ -251,6 +251,13 @@ extension Color {
     }
 }
 
+// MARK: - Built-in Log Type
+enum BuiltInLogType: String, CaseIterable, Codable, Identifiable {
+    case food, sleep, water, weight, workout
+
+    var id: String { rawValue }
+}
+
 // MARK: - App Preferences
 class AppPreferences: ObservableObject {
     static let shared = AppPreferences()
@@ -428,6 +435,17 @@ class AppPreferences: ObservableObject {
 
     var showAnyLogs: Bool {
         showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs || showSleepLogs || showCustomLogs
+    }
+
+    @Published var logDisplayOrder: [BuiltInLogType] {
+        didSet {
+            let rawValues = logDisplayOrder.map { $0.rawValue }
+            UserDefaults.standard.set(rawValues, forKey: "logDisplayOrder")
+        }
+    }
+
+    func moveLog(from source: IndexSet, to destination: Int) {
+        logDisplayOrder.move(fromOffsets: source, toOffset: destination)
     }
     
     
@@ -669,6 +687,17 @@ class AppPreferences: ObservableObject {
         self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
+
+        // Load log display order
+        if let savedRawValues = UserDefaults.standard.stringArray(forKey: "logDisplayOrder") {
+            let decoded = savedRawValues.compactMap { BuiltInLogType(rawValue: $0) }
+            // Ensure all types are present (handles new types added in future)
+            let missing = BuiltInLogType.allCases.filter { !decoded.contains($0) }
+            self.logDisplayOrder = decoded + missing
+        } else {
+            self.logDisplayOrder = BuiltInLogType.allCases
+        }
+
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
         self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
@@ -944,8 +973,6 @@ struct SettingsView: View {
     @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
-    @State private var showingDeleteGoalsAlert = false
-    @State private var showingDeleteGoalsSuccessAlert = false
     @State private var cachedSyncStatus: iCloudManager.SyncStatus = .unknown
     @State private var cachedCloudAvailability = true
     @State private var syncButtonDisabled = false
@@ -1146,89 +1173,11 @@ struct SettingsView: View {
                 }
 
                 Section("Log Preferences") {
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showFoodLogs },
-                        set: { appPrefs.showFoodLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "fork.knife")
-                                .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Food Logs")
-                                    .font(.body)
-                                Text("Show food tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                    ForEach(appPrefs.logDisplayOrder) { logType in
+                        logToggleRow(for: logType)
                     }
-
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showSleepLogs },
-                        set: { appPrefs.showSleepLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "bed.double.fill")
-                                .foregroundColor(appPrefs.showSleepLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Sleep Logs")
-                                    .font(.body)
-                                Text("Track wake up time and bed time")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showWaterLogs },
-                        set: { appPrefs.showWaterLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "drop.fill")
-                                .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Water Logs")
-                                    .font(.body)
-                                Text("Track daily water intake in cups")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showWeightLogs },
-                        set: { appPrefs.showWeightLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "scalemass")
-                                .foregroundColor(appPrefs.showWeightLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Weight Logs")
-                                    .font(.body)
-                                Text("Show weight tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showWorkoutLogs },
-                        set: { appPrefs.showWorkoutLogs = $0 }
-                    )) {
-                        HStack {
-                            Image(systemName: "figure.run")
-                                .foregroundColor(appPrefs.showWorkoutLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Workout Logs")
-                                    .font(.body)
-                                Text("Show workout tracking in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                    .onMove { source, destination in
+                        appPrefs.moveLog(from: source, to: destination)
                     }
 
                     Toggle(isOn: Binding(
@@ -1247,7 +1196,8 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    
+                    .moveDisabled(true)
+
                     // Custom Logs Items subsection
                     if appPrefs.showCustomLogs {
                         VStack(alignment: .leading, spacing: 0) {
@@ -1255,6 +1205,7 @@ struct SettingsView: View {
                         }
                         .padding(.leading, 20)
                         .padding(.top, 8)
+                        .moveDisabled(true)
                     }
                 }
                 
@@ -1573,29 +1524,6 @@ struct SettingsView: View {
 
                 Section("Danger Zone") {
                     Button(role: .destructive) {
-                        showingDeleteGoalsAlert = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "target")
-                                .foregroundColor(.red)
-                            Text("Delete All Goals Data")
-                        }
-                    }
-                    .alert("Delete All Goals Data?", isPresented: $showingDeleteGoalsAlert) {
-                        Button("Cancel", role: .cancel) {}
-                        Button("Delete", role: .destructive) {
-                            handleDeleteAllGoalsData()
-                        }
-                    } message: {
-                        Text("This permanently removes every goal and goal category from local storage and iCloud. This cannot be undone.")
-                    }
-                    .alert("Goals Deleted Successfully", isPresented: $showingDeleteGoalsSuccessAlert) {
-                        Button("OK") {}
-                    } message: {
-                        Text("All goals data has been deleted. Goals screens will refresh to reflect the changes.")
-                    }
-                    
-                    Button(role: .destructive) {
                         showingDeleteAllAlert = true
                     } label: {
                         HStack {
@@ -1769,14 +1697,6 @@ struct SettingsView: View {
         }
     }
     
-    private func handleDeleteAllGoalsData() {
-        DataManager.shared.goalsManager.deleteAllData()
-        
-        Task { @MainActor in
-            showingDeleteGoalsSuccessAlert = true
-        }
-    }
-    
     private func updateSyncButtonState(status: iCloudManager.SyncStatus, available: Bool, logChange: Bool) {
         let isSyncing = status == .syncing
         let disabled = isSyncing || !available
@@ -1787,6 +1707,97 @@ struct SettingsView: View {
         
         showingSyncProgress = isSyncing
         syncButtonDisabled = disabled
+    }
+
+    @ViewBuilder
+    private func logToggleRow(for logType: BuiltInLogType) -> some View {
+        switch logType {
+        case .food:
+            Toggle(isOn: Binding(
+                get: { appPrefs.showFoodLogs },
+                set: { appPrefs.showFoodLogs = $0 }
+            )) {
+                HStack {
+                    Image(systemName: "fork.knife")
+                        .foregroundColor(appPrefs.showFoodLogs ? .accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Food Logs")
+                            .font(.body)
+                        Text("Show food tracking in day views")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        case .sleep:
+            Toggle(isOn: Binding(
+                get: { appPrefs.showSleepLogs },
+                set: { appPrefs.showSleepLogs = $0 }
+            )) {
+                HStack {
+                    Image(systemName: "bed.double.fill")
+                        .foregroundColor(appPrefs.showSleepLogs ? .accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sleep Logs")
+                            .font(.body)
+                        Text("Track wake up time and bed time")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        case .water:
+            Toggle(isOn: Binding(
+                get: { appPrefs.showWaterLogs },
+                set: { appPrefs.showWaterLogs = $0 }
+            )) {
+                HStack {
+                    Image(systemName: "drop.fill")
+                        .foregroundColor(appPrefs.showWaterLogs ? .accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Water Logs")
+                            .font(.body)
+                        Text("Track daily water intake in cups")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        case .weight:
+            Toggle(isOn: Binding(
+                get: { appPrefs.showWeightLogs },
+                set: { appPrefs.showWeightLogs = $0 }
+            )) {
+                HStack {
+                    Image(systemName: "scalemass")
+                        .foregroundColor(appPrefs.showWeightLogs ? .accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Weight Logs")
+                            .font(.body)
+                        Text("Show weight tracking in day views")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        case .workout:
+            Toggle(isOn: Binding(
+                get: { appPrefs.showWorkoutLogs },
+                set: { appPrefs.showWorkoutLogs = $0 }
+            )) {
+                HStack {
+                    Image(systemName: "figure.run")
+                        .foregroundColor(appPrefs.showWorkoutLogs ? .accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Workout Logs")
+                            .font(.body)
+                        Text("Show workout tracking in day views")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder
