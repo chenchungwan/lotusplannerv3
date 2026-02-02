@@ -25,10 +25,12 @@ LotusPlannerV3/
 │   │   └── *.swift                # Source files
 │   └── LotusPlannerV3.xcodeproj
 ├── CLAUDE.md                      # This file
-├── TASKS_COMPONENT_CUSTOMIZATION.md  # TasksComponent usage guide
-├── APP_STORE_SUBMISSION_GUIDE.md  # App Store deployment guide
-├── DAY_VIEW_LAYOUTS.md            # Visual guide for 4 day view layouts
-├── ICLOUD_SYNC_DIAGNOSTIC.md      # iCloud sync troubleshooting guide
+├── docs/                          # Documentation files
+│   ├── TASKS_COMPONENT_CUSTOMIZATION.md
+│   ├── APP_STORE_SUBMISSION_GUIDE.md
+│   ├── DAY_VIEW_LAYOUTS.md
+│   ├── ICLOUD_SYNC_DIAGNOSTIC.md
+│   └── ...                        # Other guides and references
 ├── validate_security.sh           # Security validation script
 └── ExportOptions.plist            # Xcode export configuration
 ```
@@ -224,14 +226,14 @@ Additional legacy views (not in active rotation):
 
 All located in: `LotusPlannerV3/LotusPlannerV3/NewUIs/`
 
-See `DAY_VIEW_LAYOUTS.md` for visual diagrams and detailed comparison of the 4 active layouts.
+See `docs/DAY_VIEW_LAYOUTS.md` for visual diagrams and detailed comparison of the 4 active layouts.
 
 ### Reusable Components
 
 - **`TasksComponent`** - Highly customizable tasks display component
   - Used across 8+ different views with different configurations
   - Parameters: `horizontalCards`, `isSingleDayView`, `hideDueDateTag`, `showTitle`, `showEmptyState`
-  - See `TASKS_COMPONENT_CUSTOMIZATION.md` for detailed usage guide
+  - See `docs/TASKS_COMPONENT_CUSTOMIZATION.md` for detailed usage guide
   - Location: `LotusPlannerV3/LotusPlannerV3/TasksComponent.swift`
 
 - **`TimeboxComponent`** - Time-boxed scheduling view
@@ -327,7 +329,7 @@ await iCloudManager.shared.diagnoseCloudKitData()  // Check CloudKit records
 iCloudManager.shared.forceCompleteSync()           // Force full sync
 ```
 
-See `ICLOUD_SYNC_DIAGNOSTIC.md` for comprehensive troubleshooting guide, especially for production sync issues.
+See `docs/ICLOUD_SYNC_DIAGNOSTIC.md` for comprehensive troubleshooting guide, especially for production sync issues.
 
 ### Testing
 - No test files currently present

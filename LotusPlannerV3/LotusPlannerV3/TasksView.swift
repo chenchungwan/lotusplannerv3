@@ -2208,7 +2208,7 @@ struct TasksView: View {
     }
     
     private func verticalTasksView(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .top, spacing: 0) {
             // Personal Tasks Column
             if authManager.isLinked(kind: .personal) {
                 TasksComponent(
