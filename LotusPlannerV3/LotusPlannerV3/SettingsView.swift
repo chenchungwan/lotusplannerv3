@@ -358,7 +358,18 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(showCustomLogs, forKey: "showCustomLogs")
         }
     }
-    
+
+    // Custom log section name (synced via iCloud KVS)
+    @Published var customLogSectionName: String {
+        didSet {
+            let trimmed = String(customLogSectionName.prefix(30))
+            if trimmed != customLogSectionName {
+                customLogSectionName = trimmed
+            }
+            NSUbiquitousKeyValueStore.default.set(customLogSectionName, forKey: "customLogSectionName")
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
 
     // Hide completed tasks
     @Published var hideCompletedTasks: Bool {
@@ -687,6 +698,7 @@ class AppPreferences: ObservableObject {
         self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
+        self.customLogSectionName = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName") ?? "Custom Logs"
 
         // Load log display order
         if let savedRawValues = UserDefaults.standard.stringArray(forKey: "logDisplayOrder") {
@@ -756,6 +768,20 @@ class AppPreferences: ObservableObject {
         
         // Load WeekTimelineComponent divider positions
         self.weekTimelineTasksRowHeight = UserDefaults.standard.object(forKey: "weekTimelineTasksRowHeight") as? CGFloat ?? 120
+
+        // Listen for iCloud KVS changes from other devices
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: NSUbiquitousKeyValueStore.default,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            let newName = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName") ?? "Custom Logs"
+            if self.customLogSectionName != newName {
+                self.customLogSectionName = newName
+            }
+        }
+        NSUbiquitousKeyValueStore.default.synchronize()
     }
     
     func updateDarkMode(_ value: Bool) {
@@ -1188,8 +1214,9 @@ struct SettingsView: View {
                             Image(systemName: "list.bullet.rectangle")
                                 .foregroundColor(appPrefs.showCustomLogs ? .accentColor : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Custom Logs")
+                                TextField("Custom Logs", text: $appPrefs.customLogSectionName)
                                     .font(.body)
+                                    .textFieldStyle(.plain)
                                 Text("Show custom checklist items in day views")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
