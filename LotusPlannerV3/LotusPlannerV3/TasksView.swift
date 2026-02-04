@@ -409,10 +409,16 @@ class TasksViewModel: ObservableObject {
     private func taskSortComparator(_ lhs: GoogleTask, _ rhs: GoogleTask) -> Bool {
         let lhsDate = lhs.dueDate ?? lhs.completionDate ?? Date.distantFuture
         let rhsDate = rhs.dueDate ?? rhs.completionDate ?? Date.distantFuture
-        if lhsDate == rhsDate {
-            return (lhs.updated ?? "") > (rhs.updated ?? "")
+        if lhsDate != rhsDate {
+            return lhsDate < rhsDate
         }
-        return lhsDate < rhsDate
+        // Sort by priority (P0 highest first, no priority goes last)
+        let lhsPriority = lhs.priority?.sortOrder ?? Int.max
+        let rhsPriority = rhs.priority?.sortOrder ?? Int.max
+        if lhsPriority != rhsPriority {
+            return lhsPriority < rhsPriority
+        }
+        return (lhs.updated ?? "") > (rhs.updated ?? "")
     }
     
     private func relevantDate(for task: GoogleTask) -> Date? {

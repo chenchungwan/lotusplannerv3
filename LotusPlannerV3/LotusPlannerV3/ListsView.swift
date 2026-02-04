@@ -547,13 +547,13 @@ struct TasksDetailColumn: View {
         // Filter out completed tasks if hideCompletedTasks is enabled
         let filtered = appPrefs.hideCompletedTasks ? allTasks.filter { !$0.isCompleted } : allTasks
         
-        // Sort by: 1) completion status, 2) due date, 3) alphabetically
+        // Sort by: 1) completion status, 2) due date, 3) priority, 4) alphabetically
         let sorted = filtered.sorted { (a, b) in
             // 1. Sort by completion status (incomplete first)
             if a.isCompleted != b.isCompleted {
                 return !a.isCompleted // incomplete (false) comes before completed (true)
             }
-            
+
             // 2. Sort by due date (soonest first, no due date goes last)
             switch (a.dueDate, b.dueDate) {
             case let (dateA?, dateB?):
@@ -565,10 +565,17 @@ struct TasksDetailColumn: View {
             case (nil, _?):
                 return false // tasks without due dates come after tasks with
             case (nil, nil):
-                break // both have no due date, continue to alphabetical sort
+                break // both have no due date, continue to priority sort
             }
-            
-            // 3. Sort alphabetically by title
+
+            // 3. Sort by priority (P0 highest first, no priority goes last)
+            let aPriority = a.priority?.sortOrder ?? Int.max
+            let bPriority = b.priority?.sortOrder ?? Int.max
+            if aPriority != bPriority {
+                return aPriority < bPriority
+            }
+
+            // 4. Sort alphabetically by title
             return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
         
