@@ -1477,81 +1477,343 @@ struct JournalView: View {
         @Binding var photo: JournalPhoto
         var onDelete: () -> Void
         var onChanged: () -> Void = {}
-        var canvasSize: CGSize = CGSize(width: 600, height: 800) // Default canvas size
+        var canvasSize: CGSize = CGSize(width: 600, height: 800)
 
         @State private var dragOffset: CGSize = .zero
-        @State private var scale: CGFloat = 1.0
         @State private var rotationAngle: Angle = .zero
-        @State private var showDelete: Bool = false
+        @State private var showControls: Bool = false
+        @State private var isCropping: Bool = false
+        @State private var cropRect: CGRect = .zero
+        // Track live resize offset per corner
+        @State private var resizeOffset: CGSize = .zero
+
+        private let minSize: CGFloat = 40
+        private let handleSize: CGFloat = 20
 
         var body: some View {
-            ZStack(alignment: .topLeading) {
-                Image(uiImage: photo.image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(
-                        width: max(1.0, photo.size.width * scale),
-                        height: max(1.0, photo.size.height * scale)
-                    )
-                    .rotationEffect(photo.rotation + rotationAngle)
-
-                if showDelete {
-                    Button(action: onDelete) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.white)
-                            .background(Color.red)
-                            .clipShape(Circle())
-                    }
-                    .offset(x: -10, y: -10) // slight offset outward
+            ZStack {
+                if isCropping {
+                    cropView
+                } else {
+                    normalView
                 }
             }
             .position(
                 x: photo.position.x + dragOffset.width,
                 y: photo.position.y + dragOffset.height
             )
-            .gesture(dragGesture.simultaneously(with: magnificationGesture).simultaneously(with: rotationGesture))
-            .onTapGesture {
-                withAnimation { showDelete.toggle() }
-            }
-            .onChange(of: photo.position) { _ in
-                // Persist after moves
-                DispatchQueue.main.async {
-                    // parent will handle save via binding context
+        }
+
+        // MARK: - Normal (non-crop) view
+        private var normalView: some View {
+            ZStack {
+                Image(uiImage: photo.image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(
+                        width: max(minSize, photo.size.width + resizeOffset.width),
+                        height: max(minSize, photo.size.height + resizeOffset.height)
+                    )
+                    .clipped()
+                    .rotationEffect(photo.rotation + rotationAngle)
+                    .overlay(
+                        showControls
+                            ? RoundedRectangle(cornerRadius: 2)
+                                .stroke(Color.accentColor, lineWidth: 2)
+                            : nil
+                    )
+
+                if showControls {
+                    // Control buttons top-left
+                    VStack {
+                        HStack {
+                            HStack(spacing: 4) {
+                                Button(action: onDelete) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundColor(.white)
+                                        .background(Color.red)
+                                        .clipShape(Circle())
+                                }
+                                Button(action: {
+                                    cropRect = CGRect(
+                                        x: 0, y: 0,
+                                        width: photo.size.width,
+                                        height: photo.size.height
+                                    )
+                                    isCropping = true
+                                }) {
+                                    Image(systemName: "crop")
+                                        .font(.system(size: 22))
+                                        .foregroundColor(.white)
+                                        .background(Color.accentColor)
+                                        .clipShape(Circle())
+                                }
+                            }
+                            .offset(x: -8, y: -8)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+
+                    // Corner resize handles
+                    cornerHandle(corner: .bottomRight)
+                    cornerHandle(corner: .bottomLeft)
+                    cornerHandle(corner: .topRight)
+                    cornerHandle(corner: .topLeft)
                 }
             }
+            .frame(
+                width: max(minSize, photo.size.width + resizeOffset.width) + handleSize,
+                height: max(minSize, photo.size.height + resizeOffset.height) + handleSize
+            )
+            .contentShape(Rectangle())
+            .gesture(showControls ? nil : dragGesture)
+            .simultaneousGesture(showControls ? nil : rotationGesture)
+            .onTapGesture {
+                withAnimation { showControls.toggle() }
+            }
         }
-        // Drag
+
+        // MARK: - Corner handle
+        private enum Corner { case topLeft, topRight, bottomLeft, bottomRight }
+
+        private func cornerHandle(corner: Corner) -> some View {
+            let w = max(minSize, photo.size.width + resizeOffset.width)
+            let h = max(minSize, photo.size.height + resizeOffset.height)
+
+            let xOffset: CGFloat
+            let yOffset: CGFloat
+            switch corner {
+            case .topLeft:     xOffset = -w / 2; yOffset = -h / 2
+            case .topRight:    xOffset = w / 2;  yOffset = -h / 2
+            case .bottomLeft:  xOffset = -w / 2; yOffset = h / 2
+            case .bottomRight: xOffset = w / 2;  yOffset = h / 2
+            }
+
+            return Circle()
+                .fill(Color.accentColor)
+                .frame(width: handleSize, height: handleSize)
+                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .offset(x: xOffset, y: yOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            let aspect = max(photo.size.width, 1) / max(photo.size.height, 1)
+                            let dx = value.translation.width
+                            let dy = value.translation.height
+                            var dw: CGFloat = 0
+                            var dh: CGFloat = 0
+
+                            switch corner {
+                            case .bottomRight:
+                                dw = dx; dh = dw / aspect
+                            case .bottomLeft:
+                                dw = -dx; dh = dw / aspect
+                            case .topRight:
+                                dw = dx; dh = dw / aspect
+                            case .topLeft:
+                                dw = -dx; dh = dw / aspect
+                            }
+
+                            // Clamp so photo doesn't get smaller than minimum
+                            if photo.size.width + dw < minSize { dw = minSize - photo.size.width }
+                            if photo.size.height + dh < minSize { dh = minSize - photo.size.height }
+                            resizeOffset = CGSize(width: dw, height: dh)
+                        }
+                        .onEnded { _ in
+                            photo.size.width = max(minSize, photo.size.width + resizeOffset.width)
+                            photo.size.height = max(minSize, photo.size.height + resizeOffset.height)
+                            resizeOffset = .zero
+                            onChanged()
+                        }
+                )
+        }
+
+        // MARK: - Crop view
+        private var cropView: some View {
+            let imgW = photo.size.width
+            let imgH = photo.size.height
+
+            return ZStack {
+                // Full image dimmed
+                Image(uiImage: photo.image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: imgW, height: imgH)
+                    .clipped()
+                    .overlay(Color.black.opacity(0.5))
+
+                // Bright crop region
+                Image(uiImage: photo.image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: imgW, height: imgH)
+                    .clipped()
+                    .mask(
+                        Rectangle()
+                            .frame(width: cropRect.width, height: cropRect.height)
+                            .offset(
+                                x: cropRect.midX - imgW / 2,
+                                y: cropRect.midY - imgH / 2
+                            )
+                    )
+
+                // Crop rect border
+                Rectangle()
+                    .stroke(Color.white, lineWidth: 2)
+                    .frame(width: cropRect.width, height: cropRect.height)
+                    .offset(
+                        x: cropRect.midX - imgW / 2,
+                        y: cropRect.midY - imgH / 2
+                    )
+
+                // Crop corner handles
+                cropCornerHandle(corner: .topLeft)
+                cropCornerHandle(corner: .topRight)
+                cropCornerHandle(corner: .bottomLeft)
+                cropCornerHandle(corner: .bottomRight)
+
+                // Done / Cancel buttons
+                VStack {
+                    Spacer()
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            isCropping = false
+                        }) {
+                            Text("Cancel")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.gray)
+                                .cornerRadius(6)
+                        }
+                        Button(action: applyCrop) {
+                            Text("Done")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.accentColor)
+                                .cornerRadius(6)
+                        }
+                    }
+                    .padding(.bottom, 8)
+                }
+            }
+            .frame(width: imgW, height: imgH + 44)
+        }
+
+        private func cropCornerHandle(corner: Corner) -> some View {
+            let imgW = photo.size.width
+            let imgH = photo.size.height
+
+            let xPos: CGFloat
+            let yPos: CGFloat
+            switch corner {
+            case .topLeft:     xPos = cropRect.minX; yPos = cropRect.minY
+            case .topRight:    xPos = cropRect.maxX; yPos = cropRect.minY
+            case .bottomLeft:  xPos = cropRect.minX; yPos = cropRect.maxY
+            case .bottomRight: xPos = cropRect.maxX; yPos = cropRect.maxY
+            }
+
+            return Circle()
+                .fill(Color.white)
+                .frame(width: 16, height: 16)
+                .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+                .offset(
+                    x: xPos - imgW / 2,
+                    y: yPos - imgH / 2
+                )
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            var rect = cropRect
+                            let dx = value.translation.width
+                            let dy = value.translation.height
+                            let minCrop: CGFloat = 30
+
+                            switch corner {
+                            case .topLeft:
+                                let newX = max(0, rect.origin.x + dx)
+                                let newY = max(0, rect.origin.y + dy)
+                                let newW = rect.maxX - newX
+                                let newH = rect.maxY - newY
+                                if newW >= minCrop && newH >= minCrop {
+                                    rect.origin.x = newX
+                                    rect.origin.y = newY
+                                    rect.size.width = newW
+                                    rect.size.height = newH
+                                }
+                            case .topRight:
+                                let newW = min(imgW - rect.origin.x, rect.width + dx)
+                                let newY = max(0, rect.origin.y + dy)
+                                let newH = rect.maxY - newY
+                                if newW >= minCrop && newH >= minCrop {
+                                    rect.size.width = newW
+                                    rect.origin.y = newY
+                                    rect.size.height = newH
+                                }
+                            case .bottomLeft:
+                                let newX = max(0, rect.origin.x + dx)
+                                let newW = rect.maxX - newX
+                                let newH = min(imgH - rect.origin.y, rect.height + dy)
+                                if newW >= minCrop && newH >= minCrop {
+                                    rect.origin.x = newX
+                                    rect.size.width = newW
+                                    rect.size.height = newH
+                                }
+                            case .bottomRight:
+                                let newW = min(imgW - rect.origin.x, rect.width + dx)
+                                let newH = min(imgH - rect.origin.y, rect.height + dy)
+                                if newW >= minCrop && newH >= minCrop {
+                                    rect.size.width = newW
+                                    rect.size.height = newH
+                                }
+                            }
+                            cropRect = rect
+                        }
+                )
+        }
+
+        // MARK: - Apply crop
+        private func applyCrop() {
+            let scaleX = photo.image.size.width / photo.size.width
+            let scaleY = photo.image.size.height / photo.size.height
+
+            let scaledRect = CGRect(
+                x: cropRect.origin.x * scaleX,
+                y: cropRect.origin.y * scaleY,
+                width: cropRect.width * scaleX,
+                height: cropRect.height * scaleY
+            )
+
+            if let cgImage = photo.image.cgImage?.cropping(to: scaledRect) {
+                let croppedImage = UIImage(cgImage: cgImage, scale: photo.image.scale, orientation: photo.image.imageOrientation)
+                photo.image = croppedImage
+                photo.size = CGSize(width: cropRect.width, height: cropRect.height)
+            }
+
+            isCropping = false
+            showControls = false
+            onChanged()
+        }
+
+        // MARK: - Gestures
         private var dragGesture: some Gesture {
             DragGesture()
                 .onChanged { value in
                     dragOffset = value.translation
                 }
                 .onEnded { value in
-                    let newX = photo.position.x + value.translation.width
-                    let newY = photo.position.y + value.translation.height
-                    
-                    // Allow photo to move freely - no bounds restrictions
-                    photo.position.x = newX
-                    photo.position.y = newY
-                    
+                    photo.position.x += value.translation.width
+                    photo.position.y += value.translation.height
                     dragOffset = .zero
                     onChanged()
                 }
         }
-        // Resize
-        private var magnificationGesture: some Gesture {
-            MagnificationGesture()
-                .onChanged { scaleVal in
-                    scale = scaleVal
-                }
-                .onEnded { scaleVal in
-                    photo.size.width *= scaleVal
-                    photo.size.height *= scaleVal
-                    scale = 1.0
-                    onChanged()
-                }
-        }
-        // Rotate
+
         private var rotationGesture: some Gesture {
             RotationGesture()
                 .onChanged { angle in
