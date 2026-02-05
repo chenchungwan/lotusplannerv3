@@ -29,6 +29,14 @@ struct JournalView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     /// Photos placed on the canvas.
     @State private var photos: [JournalPhoto] = []
+    /// Text annotations placed on the canvas.
+    @State private var textAnnotations: [JournalTextAnnotation] = []
+    /// Whether the text input alert is showing.
+    @State private var showTextInput: Bool = false
+    /// The annotation currently being edited (nil = new annotation).
+    @State private var editingAnnotationId: UUID? = nil
+    /// Text field content for the text input alert.
+    @State private var annotationInputText: String = ""
     /// Show confirmation alert before erasing journal content
     @State private var showingEraseConfirmation = false
     /// Loading states for sync status indicators
@@ -134,7 +142,10 @@ struct JournalView: View {
             
             // Save photos
             await savePhotos(for: saveDate)
-            
+
+            // Save text annotations
+            await saveTextAnnotations(for: saveDate)
+
             saveStatus = .saved
             
             // Clear save status after 2 seconds
@@ -175,10 +186,13 @@ struct JournalView: View {
         
         // Load photos with fresh data
         await loadPhotos(for: targetDate)
-        
+
+        // Load text annotations
+        await loadTextAnnotations(for: targetDate)
+
         loadedDate = targetDate
         contentDate = targetDate  // Set the content date to the loaded date
-        
+
         isSavingOrLoading = false
     }
     
@@ -465,6 +479,44 @@ struct JournalView: View {
         } message: {
             Text("You have unsaved changes. Refreshing will discard your current work. Do you want to continue?")
         }
+        .alert(editingAnnotationId != nil ? "Edit Text" : "Add Text", isPresented: $showTextInput) {
+            TextField("Enter text", text: $annotationInputText)
+            Button(editingAnnotationId != nil ? "Save" : "Add") {
+                let trimmed = annotationInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+
+                if let editId = editingAnnotationId,
+                   let idx = textAnnotations.firstIndex(where: { $0.id == editId }) {
+                    // Update existing
+                    textAnnotations[idx].text = trimmed
+                } else {
+                    // Create new at center of canvas
+                    let center = CGPoint(
+                        x: max(canvasSize.width / 2, 100),
+                        y: max(canvasSize.height / 2, 100)
+                    )
+                    let newAnnotation = JournalTextAnnotation(
+                        id: UUID(),
+                        text: trimmed,
+                        position: center,
+                        size: CGSize(width: 200, height: 60)
+                    )
+                    textAnnotations.append(newAnnotation)
+                }
+
+                annotationInputText = ""
+                editingAnnotationId = nil
+                Task { @MainActor in
+                    await saveTextAnnotations()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                annotationInputText = ""
+                editingAnnotationId = nil
+            }
+        } message: {
+            Text(editingAnnotationId != nil ? "Edit the text for this annotation." : "Enter text to place on the journal.")
+        }
     }
 
     // MARK: - Top toolbar inline (all icons on same line as title)
@@ -533,7 +585,15 @@ struct JournalView: View {
                 }
                 .disabled(isSavingOrLoading || isSyncing)
                 .id(isSyncing)
-                
+
+                Button(action: {
+                    editingAnnotationId = nil
+                    annotationInputText = ""
+                    showTextInput = true
+                }) {
+                    Image(systemName: "character.cursor.ibeam")
+                }
+
                 Button(action: { showToolPicker.toggle() }) {
                     Image(systemName: "pencil.and.scribble")
                 }
@@ -622,7 +682,10 @@ struct JournalView: View {
             
             // Photos overlay
             photosOverlay
-            
+
+            // Text annotations overlay
+            textAnnotationsOverlay
+
             // Retry download overlay
             if showRetryDownload {
                 VStack(spacing: 16) {
@@ -714,9 +777,42 @@ struct JournalView: View {
                 }
             )
     }
-    
+
+    // Text annotations overlay for absolute positioning
+    private var textAnnotationsOverlay: some View {
+        Color.clear
+            .allowsHitTesting(false)
+            .overlay(
+                ZStack {
+                    ForEach(textAnnotations.indices, id: \.self) { idx in
+                        DraggableTextView(
+                            annotation: $textAnnotations[idx],
+                            onDelete: {
+                                textAnnotations.remove(at: idx)
+                                Task { @MainActor in
+                                    await saveTextAnnotations()
+                                }
+                            },
+                            onEdit: {
+                                editingAnnotationId = textAnnotations[idx].id
+                                annotationInputText = textAnnotations[idx].text
+                                showTextInput = true
+                            },
+                            onChanged: {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    Task { @MainActor in
+                                        await saveTextAnnotations()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            )
+    }
+
     // (Old floating controlButtons removed)
-    
+
     // MARK: - Clear Journal
     private func clearJournal() {
         // Clear drawing
@@ -741,6 +837,14 @@ struct JournalView: View {
         let empty: [PhotoMeta] = []
         if let jsonData = try? JSONEncoder().encode(empty) {
             try? jsonData.write(to: metaURL, options: .atomic)
+        }
+
+        // Clear text annotations
+        textAnnotations.removeAll()
+        let textURL = textMetadataURL(for: currentDate)
+        let emptyTexts: [TextAnnotationMeta] = []
+        if let jsonData = try? JSONEncoder().encode(emptyTexts) {
+            try? jsonData.write(to: textURL, options: .atomic)
         }
     }
 
@@ -769,7 +873,23 @@ struct JournalView: View {
         let cw: Double?
         let ch: Double?
     }
-    
+
+    // MARK: - Text Annotation Persistence
+    private struct TextAnnotationMeta: Codable {
+        let id: String
+        let text: String
+        let x: Double
+        let y: Double
+        let width: Double
+        let height: Double
+        let nx: Double?
+        let ny: Double?
+        let nw: Double?
+        let nh: Double?
+        let cw: Double?
+        let ch: Double?
+    }
+
     /// Directory where per-day photo PNGs are stored.
     /// Uses the same directory as JournalManager for consistency
     private func photosDirectory() -> URL {
@@ -1193,12 +1313,107 @@ struct JournalView: View {
         guard FileManager.default.fileExists(atPath: url.path) else {
             return
         }
-        
+
         // Wait a reasonable time for iCloud to queue and process the upload
         // iCloud uploads happen asynchronously, so we just ensure the file is saved locally
         let waitTime: UInt64 = 1_000_000_000 // 1 second
         try? await Task.sleep(nanoseconds: waitTime)
     }
+
+    // MARK: - Text Annotation Persistence
+
+    private func textMetadataURL(for date: Date) -> URL {
+        return JournalManager.shared.textMetadataURL(for: date)
+    }
+
+    private func saveTextAnnotations(for date: Date? = nil) async {
+        do {
+            let targetDate = date ?? currentDate
+            let url = textMetadataURL(for: targetDate)
+
+            if textAnnotations.isEmpty {
+                let empty: [TextAnnotationMeta] = []
+                let jsonData = try JSONEncoder().encode(empty)
+                try jsonData.write(to: url, options: .atomic)
+                return
+            }
+
+            let cw = max(canvasSize.width, 1)
+            let ch = max(canvasSize.height, 1)
+            let metas = textAnnotations.map { ann in
+                TextAnnotationMeta(
+                    id: ann.id.uuidString,
+                    text: ann.text,
+                    x: ann.position.x,
+                    y: ann.position.y,
+                    width: ann.size.width,
+                    height: ann.size.height,
+                    nx: Double(ann.position.x / cw),
+                    ny: Double(ann.position.y / ch),
+                    nw: Double(ann.size.width / cw),
+                    nh: Double(ann.size.height / ch),
+                    cw: Double(cw),
+                    ch: Double(ch)
+                )
+            }
+
+            let jsonData = try JSONEncoder().encode(metas)
+            try jsonData.write(to: url, options: .atomic)
+
+            // Wait for iCloud upload
+            var isUbiquitous: AnyObject?
+            try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
+            if (isUbiquitous as? Bool) == true {
+                await ensureFileUploadedForPhotos(url: url)
+            }
+        } catch {
+            // Silently fail - will retry on next save
+        }
+    }
+
+    private func loadTextAnnotations(for date: Date? = nil) async {
+        let targetDate = date ?? currentDate
+        textAnnotations.removeAll()
+
+        let url = textMetadataURL(for: targetDate)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let metas = try JSONDecoder().decode([TextAnnotationMeta].self, from: data)
+
+            var loaded: [JournalTextAnnotation] = []
+            for meta in metas {
+                guard let uuid = UUID(uuidString: meta.id) else { continue }
+
+                var x = meta.x
+                var y = meta.y
+                var w = meta.width
+                var h = meta.height
+
+                // Use normalized coordinates if available and canvas size differs
+                if let nx = meta.nx, let ny = meta.ny, let nw = meta.nw, let nh = meta.nh,
+                   canvasSize.width > 0, canvasSize.height > 0 {
+                    x = nx * canvasSize.width
+                    y = ny * canvasSize.height
+                    w = nw * canvasSize.width
+                    h = nh * canvasSize.height
+                }
+
+                loaded.append(JournalTextAnnotation(
+                    id: uuid,
+                    text: meta.text,
+                    position: CGPoint(x: max(0, x), y: max(0, y)),
+                    size: CGSize(width: max(60, w), height: max(30, h))
+                ))
+            }
+
+            textAnnotations = loaded
+        } catch {
+            // Silently fail - empty annotations for this date
+        }
+    }
+
     private func loadSelectedPhotos() {
         guard !pickerItems.isEmpty else { 
             return 
@@ -1349,9 +1564,87 @@ struct JournalView: View {
                 }
         }
     }
-    
+
+    // MARK: - Text Annotation model & view
+    struct JournalTextAnnotation: Identifiable {
+        let id: UUID
+        var text: String
+        var position: CGPoint
+        var size: CGSize
+    }
+
+    struct DraggableTextView: View {
+        @Binding var annotation: JournalTextAnnotation
+        var onDelete: () -> Void
+        var onEdit: () -> Void
+        var onChanged: () -> Void = {}
+
+        @State private var dragOffset: CGSize = .zero
+        @State private var showControls: Bool = false
+
+        var body: some View {
+            ZStack(alignment: .topTrailing) {
+                Text(annotation.text)
+                    .font(.system(size: 16))
+                    .foregroundColor(.black)
+                    .padding(8)
+                    .frame(
+                        minWidth: 60,
+                        maxWidth: max(60, annotation.size.width),
+                        alignment: .topLeading
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .background(Color.white.opacity(0.85))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(showControls ? Color.accentColor : Color.gray.opacity(0.4), lineWidth: showControls ? 2 : 1)
+                    )
+
+                if showControls {
+                    HStack(spacing: 4) {
+                        Button(action: onEdit) {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.accentColor)
+                                .background(Color.white)
+                                .clipShape(Circle())
+                        }
+                        Button(action: onDelete) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white)
+                                .background(Color.red)
+                                .clipShape(Circle())
+                        }
+                    }
+                    .offset(x: 8, y: -8)
+                }
+            }
+            .position(
+                x: annotation.position.x + dragOffset.width,
+                y: annotation.position.y + dragOffset.height
+            )
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        dragOffset = value.translation
+                    }
+                    .onEnded { value in
+                        annotation.position.x += value.translation.width
+                        annotation.position.y += value.translation.height
+                        dragOffset = .zero
+                        onChanged()
+                    }
+            )
+            .onTapGesture {
+                withAnimation { showControls.toggle() }
+            }
+        }
+    }
+
 }
 
 #Preview {
     JournalView(currentDate: .constant(Date()))
-} 
+}

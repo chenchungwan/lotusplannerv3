@@ -65,7 +65,16 @@ class JournalManager: NSObject {
         let name = formatter.string(from: date) + "_photos.json"
         return photosDirectoryURL.appendingPathComponent(name)
     }
-    
+
+    func textMetadataURL(for date: Date) -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd"
+        let name = formatter.string(from: date) + "_texts.json"
+        return photosDirectoryURL.appendingPathComponent(name)
+    }
+
     // MARK: - Background PDF Management
     
     private func storedURL(for layoutType: JournalLayoutType) -> URL {
