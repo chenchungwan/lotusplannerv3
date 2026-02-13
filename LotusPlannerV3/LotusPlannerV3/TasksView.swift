@@ -2055,6 +2055,28 @@ struct TasksView: View {
                 lastFilterState = ""
                 logDebug("🔄 Filter changed to week for current week from All Tasks")
             }
+            // Listen for request to filter tasks to current month (when coming from All Tasks filter)
+            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentMonth"), object: nil, queue: .main) { _ in
+                selectedFilter = .month
+                referenceDate = Date()
+                navigationManager.showingAllTasks = false
+                // Clear cache to ensure fresh filtering
+                cachedFilteredPersonalTasks.removeAll()
+                cachedFilteredProfessionalTasks.removeAll()
+                lastFilterState = ""
+                logDebug("🔄 Filter changed to month for current month from All Tasks")
+            }
+            // Listen for request to filter tasks to current year (when coming from All Tasks filter)
+            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentYear"), object: nil, queue: .main) { _ in
+                selectedFilter = .year
+                referenceDate = Date()
+                navigationManager.showingAllTasks = false
+                // Clear cache to ensure fresh filtering
+                cachedFilteredPersonalTasks.removeAll()
+                cachedFilteredProfessionalTasks.removeAll()
+                lastFilterState = ""
+                logDebug("🔄 Filter changed to year for current year from All Tasks")
+            }
         }
         .onChange(of: selectedFilter) { _, newValue in
             logDebug("🔄 Filter changed to: \(newValue.rawValue)")

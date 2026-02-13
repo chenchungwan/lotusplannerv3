@@ -505,7 +505,12 @@ struct GlobalNavBar: View {
                                     }
                                 }
                                 Button {
-                                    handleTimeIntervalChange(.month)
+                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentMonth"), object: nil)
+                                    } else {
+                                        handleTimeIntervalChange(.month)
+                                    }
                                 } label: {
                                     Image(systemName: "m.circle")
                                         .font(adaptiveIconSize)
@@ -513,7 +518,12 @@ struct GlobalNavBar: View {
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
                                 }
                                 Button {
-                                    handleTimeIntervalChange(.year)
+                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentYear"), object: nil)
+                                    } else {
+                                        handleTimeIntervalChange(.year)
+                                    }
                                 } label: {
                                     Image(systemName: "y.circle")
                                         .font(adaptiveIconSize)
@@ -840,7 +850,12 @@ struct GlobalNavBar: View {
                                     }
                                 }
                                 Button {
-                                    handleTimeIntervalChange(.month)
+                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentMonth"), object: nil)
+                                    } else {
+                                        handleTimeIntervalChange(.month)
+                                    }
                                 } label: {
                                     Image(systemName: "m.circle")
                                         .font(adaptiveIconSize)
@@ -848,7 +863,12 @@ struct GlobalNavBar: View {
                                         .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
                                 }
                                 Button {
-                                    handleTimeIntervalChange(.year)
+                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
+                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentYear"), object: nil)
+                                    } else {
+                                        handleTimeIntervalChange(.year)
+                                    }
                                 } label: {
                                     Image(systemName: "y.circle")
                                         .font(adaptiveIconSize)
