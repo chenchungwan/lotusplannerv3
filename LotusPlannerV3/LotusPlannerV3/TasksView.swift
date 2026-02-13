@@ -3488,6 +3488,7 @@ struct TaskDetailsView: View {
                                 startTime = newValue
                             }
                         ), displayedComponents: [.date, .hourAndMinute])
+                        .environment(\.calendar, Calendar.mondayFirst)
 
                         // Custom end time picker (same as events)
                         HStack {
