@@ -281,7 +281,7 @@ struct DayViewNewClassic: View {
         HStack(alignment: .top, spacing: 8) {
             // Personal Tasks
             let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
+            if auth.isLinked(kind: .personal) {
                 TasksComponent(
                     taskLists: tasksVM.personalTaskLists,
                     tasksDict: personalFiltered,
@@ -308,6 +308,7 @@ struct DayViewNewClassic: View {
                             await tasksVM.updateTaskListOrder(newOrder, for: .personal)
                         }
                     },
+                    showEmptyState: true,
                     isSingleDayView: true,
                     showTaskStartTime: true,
                     isBulkEditMode: bulkEditManager.state.isActive,
@@ -344,7 +345,7 @@ struct DayViewNewClassic: View {
             
             // Professional Tasks
             let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
+            if auth.isLinked(kind: .professional) {
                 TasksComponent(
                     taskLists: tasksVM.professionalTaskLists,
                     tasksDict: professionalFiltered,
@@ -371,6 +372,7 @@ struct DayViewNewClassic: View {
                             await tasksVM.updateTaskListOrder(newOrder, for: .professional)
                         }
                     },
+                    showEmptyState: true,
                     isSingleDayView: true,
                     showTaskStartTime: true,
                     isBulkEditMode: bulkEditManager.state.isActive,

@@ -142,20 +142,23 @@ struct AddLogEntryView: View {
             }
             
             DatePicker("Date", selection: $viewModel.weightDate, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.calendar, Calendar.mondayFirst)
         }
     }
-    
+
     private var workoutForm: some View {
         Section("Workout Details") {
             TextField("Workout name", text: $viewModel.workoutName)
             DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.calendar, Calendar.mondayFirst)
         }
     }
-    
+
     private var foodForm: some View {
         Section("Food Details") {
             TextField("Food name", text: $viewModel.foodName)
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
+                .environment(\.calendar, Calendar.mondayFirst)
         }
     }
 
@@ -163,6 +166,7 @@ struct AddLogEntryView: View {
         Section("Water Details") {
             Stepper("Cups: \(viewModel.waterCupsConsumed)", value: $viewModel.waterCupsConsumed, in: 0...20)
             DatePicker("Date", selection: $viewModel.waterDate, displayedComponents: [.date])
+                .environment(\.calendar, Calendar.mondayFirst)
         }
     }
 
