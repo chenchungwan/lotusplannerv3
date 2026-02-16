@@ -1032,7 +1032,7 @@ extension WeeklyView {
                     .font(.system(size: 14, weight: .semibold))
                     .fontWeight(.semibold)
                     .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
-                
+
                 Text(formatDateShort(from: date))
                     .font(.system(size: 16, weight: .bold))
                     .fontWeight(.bold)
@@ -1053,7 +1053,22 @@ extension WeeklyView {
     private func formatDateShort(from date: Date) -> String {
         DateFormatter.standardDate.string(from: date)
     }
-    
+
+    @ViewBuilder
+    private func workoutStreakBadge(for date: Date) -> some View {
+        if appPrefs.showWorkoutStreak && appPrefs.showWorkoutLogs {
+            let streak = logsViewModel.workoutStreak(on: date)
+            HStack(spacing: 3) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(streak > 0 ? .orange : .secondary)
+                Text("\(streak)/7")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(streak > 0 ? .orange : .secondary)
+            }
+        }
+    }
+
     // MARK: - Individual Column Views for Horizontal Layout
     private func weekDayRowEventsColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -1208,6 +1223,7 @@ extension WeeklyView {
                     let entries = getWeightLogsForDate(date)
                     ForEach(entries, id: \.id) { entry in weightLogCard(entry: entry) }
                 case .workout:
+                    workoutStreakBadge(for: date)
                     let entries = getWorkoutLogsForDate(date)
                     ForEach(entries, id: \.id) { entry in workoutLogCard(entry: entry) }
                 }
@@ -1217,7 +1233,7 @@ extension WeeklyView {
         .frame(width: logColumnWidth(), alignment: .topLeading)
         .frame(minHeight: 80)
     }
-    
+
     private func weekDayRowContent(date: Date, isToday: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // Events column
@@ -1664,6 +1680,7 @@ extension WeeklyView {
                 let entries = getWeightLogsForDate(date)
                 ForEach(entries, id: \.id) { entry in weightLogCard(entry: entry) }
             case .workout:
+                workoutStreakBadge(for: date)
                 let entries = getWorkoutLogsForDate(date)
                 ForEach(entries, id: \.id) { entry in workoutLogCard(entry: entry) }
             }
@@ -1692,6 +1709,7 @@ extension WeeklyView {
                     let entries = getWeightLogsForDate(date)
                     ForEach(entries, id: \.id) { entry in weightLogCard(entry: entry) }
                 case .workout:
+                    workoutStreakBadge(for: date)
                     let entries = getWorkoutLogsForDate(date)
                     ForEach(entries, id: \.id) { entry in workoutLogCard(entry: entry) }
                 }
@@ -1716,6 +1734,7 @@ extension WeeklyView {
                     let entries = getWeightLogsForDate(date)
                     ForEach(entries, id: \.id) { entry in weightLogCard(entry: entry) }
                 case .workout:
+                    workoutStreakBadge(for: date)
                     let entries = getWorkoutLogsForDate(date)
                     ForEach(entries, id: \.id) { entry in workoutLogCard(entry: entry) }
                 }
@@ -1758,8 +1777,9 @@ extension WeeklyView {
     
     private func weekWorkoutLogColumn(date: Date) -> some View {
         let workoutLogsForDate = getWorkoutLogsForDate(date)
-        
+
         return VStack(alignment: .leading, spacing: 4) {
+            workoutStreakBadge(for: date)
             ForEach(workoutLogsForDate, id: \.id) { entry in
                 weekWorkoutLogCard(entry: entry)
             }
@@ -2157,14 +2177,14 @@ extension WeeklyView {
     
     private func weekTaskDateHeaderView(date: Date) -> some View {
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
-        
+
         return VStack(spacing: 4) {
             // Standardized day of week format: MON, TUE, etc.
             Text(DateFormatter.standardDayOfWeek.string(from: date).uppercased())
                 .font(.system(size: 16, weight: .semibold))
                 .fontWeight(.semibold)
                 .foregroundColor(isToday ? DateDisplayStyle.todayColor : DateDisplayStyle.secondaryColor)
-            
+
             // Standardized date format: m/d/yy
             Text(DateFormatter.standardDate.string(from: date))
                 .font(.system(size: 20, weight: .bold))

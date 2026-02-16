@@ -471,7 +471,12 @@ class AppPreferences: ObservableObject {
         WorkoutType.allCases.filter { selectedWorkoutTypes.contains($0) }
     }
 
-
+    // Show rolling 7-day workout streak in weekly view
+    @Published var showWorkoutStreak: Bool {
+        didSet {
+            UserDefaults.standard.set(showWorkoutStreak, forKey: "showWorkoutStreak")
+        }
+    }
 
     // Day View Divider Positions
     @Published var dayViewCompactTasksHeight: CGFloat {
@@ -729,6 +734,9 @@ class AppPreferences: ObservableObject {
         } else {
             self.selectedWorkoutTypes = Set(WorkoutType.allCases)
         }
+
+        // Load workout streak preference (default off)
+        self.showWorkoutStreak = UserDefaults.standard.object(forKey: "showWorkoutStreak") as? Bool ?? false
 
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
@@ -1239,6 +1247,23 @@ struct SettingsView: View {
                                     Text("Workout Types")
                                         .font(.body)
                                     Text("\(appPrefs.selectedWorkoutTypes.count) of \(WorkoutType.allCases.count) selected")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.leading, 20)
+                        .moveDisabled(true)
+
+                        Toggle(isOn: $appPrefs.showWorkoutStreak) {
+                            HStack {
+                                Image(systemName: "flame.fill")
+                                    .foregroundColor(appPrefs.showWorkoutStreak ? .orange : .secondary)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Workout Streak")
+                                        .font(.body)
+                                    Text("Show rolling 7-day workout count in weekly view")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }

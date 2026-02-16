@@ -127,7 +127,21 @@ class LogsViewModel: ObservableObject {
     func sleepLogs(on date: Date) -> [SleepLogEntry] {
         sleepEntriesByDay[normalizedDay(date)] ?? []
     }
-    
+
+    /// Rolling 7-day workout streak: counts how many of the last 7 days
+    /// (including the given date) had at least one workout entry. Range: 0–7.
+    func workoutStreak(on date: Date) -> Int {
+        let calendar = Calendar.current
+        var count = 0
+        for offset in 0..<7 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: date) else { continue }
+            if !(workoutEntriesByDay[normalizedDay(day)] ?? []).isEmpty {
+                count += 1
+            }
+        }
+        return count
+    }
+
     var accentColor: Color {
         return AppPreferences.shared.personalColor
     }
