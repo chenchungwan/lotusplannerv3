@@ -30,6 +30,7 @@ class LogsViewModel: ObservableObject {
     @Published var weightDate = Date()
     
     // Workout entry form
+    @Published var selectedWorkoutType: WorkoutType = .running
     @Published var workoutName = ""
     @Published var workoutDate = Date()
     
@@ -50,6 +51,7 @@ class LogsViewModel: ObservableObject {
     private var originalWeightValue = ""
     private var originalWeightUnit: WeightUnit = .pounds
     private var originalWeightDate = Date()
+    private var originalWorkoutType: WorkoutType = .running
     private var originalWorkoutName = ""
     private var originalWorkoutDate = Date()
     private var originalFoodName = ""
@@ -279,25 +281,21 @@ class LogsViewModel: ObservableObject {
     
     // MARK: - Workout Entries
     func addWorkoutEntry() {
-        guard !workoutName.isEmpty else {
-            errorMessage = "Please enter a workout name"
-            return
-        }
-        
         let userId = getUserId()
-        let entry = WorkoutLogEntry(date: workoutDate, name: workoutName, userId: userId)
-        
+        let entry = WorkoutLogEntry(date: workoutDate, name: workoutName.trimmingCharacters(in: .whitespacesAndNewlines), workoutType: selectedWorkoutType, userId: userId)
+
         // Save to Core Data immediately
         coreDataManager.saveWorkoutEntry(entry)
-        
+
         // Update local array
         workoutEntries.append(entry)
-        
+
         // Clear form
+        let prefs = AppPreferences.shared
+        selectedWorkoutType = prefs.selectedWorkoutTypes.contains(.running) ? .running : (prefs.sortedSelectedWorkoutTypes.first ?? .running)
         workoutName = ""
         workoutDate = Date()
         showingAddLogSheet = false
-        
     }
     
     func deleteWorkoutEntry(_ entry: WorkoutLogEntry) {
@@ -446,7 +444,7 @@ class LogsViewModel: ObservableObject {
     }
     
     var canAddWorkout: Bool {
-        return !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return true // A workout type is always selected from the picker
     }
     
     var canAddFood: Bool {
@@ -481,7 +479,8 @@ class LogsViewModel: ObservableObject {
                    selectedWeightUnit != originalWeightUnit ||
                    weightDate != originalWeightDate
         case .workout:
-            return workoutName != originalWorkoutName ||
+            return selectedWorkoutType != originalWorkoutType ||
+                   workoutName != originalWorkoutName ||
                    workoutDate != originalWorkoutDate
         case .food:
             return foodName != originalFoodName ||
@@ -523,6 +522,8 @@ class LogsViewModel: ObservableObject {
     func resetForms() {
         weightValue = ""
         weightDate = currentDate
+        let prefs = AppPreferences.shared
+        selectedWorkoutType = prefs.selectedWorkoutTypes.contains(.running) ? .running : (prefs.sortedSelectedWorkoutTypes.first ?? .running)
         workoutName = ""
         foodName = ""
         workoutDate = currentDate
@@ -551,9 +552,11 @@ class LogsViewModel: ObservableObject {
     func editWorkoutEntry(_ entry: WorkoutLogEntry) {
         editingEntry = (.workout, entry.id)
         selectedLogType = .workout
+        selectedWorkoutType = entry.workoutType
         workoutName = entry.name
         workoutDate = entry.date
         // Store original values for change detection
+        originalWorkoutType = entry.workoutType
         originalWorkoutName = entry.name
         originalWorkoutDate = entry.date
         showingEditLogSheet = true
@@ -648,30 +651,27 @@ class LogsViewModel: ObservableObject {
     }
     
     private func updateWorkoutEntry() {
-        guard let editingEntry = editingEntry,
-              !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            errorMessage = "Please enter a workout name"
-            return
-        }
-        
+        guard let editingEntry = editingEntry else { return }
+
         // Find and update the entry
         if let index = workoutEntries.firstIndex(where: { $0.id == editingEntry.id }) {
             let updatedEntry = WorkoutLogEntry(
                 id: editingEntry.id,
                 date: workoutDate,
-                name: workoutName,
+                name: workoutName.trimmingCharacters(in: .whitespacesAndNewlines),
+                workoutTypeRaw: selectedWorkoutType.rawValue,
                 userId: workoutEntries[index].userId,
                 createdAt: workoutEntries[index].createdAt
             )
-            
+
             // Update in Core Data
             coreDataManager.deleteWorkoutEntry(workoutEntries[index])
             coreDataManager.saveWorkoutEntry(updatedEntry)
-            
+
             // Update local array
             workoutEntries[index] = updatedEntry
         }
-        
+
         // Clear form and close sheet
         resetForms()
         showingEditLogSheet = false

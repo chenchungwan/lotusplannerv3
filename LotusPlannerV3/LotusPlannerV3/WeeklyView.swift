@@ -1771,12 +1771,23 @@ extension WeeklyView {
     }
     
     private func weekWorkoutLogCard(entry: WorkoutLogEntry) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // Workout name
-            Text(entry.name)
+        HStack(spacing: 6) {
+            Image(systemName: entry.displayIcon)
                 .font(.body)
-                .foregroundColor(.primary)
-                .lineLimit(2)
+                .foregroundColor(logsViewModel.accentColor)
+                .frame(width: 20)
+
+            if !entry.name.isEmpty {
+                Text(entry.name)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+            } else {
+                Text(entry.workoutType.displayName)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 6)
@@ -1977,14 +1988,26 @@ extension WeeklyView {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .frame(width: 60, alignment: .leading)
-            
-            // Workout name
+
+            Image(systemName: entry.displayIcon)
+                .font(.body)
+                .foregroundColor(logsViewModel.accentColor)
+                .frame(width: 20)
+
+            // Workout description
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                    .font(.body)
-                    .fontWeight(.medium)
+                if !entry.name.isEmpty {
+                    Text(entry.name)
+                        .font(.body)
+                        .fontWeight(.medium)
+                } else {
+                    Text(entry.workoutType.displayName)
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
             }
-            
+
             Spacer()
         }
         .padding(.vertical, 4)

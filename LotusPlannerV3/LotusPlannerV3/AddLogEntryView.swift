@@ -148,7 +148,13 @@ struct AddLogEntryView: View {
 
     private var workoutForm: some View {
         Section("Workout Details") {
-            TextField("Workout name", text: $viewModel.workoutName)
+            Picker("Workout Type", selection: $viewModel.selectedWorkoutType) {
+                ForEach(appPrefs.sortedSelectedWorkoutTypes) { type in
+                    Label(type.displayName, systemImage: type.icon)
+                        .tag(type)
+                }
+            }
+            TextField("Description (optional)", text: $viewModel.workoutName)
             DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.calendar, Calendar.mondayFirst)
         }

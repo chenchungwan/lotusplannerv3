@@ -100,29 +100,30 @@ class CoreDataManager: ObservableObject {
         workoutLog.id = entry.id
         workoutLog.date = entry.date
         workoutLog.name = entry.name
+        workoutLog.workoutType = entry.workoutTypeRaw
         workoutLog.userId = entry.userId
         workoutLog.createdAt = entry.createdAt
-        
+
         save()
     }
-    
+
     func loadWorkoutEntries() -> [WorkoutLogEntry] {
         let request: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \WorkoutLog.createdAt, ascending: false)]
-        
+
         do {
             let logs = try context.fetch(request)
             return logs.compactMap { log in
                 guard let id = log.id,
                       let date = log.date,
-                      let name = log.name,
                       let userId = log.userId,
                       let createdAt = log.createdAt else { return nil }
-                
+
                 return WorkoutLogEntry(
                     id: id,
                     date: date,
-                    name: name,
+                    name: log.name ?? "",
+                    workoutTypeRaw: log.workoutType,
                     userId: userId,
                     createdAt: createdAt
                 )
@@ -708,6 +709,7 @@ extension WorkoutLogEntry {
         self.id = id
         self.date = date
         self.name = name
+        self.workoutTypeRaw = nil
         self.userId = userId
         self.createdAt = createdAt
     }

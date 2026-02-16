@@ -114,9 +114,24 @@ struct EditLogEntryView: View {
         }
     }
 
+    private var editWorkoutTypes: [WorkoutType] {
+        let selected = AppPreferences.shared.sortedSelectedWorkoutTypes
+        // Always include the entry's current type so it's visible when editing
+        if selected.contains(viewModel.selectedWorkoutType) {
+            return selected
+        }
+        return [viewModel.selectedWorkoutType] + selected
+    }
+
     private var workoutForm: some View {
         Section("Workout Details") {
-            TextField("Workout name", text: $viewModel.workoutName)
+            Picker("Workout Type", selection: $viewModel.selectedWorkoutType) {
+                ForEach(editWorkoutTypes) { type in
+                    Label(type.displayName, systemImage: type.icon)
+                        .tag(type)
+                }
+            }
+            TextField("Description (optional)", text: $viewModel.workoutName)
             DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.calendar, Calendar.mondayFirst)
         }

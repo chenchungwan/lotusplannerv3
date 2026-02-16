@@ -291,14 +291,27 @@ extension LogsComponent {
     }
     
     func workoutEntryRow(_ entry: WorkoutLogEntry) -> some View {
-        HStack(spacing: 8) {
-            Text(entry.name)
+        HStack(spacing: 6) {
+            Image(systemName: entry.displayIcon)
                 .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
-            
+                .foregroundColor(viewModel.accentColor)
+                .frame(width: 16)
+
+            if !entry.name.isEmpty {
+                Text(entry.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
+            } else {
+                Text(entry.workoutType.displayName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 8)

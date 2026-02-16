@@ -458,9 +458,21 @@ class AppPreferences: ObservableObject {
     func moveLog(from source: IndexSet, to destination: Int) {
         logDisplayOrder.move(fromOffsets: source, toOffset: destination)
     }
-    
-    
-    
+
+    // Selected workout types (which types appear in the picker when adding/editing)
+    @Published var selectedWorkoutTypes: Set<WorkoutType> {
+        didSet {
+            let rawValues = selectedWorkoutTypes.map { $0.rawValue }
+            UserDefaults.standard.set(rawValues, forKey: "selectedWorkoutTypes")
+        }
+    }
+
+    var sortedSelectedWorkoutTypes: [WorkoutType] {
+        WorkoutType.allCases.filter { selectedWorkoutTypes.contains($0) }
+    }
+
+
+
     // Day View Divider Positions
     @Published var dayViewCompactTasksHeight: CGFloat {
         didSet {
@@ -708,6 +720,14 @@ class AppPreferences: ObservableObject {
             self.logDisplayOrder = decoded + missing
         } else {
             self.logDisplayOrder = BuiltInLogType.allCases
+        }
+
+        // Load selected workout types (default: all types selected)
+        if let savedWorkoutTypes = UserDefaults.standard.stringArray(forKey: "selectedWorkoutTypes") {
+            let decoded = savedWorkoutTypes.compactMap { WorkoutType(rawValue: $0) }
+            self.selectedWorkoutTypes = Set(decoded.isEmpty ? WorkoutType.allCases : decoded)
+        } else {
+            self.selectedWorkoutTypes = Set(WorkoutType.allCases)
         }
 
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
@@ -1204,6 +1224,28 @@ struct SettingsView: View {
                     }
                     .onMove { source, destination in
                         appPrefs.moveLog(from: source, to: destination)
+                    }
+
+                    // Workout types selection (shown when workout logs enabled)
+                    if appPrefs.showWorkoutLogs {
+                        NavigationLink {
+                            WorkoutTypeSelectionView()
+                        } label: {
+                            HStack {
+                                Image(systemName: "figure.run")
+                                    .foregroundColor(.accentColor)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Workout Types")
+                                        .font(.body)
+                                    Text("\(appPrefs.selectedWorkoutTypes.count) of \(WorkoutType.allCases.count) selected")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.leading, 20)
+                        .moveDisabled(true)
                     }
 
                     Toggle(isOn: Binding(
@@ -2851,6 +2893,68 @@ struct EditGoalCategorySheet: View {
             } message: {
                 Text("This will delete the category and all goals in it. This action cannot be undone.")
             }
+        }
+    }
+}
+
+// MARK: - Workout Type Selection View
+struct WorkoutTypeSelectionView: View {
+    @ObservedObject private var appPrefs = AppPreferences.shared
+    @State private var searchText = ""
+
+    private var filteredTypes: [WorkoutType] {
+        if searchText.isEmpty {
+            return WorkoutType.allCases.map { $0 }
+        }
+        return WorkoutType.allCases.filter {
+            $0.displayName.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Button("Select All") {
+                    appPrefs.selectedWorkoutTypes = Set(WorkoutType.allCases)
+                }
+                Button("Deselect All") {
+                    appPrefs.selectedWorkoutTypes = []
+                }
+            }
+
+            Section {
+                ForEach(filteredTypes) { type in
+                    Button {
+                        toggleType(type)
+                    } label: {
+                        HStack {
+                            Image(systemName: type.icon)
+                                .foregroundColor(.accentColor)
+                                .frame(width: 24)
+                            Text(type.displayName)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if appPrefs.selectedWorkoutTypes.contains(type) {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                    }
+                }
+            } footer: {
+                Text("Selected types will appear in the workout type picker when adding or editing entries.")
+            }
+        }
+        .searchable(text: $searchText, prompt: "Search workout types")
+        .navigationTitle("Workout Types")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func toggleType(_ type: WorkoutType) {
+        if appPrefs.selectedWorkoutTypes.contains(type) {
+            appPrefs.selectedWorkoutTypes.remove(type)
+        } else {
+            appPrefs.selectedWorkoutTypes.insert(type)
         }
     }
 }
