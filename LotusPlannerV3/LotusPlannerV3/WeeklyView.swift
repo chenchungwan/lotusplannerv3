@@ -1803,7 +1803,7 @@ extension WeeklyView {
         HStack(spacing: 6) {
             Image(systemName: entry.displayIcon)
                 .font(.body)
-                .foregroundColor(logsViewModel.accentColor)
+                .foregroundColor(appPrefs.colorForWorkoutType(entry.workoutType))
                 .frame(width: 20)
 
             if !entry.name.isEmpty {
@@ -2020,7 +2020,7 @@ extension WeeklyView {
 
             Image(systemName: entry.displayIcon)
                 .font(.body)
-                .foregroundColor(logsViewModel.accentColor)
+                .foregroundColor(appPrefs.colorForWorkoutType(entry.workoutType))
                 .frame(width: 20)
 
             // Workout description

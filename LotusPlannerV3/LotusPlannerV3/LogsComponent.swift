@@ -294,7 +294,7 @@ extension LogsComponent {
         HStack(spacing: 6) {
             Image(systemName: entry.displayIcon)
                 .font(.caption)
-                .foregroundColor(viewModel.accentColor)
+                .foregroundColor(AppPreferences.shared.colorForWorkoutType(entry.workoutType))
                 .frame(width: 16)
 
             if !entry.name.isEmpty {
