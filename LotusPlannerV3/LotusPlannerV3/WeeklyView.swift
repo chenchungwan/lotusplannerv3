@@ -1054,17 +1054,26 @@ extension WeeklyView {
         DateFormatter.standardDate.string(from: date)
     }
 
+    private func streakColor(_ streak: Int) -> Color {
+        if streak >= 5 { return .green }
+        if streak == 4 { return .teal }
+        if streak > 0 { return .red }
+        return .secondary
+    }
+
     @ViewBuilder
     private func workoutStreakBadge(for date: Date) -> some View {
         if appPrefs.showWorkoutStreak && appPrefs.showWorkoutLogs {
             let streak = logsViewModel.workoutStreak(on: date)
+            let color = streakColor(streak)
             HStack(spacing: 3) {
                 Image(systemName: "flame.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(streak > 0 ? .orange : .secondary)
+                    .font(.body)
+                    .foregroundColor(color)
                 Text("\(streak)/7")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(streak > 0 ? .orange : .secondary)
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(color)
             }
         }
     }
