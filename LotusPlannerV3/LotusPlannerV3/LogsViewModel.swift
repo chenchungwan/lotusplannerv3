@@ -678,9 +678,8 @@ class LogsViewModel: ObservableObject {
                 createdAt: workoutEntries[index].createdAt
             )
 
-            // Update in Core Data
-            coreDataManager.deleteWorkoutEntry(workoutEntries[index])
-            coreDataManager.saveWorkoutEntry(updatedEntry)
+            // Update in Core Data (in-place to preserve CloudKit record)
+            coreDataManager.updateWorkoutEntry(updatedEntry)
 
             // Update local array
             workoutEntries[index] = updatedEntry

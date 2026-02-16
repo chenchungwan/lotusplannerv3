@@ -34,7 +34,9 @@ class CoreDataManager: ObservableObject {
                 if let parentContext = context.parent {
                     try parentContext.save()
                 }
-            } catch { }
+            } catch {
+                devLog("❌ CoreDataManager: Failed to save context: \(error.localizedDescription)", level: .error, category: .sync)
+            }
         }
     }
     
@@ -113,7 +115,42 @@ class CoreDataManager: ObservableObject {
 
         do {
             let logs = try context.fetch(request)
-            return logs.compactMap { log in
+
+            // Deduplicate: group by id, keep the version with workoutType set (or most recent)
+            var seenIds: [String: WorkoutLog] = [:]
+            var duplicatesToDelete: [WorkoutLog] = []
+
+            for log in logs {
+                guard let id = log.id else { continue }
+                if let existing = seenIds[id] {
+                    // Decide which to keep: prefer the one with workoutType populated
+                    let existingHasType = existing.workoutType != nil && !(existing.workoutType ?? "").isEmpty
+                    let newHasType = log.workoutType != nil && !(log.workoutType ?? "").isEmpty
+
+                    if newHasType && !existingHasType {
+                        // New one is better — delete the existing, keep new
+                        duplicatesToDelete.append(existing)
+                        seenIds[id] = log
+                    } else {
+                        // Keep existing — delete the new duplicate
+                        duplicatesToDelete.append(log)
+                    }
+                } else {
+                    seenIds[id] = log
+                }
+            }
+
+            // Delete duplicates from Core Data
+            if !duplicatesToDelete.isEmpty {
+                devLog("🧹 CoreDataManager: Removing \(duplicatesToDelete.count) duplicate workout entries", level: .info, category: .sync)
+                for dup in duplicatesToDelete {
+                    context.delete(dup)
+                }
+                save()
+            }
+
+            // Build result from deduplicated set
+            return seenIds.values.compactMap { log in
                 guard let id = log.id,
                       let date = log.date,
                       let userId = log.userId,
@@ -127,16 +164,36 @@ class CoreDataManager: ObservableObject {
                     userId: userId,
                     createdAt: createdAt
                 )
-            }
+            }.sorted { $0.createdAt > $1.createdAt }
         } catch {
             return []
         }
     }
     
+    func updateWorkoutEntry(_ entry: WorkoutLogEntry) {
+        let request: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", entry.id)
+
+        do {
+            let logs = try context.fetch(request)
+            if let existing = logs.first {
+                existing.date = entry.date
+                existing.name = entry.name
+                existing.workoutType = entry.workoutTypeRaw
+                save()
+            } else {
+                // Record not found — create it
+                saveWorkoutEntry(entry)
+            }
+        } catch {
+            devLog("❌ CoreDataManager: Failed to update workout entry: \(error.localizedDescription)", level: .error, category: .sync)
+        }
+    }
+
     func deleteWorkoutEntry(_ entry: WorkoutLogEntry) {
         let request: NSFetchRequest<WorkoutLog> = WorkoutLog.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", entry.id)
-        
+
         do {
             let logs = try context.fetch(request)
             logs.forEach(context.delete)
@@ -144,7 +201,7 @@ class CoreDataManager: ObservableObject {
         } catch {
         }
     }
-    
+
     // MARK: - Food Logs
     func saveFoodEntry(_ entry: FoodLogEntry) {
         let foodLog = FoodLog(context: context)

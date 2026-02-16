@@ -751,6 +751,9 @@ class AppPreferences: ObservableObject {
             self.logDisplayOrder = BuiltInLogType.allCases
         }
 
+        // Pull latest iCloud KVS data before reading workout settings
+        NSUbiquitousKeyValueStore.default.synchronize()
+
         // Load selected workout types (iCloud KVS → UserDefaults → default all)
         let kvsWorkoutTypes = NSUbiquitousKeyValueStore.default.array(forKey: "selectedWorkoutTypes") as? [String]
         let localWorkoutTypes = UserDefaults.standard.stringArray(forKey: "selectedWorkoutTypes")
@@ -837,35 +840,51 @@ class AppPreferences: ObservableObject {
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: NSUbiquitousKeyValueStore.default,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self = self else { return }
             let kvs = NSUbiquitousKeyValueStore.default
 
-            let newName = kvs.string(forKey: "customLogSectionName") ?? "Custom Logs"
-            if self.customLogSectionName != newName {
-                self.customLogSectionName = newName
+            // Log sync event for diagnostics
+            let reason = notification.userInfo?[NSUbiquitousKeyValueStoreChangeReasonKey] as? Int
+            let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+            devLog("☁️ iCloud KVS external change - reason: \(reason ?? -1), keys: \(changedKeys)", level: .info, category: .sync)
+
+            if changedKeys.isEmpty || changedKeys.contains("customLogSectionName") {
+                let newName = kvs.string(forKey: "customLogSectionName") ?? "Custom Logs"
+                if self.customLogSectionName != newName {
+                    self.customLogSectionName = newName
+                }
             }
 
             // Sync selected workout types
-            if let rawTypes = kvs.array(forKey: "selectedWorkoutTypes") as? [String] {
-                let decoded = Set(rawTypes.compactMap { WorkoutType(rawValue: $0) })
-                if !decoded.isEmpty && decoded != self.selectedWorkoutTypes {
-                    self.selectedWorkoutTypes = decoded
+            if changedKeys.isEmpty || changedKeys.contains("selectedWorkoutTypes") {
+                if let rawTypes = kvs.array(forKey: "selectedWorkoutTypes") as? [String] {
+                    let decoded = Set(rawTypes.compactMap { WorkoutType(rawValue: $0) })
+                    if !decoded.isEmpty && decoded != self.selectedWorkoutTypes {
+                        self.selectedWorkoutTypes = decoded
+                        devLog("☁️ Synced selectedWorkoutTypes: \(decoded.count) types", level: .info, category: .sync)
+                    }
                 }
             }
 
             // Sync workout streak preference
-            if kvs.object(forKey: "showWorkoutStreak") != nil {
-                let newStreak = kvs.bool(forKey: "showWorkoutStreak")
-                if self.showWorkoutStreak != newStreak {
-                    self.showWorkoutStreak = newStreak
+            if changedKeys.isEmpty || changedKeys.contains("showWorkoutStreak") {
+                if kvs.object(forKey: "showWorkoutStreak") != nil {
+                    let newStreak = kvs.bool(forKey: "showWorkoutStreak")
+                    if self.showWorkoutStreak != newStreak {
+                        self.showWorkoutStreak = newStreak
+                        devLog("☁️ Synced showWorkoutStreak: \(newStreak)", level: .info, category: .sync)
+                    }
                 }
             }
 
             // Sync workout type colors
-            if let newColors = kvs.dictionary(forKey: "workoutTypeColors") as? [String: String] {
-                if self.workoutTypeColors != newColors {
-                    self.workoutTypeColors = newColors
+            if changedKeys.isEmpty || changedKeys.contains("workoutTypeColors") {
+                if let newColors = kvs.dictionary(forKey: "workoutTypeColors") as? [String: String] {
+                    if self.workoutTypeColors != newColors {
+                        self.workoutTypeColors = newColors
+                        devLog("☁️ Synced workoutTypeColors: \(newColors.count) colors", level: .info, category: .sync)
+                    }
                 }
             }
         }
