@@ -462,8 +462,10 @@ class AppPreferences: ObservableObject {
     // Selected workout types (which types appear in the picker when adding/editing)
     @Published var selectedWorkoutTypes: Set<WorkoutType> {
         didSet {
-            let rawValues = selectedWorkoutTypes.map { $0.rawValue }
+            let rawValues = Array(selectedWorkoutTypes.map { $0.rawValue })
             UserDefaults.standard.set(rawValues, forKey: "selectedWorkoutTypes")
+            NSUbiquitousKeyValueStore.default.set(rawValues, forKey: "selectedWorkoutTypes")
+            NSUbiquitousKeyValueStore.default.synchronize()
         }
     }
 
@@ -475,6 +477,8 @@ class AppPreferences: ObservableObject {
     @Published var showWorkoutStreak: Bool {
         didSet {
             UserDefaults.standard.set(showWorkoutStreak, forKey: "showWorkoutStreak")
+            NSUbiquitousKeyValueStore.default.set(showWorkoutStreak, forKey: "showWorkoutStreak")
+            NSUbiquitousKeyValueStore.default.synchronize()
         }
     }
 
@@ -482,6 +486,8 @@ class AppPreferences: ObservableObject {
     @Published var workoutTypeColors: [String: String] {
         didSet {
             UserDefaults.standard.set(workoutTypeColors, forKey: "workoutTypeColors")
+            NSUbiquitousKeyValueStore.default.set(workoutTypeColors, forKey: "workoutTypeColors")
+            NSUbiquitousKeyValueStore.default.synchronize()
         }
     }
 
@@ -745,19 +751,27 @@ class AppPreferences: ObservableObject {
             self.logDisplayOrder = BuiltInLogType.allCases
         }
 
-        // Load selected workout types (default: all types selected)
-        if let savedWorkoutTypes = UserDefaults.standard.stringArray(forKey: "selectedWorkoutTypes") {
+        // Load selected workout types (iCloud KVS → UserDefaults → default all)
+        let kvsWorkoutTypes = NSUbiquitousKeyValueStore.default.array(forKey: "selectedWorkoutTypes") as? [String]
+        let localWorkoutTypes = UserDefaults.standard.stringArray(forKey: "selectedWorkoutTypes")
+        if let savedWorkoutTypes = kvsWorkoutTypes ?? localWorkoutTypes {
             let decoded = savedWorkoutTypes.compactMap { WorkoutType(rawValue: $0) }
             self.selectedWorkoutTypes = Set(decoded.isEmpty ? WorkoutType.allCases : decoded)
         } else {
             self.selectedWorkoutTypes = Set(WorkoutType.allCases)
         }
 
-        // Load workout streak preference (default off)
-        self.showWorkoutStreak = UserDefaults.standard.object(forKey: "showWorkoutStreak") as? Bool ?? false
+        // Load workout streak preference (iCloud KVS → UserDefaults → default off)
+        if NSUbiquitousKeyValueStore.default.object(forKey: "showWorkoutStreak") != nil {
+            self.showWorkoutStreak = NSUbiquitousKeyValueStore.default.bool(forKey: "showWorkoutStreak")
+        } else {
+            self.showWorkoutStreak = UserDefaults.standard.object(forKey: "showWorkoutStreak") as? Bool ?? false
+        }
 
-        // Load per-workout-type icon colors
-        self.workoutTypeColors = UserDefaults.standard.dictionary(forKey: "workoutTypeColors") as? [String: String] ?? [:]
+        // Load per-workout-type icon colors (iCloud KVS → UserDefaults → default empty)
+        let kvsColors = NSUbiquitousKeyValueStore.default.dictionary(forKey: "workoutTypeColors") as? [String: String]
+        let localColors = UserDefaults.standard.dictionary(forKey: "workoutTypeColors") as? [String: String]
+        self.workoutTypeColors = kvsColors ?? localColors ?? [:]
 
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
@@ -825,9 +839,34 @@ class AppPreferences: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             guard let self = self else { return }
-            let newName = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName") ?? "Custom Logs"
+            let kvs = NSUbiquitousKeyValueStore.default
+
+            let newName = kvs.string(forKey: "customLogSectionName") ?? "Custom Logs"
             if self.customLogSectionName != newName {
                 self.customLogSectionName = newName
+            }
+
+            // Sync selected workout types
+            if let rawTypes = kvs.array(forKey: "selectedWorkoutTypes") as? [String] {
+                let decoded = Set(rawTypes.compactMap { WorkoutType(rawValue: $0) })
+                if !decoded.isEmpty && decoded != self.selectedWorkoutTypes {
+                    self.selectedWorkoutTypes = decoded
+                }
+            }
+
+            // Sync workout streak preference
+            if kvs.object(forKey: "showWorkoutStreak") != nil {
+                let newStreak = kvs.bool(forKey: "showWorkoutStreak")
+                if self.showWorkoutStreak != newStreak {
+                    self.showWorkoutStreak = newStreak
+                }
+            }
+
+            // Sync workout type colors
+            if let newColors = kvs.dictionary(forKey: "workoutTypeColors") as? [String: String] {
+                if self.workoutTypeColors != newColors {
+                    self.workoutTypeColors = newColors
+                }
             }
         }
         NSUbiquitousKeyValueStore.default.synchronize()
@@ -1253,45 +1292,6 @@ struct SettingsView: View {
                     }
                     .onMove { source, destination in
                         appPrefs.moveLog(from: source, to: destination)
-                    }
-
-                    // Workout types selection (shown when workout logs enabled)
-                    if appPrefs.showWorkoutLogs {
-                        NavigationLink {
-                            WorkoutTypeSelectionView()
-                        } label: {
-                            HStack {
-                                Image(systemName: "figure.run")
-                                    .foregroundColor(.accentColor)
-                                    .frame(width: 20)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Workout Types")
-                                        .font(.body)
-                                    Text("\(appPrefs.selectedWorkoutTypes.count) of \(WorkoutType.allCases.count) selected")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.leading, 20)
-                        .moveDisabled(true)
-
-                        Toggle(isOn: $appPrefs.showWorkoutStreak) {
-                            HStack {
-                                Image(systemName: "flame.fill")
-                                    .foregroundColor(appPrefs.showWorkoutStreak ? .orange : .secondary)
-                                    .frame(width: 20)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Workout Streak")
-                                        .font(.body)
-                                    Text("Show rolling 7-day workout count in weekly view")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.leading, 20)
-                        .moveDisabled(true)
                     }
 
                     Toggle(isOn: Binding(
@@ -1896,20 +1896,62 @@ struct SettingsView: View {
                 }
             }
         case .workout:
-            Toggle(isOn: Binding(
-                get: { appPrefs.showWorkoutLogs },
-                set: { appPrefs.showWorkoutLogs = $0 }
-            )) {
-                HStack {
-                    Image(systemName: "figure.run")
-                        .foregroundColor(appPrefs.showWorkoutLogs ? .accentColor : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Workout Logs")
-                            .font(.body)
-                        Text("Show workout tracking in day views")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 0) {
+                Toggle(isOn: Binding(
+                    get: { appPrefs.showWorkoutLogs },
+                    set: { appPrefs.showWorkoutLogs = $0 }
+                )) {
+                    HStack {
+                        Image(systemName: "figure.run")
+                            .foregroundColor(appPrefs.showWorkoutLogs ? .accentColor : .secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Workout Logs")
+                                .font(.body)
+                            Text("Show workout tracking in day views")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
+                }
+
+                if appPrefs.showWorkoutLogs {
+                    Divider().padding(.vertical, 8)
+
+                    NavigationLink {
+                        WorkoutTypeSelectionView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "figure.run")
+                                .foregroundColor(.accentColor)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Workout Types")
+                                    .font(.body)
+                                Text("\(appPrefs.selectedWorkoutTypes.count) of \(WorkoutType.allCases.count) selected")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+
+                    Divider().padding(.vertical, 8)
+
+                    Toggle(isOn: $appPrefs.showWorkoutStreak) {
+                        HStack {
+                            Image(systemName: "flame.fill")
+                                .foregroundColor(appPrefs.showWorkoutStreak ? .orange : .secondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Workout Streak")
+                                    .font(.body)
+                                Text("Show rolling 7-day workout count in weekly view")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
                 }
             }
         }
