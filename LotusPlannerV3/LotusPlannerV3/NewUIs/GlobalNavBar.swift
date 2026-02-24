@@ -369,6 +369,12 @@ struct GlobalNavBar: View {
                                 showingReportIssues = true
                             }
 
+                            if let url = URL(string: "https://apps.apple.com/us/app/lotus-planner/id6749281062?action=write-review") {
+                                Link(destination: url) {
+                                    Label("Rate the App", systemImage: "star")
+                                }
+                            }
+
                         } label: {
                             Image(systemName: "line.3.horizontal")
                                 .font(adaptiveIconSize)

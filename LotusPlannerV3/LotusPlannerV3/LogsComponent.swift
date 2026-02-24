@@ -180,6 +180,19 @@ extension LogsComponent {
                 Spacer()
             }
 
+            if appPrefs.showWorkoutStreak {
+                let streak = viewModel.workoutStreak(on: currentDate)
+                HStack(spacing: 3) {
+                    Image(systemName: "flame.fill")
+                        .font(.caption)
+                        .foregroundColor(streakColor(streak))
+                    Text("\(streak)/7")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(streakColor(streak))
+                }
+            }
+
             if viewModel.filteredWorkoutEntries.isEmpty {
                 Text("No entries")
                     .font(.caption)
@@ -537,6 +550,13 @@ extension LogsComponent {
         case .weight: weightSection
         case .workout: workoutSection
         }
+    }
+
+    private func streakColor(_ streak: Int) -> Color {
+        if streak >= 5 { return .green }
+        if streak == 4 { return .teal }
+        if streak > 0 { return .red }
+        return .secondary
     }
 
 }
