@@ -3,10 +3,16 @@ import SwiftUI
 struct LogsComponent: View {
     @ObservedObject private var viewModel = LogsViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var healthManager = HealthManager.shared
     let currentDate: Date
     let horizontal: Bool
     let allowInternalScrolling: Bool
     let compactHorizontal: Bool
+
+    @State private var showingWeightDeleteAlert = false
+    @State private var showingWeightDeleteError = false
+    @State private var pendingDeleteWeightEntry: WeightLogEntry?
+    @State private var pendingDeleteHKWeightEntry: HealthManager.WeightEntry?
 
     init(currentDate: Date = Date(), horizontal: Bool = false, allowInternalScrolling: Bool = true, compactHorizontal: Bool = false) {
         self.currentDate = currentDate
@@ -127,6 +133,30 @@ struct LogsComponent: View {
                 viewModel.currentDate = newValue
                 viewModel.loadLogsForCurrentDate()
             }
+            .alert("Delete Weight Entry", isPresented: $showingWeightDeleteAlert) {
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteWeightEntry = nil
+                    pendingDeleteHKWeightEntry = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let hkEntry = pendingDeleteHKWeightEntry {
+                        viewModel.deleteHealthKitWeightEntry(hkEntry) { _ in
+                            showingWeightDeleteError = true
+                        }
+                        pendingDeleteHKWeightEntry = nil
+                    } else if let entry = pendingDeleteWeightEntry {
+                        viewModel.deleteWeightEntry(entry)
+                        pendingDeleteWeightEntry = nil
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to delete this weight entry? This action cannot be undone.")
+            }
+            .alert("Cannot Delete", isPresented: $showingWeightDeleteError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This entry was not created by Lotus Planner. To delete it, please use the Apple Health app.")
+            }
         }
     }
 }
@@ -136,9 +166,6 @@ extension LogsComponent {
     var weightSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "scalemass")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Weight")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -146,11 +173,17 @@ extension LogsComponent {
             }
 
             if viewModel.filteredWeightEntries.isEmpty {
-                Text("No entries")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
+                if appPrefs.healthKitEnabled && !healthManager.weightEntries.isEmpty {
+                    ForEach(healthManager.weightEntries) { entry in
+                        healthWeightRow(entry)
+                    }
+                } else {
+                    Text("No entries")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                }
             } else {
                 ForEach(viewModel.filteredWeightEntries) { entry in
                     weightEntryRow(entry)
@@ -171,9 +204,6 @@ extension LogsComponent {
     var workoutSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "figure.run")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Workout")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -219,9 +249,6 @@ extension LogsComponent {
     var foodSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "fork.knife")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Food")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -254,9 +281,6 @@ extension LogsComponent {
     var waterSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "drop.fill")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Water")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -283,6 +307,34 @@ extension LogsComponent {
         )
     }
 
+    func healthWeightRow(_ entry: HealthManager.WeightEntry) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "scalemass.fill")
+                .font(.caption2)
+                .foregroundColor(.blue)
+            Text("\(entry.weight, specifier: "%.1f") lbs")
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+            Text(entry.date, style: .time)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.systemBackground))
+        .cornerRadius(6)
+        .contextMenu {
+            Button(role: .destructive) {
+                pendingDeleteHKWeightEntry = entry
+                showingWeightDeleteAlert = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
     func weightEntryRow(_ entry: WeightLogEntry) -> some View {
         HStack(spacing: 8) {
             Text("\(entry.weight, specifier: "%.1f") \(entry.unit.displayName)")
@@ -291,15 +343,20 @@ extension LogsComponent {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .layoutPriority(1)
-            
+
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Color(.systemBackground))
         .cornerRadius(6)
-        .onTapGesture {
-            viewModel.editWeightEntry(entry)
+        .contextMenu {
+            Button(role: .destructive) {
+                pendingDeleteWeightEntry = entry
+                showingWeightDeleteAlert = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
     
@@ -359,9 +416,6 @@ extension LogsComponent {
     var sleepSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "zzz")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Sleep")
                     .font(.subheadline)
                     .fontWeight(.semibold)

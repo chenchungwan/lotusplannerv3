@@ -23,6 +23,7 @@ class LogsViewModel: ObservableObject {
     @Published var showingAddLogSheet = false
     @Published var showingEditLogSheet = false
     @Published var editingEntry: (type: LogType, id: String)? = nil
+    var editingHealthKitWeight: HealthManager.WeightEntry?
     
     // Weight entry form
     @Published var weightValue = ""
@@ -265,18 +266,21 @@ class LogsViewModel: ObservableObject {
         let time = weightDate
         
         let entry = WeightLogEntry(weight: weight, unit: selectedWeightUnit, userId: userId, date: date, time: time)
-        
-        // Save to Core Data immediately
-        coreDataManager.saveWeightEntry(entry)
-        
-        // Update local array
-        weightEntries.append(entry)
-        
+
+        if AppPreferences.shared.healthKitEnabled && HealthManager.shared.isAuthorized {
+            // Save directly to Apple Health (no local Core Data storage)
+            syncWeightToHealthKit(entry)
+        } else {
+            // Save to Core Data when HealthKit is not enabled
+            coreDataManager.saveWeightEntry(entry)
+            weightEntries.append(entry)
+        }
+
         // Clear form
         weightValue = ""
         weightDate = Date()
         showingAddLogSheet = false
-        
+
     }
     
     func deleteWeightEntry(_ entry: WeightLogEntry) {
@@ -291,6 +295,34 @@ class LogsViewModel: ObservableObject {
     private func saveWeightEntries() {
         // Individual entries are saved immediately when added/updated
         // No batch save needed with Core Data
+    }
+
+    private func syncWeightToHealthKit(_ entry: WeightLogEntry) {
+        guard AppPreferences.shared.healthKitEnabled, HealthManager.shared.isAuthorized else { return }
+        let weightInLbs: Double = entry.unit == .kilograms ? entry.weight * 2.20462 : entry.weight
+        let timestamp = entry.timestamp
+        let date = entry.date
+        Task.detached {
+            do {
+                try await HealthManager.shared.saveWeight(weightInLbs, date: timestamp)
+                // Refetch so the status bar updates immediately
+                await HealthManager.shared.fetchDayData(for: date)
+            } catch {
+                devLog("Failed to sync weight to HealthKit: \(error)", level: .error, category: .general)
+            }
+        }
+    }
+
+    /// Reconciles all app weight entries with Apple Health.
+    /// Migrates app data to HealthKit and removes from Core Data.
+    func reconcileWeightWithHealthKit() async {
+        guard AppPreferences.shared.healthKitEnabled else { return }
+        let allAppEntries = weightEntries
+        guard !allAppEntries.isEmpty else { return }
+
+        await HealthManager.shared.reconcileWeightData(appEntries: allAppEntries) { [weak self] entry in
+            self?.deleteWeightEntry(entry)
+        }
     }
     
     // MARK: - Workout Entries
@@ -552,6 +584,7 @@ class LogsViewModel: ObservableObject {
     // MARK: - Edit Entry Methods
     func editWeightEntry(_ entry: WeightLogEntry) {
         editingEntry = (.weight, entry.id)
+        editingHealthKitWeight = nil
         selectedLogType = .weight
         weightValue = String(entry.weight)
         selectedWeightUnit = entry.unit
@@ -561,6 +594,31 @@ class LogsViewModel: ObservableObject {
         originalWeightUnit = entry.unit
         originalWeightDate = entry.timestamp
         showingEditLogSheet = true
+    }
+
+    func editHealthKitWeightEntry(_ entry: HealthManager.WeightEntry) {
+        editingEntry = (.weight, entry.id.uuidString)
+        editingHealthKitWeight = entry
+        selectedLogType = .weight
+        weightValue = String(entry.weight)
+        selectedWeightUnit = .pounds
+        weightDate = entry.date
+        originalWeightValue = String(entry.weight)
+        originalWeightUnit = .pounds
+        originalWeightDate = entry.date
+        showingEditLogSheet = true
+    }
+
+    func deleteHealthKitWeightEntry(_ entry: HealthManager.WeightEntry, onError: ((Error) -> Void)? = nil) {
+        Task.detached {
+            do {
+                try await HealthManager.shared.deleteWeight(entry)
+                await HealthManager.shared.fetchDayData(for: entry.date)
+            } catch {
+                devLog("Failed to delete HealthKit weight: \(error)", level: .error, category: .general)
+                await MainActor.run { onError?(error) }
+            }
+        }
     }
     
     func editWorkoutEntry(_ entry: WorkoutLogEntry) {
@@ -634,13 +692,34 @@ class LogsViewModel: ObservableObject {
             errorMessage = "Please enter a valid weight"
             return
         }
-        
+
+        // Editing a HealthKit weight entry
+        if let hkEntry = editingHealthKitWeight {
+            let weightInLbs: Double = selectedWeightUnit == .kilograms ? weight * 2.20462 : weight
+            let date = weightDate
+            Task.detached {
+                do {
+                    // Delete old entry, save new one
+                    try await HealthManager.shared.deleteWeight(hkEntry)
+                    try await HealthManager.shared.saveWeight(weightInLbs, date: date)
+                    await HealthManager.shared.fetchDayData(for: date)
+                } catch {
+                    devLog("Failed to update HealthKit weight: \(error)", level: .error, category: .general)
+                }
+            }
+            editingHealthKitWeight = nil
+            resetForms()
+            showingEditLogSheet = false
+            self.editingEntry = nil
+            return
+        }
+
         // Find and update the entry
         if let index = weightEntries.firstIndex(where: { $0.id == editingEntry.id }) {
             let calendar = Calendar.current
             let date = calendar.startOfDay(for: weightDate)
             let time = weightDate
-            
+
             let updatedEntry = WeightLogEntry(
                 id: editingEntry.id,
                 date: date,
@@ -649,21 +728,26 @@ class LogsViewModel: ObservableObject {
                 unit: selectedWeightUnit,
                 userId: weightEntries[index].userId
             )
-            
-            // Update in Core Data
-            coreDataManager.deleteWeightEntry(weightEntries[index])
-            coreDataManager.saveWeightEntry(updatedEntry)
-            
-            // Update local array
-            weightEntries[index] = updatedEntry
+
+            if AppPreferences.shared.healthKitEnabled && HealthManager.shared.isAuthorized {
+                // Remove from Core Data and save to Apple Health only
+                coreDataManager.deleteWeightEntry(weightEntries[index])
+                weightEntries.remove(at: index)
+                syncWeightToHealthKit(updatedEntry)
+            } else {
+                // Update in Core Data
+                coreDataManager.deleteWeightEntry(weightEntries[index])
+                coreDataManager.saveWeightEntry(updatedEntry)
+                weightEntries[index] = updatedEntry
+            }
         }
-        
+
         // Clear form and close sheet
         resetForms()
         showingEditLogSheet = false
         self.editingEntry = nil
     }
-    
+
     private func updateWorkoutEntry() {
         guard let editingEntry = editingEntry else { return }
 

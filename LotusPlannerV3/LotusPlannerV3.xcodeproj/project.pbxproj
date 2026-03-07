@@ -366,6 +366,8 @@
 				INFOPLIST_FILE = LotusPlannerV3/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Lotus Planner";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lotus Planner reads your health data to display weight, sleep, workouts, steps, energy, and activity ring status in your daily views.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lotus Planner can write weight, sleep, steps, and energy data to Apple Health to keep your records in sync.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "LotusPlannerV3 needs access to save photos you create or edit in your daily planning notes.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LotusPlannerV3 needs access to your photo library to let you add photos to your daily notes and planning materials.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -406,6 +408,8 @@
 				INFOPLIST_FILE = LotusPlannerV3/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Lotus Planner";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lotus Planner reads your health data to display weight, sleep, workouts, steps, energy, and activity ring status in your daily views.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lotus Planner can write weight, sleep, steps, and energy data to Apple Health to keep your records in sync.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "LotusPlannerV3 needs access to save photos you create or edit in your daily planning notes.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LotusPlannerV3 needs access to your photo library to let you add photos to your daily notes and planning materials.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

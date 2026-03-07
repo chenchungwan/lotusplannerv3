@@ -40,6 +40,8 @@ struct DayViewMobile: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
+                HealthStatusBar()
+
                 // Bulk Edit Toolbar (shown when in bulk edit mode)
                 if bulkEditManager.state.isActive {
                     BulkEditToolbarView(bulkEditManager: bulkEditManager)

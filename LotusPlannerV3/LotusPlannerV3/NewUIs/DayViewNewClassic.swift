@@ -40,17 +40,21 @@ struct DayViewNewClassic: View {
     
     var body: some View {
         GeometryReader { geometry in
-            HStack(alignment: .top, spacing: 0) {
-                // Left section (dynamic width) - TimeboxComponent and Logs
-                leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
+            VStack(spacing: 0) {
+                HealthStatusBar()
 
-                // Vertical divider
-                dayVerticalDivider
+                HStack(alignment: .top, spacing: 0) {
+                    // Left section (dynamic width) - TimeboxComponent and Logs
+                    leftDaySectionWithDivider(geometry: geometry)
+                        .frame(width: dayLeftSectionWidth)
 
-                // Right section - Tasks and Journal
-                rightDaySection(geometry: geometry)
-                    .frame(maxWidth: .infinity)
+                    // Vertical divider
+                    dayVerticalDivider
+
+                    // Right section - Tasks and Journal
+                    rightDaySection(geometry: geometry)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
         // Task details sheet

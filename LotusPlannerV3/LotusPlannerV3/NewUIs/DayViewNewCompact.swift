@@ -51,18 +51,22 @@ struct DayViewNewCompact: View {
 
     var body: some View {
         GeometryReader { geometry in
-            // Main Content: Events + Tasks (left) | Journal (right)
-            HStack(spacing: 0) {
-                // Left Column: Events + Tasks + Logs with draggable divider
-                leftColumn(geometry: geometry)
-                    .frame(width: columnDividerPosition)
+            VStack(spacing: 0) {
+                HealthStatusBar()
 
-                // Draggable divider between columns
-                columnDivider(geometry: geometry)
+                // Main Content: Events + Tasks (left) | Journal (right)
+                HStack(spacing: 0) {
+                    // Left Column: Events + Tasks + Logs with draggable divider
+                    leftColumn(geometry: geometry)
+                        .frame(width: columnDividerPosition)
 
-                // Right Column: Journal
-                journalColumn
-                    .frame(maxWidth: .infinity)
+                    // Draggable divider between columns
+                    columnDivider(geometry: geometry)
+
+                    // Right Column: Journal
+                    journalColumn
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
         .background(Color(.systemBackground))

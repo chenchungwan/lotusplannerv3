@@ -392,6 +392,13 @@ class AppPreferences: ObservableObject {
         }
     }
     
+    // Apple Health integration
+    @Published var healthKitEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(healthKitEnabled, forKey: "healthKitEnabled")
+        }
+    }
+
     // Use alternative row-based weekly view layout
     @Published var useRowBasedWeeklyView: Bool {
         didSet {
@@ -780,11 +787,8 @@ class AppPreferences: ObservableObject {
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
         self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
         self.verboseLoggingEnabled = UserDefaults.standard.object(forKey: DevLogger.verboseLoggingDefaultsKey) as? Bool ?? false
-        
-        
+        self.healthKitEnabled = UserDefaults.standard.object(forKey: "healthKitEnabled") as? Bool ?? false
 
-
-        
         // Load colors from UserDefaults or use defaults
         let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
         let professionalHex = UserDefaults.standard.string(forKey: "professionalColor") ?? "#38eb50"
@@ -952,8 +956,11 @@ class AppPreferences: ObservableObject {
     func updateVerboseLogging(_ value: Bool) {
         verboseLoggingEnabled = value
     }
-    
-    
+
+    func updateHealthKitEnabled(_ value: Bool) {
+        healthKitEnabled = value
+    }
+
     // Day View Divider Position Update Methods
     func updateDayViewCompactTasksHeight(_ value: CGFloat) {
         dayViewCompactTasksHeight = value
@@ -1343,6 +1350,55 @@ struct SettingsView: View {
                     }
                 }
                 
+                // Apple Health section
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.healthKitEnabled },
+                        set: { newValue in
+                            appPrefs.updateHealthKitEnabled(newValue)
+                            if newValue {
+                                Task {
+                                    await HealthManager.shared.requestAuthorization()
+                                    if !HealthManager.shared.isAuthorized {
+                                        appPrefs.updateHealthKitEnabled(false)
+                                    }
+                                }
+                            }
+                        }
+                    )) {
+                        HStack {
+                            Image(systemName: "heart.fill")
+                                .foregroundColor(appPrefs.healthKitEnabled ? .pink : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Link Apple Health")
+                                    .font(.body)
+                                Text("Read and write weight, sleep, workouts, steps, energy, and activity data")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .disabled(!HealthManager.shared.isHealthKitAvailable)
+                } header: {
+                    HStack(spacing: 8) {
+                        Text("Apple Health")
+                        Text("Beta")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                } footer: {
+                    if !HealthManager.shared.isHealthKitAvailable {
+                        Text("Apple Health is not available on this device.")
+                    } else {
+                        Text("Health data integration is in beta. You can manage permissions in the Health app.")
+                    }
+                }
+
                 // Goal Preferences section - temporarily hidden
 //                Section {
 //                    Toggle(isOn: Binding(

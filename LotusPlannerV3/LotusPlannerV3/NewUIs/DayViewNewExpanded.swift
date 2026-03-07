@@ -45,10 +45,13 @@ struct DayViewNewExpanded: View {
     
     var body: some View {
         GeometryReader { geometry in
-            ScrollView(.horizontal, showsIndicators: true) {
-                HStack(spacing: 0) {
-                    // First column: Timeline + Tasks
-                    HStack(alignment: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                HealthStatusBar()
+
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(spacing: 0) {
+                        // First column: Timeline + Tasks
+                        HStack(alignment: .top, spacing: 0) {
                         // Left section (dynamic width) - TimeboxComponent and Logs
                         leftDaySectionWithDivider(geometry: geometry)
                             .frame(width: dayLeftSectionWidth)
@@ -69,6 +72,7 @@ struct DayViewNewExpanded: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(12)
                 }
+            }
             }
         }
         // Task details sheet

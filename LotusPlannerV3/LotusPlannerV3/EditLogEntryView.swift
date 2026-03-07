@@ -70,7 +70,10 @@ struct EditLogEntryView: View {
         
         switch editingEntry.type {
         case .weight:
-            if let entry = viewModel.weightEntries.first(where: { $0.id == editingEntry.id }) {
+            if let hkEntry = viewModel.editingHealthKitWeight {
+                viewModel.deleteHealthKitWeightEntry(hkEntry)
+                viewModel.editingHealthKitWeight = nil
+            } else if let entry = viewModel.weightEntries.first(where: { $0.id == editingEntry.id }) {
                 viewModel.deleteWeightEntry(entry)
             }
         case .workout:
