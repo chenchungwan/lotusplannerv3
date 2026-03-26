@@ -359,7 +359,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LotusPlannerV3/LotusPlannerV3.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = M39PXKFX82;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -367,6 +367,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Lotus Planner";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lotus Planner uses your health data to display activity ring progress in your workout log.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lotus Planner saves health data you enter in the app to Apple Health.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "LotusPlannerV3 needs access to save photos you create or edit in your daily planning notes.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LotusPlannerV3 needs access to your photo library to let you add photos to your daily notes and planning materials.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -379,7 +380,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.3.3;
+				MARKETING_VERSION = 2.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chenchungwan.LotusPlannerV3;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -400,7 +401,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LotusPlannerV3/LotusPlannerV3.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = M39PXKFX82;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -408,6 +409,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Lotus Planner";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Lotus Planner uses your health data to display activity ring progress in your workout log.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Lotus Planner saves health data you enter in the app to Apple Health.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "LotusPlannerV3 needs access to save photos you create or edit in your daily planning notes.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LotusPlannerV3 needs access to your photo library to let you add photos to your daily notes and planning materials.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -420,7 +422,7 @@
 					"@executable_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.3.3;
+				MARKETING_VERSION = 2.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chenchungwan.LotusPlannerV3;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

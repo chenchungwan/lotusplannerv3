@@ -1065,7 +1065,7 @@ extension WeeklyView {
     @ViewBuilder
     private func workoutStreakBadge(for date: Date) -> some View {
         let showStreak = appPrefs.showWorkoutStreak && appPrefs.showWorkoutLogs
-        let showRings = appPrefs.showActivityRings && healthKit.isAuthorized
+        let showRings = appPrefs.showActivityRings
         if showStreak || showRings {
             HStack(spacing: 8) {
                 if showStreak {

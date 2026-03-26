@@ -1980,22 +1980,40 @@ struct SettingsView: View {
 
                     Divider().padding(.vertical, 8)
 
-                    Toggle(isOn: $appPrefs.showActivityRings) {
+                    if HealthKitManager.shared.isHealthKitAvailable {
+                        Toggle(isOn: $appPrefs.showActivityRings) {
+                            HStack {
+                                Image(systemName: "circle.circle")
+                                    .foregroundColor(appPrefs.showActivityRings ? .red : .secondary)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Activity Rings")
+                                        .font(.body)
+                                    Text("Show Move, Exercise, and Stand rings from Apple Health")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.leading, 20)
+                    } else {
                         HStack {
                             Image(systemName: "circle.circle")
-                                .foregroundColor(appPrefs.showActivityRings ? .red : .secondary)
+                                .foregroundColor(.secondary)
                                 .frame(width: 20)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Activity Rings")
                                     .font(.body)
-                                Text("Show Move, Exercise, and Stand rings from Apple Health")
+                                    .foregroundColor(.secondary)
+                                Text("Apple Health is not available on this device")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture { }
+                        .padding(.leading, 20)
                     }
-                    .disabled(!HealthKitManager.shared.isHealthKitAvailable)
-                    .padding(.leading, 20)
                 }
             }
         }

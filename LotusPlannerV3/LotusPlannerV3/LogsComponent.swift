@@ -189,7 +189,7 @@ extension LogsComponent {
                     }
                 }
 
-                if appPrefs.showActivityRings && healthKit.isAuthorized {
+                if appPrefs.showActivityRings {
                     let rings = healthKit.ringData(for: currentDate)
                     HStack(spacing: 4) {
                         activityRingView(value: rings.moveValue, goal: rings.moveGoal, color: .red)
@@ -199,11 +199,11 @@ extension LogsComponent {
                 }
             }
             .task(id: currentDate) {
-                guard appPrefs.showActivityRings, healthKit.isAuthorized else { return }
+                guard appPrefs.showActivityRings else { return }
                 await healthKit.fetchActivityRings(for: currentDate)
             }
             .task(id: appPrefs.showActivityRings) {
-                guard appPrefs.showActivityRings, healthKit.isAuthorized else { return }
+                guard appPrefs.showActivityRings else { return }
                 await healthKit.fetchActivityRings(for: currentDate)
             }
 

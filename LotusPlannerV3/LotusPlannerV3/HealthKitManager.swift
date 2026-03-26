@@ -25,6 +25,8 @@ class HealthKitManager: ObservableObject {
         HKHealthStore.isHealthDataAvailable()
     }
 
+    private var hasRequestedAuth = false
+
     private init() {
         if isHealthKitAvailable {
             isAuthorized = AppPreferences.shared.showActivityRings
@@ -60,7 +62,12 @@ class HealthKitManager: ObservableObject {
     }
 
     func fetchActivityRings(for date: Date) async {
-        if !isAuthorized {
+        // Always request auth on first fetch to ensure HealthKit access
+        if !hasRequestedAuth {
+            hasRequestedAuth = true
+            let authorized = await requestAuthorization()
+            guard authorized else { return }
+        } else if !isAuthorized {
             let authorized = await ensureAuthorized()
             guard authorized else { return }
         }
@@ -86,7 +93,7 @@ class HealthKitManager: ObservableObject {
                 ringDataByDay[key] = ActivityRingData(
                     moveGoal: summary.activeEnergyBurnedGoal.doubleValue(for: .kilocalorie()),
                     moveValue: summary.activeEnergyBurned.doubleValue(for: .kilocalorie()),
-                    exerciseGoal: summary.appleExerciseTime.doubleValue(for: .minute()),
+                    exerciseGoal: summary.appleExerciseTimeGoal.doubleValue(for: .minute()),
                     exerciseValue: summary.appleExerciseTime.doubleValue(for: .minute()),
                     standGoal: summary.appleStandHoursGoal.doubleValue(for: .count()),
                     standValue: summary.appleStandHours.doubleValue(for: .count())
