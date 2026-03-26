@@ -482,6 +482,13 @@ class AppPreferences: ObservableObject {
         }
     }
 
+    // Show activity rings from Apple Health in workout log
+    @Published var showActivityRings: Bool {
+        didSet {
+            UserDefaults.standard.set(showActivityRings, forKey: "showActivityRings")
+        }
+    }
+
     // Per-workout-type icon colors (rawValue → hex string)
     @Published var workoutTypeColors: [String: String] {
         didSet {
@@ -776,6 +783,7 @@ class AppPreferences: ObservableObject {
         let localColors = UserDefaults.standard.dictionary(forKey: "workoutTypeColors") as? [String: String]
         self.workoutTypeColors = kvsColors ?? localColors ?? [:]
 
+        self.showActivityRings = UserDefaults.standard.object(forKey: "showActivityRings") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
         self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
@@ -1343,79 +1351,77 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Goal Preferences section - temporarily hidden
-//                Section {
-//                    Toggle(isOn: Binding(
-//                        get: { !appPrefs.hideGoals },
-//                        set: { appPrefs.updateHideGoals(!$0) }
-//                    )) {
-//                        HStack {
-//                            Image(systemName: "target")
-//                                .foregroundColor(appPrefs.hideGoals ? .secondary : .accentColor)
-//                            VStack(alignment: .leading, spacing: 2) {
-//                                Text("Enable Goals")
-//                                    .font(.body)
-//                                Text("Enable goal management features")
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//                        }
-//                    }
-//
-//                    if !appPrefs.hideGoals {
-//                        GoalCategoriesInlineView()
-//                            .padding(.leading, 20)
-//                            .padding(.top, 8)
-//                    }
-//                } header: {
-//                    HStack(spacing: 8) {
-//                        Text("Goal Preferences")
-//                        Text("Beta")
-//                            .font(.caption2)
-//                            .fontWeight(.semibold)
-//                            .foregroundColor(.white)
-//                            .padding(.horizontal, 6)
-//                            .padding(.vertical, 2)
-//                            .background(Color.orange)
-//                            .clipShape(RoundedRectangle(cornerRadius: 4))
-//                    }
-//                } footer: {
-//                    Text("Goal features are still in beta. We're actively improving them.")
-//                }
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { !appPrefs.hideGoals },
+                        set: { appPrefs.updateHideGoals(!$0) }
+                    )) {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundColor(appPrefs.hideGoals ? .secondary : .accentColor)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Enable Goals")
+                                    .font(.body)
+                                Text("Enable goal management features")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
 
-                // Book View Preferences section - temporarily hidden
-//                Section {
-//                    Toggle(isOn: Binding(
-//                        get: { !appPrefs.hideBookView },
-//                        set: { appPrefs.updateHideBookView(!$0) }
-//                    )) {
-//                        HStack {
-//                            Image(systemName: "book.pages")
-//                                .foregroundColor(appPrefs.hideBookView ? .secondary : .accentColor)
-//                            VStack(alignment: .leading, spacing: 2) {
-//                                Text("Enable Book View")
-//                                    .font(.body)
-//                                Text("Show Book View option in navigation menu")
-//                                    .font(.caption)
-//                                    .foregroundColor(.secondary)
-//                            }
-//                        }
-//                    }
-//                } header: {
-//                    HStack(spacing: 8) {
-//                        Text("Book View")
-//                        Text("Beta")
-//                            .font(.caption2)
-//                            .fontWeight(.semibold)
-//                            .foregroundColor(.white)
-//                            .padding(.horizontal, 6)
-//                            .padding(.vertical, 2)
-//                            .background(Color.orange)
-//                            .clipShape(RoundedRectangle(cornerRadius: 4))
-//                    }
-//                } footer: {
-//                    Text("Book View lets you swipe through your planner like a book. This feature is still in beta.")
-//                }
+                    if !appPrefs.hideGoals {
+                        GoalCategoriesInlineView()
+                            .padding(.leading, 20)
+                            .padding(.top, 8)
+                    }
+                } header: {
+                    HStack(spacing: 8) {
+                        Text("Goal Preferences")
+                        Text("Beta")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                } footer: {
+                    Text("Goal features are still in beta. We're actively improving them.")
+                }
+
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { !appPrefs.hideBookView },
+                        set: { appPrefs.updateHideBookView(!$0) }
+                    )) {
+                        HStack {
+                            Image(systemName: "book.pages")
+                                .foregroundColor(appPrefs.hideBookView ? .secondary : .accentColor)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Enable Book View")
+                                    .font(.body)
+                                Text("Show Book View option in navigation menu")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    HStack(spacing: 8) {
+                        Text("Book View")
+                        Text("Beta")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                } footer: {
+                    Text("Book View lets you swipe through your planner like a book. This feature is still in beta.")
+                }
 
                 Section("App Preferences") {
                     HStack {
@@ -1970,6 +1976,25 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    .padding(.leading, 20)
+
+                    Divider().padding(.vertical, 8)
+
+                    Toggle(isOn: $appPrefs.showActivityRings) {
+                        HStack {
+                            Image(systemName: "circle.circle")
+                                .foregroundColor(appPrefs.showActivityRings ? .red : .secondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Activity Rings")
+                                    .font(.body)
+                                Text("Show Move, Exercise, and Stand rings from Apple Health")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .disabled(!HealthKitManager.shared.isHealthKitAvailable)
                     .padding(.leading, 20)
                 }
             }

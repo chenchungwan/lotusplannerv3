@@ -14,6 +14,7 @@ struct WeeklyView: View {
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var logsViewModel = LogsViewModel.shared
+    @ObservedObject private var healthKit = HealthKitManager.shared
     @ObservedObject private var customLogManager = CustomLogManager.shared
     @ObservedObject private var bulkEditManager: BulkEditManager
 
@@ -1063,17 +1064,61 @@ extension WeeklyView {
 
     @ViewBuilder
     private func workoutStreakBadge(for date: Date) -> some View {
-        if appPrefs.showWorkoutStreak && appPrefs.showWorkoutLogs {
-            let streak = logsViewModel.workoutStreak(on: date)
-            let color = streakColor(streak)
-            HStack(spacing: 3) {
-                Image(systemName: "flame.fill")
-                    .font(.body)
-                    .foregroundColor(color)
-                Text("\(streak)/7")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundColor(color)
+        let showStreak = appPrefs.showWorkoutStreak && appPrefs.showWorkoutLogs
+        let showRings = appPrefs.showActivityRings && healthKit.isAuthorized
+        if showStreak || showRings {
+            HStack(spacing: 8) {
+                if showStreak {
+                    let streak = logsViewModel.workoutStreak(on: date)
+                    let color = streakColor(streak)
+                    HStack(spacing: 3) {
+                        Image(systemName: "trophy.fill")
+                            .font(.body)
+                            .foregroundColor(color)
+                        Text("\(streak)/7")
+                            .font(.body)
+                            .fontWeight(.semibold)
+                            .foregroundColor(color)
+                    }
+                }
+
+                if showRings {
+                    let rings = healthKit.ringData(for: date)
+                    HStack(spacing: 4) {
+                        activityRingView(value: rings.moveValue, goal: rings.moveGoal, color: .red)
+                        activityRingView(value: rings.exerciseValue, goal: rings.exerciseGoal, color: .green)
+                        activityRingView(value: rings.standValue, goal: rings.standGoal, color: .cyan)
+                    }
+                }
+            }
+            .task(id: date) {
+                guard showRings else { return }
+                await healthKit.fetchActivityRings(for: date)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func activityRingView(value: Double, goal: Double, color: Color) -> some View {
+        let progress = goal > 0 ? min(value / goal, 1.0) : 0
+        let isComplete = goal > 0 && value >= goal
+        let size: CGFloat = 16
+
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.2), lineWidth: 3)
+                .frame(width: size, height: size)
+
+            if isComplete {
+                Circle()
+                    .fill(color)
+                    .frame(width: size, height: size)
+            } else {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: size, height: size)
+                    .rotationEffect(.degrees(-90))
             }
         }
     }

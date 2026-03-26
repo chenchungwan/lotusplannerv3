@@ -3,6 +3,7 @@ import SwiftUI
 struct LogsComponent: View {
     @ObservedObject private var viewModel = LogsViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var healthKit = HealthKitManager.shared
     let currentDate: Date
     let horizontal: Bool
     let allowInternalScrolling: Bool
@@ -136,9 +137,6 @@ extension LogsComponent {
     var weightSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "scalemass")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Weight")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -171,26 +169,42 @@ extension LogsComponent {
     var workoutSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "figure.run")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Workout")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
             }
 
-            if appPrefs.showWorkoutStreak {
-                let streak = viewModel.workoutStreak(on: currentDate)
-                HStack(spacing: 3) {
-                    Image(systemName: "flame.fill")
-                        .font(.caption)
-                        .foregroundColor(streakColor(streak))
-                    Text("\(streak)/7")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(streakColor(streak))
+            HStack(spacing: 8) {
+                if appPrefs.showWorkoutStreak {
+                    let streak = viewModel.workoutStreak(on: currentDate)
+                    HStack(spacing: 3) {
+                        Image(systemName: "trophy.fill")
+                            .font(.caption)
+                            .foregroundColor(streakColor(streak))
+                        Text("\(streak)/7")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(streakColor(streak))
+                    }
                 }
+
+                if appPrefs.showActivityRings && healthKit.isAuthorized {
+                    let rings = healthKit.ringData(for: currentDate)
+                    HStack(spacing: 4) {
+                        activityRingView(value: rings.moveValue, goal: rings.moveGoal, color: .red)
+                        activityRingView(value: rings.exerciseValue, goal: rings.exerciseGoal, color: .green)
+                        activityRingView(value: rings.standValue, goal: rings.standGoal, color: .cyan)
+                    }
+                }
+            }
+            .task(id: currentDate) {
+                guard appPrefs.showActivityRings, healthKit.isAuthorized else { return }
+                await healthKit.fetchActivityRings(for: currentDate)
+            }
+            .task(id: appPrefs.showActivityRings) {
+                guard appPrefs.showActivityRings, healthKit.isAuthorized else { return }
+                await healthKit.fetchActivityRings(for: currentDate)
             }
 
             if viewModel.filteredWorkoutEntries.isEmpty {
@@ -219,9 +233,6 @@ extension LogsComponent {
     var foodSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "fork.knife")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Food")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -254,9 +265,6 @@ extension LogsComponent {
     var waterSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "drop.fill")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Water")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -359,9 +367,6 @@ extension LogsComponent {
     var sleepSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Image(systemName: "zzz")
-                    .foregroundColor(viewModel.accentColor)
-                    .frame(width: 20, alignment: .leading)
                 Text("Sleep")
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -557,6 +562,31 @@ extension LogsComponent {
         if streak == 4 { return .teal }
         if streak > 0 { return .red }
         return .secondary
+    }
+
+    @ViewBuilder
+    private func activityRingView(value: Double, goal: Double, color: Color) -> some View {
+        let progress = goal > 0 ? min(value / goal, 1.0) : 0
+        let isComplete = goal > 0 && value >= goal
+        let size: CGFloat = 16
+
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.2), lineWidth: 3)
+                .frame(width: size, height: size)
+
+            if isComplete {
+                Circle()
+                    .fill(color)
+                    .frame(width: size, height: size)
+            } else {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: size, height: size)
+                    .rotationEffect(.degrees(-90))
+            }
+        }
     }
 
 }

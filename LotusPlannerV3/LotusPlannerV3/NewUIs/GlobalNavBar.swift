@@ -359,14 +359,20 @@ struct GlobalNavBar: View {
                             }
                             Divider()
                             
-                            Button("Settings") {
+                            Button(action: {
                                 showingSettings = true
+                            }) {
+                                Label("Settings", systemImage: "gearshape")
                             }
-                            Button("About") {
+                            Button(action: {
                                 showingAbout = true
+                            }) {
+                                Label("About", systemImage: "info.circle")
                             }
-                            Button("Report Issue / Request Features") {
+                            Button(action: {
                                 showingReportIssues = true
+                            }) {
+                                Label("Report Issue / Request Features", systemImage: "exclamationmark.bubble")
                             }
 
                             if let url = URL(string: "https://apps.apple.com/us/app/lotus-planner/id6749281062?action=write-review") {
