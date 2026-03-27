@@ -1114,6 +1114,7 @@ struct SettingsView: View {
     @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
+    @State private var showingDeleteGoalsAlert = false
     @State private var cachedSyncStatus: iCloudManager.SyncStatus = .unknown
     @State private var cachedCloudAvailability = true
     @State private var syncButtonDisabled = false
@@ -1663,6 +1664,24 @@ struct SettingsView: View {
                 
 
                 Section("Danger Zone") {
+                    Button(role: .destructive) {
+                        showingDeleteGoalsAlert = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundColor(.red)
+                            Text("Delete All Goals Data")
+                        }
+                    }
+                    .alert("Delete All Goals?", isPresented: $showingDeleteGoalsAlert) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Delete All Goals", role: .destructive) {
+                            GoalsManager.shared.deleteAllData()
+                        }
+                    } message: {
+                        Text("This will permanently delete all goals and goal categories. This action cannot be undone.")
+                    }
+
                     Button(role: .destructive) {
                         showingDeleteAllAlert = true
                     } label: {

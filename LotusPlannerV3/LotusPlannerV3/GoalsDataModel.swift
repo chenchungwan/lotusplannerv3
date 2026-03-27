@@ -42,6 +42,11 @@ struct LinkedTaskData: Codable, Hashable {
     }
 }
 
+// MARK: - Goal Extended Data
+struct GoalExtendedData: Codable {
+    var notes: String = "" // Free-form notes (motivation, context, etc.)
+}
+
 // MARK: - Goal Data Model
 struct GoalData: Identifiable, Codable {
     let id: UUID
@@ -55,6 +60,7 @@ struct GoalData: Identifiable, Codable {
     var createdAt: Date
     var updatedAt: Date
     var linkedTasks: [LinkedTaskData] // Tasks linked to this goal
+    var extendedData: GoalExtendedData? // Steps 2-6 data
 
     init(
         id: UUID = UUID(),
@@ -67,7 +73,8 @@ struct GoalData: Identifiable, Codable {
         isCompleted: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        linkedTasks: [LinkedTaskData] = []
+        linkedTasks: [LinkedTaskData] = [],
+        extendedData: GoalExtendedData? = nil
     ) {
         self.id = id
         self.title = title
@@ -80,6 +87,7 @@ struct GoalData: Identifiable, Codable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.linkedTasks = linkedTasks
+        self.extendedData = extendedData
     }
 }
 

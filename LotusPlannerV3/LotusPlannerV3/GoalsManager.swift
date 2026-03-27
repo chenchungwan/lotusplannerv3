@@ -95,6 +95,13 @@ class GoalsManager: ObservableObject {
                     } catch { }
                 }
 
+                // Deserialize extended data from JSON
+                var extendedData: GoalExtendedData? = nil
+                if let extendedJSON = entity.extendedDataJSON,
+                   let jsonData = extendedJSON.data(using: .utf8) {
+                    extendedData = try? JSONDecoder().decode(GoalExtendedData.self, from: jsonData)
+                }
+
                 return GoalData(
                     id: UUID(uuidString: entity.id ?? "") ?? UUID(),
                     title: entity.title ?? "",
@@ -106,7 +113,8 @@ class GoalsManager: ObservableObject {
                     isCompleted: entity.isCompleted,
                     createdAt: entity.createdAt ?? Date(),
                     updatedAt: entity.updatedAt ?? Date(),
-                    linkedTasks: linkedTasks
+                    linkedTasks: linkedTasks,
+                    extendedData: extendedData
                 )
             }
             goals = deduplicatedGoals(from: mappedGoals)
@@ -188,8 +196,22 @@ class GoalsManager: ObservableObject {
         if let index = goals.firstIndex(where: { $0.id == goal.id }) {
             goals[index] = goal
             updateGoalInCoreData(goal)
-            
-            // CloudKit sync handled automatically by NSPersistentCloudKitContainer
+        }
+    }
+
+    /// Updates a linked task reference when a task is moved (gets a new ID/list).
+    func updateLinkedTask(oldTaskId: String, oldListId: String, newTaskId: String, newListId: String, newAccountKind: GoogleAuthManager.AccountKind) {
+        var updated = false
+        for i in goals.indices {
+            if let taskIndex = goals[i].linkedTasks.firstIndex(where: { $0.taskId == oldTaskId && $0.listId == oldListId }) {
+                goals[i].linkedTasks[taskIndex] = LinkedTaskData(taskId: newTaskId, listId: newListId, accountKind: newAccountKind)
+                updateGoalInCoreData(goals[i])
+                updated = true
+                devLog("Updated goal link: \(goals[i].title) task \(oldTaskId) -> \(newTaskId) in list \(newListId)", level: .info, category: .goals)
+            }
+        }
+        if !updated {
+            devLog("No goal found with linked task \(oldTaskId) in list \(oldListId)", level: .info, category: .goals)
         }
     }
     
@@ -356,6 +378,15 @@ class GoalsManager: ObservableObject {
                 entity.linkedTasksJSON = nil
             }
 
+            // Serialize extended data to JSON
+            if let extData = goal.extendedData {
+                if let jsonData = try? JSONEncoder().encode(extData) {
+                    entity.extendedDataJSON = String(data: jsonData, encoding: .utf8)
+                }
+            } else {
+                entity.extendedDataJSON = nil
+            }
+
             saveContext()
         } catch { }
     }
@@ -386,6 +417,15 @@ class GoalsManager: ObservableObject {
                     }
                 } else {
                     entity.linkedTasksJSON = nil
+                }
+
+                // Serialize extended data to JSON
+                if let extData = goal.extendedData {
+                    if let jsonData = try? JSONEncoder().encode(extData) {
+                        entity.extendedDataJSON = String(data: jsonData, encoding: .utf8)
+                    }
+                } else {
+                    entity.extendedDataJSON = nil
                 }
 
                 saveContext()

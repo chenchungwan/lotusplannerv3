@@ -865,11 +865,20 @@ class TasksViewModel: ObservableObject {
                 // Clear caches to ensure UI refreshes
                 self.clearCacheForAccount(kind)
                 self.clearAllFilteredCaches()
+
+                // Update goal links to point to the new task ID/list
+                GoalsManager.shared.updateLinkedTask(
+                    oldTaskId: originalTaskId,
+                    oldListId: sourceListId,
+                    newTaskId: taskToAdd.id,
+                    newListId: targetListId,
+                    newAccountKind: kind
+                )
             }
 
             // Return the new task so caller can transfer time window
             return taskToAdd
-            
+
         } catch {
             // If deletion failed, clean up the task we created in the target list
             if let createdTask = newTask {
@@ -884,7 +893,7 @@ class TasksViewModel: ObservableObject {
             return nil
         }
     }
-    
+
     func crossAccountMoveTask(_ updatedTask: GoogleTask, from source: (GoogleAuthManager.AccountKind, String), to target: (GoogleAuthManager.AccountKind, String)) async -> GoogleTask? {
         // First, get the original task from local state to ensure we have the correct server ID
         let originalTask = await MainActor.run {
@@ -963,6 +972,15 @@ class TasksViewModel: ObservableObject {
                 self.clearCacheForAccount(source.0)
                 self.clearCacheForAccount(target.0)
                 self.clearAllFilteredCaches()
+
+                // Update goal links to point to the new task ID/list/account
+                GoalsManager.shared.updateLinkedTask(
+                    oldTaskId: originalTaskId,
+                    oldListId: source.1,
+                    newTaskId: taskToAdd.id,
+                    newListId: target.1,
+                    newAccountKind: target.0
+                )
             }
 
             // Return the new task so caller can transfer time window

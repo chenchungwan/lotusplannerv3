@@ -178,7 +178,9 @@ struct GoalsView: View {
             }
         }
         .sheet(item: $goalToEdit) { goal in
-            EditGoalView(goal: goal)
+            CreateGoalView(editingGoal: goal) {
+                goalToEdit = nil
+            }
         }
         .sheet(isPresented: $showingCreateGoal) {
             CreateGoalView(
@@ -283,37 +285,31 @@ struct GoalsView: View {
         guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: date) else {
             return goals
         }
-        
         return goals.filter { goal in
-            // Filter by goal type (weekly goals only) AND due date within the week
-            goal.targetTimeframe == .week && 
-            goal.dueDate >= weekInterval.start && 
+            goal.targetTimeframe == .week &&
+            goal.dueDate >= weekInterval.start &&
             goal.dueDate < weekInterval.end
         }
     }
-    
+
     private func filterGoalsForMonth(_ goals: [GoalData], date: Date) -> [GoalData] {
         guard let monthInterval = Calendar.current.dateInterval(of: .month, for: date) else {
             return goals
         }
-        
         return goals.filter { goal in
-            // Filter by goal type (monthly goals only) AND due date within the month
-            goal.targetTimeframe == .month && 
-            goal.dueDate >= monthInterval.start && 
+            goal.targetTimeframe == .month &&
+            goal.dueDate >= monthInterval.start &&
             goal.dueDate < monthInterval.end
         }
     }
-    
+
     private func filterGoalsForYear(_ goals: [GoalData], date: Date) -> [GoalData] {
         guard let yearInterval = Calendar.current.dateInterval(of: .year, for: date) else {
             return goals
         }
-        
         return goals.filter { goal in
-            // Filter by goal type (yearly goals only) AND due date within the year
-            goal.targetTimeframe == .year && 
-            goal.dueDate >= yearInterval.start && 
+            goal.targetTimeframe == .year &&
+            goal.dueDate >= yearInterval.start &&
             goal.dueDate < yearInterval.end
         }
     }
@@ -792,12 +788,9 @@ struct GoalRow: View {
                         ForEach(goal.linkedTasks, id: \.taskId) { linkedTask in
                             if let task = getTask(from: linkedTask) {
                                 HStack(spacing: 6) {
-                                    // Task completion indicator
                                     Image(systemName: task.status == "completed" ? "checkmark.circle.fill" : "circle")
                                         .font(.caption2)
                                         .foregroundColor(task.status == "completed" ? .green : .secondary)
-
-                                    // Task title
                                     Text(task.title)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -900,137 +893,109 @@ struct AddCategoryCard: View {
     }
 }
 
-// MARK: - Create Goal View
+// MARK: - Create Goal View (3-Step Flow)
 struct CreateGoalView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var goalsManager = GoalsManager.shared
-    
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var authManager = GoogleAuthManager.shared
+
     let editingGoal: GoalData?
     let onDismiss: () -> Void
     let defaultTimeframe: TimelineInterval?
     let defaultDate: Date?
-    
+
+    // Step tracking
+    @State private var currentStep = 1
+    private let totalSteps = 3
+
+    // Step 1: Define the Goal
     @State private var title = ""
     @State private var selectedCategoryId: UUID?
     @State private var selectedTimeframe: GoalTimeframe = .year
     @State private var selectedDate = Date()
+    @State private var notes = ""
+
+    // Step 2: Break Down into Tasks
+    @State private var taskItems: [PendingTask] = []
+
+    // Editing
     @State private var showingDeleteAlert = false
-    
-    // Track original values for change detection
-    private let originalTitle: String
-    private let originalCategoryId: UUID?
-    private let originalTimeframe: GoalTimeframe
-    private let originalDueDate: Date
-    
+
+    struct PendingTask: Identifiable {
+        let id = UUID()
+        var title: String
+        var dueDate: Date
+        var accountKind: GoogleAuthManager.AccountKind = .personal
+        var listId: String = ""
+        var existingTaskId: String? = nil // Non-nil if this is an already-created task
+    }
+
     init(editingGoal: GoalData? = nil, defaultTimeframe: TimelineInterval? = nil, defaultDate: Date? = nil, onDismiss: @escaping () -> Void = {}) {
         self.editingGoal = editingGoal
         self.onDismiss = onDismiss
         self.defaultTimeframe = defaultTimeframe
         self.defaultDate = defaultDate
-        
-        // Store original values
-        self.originalTitle = editingGoal?.title ?? ""
-        self.originalCategoryId = editingGoal?.categoryId
-        self.originalTimeframe = editingGoal?.targetTimeframe ?? .year
-        self.originalDueDate = editingGoal?.dueDate ?? Date()
     }
-    
-    // Check if any changes have been made
-    private var hasChanges: Bool {
-        guard editingGoal != nil else { return false }
-        
-        return title != originalTitle ||
-               selectedCategoryId != originalCategoryId ||
-               selectedTimeframe != originalTimeframe ||
-               !Calendar.current.isDate(calculateDueDate(), inSameDayAs: originalDueDate)
+
+    private var canProceedFromStep1: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedCategoryId != nil
     }
-    
-    // Validate that required fields are filled
+
     private var canSave: Bool {
-        return !title.isEmpty && selectedCategoryId != nil
+        canProceedFromStep1
     }
-    
+
+    private var availableTaskLists: [(list: GoogleTaskList, kind: GoogleAuthManager.AccountKind)] {
+        var result: [(GoogleTaskList, GoogleAuthManager.AccountKind)] = []
+        for list in tasksVM.personalTaskLists {
+            result.append((list, .personal))
+        }
+        for list in tasksVM.professionalTaskLists {
+            result.append((list, .professional))
+        }
+        return result
+    }
+
+    private var defaultListId: String {
+        tasksVM.personalTaskLists.first?.id ?? tasksVM.professionalTaskLists.first?.id ?? ""
+    }
+
+    private var defaultAccountKind: GoogleAuthManager.AccountKind {
+        if !tasksVM.personalTaskLists.isEmpty { return .personal }
+        return .professional
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Goal Details") {
-                    TextField("Add goal description", text: $title)
-                }
-                
-                Section("Category") {
-                    Picker("Category", selection: Binding(
-                        get: { selectedCategoryId },
-                        set: { selectedCategoryId = $0 }
-                    )) {
-                        Text("Select a category").tag(nil as UUID?)
-                        ForEach(goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition }), id: \.id) { category in
-                            Text(category.title).tag(category.id as UUID?)
-                        }
+            VStack(spacing: 0) {
+                // Step indicator
+                HStack(spacing: 4) {
+                    ForEach(1...totalSteps, id: \.self) { step in
+                        Capsule()
+                            .fill(step <= currentStep ? Color.accentColor : Color(.systemGray4))
+                            .frame(height: 4)
                     }
                 }
-                
-                Section("Due Date") {
-                    HStack(alignment: .top, spacing: 8) {
-                        // First Column: Timeframe Selection with Radio Buttons
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Timeframe")
-                                .font(.headline)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach([GoalTimeframe.year, GoalTimeframe.month, GoalTimeframe.week], id: \.self) { timeframe in
-                                    Button(action: {
-                                        selectedTimeframe = timeframe
-                                    }) {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: selectedTimeframe == timeframe ? "largecircle.fill.circle" : "circle")
-                                                .foregroundColor(selectedTimeframe == timeframe ? .accentColor : .secondary)
-                                                .font(.title2)
-                                            
-                                            Text(timeframe.displayName)
-                                                .font(.body)
-                                                .fontWeight(selectedTimeframe == timeframe ? .semibold : .regular)
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        
-                        Divider()
-                        
-                        // Second Column: Date Picker based on selected timeframe
-                        VStack(alignment: .leading, spacing: 8) {
-                            switch selectedTimeframe {
-                            case .year:
-                                YearPickerView(selectedDate: $selectedDate)
-                            case .month:
-                                MonthPickerView(selectedDate: $selectedDate)
-                            case .week:
-                                WeekPickerView(selectedDate: $selectedDate)
-                            }
-                            
-                            Text("Due: \(calculateDueDate().formatted(date: .abbreviated, time: .omitted))")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+                // Step content
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch currentStep {
+                        case 1: step1DefineGoal
+                        case 2: step2BreakDown
+                        case 3: step3Review
+                        default: EmptyView()
                         }
                     }
+                    .padding()
                 }
-                
-                if editingGoal != nil {
-                    Section {
-                        Button(action: {
-                            showingDeleteAlert = true
-                        }) {
-                            HStack {
-                                Spacer()
-                                Text("Delete Goal")
-                                    .foregroundColor(.red)
-                                Spacer()
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+
+                // Navigation
+                stepNavigation
+                    .padding()
             }
             .navigationTitle(editingGoal != nil ? "Edit Goal" : "New Goal")
             .navigationBarTitleDisplayMode(.inline)
@@ -1041,160 +1006,600 @@ struct CreateGoalView: View {
                         dismiss()
                     }
                 }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(editingGoal != nil ? "Save" : "Create") {
-                        saveGoal()
-                    }
-                    .disabled(!canSave || (editingGoal != nil ? !hasChanges : false))
-                    .fontWeight(.semibold)
-                    .foregroundColor((canSave && (editingGoal == nil || hasChanges)) ? .accentColor : .secondary)
-                    .opacity((canSave && (editingGoal == nil || hasChanges)) ? 1.0 : 0.5)
-                }
             }
             .alert("Delete Goal", isPresented: $showingDeleteAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    deleteGoal()
-                }
+                Button("Delete Goal & Tasks", role: .destructive) { deleteGoal() }
             } message: {
-                Text("Are you sure you want to delete '\(title)'? This action cannot be undone.")
+                let taskCount = editingGoal?.linkedTasks.count ?? 0
+                if taskCount > 0 {
+                    Text("This will delete '\(title)' and its \(taskCount) linked task\(taskCount == 1 ? "" : "s") from Google Tasks. This action cannot be undone.")
+                } else {
+                    Text("Are you sure you want to delete '\(title)'? This action cannot be undone.")
+                }
             }
         }
-        .onAppear {
-            populateForm()
+        .onAppear { populateForm() }
+    }
+
+    // MARK: - Step 1: Define the Goal
+
+    private var step1DefineGoal: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Define Your Goal")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Be specific — a clear goal is actionable, measurable, and timebound.")
+                .font(.callout)
+                .foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Goal")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                TextField("e.g. Run a 5K race by September", text: $title, axis: .vertical)
+                    .lineLimit(2...4)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Category")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Picker("Category", selection: Binding(
+                    get: { selectedCategoryId },
+                    set: { selectedCategoryId = $0 }
+                )) {
+                    Text("Select a category").tag(nil as UUID?)
+                    ForEach(goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition }), id: \.id) { category in
+                        Text(category.title).tag(category.id as UUID?)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Due Date")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach([GoalTimeframe.year, GoalTimeframe.month, GoalTimeframe.week], id: \.self) { timeframe in
+                            Button {
+                                selectedTimeframe = timeframe
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: selectedTimeframe == timeframe ? "largecircle.fill.circle" : "circle")
+                                        .foregroundColor(selectedTimeframe == timeframe ? .accentColor : .secondary)
+                                    Text(timeframe.displayName)
+                                        .fontWeight(selectedTimeframe == timeframe ? .semibold : .regular)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        switch selectedTimeframe {
+                        case .year: YearPickerView(selectedDate: $selectedDate)
+                        case .month: MonthPickerView(selectedDate: $selectedDate)
+                        case .week: WeekPickerView(selectedDate: $selectedDate)
+                        }
+                        Text("Due: \(calculateDueDate().formatted(date: .abbreviated, time: .omitted))")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Notes")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("Motivation, context, or anything you want to remember")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("Optional notes...", text: $notes, axis: .vertical)
+                    .lineLimit(2...4)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            if editingGoal != nil {
+                Button(action: { showingDeleteAlert = true }) {
+                    HStack {
+                        Spacer()
+                        Text("Delete Goal")
+                            .foregroundColor(.red)
+                        Spacer()
+                    }
+                }
+                .padding(.top, 8)
+            }
         }
     }
-    
-    
-    private func formatSelectedDate() -> String {
-        let formatter = DateFormatter()
-        switch selectedTimeframe {
-        case .week:
-            formatter.dateFormat = "MMM d yyyy"
-            return "Week of \(formatter.string(from: selectedDate))"
-        case .month:
-            formatter.dateFormat = "MMMM yyyy"
-            return formatter.string(from: selectedDate)
-        case .year:
-            formatter.dateFormat = "yyyy"
-            return formatter.string(from: selectedDate)
+
+    // MARK: - Step 2: Break Down into Tasks
+
+    private var step2BreakDown: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Break It Down")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("What tasks do you need to complete to achieve this goal? These will be created as Google Tasks you can schedule in your day views.")
+                .font(.callout)
+                .foregroundColor(.secondary)
+
+            ForEach($taskItems) { $item in
+                let isExisting = item.existingTaskId != nil
+                if isExisting {
+                    existingTaskRow(item)
+                } else {
+                    newTaskRow($item)
+                }
+            }
+
+            Button {
+                addTaskItem()
+            } label: {
+                Label("Add Task", systemImage: "plus.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
+            .buttonStyle(.plain)
+
+            if taskItems.isEmpty {
+                Text("You can skip this step and add tasks later.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
+            }
         }
     }
-    
+
+    // MARK: - Task Row Helpers
+
+    private func existingTaskRow(_ item: PendingTask) -> some View {
+        let task = lookupTask(item)
+        let isCompleted = task?.isCompleted ?? false
+        let listName = listNameForTask(item)
+
+        return HStack(spacing: 8) {
+            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isCompleted ? .green : .secondary)
+                .font(.body)
+
+            Text(item.title)
+                .font(.body)
+                .strikethrough(isCompleted)
+                .foregroundColor(isCompleted ? .secondary : .primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if !listName.isEmpty {
+                Text(listName)
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.15))
+                    .foregroundColor(.blue)
+                    .cornerRadius(4)
+            }
+
+            Text(item.dueDate.formatted(date: .abbreviated, time: .omitted))
+                .font(.caption2)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(item.dueDate < Date() && !isCompleted ? Color.red.opacity(0.15) : Color.green.opacity(0.15))
+                .foregroundColor(item.dueDate < Date() && !isCompleted ? .red : .green)
+                .cornerRadius(4)
+
+            Button {
+                taskItems.removeAll { $0.id == item.id }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+    }
+
+    private func newTaskRow(_ item: Binding<PendingTask>) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "circle")
+                    .foregroundColor(.secondary)
+                    .font(.body)
+                TextField("Task name", text: item.title)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    taskItems.removeAll { $0.id == item.wrappedValue.id }
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundColor(.red)
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 8) {
+                DatePicker("Due", selection: item.dueDate, in: ...calculateDueDate(), displayedComponents: .date)
+                    .environment(\.calendar, Calendar.mondayFirst)
+                    .font(.caption)
+
+                if availableTaskLists.count > 1 {
+                    Picker("List", selection: Binding(
+                        get: { "\(item.wrappedValue.accountKind == .personal ? "p" : "w"):\(item.wrappedValue.listId)" },
+                        set: { newValue in
+                            let parts = newValue.split(separator: ":")
+                            if parts.count == 2 {
+                                item.wrappedValue.accountKind = parts[0] == "p" ? .personal : .professional
+                                item.wrappedValue.listId = String(parts[1])
+                            }
+                        }
+                    )) {
+                        ForEach(availableTaskLists, id: \.list.id) { entry in
+                            let prefix = entry.kind == .personal ? "Personal" : "Work"
+                            Text("\(prefix): \(entry.list.title)")
+                                .tag("\(entry.kind == .personal ? "p" : "w"):\(entry.list.id)")
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .font(.caption)
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+    }
+
+    private func lookupTask(_ item: PendingTask) -> GoogleTask? {
+        guard let taskId = item.existingTaskId else { return nil }
+        let tasksDict = item.accountKind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        return tasksDict[item.listId]?.first(where: { $0.id == taskId })
+    }
+
+    private func listNameForTask(_ item: PendingTask) -> String {
+        let lists = item.accountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        return lists.first(where: { $0.id == item.listId })?.title ?? ""
+    }
+
+    // MARK: - Step 3: Review & Commit
+
+    private var step3Review: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Review & Commit")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            VStack(alignment: .leading, spacing: 12) {
+                summaryRow(label: "Goal", value: title)
+
+                if let catId = selectedCategoryId,
+                   let cat = goalsManager.categories.first(where: { $0.id == catId }) {
+                    summaryRow(label: "Category", value: cat.title)
+                }
+
+                summaryRow(label: "Due", value: calculateDueDate().formatted(date: .abbreviated, time: .omitted))
+
+                if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    summaryRow(label: "Notes", value: notes)
+                }
+
+                let filledTasks = taskItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                if !filledTasks.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Tasks (\(filledTasks.count))")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        ForEach(filledTasks) { task in
+                            HStack(spacing: 6) {
+                                Image(systemName: "circle")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(task.title)
+                                    .font(.body)
+                                Spacer()
+                                Text(task.dueDate.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(10)
+        }
+    }
+
+    private func summaryRow(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.body)
+        }
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Step Navigation
+
+    private var stepNavigation: some View {
+        HStack {
+            if currentStep > 1 {
+                Button {
+                    withAnimation { currentStep -= 1 }
+                } label: {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                }
+            }
+
+            Spacer()
+
+            if currentStep < totalSteps {
+                if currentStep == 2 {
+                    Button("Skip") {
+                        withAnimation { currentStep += 1 }
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.trailing, 8)
+                }
+
+                Button {
+                    withAnimation { currentStep += 1 }
+                } label: {
+                    HStack {
+                        Text("Next")
+                        Image(systemName: "chevron.right")
+                    }
+                    .fontWeight(.semibold)
+                }
+                .disabled(currentStep == 1 && !canProceedFromStep1)
+            } else {
+                Button {
+                    saveGoal()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isSaving {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.8)
+                        }
+                        Text(isSaving ? "Saving..." : (editingGoal != nil ? "Save Goal" : "Create Goal"))
+                    }
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                    .background((canSave && !isSaving) ? Color.accentColor : Color.gray)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .disabled(!canSave || isSaving)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func addTaskItem() {
+        let dueDate = calculateDueDate()
+        taskItems.append(PendingTask(
+            title: "",
+            dueDate: dueDate,
+            accountKind: defaultAccountKind,
+            listId: defaultListId
+        ))
+    }
+
     private func calculateDueDate() -> Date {
-        let calendar = Calendar.current
-        
+        let calendar = Calendar.mondayFirst
         switch selectedTimeframe {
         case .week:
-            // End of the selected week (Sunday)
-            let weekday = calendar.component(.weekday, from: selectedDate)
-            let daysUntilSunday = (7 - weekday + 1) % 7
-            return calendar.date(byAdding: .day, value: daysUntilSunday, to: selectedDate) ?? selectedDate
-            
-        case .month:
-            // End of the selected month
-            if let endOfMonth = calendar.dateInterval(of: .month, for: selectedDate)?.end {
-                return calendar.date(byAdding: .day, value: -1, to: endOfMonth) ?? selectedDate
+            // End of Monday-first week = Sunday
+            if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: selectedDate) {
+                return calendar.date(byAdding: .day, value: -1, to: weekInterval.end) ?? selectedDate
             }
             return selectedDate
-            
+        case .month:
+            if let end = calendar.dateInterval(of: .month, for: selectedDate)?.end {
+                return calendar.date(byAdding: .day, value: -1, to: end) ?? selectedDate
+            }
+            return selectedDate
         case .year:
-            // End of the selected year
-            if let endOfYear = calendar.dateInterval(of: .year, for: selectedDate)?.end {
-                return calendar.date(byAdding: .day, value: -1, to: endOfYear) ?? selectedDate
+            if let end = calendar.dateInterval(of: .year, for: selectedDate)?.end {
+                return calendar.date(byAdding: .day, value: -1, to: end) ?? selectedDate
             }
             return selectedDate
         }
     }
-    
+
     private func populateForm() {
         if let goal = editingGoal {
             title = goal.title
             selectedCategoryId = goal.categoryId
             selectedTimeframe = goal.targetTimeframe
             selectedDate = goal.dueDate
+            notes = goal.extendedData?.notes ?? ""
+            // Populate linked tasks as PendingTask items for editing
+            for linked in goal.linkedTasks {
+                let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
+                    var dueDate = Date()
+                    if let dueDateStr = task.due {
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+                        formatter.locale = Locale(identifier: "en_US_POSIX")
+                        if let parsed = formatter.date(from: dueDateStr) { dueDate = parsed }
+                    }
+                    taskItems.append(PendingTask(
+                        title: task.title,
+                        dueDate: dueDate,
+                        accountKind: linked.accountKindEnum,
+                        listId: linked.listId,
+                        existingTaskId: linked.taskId
+                    ))
+                }
+            }
         } else {
-            // Set defaults for new goals
             selectedCategoryId = goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition }).first?.id
-            
-            // Use defaultTimeframe and defaultDate if provided
+
             if let defaultInterval = defaultTimeframe, let date = defaultDate {
                 let calendar = Calendar.mondayFirst
-                
-                // Map TimelineInterval to GoalTimeframe and calculate end date
                 switch defaultInterval {
-                case .day:
-                    // If "All Goals" view, default to weekly with current week
+                case .day, .week:
                     selectedTimeframe = .week
-                    if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date) {
-                        selectedDate = calendar.date(byAdding: .day, value: -1, to: weekInterval.end) ?? date
-                    } else {
-                        selectedDate = date
-                    }
-                case .week:
-                    selectedTimeframe = .week
-                    if let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date) {
-                        selectedDate = calendar.date(byAdding: .day, value: -1, to: weekInterval.end) ?? date
-                    } else {
-                        selectedDate = date
-                    }
+                    if let i = calendar.dateInterval(of: .weekOfYear, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: i.end) ?? date
+                    } else { selectedDate = date }
                 case .month:
                     selectedTimeframe = .month
-                    if let monthInterval = calendar.dateInterval(of: .month, for: date) {
-                        selectedDate = calendar.date(byAdding: .day, value: -1, to: monthInterval.end) ?? date
-                    } else {
-                        selectedDate = date
-                    }
+                    if let i = calendar.dateInterval(of: .month, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: i.end) ?? date
+                    } else { selectedDate = date }
                 case .year:
                     selectedTimeframe = .year
-                    if let yearInterval = calendar.dateInterval(of: .year, for: date) {
-                        selectedDate = calendar.date(byAdding: .day, value: -1, to: yearInterval.end) ?? date
-                    } else {
-                        selectedDate = date
-                    }
+                    if let i = calendar.dateInterval(of: .year, for: date) {
+                        selectedDate = calendar.date(byAdding: .day, value: -1, to: i.end) ?? date
+                    } else { selectedDate = date }
                 }
             } else {
-                // Fallback to old defaults
                 selectedTimeframe = .year
                 selectedDate = Date()
             }
         }
     }
-    
+
+    @State private var isSaving = false
+
     private func saveGoal() {
-        guard let categoryId = selectedCategoryId else { return }
-        
-        if let existingGoal = editingGoal {
-            // Update existing goal
-            var updatedGoal = existingGoal
-            updatedGoal.title = title
-            updatedGoal.categoryId = categoryId
-            updatedGoal.targetTimeframe = selectedTimeframe
-            updatedGoal.dueDate = calculateDueDate()
-            updatedGoal.updatedAt = Date()
-            
-            goalsManager.updateGoal(updatedGoal)
-        } else {
-            // Create new goal
-            let newGoal = GoalData(
-                title: title,
-                description: "",
-                successMetric: "",
-                categoryId: categoryId,
-                targetTimeframe: selectedTimeframe,
-                dueDate: calculateDueDate()
-            )
-            
-            goalsManager.addGoal(newGoal)
+        guard let categoryId = selectedCategoryId, !isSaving else { return }
+        isSaving = true
+
+        let extData = GoalExtendedData(
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+
+        let dueDate = calculateDueDate()
+        let goalTitle = title
+        // Separate existing tasks (already created) from new ones
+        let filledTasks = taskItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let newTasks = filledTasks.filter { $0.existingTaskId == nil }
+        let existingTasks = filledTasks.filter { $0.existingTaskId != nil }
+        let defListId = defaultListId
+
+        Task {
+            // Keep existing linked tasks
+            var linkedTasks: [LinkedTaskData] = existingTasks.map { item in
+                LinkedTaskData(
+                    taskId: item.existingTaskId!,
+                    listId: item.listId,
+                    accountKind: item.accountKind
+                )
+            }
+
+            // Create only new tasks
+            for item in newTasks {
+                let listId = item.listId.isEmpty ? defListId : item.listId
+                let kind = item.accountKind
+
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                let dueDateStr = formatter.string(from: item.dueDate)
+
+                let tempTask = GoogleTask(
+                    id: UUID().uuidString,
+                    title: item.title,
+                    notes: "Goal: \(goalTitle)",
+                    status: "needsAction",
+                    due: dueDateStr
+                )
+
+                do {
+                    let createdTask = try await tasksVM.createTaskOnServer(tempTask, in: listId, for: kind)
+                    await MainActor.run {
+                        switch kind {
+                        case .personal:
+                            if tasksVM.personalTasks[listId] != nil {
+                                tasksVM.personalTasks[listId]?.append(createdTask)
+                            } else {
+                                tasksVM.personalTasks[listId] = [createdTask]
+                            }
+                        case .professional:
+                            if tasksVM.professionalTasks[listId] != nil {
+                                tasksVM.professionalTasks[listId]?.append(createdTask)
+                            } else {
+                                tasksVM.professionalTasks[listId] = [createdTask]
+                            }
+                        }
+                    }
+                    linkedTasks.append(LinkedTaskData(
+                        taskId: createdTask.id,
+                        listId: listId,
+                        accountKind: kind
+                    ))
+                } catch {
+                    devLog("Failed to create task '\(item.title)': \(error)", level: .error, category: .tasks)
+                }
+            }
+
+            await MainActor.run {
+                if let existingGoal = editingGoal {
+                    var updatedGoal = existingGoal
+                    updatedGoal.title = title
+                    updatedGoal.categoryId = categoryId
+                    updatedGoal.targetTimeframe = selectedTimeframe
+                    updatedGoal.dueDate = dueDate
+                    updatedGoal.updatedAt = Date()
+                    updatedGoal.extendedData = extData
+                    updatedGoal.linkedTasks = linkedTasks
+                    goalsManager.updateGoal(updatedGoal)
+                } else {
+                    devLog("Creating goal '\(title)' with \(linkedTasks.count) linked tasks: \(linkedTasks.map { $0.taskId })", level: .info, category: .goals)
+                    let newGoal = GoalData(
+                        title: title,
+                        categoryId: categoryId,
+                        targetTimeframe: selectedTimeframe,
+                        dueDate: dueDate,
+                        linkedTasks: linkedTasks,
+                        extendedData: extData
+                    )
+                    goalsManager.addGoal(newGoal)
+                }
+
+                onDismiss()
+                dismiss()
+            }
         }
-        
-        onDismiss()
-        dismiss()
     }
-    
+
     private func deleteGoal() {
         if let goal = editingGoal {
+            // Delete linked Google Tasks
+            for linked in goal.linkedTasks {
+                let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
+                    Task {
+                        await tasksVM.deleteTask(task, from: linked.listId, for: linked.accountKindEnum)
+                    }
+                }
+            }
             goalsManager.deleteGoal(goal.id)
         }
         onDismiss()
@@ -1248,6 +1653,110 @@ struct CreateCategoryView: View {
     private func saveCategory() {
         goalsManager.addCategory(title: title, displayPosition: selectedPosition)
         dismiss()
+    }
+}
+
+// MARK: - Goal Detail Sheet
+struct GoalDetailSheet: View {
+    let goal: GoalData
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+
+    private var category: GoalCategoryData? {
+        goalsManager.getCategoryById(goal.categoryId)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Title
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Goal")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text(goal.title)
+                            .font(.title3)
+                            .fontWeight(.bold)
+                    }
+
+                    // Category, Due, Status
+                    HStack(spacing: 12) {
+                        if let cat = category {
+                            tagChip(cat.title, color: .blue)
+                        }
+                        tagChip(goal.dueDate.formatted(date: .abbreviated, time: .omitted),
+                                color: goal.isOverdue ? .red : .green)
+                        tagChip(goal.isCompleted ? "Done" : "In Progress",
+                                color: goal.isCompleted ? .green : .orange)
+                    }
+
+                    // Notes
+                    if let ext = goal.extendedData, !ext.notes.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Notes")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Text(ext.notes)
+                                .font(.body)
+                        }
+                    }
+
+                    // Linked Tasks
+                    if !goal.linkedTasks.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Tasks")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            ForEach(goal.linkedTasks, id: \.taskId) { linked in
+                                let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                                if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(task.isCompleted ? .green : .secondary)
+                                            .font(.body)
+                                        Text(task.title)
+                                            .font(.body)
+                                            .strikethrough(task.isCompleted)
+                                        Spacer()
+                                        if let due = task.due {
+                                            Text(due.prefix(10))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(8)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 20)
+                }
+                .padding()
+            }
+            .navigationTitle("Goal Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func tagChip(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.15))
+            .foregroundColor(color)
+            .cornerRadius(6)
     }
 }
 
@@ -1452,135 +1961,6 @@ struct WeekPickerView: View {
         let startString = formatter.string(from: startDate)
         let endString = formatter.string(from: endDate)
         return "\(startString) - \(endString)"
-    }
-}
-
-// MARK: - Goal Detail Sheet
-struct GoalDetailSheet: View {
-    let goal: GoalData
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject private var goalsManager = GoalsManager.shared
-    
-    private var category: GoalCategoryData? {
-        goalsManager.getCategoryById(goal.categoryId)
-    }
-    
-    private var dueDateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter
-    }
-    
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Title
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Title")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text(goal.title)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                    }
-                    
-                    // Description
-                    if !goal.description.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Description")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            Text(goal.description)
-                                .font(.body)
-                        }
-                    }
-                    
-                    // Success Metric
-                    if !goal.successMetric.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Success Metric")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            Text(goal.successMetric)
-                                .font(.body)
-                        }
-                    }
-                    
-                    // Category
-                    if let category = category {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Category")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                            Text(category.title)
-                                .font(.body)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color(.systemGray5))
-                                .cornerRadius(8)
-                        }
-                    }
-                    
-                    // Timeframe
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Timeframe")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text(goal.targetTimeframe.displayName)
-                            .font(.body)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(.systemGray5))
-                            .cornerRadius(8)
-                    }
-                    
-                    // Due Date
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Due Date")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text(dueDateFormatter.string(from: goal.dueDate))
-                            .font(.body)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(goal.isCompleted ? Color.green.opacity(0.2) : Color.blue.opacity(0.2))
-                            .cornerRadius(8)
-                    }
-                    
-                    // Status
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Status")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        HStack {
-                            Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(goal.isCompleted ? .green : .secondary)
-                            Text(goal.isCompleted ? "Completed" : "In Progress")
-                                .font(.body)
-                                .fontWeight(goal.isCompleted ? .semibold : .regular)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(goal.isCompleted ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
-                    Spacer(minLength: 20)
-                }
-                .padding()
-            }
-            .navigationTitle("Goal Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
     }
 }
 
