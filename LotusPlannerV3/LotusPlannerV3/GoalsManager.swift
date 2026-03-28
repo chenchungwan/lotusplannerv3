@@ -92,7 +92,10 @@ class GoalsManager: ObservableObject {
                    let jsonData = linkedTasksJSON.data(using: .utf8) {
                     do {
                         linkedTasks = try JSONDecoder().decode([LinkedTaskData].self, from: jsonData)
-                    } catch { }
+                        devLog("🎯 Goal '\(entity.title ?? "")' loaded with \(linkedTasks.count) linked tasks", level: .info, category: .goals)
+                    } catch {
+                        devLog("🎯 Failed to decode linkedTasksJSON for '\(entity.title ?? "")': \(error)", level: .error, category: .goals)
+                    }
                 }
 
                 // Deserialize extended data from JSON
@@ -856,22 +859,39 @@ class GoalsManager: ObservableObject {
     }
     
     private func deduplicatedGoals(from goals: [GoalData]) -> [GoalData] {
+        // First deduplicate by UUID (primary key)
+        var uniqueById: [UUID: GoalData] = [:]
+        for goal in goals {
+            if let existing = uniqueById[goal.id] {
+                // Keep the one with more linked tasks, or later updatedAt
+                if goal.linkedTasks.count > existing.linkedTasks.count ||
+                   (goal.linkedTasks.count == existing.linkedTasks.count && goal.updatedAt > existing.updatedAt) {
+                    uniqueById[goal.id] = goal
+                }
+            } else {
+                uniqueById[goal.id] = goal
+            }
+        }
+
+        // Then deduplicate by content key (handles CloudKit duplicates with different UUIDs)
         var uniqueByKey: [String: GoalData] = [:]
         let calendar = Calendar.current
-        
-        for goal in goals {
+
+        for goal in uniqueById.values {
             let key = goalDeduplicationKey(for: goal, calendar: calendar)
             guard !key.isEmpty else { continue }
-            
+
             if let existing = uniqueByKey[key] {
-                if goal.updatedAt > existing.updatedAt {
+                // Prefer the one with more linked tasks, then later updatedAt
+                if goal.linkedTasks.count > existing.linkedTasks.count ||
+                   (goal.linkedTasks.count == existing.linkedTasks.count && goal.updatedAt > existing.updatedAt) {
                     uniqueByKey[key] = goal
                 }
             } else {
                 uniqueByKey[key] = goal
             }
         }
-        
+
         return Array(uniqueByKey.values)
             .sorted {
                 if $0.categoryId == $1.categoryId {

@@ -1391,38 +1391,39 @@ struct SettingsView: View {
                     Text("Goal features are still in beta. We're actively improving them.")
                 }
 
-                Section {
-                    Toggle(isOn: Binding(
-                        get: { !appPrefs.hideBookView },
-                        set: { appPrefs.updateHideBookView(!$0) }
-                    )) {
-                        HStack {
-                            Image(systemName: "book.pages")
-                                .foregroundColor(appPrefs.hideBookView ? .secondary : .accentColor)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Enable Book View")
-                                    .font(.body)
-                                Text("Show Book View option in navigation menu")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                } header: {
-                    HStack(spacing: 8) {
-                        Text("Book View")
-                        Text("Beta")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                } footer: {
-                    Text("Book View lets you swipe through your planner like a book. This feature is still in beta.")
-                }
+                // Book View section - temporarily hidden
+//                Section {
+//                    Toggle(isOn: Binding(
+//                        get: { !appPrefs.hideBookView },
+//                        set: { appPrefs.updateHideBookView(!$0) }
+//                    )) {
+//                        HStack {
+//                            Image(systemName: "book.pages")
+//                                .foregroundColor(appPrefs.hideBookView ? .secondary : .accentColor)
+//                            VStack(alignment: .leading, spacing: 2) {
+//                                Text("Enable Book View")
+//                                    .font(.body)
+//                                Text("Show Book View option in navigation menu")
+//                                    .font(.caption)
+//                                    .foregroundColor(.secondary)
+//                            }
+//                        }
+//                    }
+//                } header: {
+//                    HStack(spacing: 8) {
+//                        Text("Book View")
+//                        Text("Beta")
+//                            .font(.caption2)
+//                            .fontWeight(.semibold)
+//                            .foregroundColor(.white)
+//                            .padding(.horizontal, 6)
+//                            .padding(.vertical, 2)
+//                            .background(Color.orange)
+//                            .clipShape(RoundedRectangle(cornerRadius: 4))
+//                    }
+//                } footer: {
+//                    Text("Book View lets you swipe through your planner like a book. This feature is still in beta.")
+//                }
 
                 Section("App Preferences") {
                     HStack {

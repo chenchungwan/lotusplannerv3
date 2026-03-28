@@ -905,22 +905,17 @@ struct CreateGoalView: View {
     let defaultTimeframe: TimelineInterval?
     let defaultDate: Date?
 
-    // Step tracking
-    @State private var currentStep = 1
-    private let totalSteps = 3
-
-    // Step 1: Define the Goal
     @State private var title = ""
     @State private var selectedCategoryId: UUID?
     @State private var selectedTimeframe: GoalTimeframe = .year
     @State private var selectedDate = Date()
     @State private var notes = ""
 
-    // Step 2: Break Down into Tasks
     @State private var taskItems: [PendingTask] = []
 
     // Editing
     @State private var showingDeleteAlert = false
+    @State private var showingTaskPicker = false
 
     struct PendingTask: Identifiable {
         let id = UUID()
@@ -938,12 +933,8 @@ struct CreateGoalView: View {
         self.defaultDate = defaultDate
     }
 
-    private var canProceedFromStep1: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedCategoryId != nil
-    }
-
     private var canSave: Bool {
-        canProceedFromStep1
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedCategoryId != nil
     }
 
     private var availableTaskLists: [(list: GoogleTaskList, kind: GoogleAuthManager.AccountKind)] {
@@ -968,34 +959,28 @@ struct CreateGoalView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Step indicator
-                HStack(spacing: 4) {
-                    ForEach(1...totalSteps, id: \.self) { step in
-                        Capsule()
-                            .fill(step <= currentStep ? Color.accentColor : Color(.systemGray4))
-                            .frame(height: 4)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Goal Details
+                    goalDetailsSection
 
-                // Step content
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        switch currentStep {
-                        case 1: step1DefineGoal
-                        case 2: step2BreakDown
-                        case 3: step3Review
-                        default: EmptyView()
+                    // Tasks
+                    tasksSection
+
+                    // Delete
+                    if editingGoal != nil {
+                        Button(action: { showingDeleteAlert = true }) {
+                            HStack {
+                                Spacer()
+                                Text("Delete Goal")
+                                    .foregroundColor(.red)
+                                Spacer()
+                            }
                         }
+                        .padding(.top, 8)
                     }
-                    .padding()
                 }
-
-                // Navigation
-                stepNavigation
-                    .padding()
+                .padding()
             }
             .navigationTitle(editingGoal != nil ? "Edit Goal" : "New Goal")
             .navigationBarTitleDisplayMode(.inline)
@@ -1005,6 +990,20 @@ struct CreateGoalView: View {
                         onDismiss()
                         dismiss()
                     }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        saveGoal()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Text(editingGoal != nil ? "Save" : "Create")
+                                .fontWeight(.semibold)
+                        }
+                    }
+                    .disabled(!canSave || isSaving)
                 }
             }
             .alert("Delete Goal", isPresented: $showingDeleteAlert) {
@@ -1022,18 +1021,10 @@ struct CreateGoalView: View {
         .onAppear { populateForm() }
     }
 
-    // MARK: - Step 1: Define the Goal
+    // MARK: - Goal Details Section
 
-    private var step1DefineGoal: some View {
+    private var goalDetailsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Define Your Goal")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("Be specific — a clear goal is actionable, measurable, and timebound.")
-                .font(.callout)
-                .foregroundColor(.secondary)
-
             VStack(alignment: .leading, spacing: 8) {
                 Text("Goal")
                     .font(.subheadline)
@@ -1083,12 +1074,17 @@ struct CreateGoalView: View {
 
                     Divider()
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        switch selectedTimeframe {
-                        case .year: YearPickerView(selectedDate: $selectedDate)
-                        case .month: MonthPickerView(selectedDate: $selectedDate)
-                        case .week: WeekPickerView(selectedDate: $selectedDate)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Group {
+                            switch selectedTimeframe {
+                            case .year: YearPickerView(selectedDate: $selectedDate)
+                            case .month: MonthPickerView(selectedDate: $selectedDate)
+                            case .week: WeekPickerView(selectedDate: $selectedDate)
+                            }
                         }
+                        .frame(height: 100)
+                        .clipped()
+
                         Text("Due: \(calculateDueDate().formatted(date: .abbreviated, time: .omitted))")
                             .foregroundColor(.secondary)
                             .font(.caption)
@@ -1100,63 +1096,70 @@ struct CreateGoalView: View {
                 Text("Notes")
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                Text("Motivation, context, or anything you want to remember")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
                 TextField("Optional notes...", text: $notes, axis: .vertical)
                     .lineLimit(2...4)
                     .textFieldStyle(.roundedBorder)
             }
-
-            if editingGoal != nil {
-                Button(action: { showingDeleteAlert = true }) {
-                    HStack {
-                        Spacer()
-                        Text("Delete Goal")
-                            .foregroundColor(.red)
-                        Spacer()
-                    }
-                }
-                .padding(.top, 8)
-            }
         }
     }
 
-    // MARK: - Step 2: Break Down into Tasks
+    // MARK: - Tasks Section
 
-    private var step2BreakDown: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Break It Down")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Text("What tasks do you need to complete to achieve this goal? These will be created as Google Tasks you can schedule in your day views.")
-                .font(.callout)
-                .foregroundColor(.secondary)
+    private var tasksSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Tasks")
+                .font(.subheadline)
+                .fontWeight(.semibold)
 
             ForEach($taskItems) { $item in
-                let isExisting = item.existingTaskId != nil
-                if isExisting {
+                if item.existingTaskId != nil {
                     existingTaskRow(item)
                 } else {
                     newTaskRow($item)
                 }
             }
 
-            Button {
-                addTaskItem()
-            } label: {
-                Label("Add Task", systemImage: "plus.circle.fill")
-                    .foregroundColor(.accentColor)
-            }
-            .buttonStyle(.plain)
+            HStack(spacing: 16) {
+                Button {
+                    addTaskItem()
+                } label: {
+                    Label("New Task", systemImage: "plus.circle.fill")
+                        .font(.callout)
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
 
-            if taskItems.isEmpty {
-                Text("You can skip this step and add tasks later.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.top, 4)
+                Button {
+                    showingTaskPicker = true
+                } label: {
+                    Label("Link Existing", systemImage: "link.circle.fill")
+                        .font(.callout)
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
             }
+        }
+        .sheet(isPresented: $showingTaskPicker) {
+            TaskPickerSheet(
+                tasksVM: tasksVM,
+                alreadyLinkedIds: Set(taskItems.compactMap { $0.existingTaskId }),
+                onSelect: { task, listId, kind in
+                    var dueDate = Date()
+                    if let dueDateStr = task.due {
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+                        formatter.locale = Locale(identifier: "en_US_POSIX")
+                        if let parsed = formatter.date(from: dueDateStr) { dueDate = parsed }
+                    }
+                    taskItems.append(PendingTask(
+                        title: task.title,
+                        dueDate: dueDate,
+                        accountKind: kind,
+                        listId: listId,
+                        existingTaskId: task.id
+                    ))
+                }
+            )
         }
     }
 
@@ -1271,128 +1274,6 @@ struct CreateGoalView: View {
     private func listNameForTask(_ item: PendingTask) -> String {
         let lists = item.accountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
         return lists.first(where: { $0.id == item.listId })?.title ?? ""
-    }
-
-    // MARK: - Step 3: Review & Commit
-
-    private var step3Review: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Review & Commit")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            VStack(alignment: .leading, spacing: 12) {
-                summaryRow(label: "Goal", value: title)
-
-                if let catId = selectedCategoryId,
-                   let cat = goalsManager.categories.first(where: { $0.id == catId }) {
-                    summaryRow(label: "Category", value: cat.title)
-                }
-
-                summaryRow(label: "Due", value: calculateDueDate().formatted(date: .abbreviated, time: .omitted))
-
-                if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    summaryRow(label: "Notes", value: notes)
-                }
-
-                let filledTasks = taskItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                if !filledTasks.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Tasks (\(filledTasks.count))")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        ForEach(filledTasks) { task in
-                            HStack(spacing: 6) {
-                                Image(systemName: "circle")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Text(task.title)
-                                    .font(.body)
-                                Spacer()
-                                Text(task.dueDate.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(10)
-        }
-    }
-
-    private func summaryRow(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-            Text(value)
-                .font(.body)
-        }
-        .padding(.bottom, 4)
-    }
-
-    // MARK: - Step Navigation
-
-    private var stepNavigation: some View {
-        HStack {
-            if currentStep > 1 {
-                Button {
-                    withAnimation { currentStep -= 1 }
-                } label: {
-                    HStack {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                }
-            }
-
-            Spacer()
-
-            if currentStep < totalSteps {
-                if currentStep == 2 {
-                    Button("Skip") {
-                        withAnimation { currentStep += 1 }
-                    }
-                    .foregroundColor(.secondary)
-                    .padding(.trailing, 8)
-                }
-
-                Button {
-                    withAnimation { currentStep += 1 }
-                } label: {
-                    HStack {
-                        Text("Next")
-                        Image(systemName: "chevron.right")
-                    }
-                    .fontWeight(.semibold)
-                }
-                .disabled(currentStep == 1 && !canProceedFromStep1)
-            } else {
-                Button {
-                    saveGoal()
-                } label: {
-                    HStack(spacing: 6) {
-                        if isSaving {
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(0.8)
-                        }
-                        Text(isSaving ? "Saving..." : (editingGoal != nil ? "Save Goal" : "Create Goal"))
-                    }
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background((canSave && !isSaving) ? Color.accentColor : Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                }
-                .disabled(!canSave || isSaving)
-            }
-        }
     }
 
     // MARK: - Helpers
@@ -1604,6 +1485,212 @@ struct CreateGoalView: View {
         }
         onDismiss()
         dismiss()
+    }
+}
+
+// MARK: - Task Picker Sheet (3-column: Account → List → Tasks)
+struct TaskPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var tasksVM: TasksViewModel
+    let alreadyLinkedIds: Set<String>
+    let onSelect: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
+
+    @State private var selectedAccount: GoogleAuthManager.AccountKind? = nil
+    @State private var selectedListId: String? = nil
+
+    private var availableAccounts: [GoogleAuthManager.AccountKind] {
+        var accounts: [GoogleAuthManager.AccountKind] = []
+        if !tasksVM.personalTaskLists.isEmpty { accounts.append(.personal) }
+        if !tasksVM.professionalTaskLists.isEmpty { accounts.append(.professional) }
+        return accounts
+    }
+
+    private var listsForAccount: [GoogleTaskList] {
+        guard let account = selectedAccount else { return [] }
+        return account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+    }
+
+    private var tasksForList: [GoogleTask] {
+        guard let account = selectedAccount, let listId = selectedListId else { return [] }
+        let dict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        return (dict[listId] ?? []).filter { !alreadyLinkedIds.contains($0.id) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            HStack(spacing: 0) {
+                // Column 1: Accounts
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Account")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+
+                    ScrollView {
+                        VStack(spacing: 2) {
+                            ForEach(availableAccounts, id: \.self) { account in
+                                Button {
+                                    selectedAccount = account
+                                    selectedListId = nil
+                                } label: {
+                                    HStack {
+                                        Image(systemName: account == .personal ? "person.fill" : "briefcase.fill")
+                                            .font(.caption)
+                                        Text(account == .personal ? "Personal" : "Work")
+                                            .font(.callout)
+                                        Spacer()
+                                        if selectedAccount == account {
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(selectedAccount == account ? Color.accentColor.opacity(0.1) : Color.clear)
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                }
+                .frame(minWidth: 120, maxWidth: 140)
+                .background(Color(.systemGray6))
+
+                Divider()
+
+                // Column 2: Lists
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("List")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+
+                    if selectedAccount == nil {
+                        Spacer()
+                        Text("Select an account")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 2) {
+                                ForEach(listsForAccount) { list in
+                                    Button {
+                                        selectedListId = list.id
+                                    } label: {
+                                        HStack {
+                                            Text(list.title)
+                                                .font(.callout)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            if selectedListId == list.id {
+                                                Image(systemName: "chevron.right")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .background(selectedListId == list.id ? Color.accentColor.opacity(0.1) : Color.clear)
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                }
+                .frame(minWidth: 140, maxWidth: 180)
+                .background(Color(.systemGray6).opacity(0.5))
+
+                Divider()
+
+                // Column 3: Tasks
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Tasks")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+
+                    if selectedListId == nil {
+                        Spacer()
+                        Text("Select a list")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                    } else if tasksForList.isEmpty {
+                        Spacer()
+                        Text("No tasks available")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 2) {
+                                ForEach(tasksForList) { task in
+                                    Button {
+                                        onSelect(task, selectedListId!, selectedAccount!)
+                                        dismiss()
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                                .foregroundColor(task.isCompleted ? .green : .secondary)
+                                                .font(.caption)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(task.title)
+                                                    .font(.callout)
+                                                    .foregroundColor(task.isCompleted ? .secondary : .primary)
+                                                    .strikethrough(task.isCompleted)
+                                                    .lineLimit(2)
+                                                if let due = task.due {
+                                                    Text(String(due.prefix(10)))
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 8)
+                                        .background(Color(.systemBackground))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .navigationTitle("Link Existing Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .onAppear {
+            // Auto-select first account
+            if let first = availableAccounts.first {
+                selectedAccount = first
+            }
+        }
     }
 }
 
