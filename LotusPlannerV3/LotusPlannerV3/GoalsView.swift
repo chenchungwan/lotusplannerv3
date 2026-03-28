@@ -977,6 +977,16 @@ struct CreateGoalView: View {
                     // Tasks
                     tasksSection
 
+                    // Notes
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Notes")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        TextField("Optional notes...", text: $notes, axis: .vertical)
+                            .lineLimit(2...4)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
                     // Delete
                     if editingGoal != nil {
                         Button(action: { showingDeleteAlert = true }) {
@@ -1102,14 +1112,6 @@ struct CreateGoalView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Notes")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                TextField("Optional notes...", text: $notes, axis: .vertical)
-                    .lineLimit(2...4)
-                    .textFieldStyle(.roundedBorder)
-            }
         }
     }
 
@@ -1478,17 +1480,23 @@ struct CreateGoalView: View {
 
                 do {
                     let createdTask = try await tasksVM.createTaskOnServer(tempTask, in: listId, for: kind)
+                    // Add to local state properly
                     await MainActor.run {
                         switch kind {
                         case .personal:
                             if tasksVM.personalTasks[listId] != nil {
-                                tasksVM.personalTasks[listId]?.append(createdTask)
+                                // Avoid duplicate — check if already present
+                                if !tasksVM.personalTasks[listId]!.contains(where: { $0.id == createdTask.id }) {
+                                    tasksVM.personalTasks[listId]?.append(createdTask)
+                                }
                             } else {
                                 tasksVM.personalTasks[listId] = [createdTask]
                             }
                         case .professional:
                             if tasksVM.professionalTasks[listId] != nil {
-                                tasksVM.professionalTasks[listId]?.append(createdTask)
+                                if !tasksVM.professionalTasks[listId]!.contains(where: { $0.id == createdTask.id }) {
+                                    tasksVM.professionalTasks[listId]?.append(createdTask)
+                                }
                             } else {
                                 tasksVM.professionalTasks[listId] = [createdTask]
                             }
