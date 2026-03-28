@@ -142,6 +142,7 @@ extension TasksComponent {
                 taskList: taskList,
                 tasks: filtered,
                 accentColor: accentColor,
+                accountType: accountType,
                 onTaskToggle: { task in onTaskToggle(task, taskList.id) },
                 onTaskDetails: { task, listId in
                     onTaskDetails(task, listId)
@@ -240,6 +241,7 @@ private struct TaskComponentListCard: View {
     let taskList: GoogleTaskList
     let tasks: [GoogleTask]
     let accentColor: Color
+    let accountType: GoogleAuthManager.AccountKind
     let onTaskToggle: (GoogleTask) -> Void
     let onTaskDetails: (GoogleTask, String) -> Void
     let onListRename: (String) -> Void
@@ -276,6 +278,7 @@ private struct TaskComponentListCard: View {
         taskList: GoogleTaskList,
         tasks: [GoogleTask],
         accentColor: Color,
+        accountType: GoogleAuthManager.AccountKind,
         onTaskToggle: @escaping (GoogleTask) -> Void,
         onTaskDetails: @escaping (GoogleTask, String) -> Void,
         onListRename: @escaping (String) -> Void,
@@ -291,6 +294,7 @@ private struct TaskComponentListCard: View {
         self.taskList = taskList
         self.tasks = tasks
         self.accentColor = accentColor
+        self.accountType = accountType
         self.onTaskToggle = onTaskToggle
         self.onTaskDetails = onTaskDetails
         self.onListRename = onListRename
@@ -395,6 +399,7 @@ private struct TaskComponentListCard: View {
                     TaskComponentRow(
                         task: task,
                         listId: taskList.id,
+                        accountKind: accountType,
                         accentColor: accentColor,
                         onToggle: { onTaskToggle(task) },
                         onDetails: { task, listId in
@@ -423,6 +428,7 @@ private struct TaskComponentListCard: View {
                 TaskComponentRow(
                     task: task,
                     listId: taskList.id,
+                    accountKind: accountType,
                     accentColor: accentColor,
                     onToggle: { onTaskToggle(task) },
                     onDetails: { task, listId in
@@ -469,6 +475,7 @@ private struct TaskComponentListCard: View {
 private struct TaskComponentRow: View {
     let task: GoogleTask
     let listId: String
+    let accountKind: GoogleAuthManager.AccountKind
     let accentColor: Color
     let onToggle: () -> Void
     let onDetails: (GoogleTask, String) -> Void
@@ -579,6 +586,11 @@ private struct TaskComponentRow: View {
                 }
             }
         }
+        .draggable(DraggableTaskInfo(
+            taskId: task.id,
+            listId: listId,
+            accountKind: accountKind == .personal ? "personal" : "professional"
+        ))
     }
     
     private func startTimeTagText(for task: GoogleTask) -> String? {

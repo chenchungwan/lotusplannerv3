@@ -37,6 +37,10 @@ class GoalsManager: ObservableObject {
         persistenceController.container.viewContext
     }
 
+    /// Timestamp of last local save — suppress reloads for a short window after saving
+    private var lastSaveTime: Date = .distantPast
+    private let reloadSuppressDuration: TimeInterval = 3.0
+
     // NOTE: CloudKit sync is handled automatically by NSPersistentCloudKitContainer
     // Manual CloudKit sync code removed to prevent conflicts with automatic sync
 
@@ -120,7 +124,22 @@ class GoalsManager: ObservableObject {
                     extendedData: extendedData
                 )
             }
-            goals = deduplicatedGoals(from: mappedGoals)
+            var newGoals = deduplicatedGoals(from: mappedGoals)
+
+            // Preserve linked tasks from in-memory goals if Core Data lost them
+            let existingGoalsById = Dictionary(goals.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+            for i in newGoals.indices {
+                if newGoals[i].linkedTasks.isEmpty,
+                   let existing = existingGoalsById[newGoals[i].id],
+                   !existing.linkedTasks.isEmpty {
+                    newGoals[i].linkedTasks = existing.linkedTasks
+                    // Re-save to Core Data to persist the links
+                    updateGoalInCoreData(newGoals[i])
+                    devLog("🎯 Preserved \(existing.linkedTasks.count) linked tasks for '\(newGoals[i].title)' during reload", level: .info, category: .goals)
+                }
+            }
+
+            goals = newGoals
         } catch { }
     }
     
@@ -203,21 +222,53 @@ class GoalsManager: ObservableObject {
     }
 
     /// Updates a linked task reference when a task is moved (gets a new ID/list).
-    func updateLinkedTask(oldTaskId: String, oldListId: String, newTaskId: String, newListId: String, newAccountKind: GoogleAuthManager.AccountKind) {
+    func updateLinkedTask(oldTaskId: String, oldListId: String, newTaskId: String, newListId: String, newAccountKind: GoogleAuthManager.AccountKind, taskTitle: String? = nil) {
         var updated = false
         for i in goals.indices {
-            if let taskIndex = goals[i].linkedTasks.firstIndex(where: { $0.taskId == oldTaskId && $0.listId == oldListId }) {
-                goals[i].linkedTasks[taskIndex] = LinkedTaskData(taskId: newTaskId, listId: newListId, accountKind: newAccountKind)
+            // Search by task ID only — listId may have been updated by refreshLinkedTaskInfo
+            if let taskIndex = goals[i].linkedTasks.firstIndex(where: { $0.taskId == oldTaskId }) {
+                let existingTitle = goals[i].linkedTasks[taskIndex].taskTitle
+                goals[i].linkedTasks[taskIndex] = LinkedTaskData(taskId: newTaskId, listId: newListId, accountKind: newAccountKind, taskTitle: taskTitle ?? existingTitle)
                 updateGoalInCoreData(goals[i])
                 updated = true
                 devLog("Updated goal link: \(goals[i].title) task \(oldTaskId) -> \(newTaskId) in list \(newListId)", level: .info, category: .goals)
             }
         }
         if !updated {
-            devLog("No goal found with linked task \(oldTaskId) in list \(oldListId)", level: .info, category: .goals)
+            devLog("No goal found with linked task \(oldTaskId)", level: .info, category: .goals)
+        }
+    }
+
+    /// Updates the cached title and list for a linked task across all goals
+    func refreshLinkedTaskInfo(taskId: String, newTitle: String, newListId: String? = nil) {
+        for i in goals.indices {
+            if let taskIndex = goals[i].linkedTasks.firstIndex(where: { $0.taskId == taskId }) {
+                var changed = false
+                if goals[i].linkedTasks[taskIndex].taskTitle != newTitle {
+                    goals[i].linkedTasks[taskIndex].taskTitle = newTitle
+                    changed = true
+                }
+                if let newListId, goals[i].linkedTasks[taskIndex].listId != newListId {
+                    goals[i].linkedTasks[taskIndex].listId = newListId
+                    changed = true
+                }
+                if changed {
+                    updateGoalInCoreData(goals[i])
+                }
+            }
         }
     }
     
+    /// Removes a linked task from all goals when the task is deleted
+    func removeLinkedTask(taskId: String) {
+        for i in goals.indices {
+            if goals[i].linkedTasks.contains(where: { $0.taskId == taskId }) {
+                goals[i].linkedTasks.removeAll { $0.taskId == taskId }
+                updateGoalInCoreData(goals[i])
+            }
+        }
+    }
+
     func deleteGoal(_ goalId: UUID) {
         goals.removeAll { $0.id == goalId }
         deleteGoalFromCoreData(goalId)
@@ -373,9 +424,12 @@ class GoalsManager: ObservableObject {
             if !goal.linkedTasks.isEmpty {
                 do {
                     let jsonData = try JSONEncoder().encode(goal.linkedTasks)
-                    entity.linkedTasksJSON = String(data: jsonData, encoding: .utf8)
+                    let jsonString = String(data: jsonData, encoding: .utf8)
+                    entity.linkedTasksJSON = jsonString
+                    devLog("🎯 Saving goal '\(goal.title)' with \(goal.linkedTasks.count) linked tasks, JSON length: \(jsonString?.count ?? 0)", level: .info, category: .goals)
                 } catch {
                     entity.linkedTasksJSON = nil
+                    devLog("🎯 Failed to encode linkedTasks for '\(goal.title)': \(error)", level: .error, category: .goals)
                 }
             } else {
                 entity.linkedTasksJSON = nil
@@ -466,7 +520,10 @@ class GoalsManager: ObservableObject {
         if context.hasChanges {
             do {
                 try context.save()
-            } catch { }
+                lastSaveTime = Date()
+            } catch {
+                devLog("🎯 GoalsManager: Failed to save context: \(error)", level: .error, category: .goals)
+            }
         }
     }
     
@@ -749,18 +806,16 @@ class GoalsManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            devLog("🎯 GoalsManager: Received .iCloudDataChanged notification - reloading data")
-            // Reload data when iCloud sync completes
             Task { @MainActor in
-                let beforeGoalsCount = self?.goals.count ?? 0
-                let beforeCategoriesCount = self?.categories.count ?? 0
-
-                self?.loadFromCoreData()
-
-                let afterGoalsCount = self?.goals.count ?? 0
-                let afterCategoriesCount = self?.categories.count ?? 0
-
-                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(afterGoalsCount), Categories: \(beforeCategoriesCount) → \(afterCategoriesCount)")
+                guard let self else { return }
+                if Date().timeIntervalSince(self.lastSaveTime) < self.reloadSuppressDuration {
+                    devLog("🎯 GoalsManager: Skipping iCloud reload (recent local save)", level: .info, category: .goals)
+                    return
+                }
+                devLog("🎯 GoalsManager: Received .iCloudDataChanged notification - reloading data")
+                let beforeGoalsCount = self.goals.count
+                self.loadFromCoreData()
+                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(self.goals.count), Categories: \(self.categories.count)")
             }
         }
 
@@ -770,18 +825,16 @@ class GoalsManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            devLog("🎯 GoalsManager: Received .NSPersistentStoreRemoteChange notification - reloading data")
-            // Reload data when CloudKit changes are received
             Task { @MainActor in
-                let beforeGoalsCount = self?.goals.count ?? 0
-                let beforeCategoriesCount = self?.categories.count ?? 0
-
-                self?.loadFromCoreData()
-
-                let afterGoalsCount = self?.goals.count ?? 0
-                let afterCategoriesCount = self?.categories.count ?? 0
-
-                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(afterGoalsCount), Categories: \(beforeCategoriesCount) → \(afterCategoriesCount)")
+                guard let self else { return }
+                if Date().timeIntervalSince(self.lastSaveTime) < self.reloadSuppressDuration {
+                    devLog("🎯 GoalsManager: Skipping remote change reload (recent local save)", level: .info, category: .goals)
+                    return
+                }
+                devLog("🎯 GoalsManager: Received .NSPersistentStoreRemoteChange - reloading data")
+                let beforeGoalsCount = self.goals.count
+                self.loadFromCoreData()
+                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(self.goals.count), Categories: \(self.categories.count)")
             }
         }
 

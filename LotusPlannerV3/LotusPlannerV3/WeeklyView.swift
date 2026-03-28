@@ -7,6 +7,17 @@ enum WeeklyViewMode: String, CaseIterable, Hashable {
     case week
 }
 
+// MARK: - Drag & Drop Task Data
+struct DraggableTaskInfo: Codable, Transferable {
+    let taskId: String
+    let listId: String
+    let accountKind: String // "personal" or "professional"
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+    }
+}
+
 struct WeeklyView: View {
     @EnvironmentObject var appPrefs: AppPreferences
     @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
@@ -638,7 +649,7 @@ extension WeeklyView {
                             // 7-day task columns with fixed width
                             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                                 weekTaskColumnPersonal(date: date)
-                                    .frame(width: dayColumnWidth, alignment: .top) // Fixed width matching timeline
+                                    .frame(width: dayColumnWidth, alignment: .top)
                                     .background(Color(.systemBackground))
                                     .overlay(
                                         Rectangle()
@@ -646,6 +657,13 @@ extension WeeklyView {
                                             .frame(width: 0.5),
                                         alignment: .trailing
                                     )
+                                    .dropDestination(for: DraggableTaskInfo.self) { items, _ in
+                                        guard let item = items.first else { return false }
+                                        handleTaskDrop(item, to: date)
+                                        return true
+                                    } isTargeted: { isTargeted in
+                                        // Optional: highlight column when dragging over
+                                    }
                                     .id("day_\(index)")
                             }
                         }
@@ -695,7 +713,7 @@ extension WeeklyView {
                             // 7-day task columns with fixed width
                             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                                 weekTaskColumnProfessional(date: date)
-                                    .frame(width: dayColumnWidth, alignment: .top) // Fixed width matching timeline
+                                    .frame(width: dayColumnWidth, alignment: .top)
                                     .background(Color(.systemBackground))
                                     .overlay(
                                         Rectangle()
@@ -703,6 +721,11 @@ extension WeeklyView {
                                             .frame(width: 0.5),
                                         alignment: .trailing
                                     )
+                                    .dropDestination(for: DraggableTaskInfo.self) { items, _ in
+                                        guard let item = items.first else { return false }
+                                        handleTaskDrop(item, to: date)
+                                        return true
+                                    } isTargeted: { _ in }
                                     .id("day_\(index)")
                             }
                         }
@@ -2365,6 +2388,30 @@ extension WeeklyView {
     // Helper function to get filtered tasks for a specific date (for weekly view)
     private func getFilteredTasksForSpecificDate(date: Date, accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
         tasksViewModel.tasksForDay(date, kind: accountKind)
+    }
+
+    private func handleTaskDrop(_ info: DraggableTaskInfo, to targetDate: Date) {
+        let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .personal : .professional
+        let tasksDict = kind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
+
+        guard let task = tasksDict[info.listId]?.first(where: { $0.id == info.taskId }) else { return }
+
+        // Format the new due date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'00:00:00.000Z"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        let newDueString = formatter.string(from: targetDate)
+
+        // Skip if same date
+        if task.due == newDueString { return }
+
+        var updatedTask = task
+        updatedTask.due = newDueString
+
+        Task {
+            await tasksViewModel.updateTask(updatedTask, in: info.listId, for: kind)
+        }
     }
     
     private func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {

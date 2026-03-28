@@ -1376,19 +1376,7 @@ struct SettingsView: View {
                             .padding(.top, 8)
                     }
                 } header: {
-                    HStack(spacing: 8) {
-                        Text("Goal Preferences")
-                        Text("Beta")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                } footer: {
-                    Text("Goal features are still in beta. We're actively improving them.")
+                    Text("Goal Preferences")
                 }
 
                 // Book View section - temporarily hidden
@@ -1984,7 +1972,7 @@ struct SettingsView: View {
 
                     Toggle(isOn: $appPrefs.showWorkoutStreak) {
                         HStack {
-                            Image(systemName: "flame.fill")
+                            Image(systemName: "trophy.fill")
                                 .foregroundColor(appPrefs.showWorkoutStreak ? .orange : .secondary)
                                 .frame(width: 20)
                             VStack(alignment: .leading, spacing: 2) {

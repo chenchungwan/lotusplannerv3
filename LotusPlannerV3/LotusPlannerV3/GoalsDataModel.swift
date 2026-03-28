@@ -28,13 +28,15 @@ enum GoalTimeframe: String, CaseIterable, Codable {
 // MARK: - Linked Task Data
 struct LinkedTaskData: Codable, Hashable {
     let taskId: String
-    let listId: String
+    var listId: String
     let accountKind: String // "personal" or "professional"
+    var taskTitle: String? // Cached title for display when task not loaded
 
-    init(taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind) {
+    init(taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind, taskTitle: String? = nil) {
         self.taskId = taskId
         self.listId = listId
         self.accountKind = accountKind == .personal ? "personal" : "professional"
+        self.taskTitle = taskTitle
     }
 
     var accountKindEnum: GoogleAuthManager.AccountKind {

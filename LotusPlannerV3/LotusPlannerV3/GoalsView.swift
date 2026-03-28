@@ -735,10 +735,21 @@ struct GoalRow: View {
         return formatter.string(from: date)
     }
 
-    // Helper to get task from linked task data
+    // Helper to get task from linked task data — searches all lists
     private func getTask(from linkedTask: LinkedTaskData) -> GoogleTask? {
+        // First try the stored list
         let tasksDict = linkedTask.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-        return tasksDict[linkedTask.listId]?.first(where: { $0.id == linkedTask.taskId })
+        if let task = tasksDict[linkedTask.listId]?.first(where: { $0.id == linkedTask.taskId }) {
+            return task
+        }
+        // Search all lists in case the task was moved
+        for (_, tasks) in tasksVM.personalTasks {
+            if let task = tasks.first(where: { $0.id == linkedTask.taskId }) { return task }
+        }
+        for (_, tasks) in tasksVM.professionalTasks {
+            if let task = tasks.first(where: { $0.id == linkedTask.taskId }) { return task }
+        }
+        return nil
     }
 
     var body: some View {
@@ -786,19 +797,18 @@ struct GoalRow: View {
                 if !goal.linkedTasks.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(goal.linkedTasks, id: \.taskId) { linkedTask in
-                            if let task = getTask(from: linkedTask) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: task.status == "completed" ? "checkmark.circle.fill" : "circle")
-                                        .font(.caption2)
-                                        .foregroundColor(task.status == "completed" ? .green : .secondary)
-                                    Text(task.title)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .strikethrough(task.status == "completed")
-                                        .lineLimit(1)
-                                }
-                                .padding(.leading, 4)
+                            let task = getTask(from: linkedTask)
+                            HStack(spacing: 6) {
+                                Image(systemName: task?.isCompleted == true ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption2)
+                                    .foregroundColor(task?.isCompleted == true ? .green : .secondary)
+                                Text(task?.title ?? linkedTask.taskTitle ?? "Task")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .strikethrough(task?.isCompleted == true)
+                                    .lineLimit(1)
                             }
+                            .padding(.leading, 4)
                         }
                     }
                     .padding(.top, 4)
@@ -1166,7 +1176,8 @@ struct CreateGoalView: View {
     // MARK: - Task Row Helpers
 
     private func existingTaskRow(_ item: PendingTask) -> some View {
-        let task = lookupTask(item)
+        let result = lookupTask(item)
+        let task = result?.task
         let isCompleted = task?.isCompleted ?? false
         let listName = listNameForTask(item)
 
@@ -1175,7 +1186,7 @@ struct CreateGoalView: View {
                 .foregroundColor(isCompleted ? .green : .secondary)
                 .font(.body)
 
-            Text(item.title)
+            Text(task?.title ?? item.title)
                 .font(.body)
                 .strikethrough(isCompleted)
                 .foregroundColor(isCompleted ? .secondary : .primary)
@@ -1265,13 +1276,29 @@ struct CreateGoalView: View {
         .cornerRadius(8)
     }
 
-    private func lookupTask(_ item: PendingTask) -> GoogleTask? {
+    private func lookupTask(_ item: PendingTask) -> (task: GoogleTask, listId: String, kind: GoogleAuthManager.AccountKind)? {
         guard let taskId = item.existingTaskId else { return nil }
+        // First try stored list
         let tasksDict = item.accountKind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-        return tasksDict[item.listId]?.first(where: { $0.id == taskId })
+        if let task = tasksDict[item.listId]?.first(where: { $0.id == taskId }) {
+            return (task, item.listId, item.accountKind)
+        }
+        // Search all lists in case the task was moved
+        for (listId, tasks) in tasksVM.personalTasks {
+            if let task = tasks.first(where: { $0.id == taskId }) { return (task, listId, .personal) }
+        }
+        for (listId, tasks) in tasksVM.professionalTasks {
+            if let task = tasks.first(where: { $0.id == taskId }) { return (task, listId, .professional) }
+        }
+        return nil
     }
 
     private func listNameForTask(_ item: PendingTask) -> String {
+        // Use actual list from lookup, not stored list ID
+        if let result = lookupTask(item) {
+            let lists = result.kind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+            return lists.first(where: { $0.id == result.listId })?.title ?? ""
+        }
         let lists = item.accountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
         return lists.first(where: { $0.id == item.listId })?.title ?? ""
     }
@@ -1311,7 +1338,12 @@ struct CreateGoalView: View {
     }
 
     private func populateForm() {
-        if let goal = editingGoal {
+        // Use fresh goal data from GoalsManager (not stale copy passed in)
+        let goal: GoalData? = editingGoal.flatMap { eg in
+            goalsManager.goals.first(where: { $0.id == eg.id })
+        } ?? editingGoal
+
+        if let goal {
             title = goal.title
             selectedCategoryId = goal.categoryId
             selectedTimeframe = goal.targetTimeframe
@@ -1319,23 +1351,54 @@ struct CreateGoalView: View {
             notes = goal.extendedData?.notes ?? ""
             // Populate linked tasks as PendingTask items for editing
             for linked in goal.linkedTasks {
+                // Search all lists to find the task (may have been moved)
+                var foundTask: GoogleTask? = nil
+                var foundListId = linked.listId
+                var foundKind = linked.accountKindEnum
+
+                // Try stored list first
                 let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
                 if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
-                    var dueDate = Date()
-                    if let dueDateStr = task.due {
-                        let formatter = DateFormatter()
-                        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
-                        formatter.locale = Locale(identifier: "en_US_POSIX")
-                        if let parsed = formatter.date(from: dueDateStr) { dueDate = parsed }
+                    foundTask = task
+                } else {
+                    // Search all lists
+                    for (listId, tasks) in tasksVM.personalTasks {
+                        if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                            foundTask = task; foundListId = listId; foundKind = .personal; break
+                        }
                     }
-                    taskItems.append(PendingTask(
-                        title: task.title,
-                        dueDate: dueDate,
-                        accountKind: linked.accountKindEnum,
-                        listId: linked.listId,
-                        existingTaskId: linked.taskId
-                    ))
+                    if foundTask == nil {
+                        for (listId, tasks) in tasksVM.professionalTasks {
+                            if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                                foundTask = task; foundListId = listId; foundKind = .professional; break
+                            }
+                        }
+                    }
                 }
+
+                var dueDate = Date()
+                if let dueDateStr = foundTask?.due {
+                    // Try full format first, then date-only
+                    let fullFormatter = DateFormatter()
+                    fullFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+                    fullFormatter.locale = Locale(identifier: "en_US_POSIX")
+                    let shortFormatter = DateFormatter()
+                    shortFormatter.dateFormat = "yyyy-MM-dd"
+                    shortFormatter.locale = Locale(identifier: "en_US_POSIX")
+                    dueDate = fullFormatter.date(from: dueDateStr)
+                        ?? shortFormatter.date(from: String(dueDateStr.prefix(10)))
+                        ?? Date()
+                } else if let taskDueDate = foundTask?.dueDate {
+                    dueDate = taskDueDate
+                }
+
+                taskItems.append(PendingTask(
+                    title: foundTask?.title ?? linked.taskTitle ?? "Task",
+                    dueDate: dueDate,
+                    accountKind: foundKind,
+                    listId: foundListId,
+                    existingTaskId: linked.taskId
+                ))
             }
         } else {
             selectedCategoryId = goalsManager.categories.sorted(by: { $0.displayPosition < $1.displayPosition }).first?.id
@@ -1390,7 +1453,8 @@ struct CreateGoalView: View {
                 LinkedTaskData(
                     taskId: item.existingTaskId!,
                     listId: item.listId,
-                    accountKind: item.accountKind
+                    accountKind: item.accountKind,
+                    taskTitle: item.title
                 )
             }
 
@@ -1433,7 +1497,8 @@ struct CreateGoalView: View {
                     linkedTasks.append(LinkedTaskData(
                         taskId: createdTask.id,
                         listId: listId,
-                        accountKind: kind
+                        accountKind: kind,
+                        taskTitle: createdTask.title
                     ))
                 } catch {
                     devLog("Failed to create task '\(item.title)': \(error)", level: .error, category: .tasks)
@@ -1797,26 +1862,24 @@ struct GoalDetailSheet: View {
                                 .font(.headline)
                                 .foregroundColor(.secondary)
                             ForEach(goal.linkedTasks, id: \.taskId) { linked in
-                                let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-                                if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                            .foregroundColor(task.isCompleted ? .green : .secondary)
-                                            .font(.body)
-                                        Text(task.title)
-                                            .font(.body)
-                                            .strikethrough(task.isCompleted)
-                                        Spacer()
-                                        if let due = task.due {
-                                            Text(due.prefix(10))
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
+                                let task = findTask(linked.taskId)
+                                HStack(spacing: 8) {
+                                    Image(systemName: task?.isCompleted == true ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(task?.isCompleted == true ? .green : .secondary)
+                                        .font(.body)
+                                    Text(task?.title ?? linked.taskTitle ?? "Task")
+                                        .font(.body)
+                                        .strikethrough(task?.isCompleted == true)
+                                    Spacer()
+                                    if let due = task?.due {
+                                        Text(due.prefix(10))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
-                                    .padding(8)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(6)
                                 }
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(6)
                             }
                         }
                     }
@@ -1833,6 +1896,17 @@ struct GoalDetailSheet: View {
                 }
             }
         }
+    }
+
+    /// Search all loaded task lists for a task by ID
+    private func findTask(_ taskId: String) -> GoogleTask? {
+        for (_, tasks) in tasksVM.personalTasks {
+            if let task = tasks.first(where: { $0.id == taskId }) { return task }
+        }
+        for (_, tasks) in tasksVM.professionalTasks {
+            if let task = tasks.first(where: { $0.id == taskId }) { return task }
+        }
+        return nil
     }
 
     private func tagChip(_ text: String, color: Color) -> some View {

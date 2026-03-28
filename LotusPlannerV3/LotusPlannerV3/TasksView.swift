@@ -592,7 +592,7 @@ class TasksViewModel: ObservableObject {
     func updateTask(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
         // OPTIMISTIC UPDATE: Update UI immediately for instant feedback
         let originalTask = await getOriginalTask(task.id, from: listId, for: kind)
-        
+
         await MainActor.run {
             switch kind {
             case .personal:
@@ -610,6 +610,9 @@ class TasksViewModel: ObservableObject {
                     }
                 }
             }
+
+            // Update cached title/list in any linked goals
+            GoalsManager.shared.refreshLinkedTaskInfo(taskId: task.id, newTitle: task.title, newListId: listId)
         }
         
         // BACKGROUND SYNC: Update server in background
@@ -728,6 +731,8 @@ class TasksViewModel: ObservableObject {
             }
             // Also delete the time window for this task
             TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
+            // Remove from any linked goals
+            GoalsManager.shared.removeLinkedTask(taskId: task.id)
         }
 
         // BACKGROUND SYNC: Delete from server in background

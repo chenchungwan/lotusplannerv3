@@ -164,17 +164,16 @@ class BulkEditManager: ObservableObject {
 
         Task {
             for taskInfo in tasksToMove {
-                // Delete from source list (using each task's original list/account)
-                await tasksVM.deleteTask(taskInfo.task, from: taskInfo.listId, for: taskInfo.accountKind)
+                let oldTaskId = taskInfo.task.id
 
-                // Create in destination list
-                await tasksVM.createTask(
-                    title: taskInfo.task.title,
-                    notes: taskInfo.task.notes,
-                    dueDate: taskInfo.task.dueDate,
-                    in: destinationListId,
-                    for: destinationAccountKind
-                )
+                // Use moveTask or crossAccountMoveTask to preserve goal links
+                if taskInfo.accountKind == destinationAccountKind {
+                    // Same account move
+                    let _ = await tasksVM.moveTask(taskInfo.task, from: taskInfo.listId, to: destinationListId, for: taskInfo.accountKind)
+                } else {
+                    // Cross account move
+                    let _ = await tasksVM.crossAccountMoveTask(taskInfo.task, from: (taskInfo.accountKind, taskInfo.listId), to: (destinationAccountKind, destinationListId))
+                }
             }
 
             await MainActor.run {
