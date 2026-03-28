@@ -385,6 +385,13 @@ class AppPreferences: ObservableObject {
         }
     }
 
+    // Goal view layout: false = category cards (default), true = individual goal cards
+    @Published var useGoalCardView: Bool {
+        didSet {
+            UserDefaults.standard.set(useGoalCardView, forKey: "useGoalCardView")
+        }
+    }
+
     // Hide book view
     @Published var hideBookView: Bool {
         didSet {
@@ -786,6 +793,7 @@ class AppPreferences: ObservableObject {
         self.showActivityRings = UserDefaults.standard.object(forKey: "showActivityRings") as? Bool ?? false
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
+        self.useGoalCardView = UserDefaults.standard.object(forKey: "useGoalCardView") as? Bool ?? false
         self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
         self.verboseLoggingEnabled = UserDefaults.standard.object(forKey: DevLogger.verboseLoggingDefaultsKey) as? Bool ?? false
         
@@ -1371,6 +1379,20 @@ struct SettingsView: View {
                     }
 
                     if !appPrefs.hideGoals {
+                        Toggle(isOn: $appPrefs.useGoalCardView) {
+                            HStack {
+                                Image(systemName: "square.grid.2x2")
+                                    .foregroundColor(appPrefs.useGoalCardView ? .accentColor : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Goal Card View")
+                                        .font(.body)
+                                    Text("Show goals as individual cards instead of grouped by category")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
                         GoalCategoriesInlineView()
                             .padding(.leading, 20)
                             .padding(.top, 8)

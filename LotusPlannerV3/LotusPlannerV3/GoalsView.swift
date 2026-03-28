@@ -119,12 +119,24 @@ struct GoalsView: View {
                 )
             }
             
-            // Main Content - Show all goals table when in day interval, grid view otherwise
+            // Main Content
             if navigationManager.currentInterval == .day {
-                // All Goals Table View
                 AllGoalsTableContent()
+            } else if appPrefs.useGoalCardView {
+                // Individual Goal Card Grid View
+                GoalCardGridView(
+                    sortedCategories: sortedCategories,
+                    getFilteredGoals: getFilteredGoalsForCategory,
+                    onGoalTap: { goal in
+                        selectedGoal = goal
+                        showingGoalDetail = true
+                    },
+                    onGoalEdit: { goal in
+                        goalToEdit = goal
+                    }
+                )
             } else {
-                // Normal Grid View with adaptive columns
+                // Category Cards Grid View
                 ScrollView {
                     LazyVGrid(
                         columns: adaptiveColumns,
@@ -157,7 +169,7 @@ struct GoalsView: View {
                             )
                             .frame(minHeight: adaptiveMinCardHeight)
                         }
-                        
+
                         // Add Category Card (only show if under max limit)
                         if goalsManager.canAddCategory {
                             AddCategoryCard(
@@ -311,6 +323,253 @@ struct GoalsView: View {
             goal.targetTimeframe == .year &&
             goal.dueDate >= yearInterval.start &&
             goal.dueDate < yearInterval.end
+        }
+    }
+}
+
+// MARK: - Goal Card Grid View (Individual Cards)
+struct GoalCardGridView: View {
+    let sortedCategories: [GoalCategoryData]
+    let getFilteredGoals: (UUID) -> [GoalData]
+    let onGoalTap: (GoalData) -> Void
+    let onGoalEdit: (GoalData) -> Void
+
+    @ObservedObject private var goalsManager = GoalsManager.shared
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+
+    private var columns: [GridItem] {
+        if horizontalSizeClass == .compact {
+            return [GridItem(.flexible())]
+        } else {
+            return [
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12)
+            ]
+        }
+    }
+
+    /// All goals ordered by category display position
+    private var orderedGoals: [(goal: GoalData, category: GoalCategoryData)] {
+        var result: [(GoalData, GoalCategoryData)] = []
+        for category in sortedCategories {
+            let goals = getFilteredGoals(category.id)
+            for goal in goals {
+                result.append((goal, category))
+            }
+        }
+        return result
+    }
+
+    var body: some View {
+        ScrollView {
+            if orderedGoals.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "target")
+                        .font(.largeTitle)
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("No goals for this period")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 60)
+            } else {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(orderedGoals, id: \.goal.id) { item in
+                        GoalCard(
+                            goal: item.goal,
+                            category: item.category,
+                            onTap: { onGoalTap(item.goal) },
+                            onEdit: { onGoalEdit(item.goal) }
+                        )
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
+}
+
+// MARK: - Individual Goal Card
+struct GoalCard: View {
+    let goal: GoalData
+    let category: GoalCategoryData
+    let onTap: () -> Void
+    let onEdit: () -> Void
+    var showListTag: Bool = true
+
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var goalsManager = GoalsManager.shared
+
+    private static let dueDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d"
+        return f
+    }()
+
+    private var isOverdue: Bool {
+        goal.daysRemaining <= 0 && !goal.isCompleted
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header: goal title with tags
+            HStack {
+                Text("Goal: \(goal.title)")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(goal.isCompleted ? .secondary : .primary)
+                    .strikethrough(goal.isCompleted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer()
+            }
+
+            // Tags row: category + due date
+            HStack(spacing: 6) {
+                // Category tag
+                Text(category.title)
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.accentColor.opacity(0.15))
+                    )
+                    .fixedSize()
+
+                // Due date tag
+                let goalTag = dueDateTagInfo(goal.dueDate, isCompleted: goal.isCompleted)
+                Text(goalTag.text)
+                    .font(.caption)
+                    .foregroundColor(goalTag.textColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(goalTag.bgColor)
+                    )
+                    .fixedSize()
+
+                Spacer()
+            }
+
+            // Linked tasks sorted by due date
+            if !goal.linkedTasks.isEmpty {
+                Divider()
+                let sorted = goal.linkedTasks.sorted { a, b in
+                    let aDate = lookupTask(a)?.dueDate ?? .distantFuture
+                    let bDate = lookupTask(b)?.dueDate ?? .distantFuture
+                    return aDate < bDate
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(sorted, id: \.taskId) { linkedTask in
+                        goalTaskRow(linkedTask)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1.5)
+        )
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .contentShape(Rectangle())
+        .onTapGesture { onEdit() }
+    }
+
+    private func lookupTask(_ linked: LinkedTaskData) -> GoogleTask? {
+        let allTasks = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        for (_, tasks) in allTasks {
+            if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                return task
+            }
+        }
+        return nil
+    }
+
+    private func listNameForLinkedTask(_ linked: LinkedTaskData) -> String {
+        let allLists = linked.accountKindEnum == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        // Search all lists for the task to handle moves
+        let allTasks = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        for (listId, tasks) in allTasks {
+            if tasks.contains(where: { $0.id == linked.taskId }) {
+                return allLists.first(where: { $0.id == listId })?.title ?? ""
+            }
+        }
+        return allLists.first(where: { $0.id == linked.listId })?.title ?? ""
+    }
+
+    @ViewBuilder
+    private func goalTaskRow(_ linked: LinkedTaskData) -> some View {
+        let task = lookupTask(linked)
+        let isCompleted = task?.isCompleted ?? false
+        let listName = listNameForLinkedTask(linked)
+
+        HStack(spacing: 8) {
+            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(isCompleted ? .green : .secondary)
+                .font(.body)
+
+            Text(task?.title ?? linked.taskTitle ?? "Task")
+                .font(.body)
+                .strikethrough(isCompleted)
+                .foregroundColor(isCompleted ? .secondary : .primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer()
+
+            if showListTag && !listName.isEmpty {
+                Text(listName)
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.15))
+                    .foregroundColor(.blue)
+                    .cornerRadius(4)
+            }
+
+            if let dueDate = task?.dueDate {
+                let tag = dueDateTagInfo(dueDate, isCompleted: isCompleted)
+                Text(tag.text)
+                    .font(.caption2)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(tag.bgColor)
+                    .foregroundColor(tag.textColor)
+                    .cornerRadius(4)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+    }
+
+    private func dueDateTagInfo(_ date: Date, isCompleted: Bool) -> (text: String, textColor: Color, bgColor: Color) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let dueDay = calendar.startOfDay(for: date)
+
+        if isCompleted {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d/yy"
+            return (formatter.string(from: date), .primary, Color(.systemGray5))
+        } else if calendar.isDate(dueDay, inSameDayAs: today) {
+            return ("Today", .white, .accentColor)
+        } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+                  calendar.isDate(dueDay, inSameDayAs: tomorrow) {
+            return ("Tomorrow", .white, .cyan)
+        } else if dueDay < today {
+            return ("Overdue", .white, .red)
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d/yy"
+            return (formatter.string(from: date), .primary, Color(.systemGray5))
         }
     }
 }
@@ -1123,11 +1382,16 @@ struct CreateGoalView: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
 
-            ForEach($taskItems) { $item in
-                if item.existingTaskId != nil {
-                    existingTaskRow(item)
+            let sortedIndices = taskItems.indices.sorted { a, b in
+                let aDate = resolvedDueDate(taskItems[a])
+                let bDate = resolvedDueDate(taskItems[b])
+                return aDate < bDate
+            }
+            ForEach(sortedIndices, id: \.self) { index in
+                if taskItems[index].existingTaskId != nil {
+                    existingTaskRow(taskItems[index])
                 } else {
-                    newTaskRow($item)
+                    newTaskRow($taskItems[index])
                 }
             }
 
@@ -1206,12 +1470,13 @@ struct CreateGoalView: View {
                     .cornerRadius(4)
             }
 
-            Text(item.dueDate.formatted(date: .abbreviated, time: .omitted))
+            let tag = dueDateTagStyle(task?.dueDate ?? item.dueDate, isCompleted: isCompleted)
+            Text(tag.text)
                 .font(.caption2)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
-                .background(item.dueDate < Date() && !isCompleted ? Color.red.opacity(0.15) : Color.green.opacity(0.15))
-                .foregroundColor(item.dueDate < Date() && !isCompleted ? .red : .green)
+                .background(tag.bgColor)
+                .foregroundColor(tag.textColor)
                 .cornerRadius(4)
 
             Button {
@@ -1558,6 +1823,37 @@ struct CreateGoalView: View {
         }
         onDismiss()
         dismiss()
+    }
+
+    private func resolvedDueDate(_ item: PendingTask) -> Date {
+        if let existingId = item.existingTaskId {
+            let result = lookupTask(item)
+            return result?.task.dueDate ?? item.dueDate
+        }
+        return item.dueDate
+    }
+
+    private func dueDateTagStyle(_ date: Date, isCompleted: Bool) -> (text: String, textColor: Color, bgColor: Color) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let dueDay = calendar.startOfDay(for: date)
+
+        if isCompleted {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d/yy"
+            return (formatter.string(from: date), .primary, Color(.systemGray5))
+        } else if calendar.isDate(dueDay, inSameDayAs: today) {
+            return ("Today", .white, .accentColor)
+        } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+                  calendar.isDate(dueDay, inSameDayAs: tomorrow) {
+            return ("Tomorrow", .white, .cyan)
+        } else if dueDay < today {
+            return ("Overdue", .white, .red)
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d/yy"
+            return (formatter.string(from: date), .primary, Color(.systemGray5))
+        }
     }
 }
 

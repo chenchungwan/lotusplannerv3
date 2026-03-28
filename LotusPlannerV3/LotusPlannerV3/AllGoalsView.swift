@@ -262,11 +262,12 @@ struct TimeframeColumnView: View {
     let onGoalDelete: (GoalData) -> Void
     let onCategoryEdit: (GoalCategoryData) -> Void
     let onCategoryDelete: (GoalCategoryData) -> Void
-    
+
     @ObservedObject private var goalsManager = GoalsManager.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
     @State private var isExpanded: Bool = true
-    
+
     init(timeframe: TimeframeGroup, categories: [GoalCategoryData], columnWidth: CGFloat, adaptivePadding: CGFloat, adaptiveSpacing: CGFloat, isCompact: Bool, onGoalTap: @escaping (GoalData) -> Void, onGoalEdit: @escaping (GoalData) -> Void, onGoalDelete: @escaping (GoalData) -> Void, onCategoryEdit: @escaping (GoalCategoryData) -> Void, onCategoryDelete: @escaping (GoalCategoryData) -> Void) {
         self.timeframe = timeframe
         self.categories = categories
@@ -279,7 +280,7 @@ struct TimeframeColumnView: View {
         self.onGoalDelete = onGoalDelete
         self.onCategoryEdit = onCategoryEdit
         self.onCategoryDelete = onCategoryDelete
-        
+
         // Auto-collapse past columns
         let now = Date()
         self._isExpanded = State(initialValue: timeframe.endDate >= now)
@@ -364,24 +365,42 @@ struct TimeframeColumnView: View {
                 }
                 .buttonStyle(.plain)
                 
-                // Category cards - scrollable area that takes remaining height
+                // Goals content - scrollable area that takes remaining height
                 ScrollView(.vertical, showsIndicators: true) {
-                    LazyVStack(spacing: adaptiveSpacing) {
-                        ForEach(categories) { category in
-                            GoalCategoryCard(
-                                category: category,
-                                goals: getGoals(for: category.id, in: timeframe),
-                                onGoalTap: onGoalTap,
-                                onGoalEdit: onGoalEdit,
-                                onGoalDelete: onGoalDelete,
-                                onCategoryEdit: onCategoryEdit,
-                                onCategoryDelete: onCategoryDelete,
-                                showTags: false,
-                                currentInterval: convertToTimelineInterval(timeframe.type),
-                                currentDate: timeframe.startDate,
-                                showQuickAdd: false
-                            )
-                            .frame(height: calculateCardHeight())
+                    if appPrefs.useGoalCardView {
+                        // Individual goal cards ordered by category
+                        LazyVStack(spacing: adaptiveSpacing) {
+                            ForEach(categories) { category in
+                                let goals = getGoals(for: category.id, in: timeframe)
+                                ForEach(goals) { goal in
+                                    GoalCard(
+                                        goal: goal,
+                                        category: category,
+                                        onTap: { onGoalTap(goal) },
+                                        onEdit: { onGoalEdit(goal) },
+                                        showListTag: false
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        LazyVStack(spacing: adaptiveSpacing) {
+                            ForEach(categories) { category in
+                                GoalCategoryCard(
+                                    category: category,
+                                    goals: getGoals(for: category.id, in: timeframe),
+                                    onGoalTap: onGoalTap,
+                                    onGoalEdit: onGoalEdit,
+                                    onGoalDelete: onGoalDelete,
+                                    onCategoryEdit: onCategoryEdit,
+                                    onCategoryDelete: onCategoryDelete,
+                                    showTags: false,
+                                    currentInterval: convertToTimelineInterval(timeframe.type),
+                                    currentDate: timeframe.startDate,
+                                    showQuickAdd: false
+                                )
+                                .frame(height: calculateCardHeight())
+                            }
                         }
                     }
                 }
