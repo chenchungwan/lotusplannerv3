@@ -338,18 +338,19 @@ struct GoalCardGridView: View {
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
 
+    private var isCompactDevice: Bool {
+        horizontalSizeClass == .compact
+    }
+
     private var columns: [GridItem] {
-        if horizontalSizeClass == .compact {
+        if isCompactDevice {
             return [GridItem(.flexible())]
         } else {
-            return [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ]
+            return [GridItem(.adaptive(minimum: 298, maximum: 298), spacing: 12)]
         }
     }
 
-    /// All goals ordered by category display position
+    /// All goals ordered by displayOrder, falling back to category position
     private var orderedGoals: [(goal: GoalData, category: GoalCategoryData)] {
         var result: [(GoalData, GoalCategoryData)] = []
         for category in sortedCategories {
@@ -358,7 +359,9 @@ struct GoalCardGridView: View {
                 result.append((goal, category))
             }
         }
-        return result
+        return result.sorted(by: { (a: (goal: GoalData, category: GoalCategoryData), b: (goal: GoalData, category: GoalCategoryData)) in
+            a.goal.displayOrder < b.goal.displayOrder
+        })
     }
 
     var body: some View {
@@ -375,7 +378,7 @@ struct GoalCardGridView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 60)
             } else {
-                LazyVGrid(columns: columns, spacing: 12) {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                     ForEach(orderedGoals, id: \.goal.id) { item in
                         GoalCard(
                             goal: item.goal,
@@ -383,11 +386,28 @@ struct GoalCardGridView: View {
                             onTap: { onGoalTap(item.goal) },
                             onEdit: { onGoalEdit(item.goal) }
                         )
+                        .draggable(item.goal.id.uuidString)
+                        .dropDestination(for: String.self) { droppedItems, _ in
+                            guard let droppedId = droppedItems.first,
+                                  let droppedUUID = UUID(uuidString: droppedId),
+                                  droppedUUID != item.goal.id else { return false }
+                            reorderGoal(droppedUUID, before: item.goal.id)
+                            return true
+                        }
                     }
                 }
                 .padding(12)
             }
         }
+    }
+
+    private func reorderGoal(_ draggedId: UUID, before targetId: UUID) {
+        var ids = orderedGoals.map { $0.goal.id }
+        guard let fromIndex = ids.firstIndex(of: draggedId),
+              let toIndex = ids.firstIndex(of: targetId) else { return }
+        ids.remove(at: fromIndex)
+        ids.insert(draggedId, at: toIndex)
+        goalsManager.updateGoalDisplayOrders(ids)
     }
 }
 
@@ -397,7 +417,6 @@ struct GoalCard: View {
     let category: GoalCategoryData
     let onTap: () -> Void
     let onEdit: () -> Void
-    var showListTag: Bool = true
 
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @ObservedObject private var goalsManager = GoalsManager.shared
@@ -414,11 +433,19 @@ struct GoalCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header: goal title with tags
-            HStack {
-                Text("Goal: \(goal.title)")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+            // Goal title with checkbox
+            HStack(alignment: .top, spacing: 8) {
+                Button {
+                    goalsManager.toggleGoalCompletion(goal.id)
+                } label: {
+                    Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundColor(goal.isCompleted ? .green : .secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Text(goal.title)
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(goal.isCompleted ? .secondary : .primary)
                     .strikethrough(goal.isCompleted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -426,60 +453,36 @@ struct GoalCard: View {
                 Spacer()
             }
 
-            // Tags row: category + due date
-            HStack(spacing: 6) {
-                // Category tag
-                Text(category.title)
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.accentColor.opacity(0.15))
-                    )
-                    .fixedSize()
+            // Category tag on its own line
+            Text(category.title)
+                .font(.caption2)
+                .foregroundColor(.accentColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.accentColor.opacity(0.15))
+                )
+                .fixedSize()
 
-                // Due date tag
-                let goalTag = dueDateTagInfo(goal.dueDate, isCompleted: goal.isCompleted)
-                Text(goalTag.text)
-                    .font(.caption)
-                    .foregroundColor(goalTag.textColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(goalTag.bgColor)
-                    )
-                    .fixedSize()
-
-                Spacer()
-            }
-
-            // Linked tasks sorted by due date
+            // Tasks — each in its own rounded white card, scrollable if needed
             if !goal.linkedTasks.isEmpty {
-                Divider()
                 let sorted = goal.linkedTasks.sorted { a, b in
                     let aDate = lookupTask(a)?.dueDate ?? .distantFuture
                     let bDate = lookupTask(b)?.dueDate ?? .distantFuture
                     return aDate < bDate
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(spacing: 6) {
                     ForEach(sorted, id: \.taskId) { linkedTask in
                         goalTaskRow(linkedTask)
                     }
                 }
             }
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.systemBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1.5)
-        )
-        .cornerRadius(8)
-        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .background(Color(.systemGray6).opacity(0.7))
+        .cornerRadius(10)
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }
     }
@@ -494,23 +497,10 @@ struct GoalCard: View {
         return nil
     }
 
-    private func listNameForLinkedTask(_ linked: LinkedTaskData) -> String {
-        let allLists = linked.accountKindEnum == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
-        // Search all lists for the task to handle moves
-        let allTasks = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-        for (listId, tasks) in allTasks {
-            if tasks.contains(where: { $0.id == linked.taskId }) {
-                return allLists.first(where: { $0.id == listId })?.title ?? ""
-            }
-        }
-        return allLists.first(where: { $0.id == linked.listId })?.title ?? ""
-    }
-
     @ViewBuilder
     private func goalTaskRow(_ linked: LinkedTaskData) -> some View {
         let task = lookupTask(linked)
         let isCompleted = task?.isCompleted ?? false
-        let listName = listNameForLinkedTask(linked)
 
         HStack(spacing: 8) {
             Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
@@ -518,22 +508,12 @@ struct GoalCard: View {
                 .font(.body)
 
             Text(task?.title ?? linked.taskTitle ?? "Task")
-                .font(.body)
+                .font(.subheadline)
                 .strikethrough(isCompleted)
                 .foregroundColor(isCompleted ? .secondary : .primary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer()
-
-            if showListTag && !listName.isEmpty {
-                Text(listName)
-                    .font(.caption2)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color.blue.opacity(0.15))
-                    .foregroundColor(.blue)
-                    .cornerRadius(4)
-            }
 
             if let dueDate = task?.dueDate {
                 let tag = dueDateTagInfo(dueDate, isCompleted: isCompleted)
@@ -546,8 +526,11 @@ struct GoalCard: View {
                     .cornerRadius(4)
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.04), radius: 1, x: 0, y: 1)
     }
 
     private func dueDateTagInfo(_ date: Date, isCompleted: Bool) -> (text: String, textColor: Color, bgColor: Color) {

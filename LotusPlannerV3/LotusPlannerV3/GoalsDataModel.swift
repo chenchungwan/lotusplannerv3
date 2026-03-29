@@ -63,6 +63,7 @@ struct GoalData: Identifiable, Codable {
     var updatedAt: Date
     var linkedTasks: [LinkedTaskData] // Tasks linked to this goal
     var extendedData: GoalExtendedData? // Steps 2-6 data
+    var displayOrder: Int
 
     init(
         id: UUID = UUID(),
@@ -76,7 +77,8 @@ struct GoalData: Identifiable, Codable {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         linkedTasks: [LinkedTaskData] = [],
-        extendedData: GoalExtendedData? = nil
+        extendedData: GoalExtendedData? = nil,
+        displayOrder: Int = 0
     ) {
         self.id = id
         self.title = title
@@ -90,6 +92,7 @@ struct GoalData: Identifiable, Codable {
         self.updatedAt = updatedAt
         self.linkedTasks = linkedTasks
         self.extendedData = extendedData
+        self.displayOrder = displayOrder
     }
 }
 

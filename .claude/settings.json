@@ -2,6 +2,9 @@
   "permissions": {
     "additionalDirectories": [
       "/Users/christinechen/Developer/LotusPlannerV3/LotusPlannerV3Tests"
+    ],
+    "allow": [
+      "Read(//Users/christinechen/Desktop/**)"
     ]
   }
 }

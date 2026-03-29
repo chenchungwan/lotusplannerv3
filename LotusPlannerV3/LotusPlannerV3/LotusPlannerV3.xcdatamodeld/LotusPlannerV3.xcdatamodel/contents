@@ -46,6 +46,7 @@
         <attribute name="userId" optional="YES" attributeType="String"/>
         <attribute name="linkedTasksJSON" optional="YES" attributeType="String"/>
         <attribute name="extendedDataJSON" optional="YES" attributeType="String"/>
+        <attribute name="displayOrder" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
     </entity>
     <entity name="CustomLogItem" representedClassName="CustomLogItem" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="YES" attributeType="String"/>

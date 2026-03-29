@@ -121,7 +121,8 @@ class GoalsManager: ObservableObject {
                     createdAt: entity.createdAt ?? Date(),
                     updatedAt: entity.updatedAt ?? Date(),
                     linkedTasks: linkedTasks,
-                    extendedData: extendedData
+                    extendedData: extendedData,
+                    displayOrder: Int(entity.displayOrder)
                 )
             }
             var newGoals = deduplicatedGoals(from: mappedGoals)
@@ -286,6 +287,15 @@ class GoalsManager: ObservableObject {
         }
     }
 
+    func updateGoalDisplayOrders(_ orderedIds: [UUID]) {
+        for (index, goalId) in orderedIds.enumerated() {
+            if let goalIndex = goals.firstIndex(where: { $0.id == goalId }) {
+                goals[goalIndex].displayOrder = index
+                updateGoalInCoreData(goals[goalIndex])
+            }
+        }
+    }
+
     // MARK: - Task Linking Management
     func linkTask(to goalId: UUID, taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind) {
         if let index = goals.firstIndex(where: { $0.id == goalId }) {
@@ -419,6 +429,7 @@ class GoalsManager: ObservableObject {
             entity.isCompleted = goal.isCompleted
             entity.updatedAt = goal.updatedAt
             entity.userId = "icloud-user" // Fixed userId for CloudKit sync across devices
+            entity.displayOrder = Int32(goal.displayOrder)
 
             // Serialize linked tasks to JSON
             if !goal.linkedTasks.isEmpty {
@@ -463,6 +474,7 @@ class GoalsManager: ObservableObject {
                 entity.dueDate = goal.dueDate
                 entity.isCompleted = goal.isCompleted
                 entity.updatedAt = goal.updatedAt
+                entity.displayOrder = Int32(goal.displayOrder)
 
                 // Serialize linked tasks to JSON
                 if !goal.linkedTasks.isEmpty {

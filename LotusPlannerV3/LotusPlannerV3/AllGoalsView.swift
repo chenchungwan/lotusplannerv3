@@ -10,7 +10,6 @@ struct AllGoalsTableContent: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
     // State for sheet presentations
-    @State private var showingEditGoal = false
     @State private var goalToEdit: GoalData?
     @State private var categoryToEdit: GoalCategoryData?
     @State private var showingEditCategory = false
@@ -161,11 +160,9 @@ struct AllGoalsTableContent: View {
                                     isCompact: isCompact,
                                     onGoalTap: { goal in
                                         goalToEdit = goal
-                                        showingEditGoal = true
                                     },
                                     onGoalEdit: { goal in
                                         goalToEdit = goal
-                                        showingEditGoal = true
                                     },
                                     onGoalDelete: { goal in
                                         goalsManager.deleteGoal(goal.id)
@@ -200,9 +197,9 @@ struct AllGoalsTableContent: View {
                 }
             }
         }
-        .sheet(isPresented: $showingEditGoal) {
-            if let goal = goalToEdit {
-                EditGoalView(goal: goal)
+        .sheet(item: $goalToEdit) { goal in
+            CreateGoalView(editingGoal: goal) {
+                goalToEdit = nil
             }
         }
         .sheet(isPresented: $showingEditCategory) {
@@ -377,8 +374,7 @@ struct TimeframeColumnView: View {
                                         goal: goal,
                                         category: category,
                                         onTap: { onGoalTap(goal) },
-                                        onEdit: { onGoalEdit(goal) },
-                                        showListTag: false
+                                        onEdit: { onGoalEdit(goal) }
                                     )
                                 }
                             }
