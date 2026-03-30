@@ -218,9 +218,9 @@ struct AllGoalsTableContent: View {
         return categoryGoals.filter { goal in
             TimeframeGroup(from: goal) == timeframe
         }
-        .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        .sorted { $0.displayOrder < $1.displayOrder }
     }
-    
+
     private func scrollToCurrentTimeframe(proxy: ScrollViewProxy, delay: Double = 0.2) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let now = Date()
@@ -463,9 +463,9 @@ struct TimeframeColumnView: View {
         return categoryGoals.filter { goal in
             TimeframeGroup(from: goal) == timeframe
         }
-        .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        .sorted { $0.displayOrder < $1.displayOrder }
     }
-    
+
     private func isCurrentWeek(_ timeframe: TimeframeGroup) -> Bool {
         guard timeframe.type == .week else { return false }
         let calendar = Calendar.mondayFirst

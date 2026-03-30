@@ -186,7 +186,7 @@ struct DayViewNewClassic: View {
                             await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
                         }
                     },
-                    showAllDaySection: false
+                    showAllDaySection: true
                 )
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)

@@ -147,8 +147,10 @@ class CalendarViewModel: ObservableObject {
 
     func forceLoadCalendarDataForMonth(containing date: Date) async {
         let calendar = Calendar.mondayFirst
-        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
-              let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: date),
+              // Extend range by 1 day on each side to capture all-day events at month boundaries
+              let monthStart = calendar.date(byAdding: .day, value: -1, to: monthInterval.start),
+              let monthEnd = calendar.date(byAdding: .day, value: 1, to: monthInterval.end) else {
             return
         }
 
@@ -587,10 +589,11 @@ class CalendarViewModel: ObservableObject {
         errorMessage = nil
         showError = false
 
-        // Get the week range using Monday-first calendar
+        // Get the week range using Monday-first calendar, extended by 1 day on each side for all-day events
         let calendar = Calendar.mondayFirst
-        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: date)?.start,
-              let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date),
+              let weekStart = calendar.date(byAdding: .day, value: -1, to: weekInterval.start),
+              let weekEnd = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .day, value: 7, to: weekInterval.start) ?? weekInterval.end) else {
             isLoading = false
             return
         }

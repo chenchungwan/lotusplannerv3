@@ -127,7 +127,7 @@ struct PersistenceController {
         })
         
         container.viewContext.automaticallyMergesChangesFromParent = true
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        container.viewContext.mergePolicy = NSMergeByPropertyStoreTrumpMergePolicy
         
         // Listen for CloudKit import/export notifications
         NotificationCenter.default.addObserver(
