@@ -47,6 +47,8 @@ struct LinkedTaskData: Codable, Hashable {
 // MARK: - Goal Extended Data
 struct GoalExtendedData: Codable {
     var notes: String = "" // Free-form notes (motivation, context, etc.)
+    var defaultListId: String? // Default task list ID for new tasks
+    var defaultAccountKind: String? // "personal" or "professional"
 }
 
 // MARK: - Goal Data Model

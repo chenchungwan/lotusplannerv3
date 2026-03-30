@@ -211,14 +211,14 @@ class GoalsManager: ObservableObject {
     func addGoal(_ goal: GoalData) {
         goals.append(goal)
         saveGoalToCoreData(goal)
-        
-        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
+        TaskGoalLinkManager.shared.syncLinksFromGoal(goal)
     }
-    
+
     func updateGoal(_ goal: GoalData) {
         if let index = goals.firstIndex(where: { $0.id == goal.id }) {
             goals[index] = goal
             updateGoalInCoreData(goal)
+            TaskGoalLinkManager.shared.syncLinksFromGoal(goal)
         }
     }
 
@@ -231,6 +231,7 @@ class GoalsManager: ObservableObject {
                 let existingTitle = goals[i].linkedTasks[taskIndex].taskTitle
                 goals[i].linkedTasks[taskIndex] = LinkedTaskData(taskId: newTaskId, listId: newListId, accountKind: newAccountKind, taskTitle: taskTitle ?? existingTitle)
                 updateGoalInCoreData(goals[i])
+                TaskGoalLinkManager.shared.syncLinksFromGoal(goals[i])
                 updated = true
                 devLog("Updated goal link: \(goals[i].title) task \(oldTaskId) -> \(newTaskId) in list \(newListId)", level: .info, category: .goals)
             }
@@ -273,8 +274,7 @@ class GoalsManager: ObservableObject {
     func deleteGoal(_ goalId: UUID) {
         goals.removeAll { $0.id == goalId }
         deleteGoalFromCoreData(goalId)
-        
-        // CloudKit sync handled automatically by NSPersistentCloudKitContainer
+        TaskGoalLinkManager.shared.unlinkAllForGoal(goalId)
     }
     
     func toggleGoalCompletion(_ goalId: UUID) {

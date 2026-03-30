@@ -1151,6 +1151,7 @@ struct CreateGoalView: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @ObservedObject private var authManager = GoogleAuthManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
 
     let editingGoal: GoalData?
     let onDismiss: () -> Void
@@ -1164,10 +1165,22 @@ struct CreateGoalView: View {
     @State private var notes = ""
 
     @State private var taskItems: [PendingTask] = []
+    @State private var selectedGoalAccountKind: GoogleAuthManager.AccountKind = .personal
+    @State private var selectedGoalListId: String = ""
 
     // Editing
     @State private var showingDeleteAlert = false
     @State private var showingTaskPicker = false
+    @State private var selectedTaskForDetail: TaskDetailSelection?
+    @State private var showingUnlinkTaskAlert = false
+    @State private var pendingUnlinkTask: PendingTask?
+
+    struct TaskDetailSelection: Identifiable {
+        let id: String
+        let task: GoogleTask
+        let listId: String
+        let accountKind: GoogleAuthManager.AccountKind
+    }
 
     struct PendingTask: Identifiable {
         let id = UUID()
@@ -1268,16 +1281,53 @@ struct CreateGoalView: View {
                     .disabled(!canSave || isSaving)
                 }
             }
-            .alert("Delete Goal", isPresented: $showingDeleteAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete Goal & Tasks", role: .destructive) { deleteGoal() }
-            } message: {
-                let taskCount = editingGoal?.linkedTasks.count ?? 0
+            .confirmationDialog("Delete Goal", isPresented: $showingDeleteAlert, titleVisibility: .visible) {
+                let taskCount = taskItems.filter { $0.existingTaskId != nil }.count
                 if taskCount > 0 {
-                    Text("This will delete '\(title)' and its \(taskCount) linked task\(taskCount == 1 ? "" : "s") from Google Tasks. This action cannot be undone.")
+                    Button("Delete Goal & \(taskCount) Task\(taskCount == 1 ? "" : "s")", role: .destructive) {
+                        deleteGoalWithTasks()
+                    }
+                    Button("Delete Goal Only (keep tasks)") {
+                        deleteGoalOnly()
+                    }
                 } else {
-                    Text("Are you sure you want to delete '\(title)'? This action cannot be undone.")
+                    Button("Delete Goal", role: .destructive) {
+                        deleteGoalOnly()
+                    }
                 }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                let taskCount = taskItems.filter { $0.existingTaskId != nil }.count
+                if taskCount > 0 {
+                    Text("Do you also want to delete the \(taskCount) linked task\(taskCount == 1 ? "" : "s") from Google Tasks?")
+                } else {
+                    Text("Are you sure you want to delete '\(title)'?")
+                }
+            }
+            .confirmationDialog("Remove Task", isPresented: $showingUnlinkTaskAlert, titleVisibility: .visible) {
+                Button("Unlink Only (keep task)") {
+                    if let task = pendingUnlinkTask {
+                        taskItems.removeAll { $0.id == task.id }
+                    }
+                    pendingUnlinkTask = nil
+                }
+                Button("Unlink & Delete Task", role: .destructive) {
+                    if let task = pendingUnlinkTask {
+                        // Delete from Google Tasks
+                        if let result = lookupTask(task) {
+                            Task {
+                                await tasksVM.deleteTask(result.task, from: result.listId, for: result.kind)
+                            }
+                        }
+                        taskItems.removeAll { $0.id == task.id }
+                    }
+                    pendingUnlinkTask = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingUnlinkTask = nil
+                }
+            } message: {
+                Text("Do you want to also delete this task from Google Tasks, or just remove it from this goal?")
             }
         }
         .onAppear { populateForm() }
@@ -1354,6 +1404,55 @@ struct CreateGoalView: View {
                 }
             }
 
+            // Default Task List
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Task List")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("New tasks for this goal will be created in this list")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 12) {
+                    ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
+                        if authManager.isLinked(kind: kind) {
+                            let lists = kind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+                            if !lists.isEmpty {
+                                Menu {
+                                    ForEach(lists) { list in
+                                        Button {
+                                            selectedGoalAccountKind = kind
+                                            selectedGoalListId = list.id
+                                        } label: {
+                                            HStack {
+                                                Text(list.title)
+                                                if selectedGoalAccountKind == kind && selectedGoalListId == list.id {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    let currentList = lists.first(where: { $0.id == selectedGoalListId && selectedGoalAccountKind == kind })
+                                    HStack(spacing: 4) {
+                                        Image(systemName: selectedGoalAccountKind == kind ? "largecircle.fill.circle" : "circle")
+                                            .font(.caption)
+                                            .foregroundColor(selectedGoalAccountKind == kind ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .secondary)
+                                        Text(appPrefs.accountName(for: kind))
+                                            .font(.subheadline)
+                                        if let currentList, selectedGoalAccountKind == kind {
+                                            Text("/ \(currentList.title)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1420,6 +1519,45 @@ struct CreateGoalView: View {
                 }
             )
         }
+        .sheet(item: $selectedTaskForDetail, onDismiss: {
+            // Refresh taskItems from goal's current linkedTasks after task detail changes
+            if let goal = editingGoal, let currentGoal = goalsManager.goals.first(where: { $0.id == goal.id }) {
+                refreshTaskItems(from: currentGoal)
+            }
+        }) { sel in
+            TaskDetailsView(
+                task: sel.task,
+                taskListId: sel.listId,
+                accountKind: sel.accountKind,
+                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                personalTaskLists: tasksVM.personalTaskLists,
+                professionalTaskLists: tasksVM.professionalTaskLists,
+                appPrefs: appPrefs,
+                viewModel: tasksVM,
+                onSave: { updatedTask in
+                    Task {
+                        await tasksVM.updateTask(updatedTask, in: sel.listId, for: sel.accountKind)
+                    }
+                },
+                onDelete: {
+                    Task {
+                        await tasksVM.deleteTask(sel.task, from: sel.listId, for: sel.accountKind)
+                        // Remove from local taskItems
+                        taskItems.removeAll { $0.existingTaskId == sel.task.id }
+                    }
+                },
+                onMove: { updatedTask, targetListId in
+                    Task {
+                        await tasksVM.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
+                    }
+                },
+                onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
+                    Task {
+                        await tasksVM.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
+                    }
+                }
+            )
+        }
     }
 
     // MARK: - Task Row Helpers
@@ -1463,7 +1601,8 @@ struct CreateGoalView: View {
                 .cornerRadius(4)
 
             Button {
-                taskItems.removeAll { $0.id == item.id }
+                pendingUnlinkTask = item
+                showingUnlinkTaskAlert = true
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)
@@ -1475,6 +1614,17 @@ struct CreateGoalView: View {
         .padding(.horizontal, 8)
         .background(Color(.systemGray6))
         .cornerRadius(8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let result = lookupTask(item) {
+                selectedTaskForDetail = TaskDetailSelection(
+                    id: result.task.id,
+                    task: result.task,
+                    listId: result.listId,
+                    accountKind: result.kind
+                )
+            }
+        }
     }
 
     private func newTaskRow(_ item: Binding<PendingTask>) -> some View {
@@ -1560,8 +1710,8 @@ struct CreateGoalView: View {
         taskItems.append(PendingTask(
             title: "",
             dueDate: dueDate,
-            accountKind: defaultAccountKind,
-            listId: defaultListId
+            accountKind: selectedGoalAccountKind,
+            listId: selectedGoalListId
         ))
     }
 
@@ -1593,12 +1743,30 @@ struct CreateGoalView: View {
             goalsManager.goals.first(where: { $0.id == eg.id })
         } ?? editingGoal
 
+        // Set default task list
+        selectedGoalAccountKind = defaultAccountKind
+        selectedGoalListId = defaultListId
+
         if let goal {
             title = goal.title
             selectedCategoryId = goal.categoryId
             selectedTimeframe = goal.targetTimeframe
             selectedDate = goal.dueDate
             notes = goal.extendedData?.notes ?? ""
+
+            // Restore saved default list, or fall back to first linked task's list
+            if let savedListId = goal.extendedData?.defaultListId, !savedListId.isEmpty {
+                selectedGoalListId = savedListId
+                if goal.extendedData?.defaultAccountKind == "professional" {
+                    selectedGoalAccountKind = .professional
+                } else {
+                    selectedGoalAccountKind = .personal
+                }
+            } else if let firstLinked = goal.linkedTasks.first {
+                selectedGoalAccountKind = firstLinked.accountKindEnum
+                selectedGoalListId = firstLinked.listId
+            }
+
             // Populate linked tasks as PendingTask items for editing
             for linked in goal.linkedTasks {
                 // Search all lists to find the task (may have been moved)
@@ -1679,6 +1847,43 @@ struct CreateGoalView: View {
         }
     }
 
+    private func refreshTaskItems(from goal: GoalData) {
+        // Keep any new (unsaved) tasks, rebuild existing task items from goal's current links
+        let newTasks = taskItems.filter { $0.existingTaskId == nil }
+        var existingTasks: [PendingTask] = []
+
+        for linked in goal.linkedTasks {
+            var foundTask: GoogleTask? = nil
+            var foundListId = linked.listId
+            var foundKind = linked.accountKindEnum
+
+            // Search all lists to find the task
+            for (listId, tasks) in tasksVM.personalTasks {
+                if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                    foundTask = task; foundListId = listId; foundKind = .personal; break
+                }
+            }
+            if foundTask == nil {
+                for (listId, tasks) in tasksVM.professionalTasks {
+                    if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                        foundTask = task; foundListId = listId; foundKind = .professional; break
+                    }
+                }
+            }
+
+            let dueDate = foundTask?.dueDate ?? Date()
+            existingTasks.append(PendingTask(
+                title: foundTask?.title ?? linked.taskTitle ?? "Task",
+                dueDate: dueDate,
+                accountKind: foundKind,
+                listId: foundListId,
+                existingTaskId: linked.taskId
+            ))
+        }
+
+        taskItems = existingTasks + newTasks
+    }
+
     @State private var isSaving = false
 
     private func saveGoal() {
@@ -1686,7 +1891,9 @@ struct CreateGoalView: View {
         isSaving = true
 
         let extData = GoalExtendedData(
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            defaultListId: selectedGoalListId.isEmpty ? nil : selectedGoalListId,
+            defaultAccountKind: selectedGoalAccountKind == .personal ? "personal" : "professional"
         )
 
         let dueDate = calculateDueDate()
@@ -1695,7 +1902,7 @@ struct CreateGoalView: View {
         let filledTasks = taskItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let newTasks = filledTasks.filter { $0.existingTaskId == nil }
         let existingTasks = filledTasks.filter { $0.existingTaskId != nil }
-        let defListId = defaultListId
+        let defListId = selectedGoalListId.isEmpty ? defaultListId : selectedGoalListId
 
         Task {
             // Keep existing linked tasks
@@ -1721,7 +1928,7 @@ struct CreateGoalView: View {
                 let tempTask = GoogleTask(
                     id: UUID().uuidString,
                     title: item.title,
-                    notes: "Goal: \(goalTitle)",
+                    notes: nil,
                     status: "needsAction",
                     due: dueDateStr
                 )
@@ -1791,17 +1998,35 @@ struct CreateGoalView: View {
         }
     }
 
-    private func deleteGoal() {
+    private func deleteGoalWithTasks() {
         if let goal = editingGoal {
             // Delete linked Google Tasks
             for linked in goal.linkedTasks {
-                let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-                if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
-                    Task {
-                        await tasksVM.deleteTask(task, from: linked.listId, for: linked.accountKindEnum)
+                // Search all lists to find the task
+                var found = false
+                for (listId, tasks) in tasksVM.personalTasks {
+                    if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                        Task { await tasksVM.deleteTask(task, from: listId, for: .personal) }
+                        found = true; break
+                    }
+                }
+                if !found {
+                    for (listId, tasks) in tasksVM.professionalTasks {
+                        if let task = tasks.first(where: { $0.id == linked.taskId }) {
+                            Task { await tasksVM.deleteTask(task, from: listId, for: .professional) }
+                            break
+                        }
                     }
                 }
             }
+            goalsManager.deleteGoal(goal.id)
+        }
+        onDismiss()
+        dismiss()
+    }
+
+    private func deleteGoalOnly() {
+        if let goal = editingGoal {
             goalsManager.deleteGoal(goal.id)
         }
         onDismiss()

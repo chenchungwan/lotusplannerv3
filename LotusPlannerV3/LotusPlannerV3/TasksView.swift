@@ -3152,6 +3152,7 @@ struct TaskDetailsView: View {
     @State private var selectedPriority: TaskPriorityData?
 
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
+    @ObservedObject private var taskGoalLinkManager = TaskGoalLinkManager.shared
     
     // Track original due date to detect changes properly
     private let originalDueDate: Date?
@@ -3163,6 +3164,11 @@ struct TaskDetailsView: View {
     private let originalIsCompleted: Bool
     private let originalCompletedTimestamp: String?
     
+    private var linkedGoals: [GoalData] {
+        let goalIds = taskGoalLinkManager.goalIds(for: task.id)
+        return GoalsManager.shared.goals.filter { goalIds.contains($0.id) }
+    }
+
     private let dueDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -3396,6 +3402,52 @@ struct TaskDetailsView: View {
                     }
                 }
                 
+                // Linked Goals Section
+                if !linkedGoals.isEmpty {
+                    Section("Linked Goals") {
+                        ForEach(linkedGoals, id: \.id) { goal in
+                            Button {
+                                // Navigate to goals view
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    let nav = NavigationManager.shared
+                                    // Set the interval to match the goal's timeframe
+                                    switch goal.targetTimeframe {
+                                    case .week:
+                                        nav.switchToGoals()
+                                        nav.updateInterval(.week, date: goal.dueDate)
+                                    case .month:
+                                        nav.switchToGoals()
+                                        nav.updateInterval(.month, date: goal.dueDate)
+                                    case .year:
+                                        nav.switchToGoals()
+                                        nav.updateInterval(.year, date: goal.dueDate)
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "target")
+                                        .foregroundColor(goal.isCompleted ? .green : .accentColor)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(goal.title)
+                                            .font(.body)
+                                            .foregroundColor(.primary)
+                                        if let category = GoalsManager.shared.categories.first(where: { $0.id == goal.categoryId }) {
+                                            Text(category.title)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Due Date Section
                 Section("Due Date") {
                     if let dueDate = editedDueDate {
