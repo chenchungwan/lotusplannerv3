@@ -722,7 +722,10 @@ struct TimeboxView: View {
             )
             .frame(width: columnWidth)
         }
-        
+        .onDrop(of: [.text], isTargeted: nil) { providers in
+            handleTimeboxItemDrop(providers: providers, targetDate: date)
+        }
+
         // Divider between days (except for the last one)
         if index < weekDates.count - 1 {
             Rectangle()
@@ -775,11 +778,16 @@ struct TimeboxView: View {
                         .onTapGesture {
                             selectedEvent = event
                         }
+                        .onDrag {
+                            let json: [String: String] = ["type": "event", "id": event.id, "accountKind": isPersonal ? "personal" : "professional", "calendarId": event.calendarId ?? "primary"]
+                            let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
+                            return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
+                        }
                     }
                 }
                 .padding(.horizontal, 2)
             }
-            
+
             // All-day tasks row (one task per line, vertical stacking)
             if !allDayTasks.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
@@ -844,7 +852,6 @@ struct TimeboxView: View {
                                     bulkEditManager.state.selectedTaskIds.insert(task.id)
                                 }
                             } else {
-                                // Determine account kind
                                 let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
                                 taskSheetSelection = TimeboxTaskSelection(
                                     id: task.id,
@@ -853,6 +860,12 @@ struct TimeboxView: View {
                                     accountKind: accountKind
                                 )
                             }
+                        }
+                        .onDrag {
+                            let listId = findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks)
+                            let json: [String: String] = ["type": "task", "id": task.id, "listId": listId, "accountKind": isPersonal ? "personal" : "professional"]
+                            let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
+                            return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
                         }
                     }
                 }
@@ -900,5 +913,77 @@ struct TimeboxView: View {
             return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
         }
     }
-    
+
+    // MARK: - Timebox Drag & Drop
+
+    private func handleTimeboxItemDrop(providers: [NSItemProvider], targetDate: Date) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
+            guard let data = data as? Data,
+                  let json = String(data: data, encoding: .utf8),
+                  let jsonData = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
+                  let itemType = dict["type"],
+                  let itemId = dict["id"],
+                  let accountKind = dict["accountKind"] else { return }
+
+            let cal = Calendar.current
+
+            DispatchQueue.main.async {
+                if itemType == "task" {
+                    let listId = dict["listId"] ?? ""
+                    guard !listId.isEmpty else { return }
+                    let kind: GoogleAuthManager.AccountKind = accountKind == "personal" ? .personal : .professional
+                    let tasksDict = kind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                    guard let task = tasksDict[listId]?.first(where: { $0.id == itemId }) else { return }
+
+                    var updatedTask = task
+                    if task.hasSpecificDueTime {
+                        // Timed task: preserve time, change date
+                        let originalTime = task.dueDate ?? Date()
+                        let h = cal.component(.hour, from: originalTime)
+                        let m = cal.component(.minute, from: originalTime)
+                        guard let newDateTime = cal.date(bySettingHour: h, minute: m, second: 0, of: targetDate) else { return }
+
+                        let isoFormatter = ISO8601DateFormatter()
+                        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        isoFormatter.timeZone = TimeZone(identifier: "UTC")
+                        updatedTask.due = isoFormatter.string(from: newDateTime)
+
+                        if let tw = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
+                            let duration = tw.endTime.timeIntervalSince(tw.startTime)
+                            let twH = cal.component(.hour, from: tw.startTime)
+                            let twM = cal.component(.minute, from: tw.startTime)
+                            if let newStart = cal.date(bySettingHour: twH, minute: twM, second: 0, of: targetDate) {
+                                TaskTimeWindowManager.shared.saveTimeWindow(taskId: task.id, startTime: newStart, endTime: newStart.addingTimeInterval(duration), isAllDay: false)
+                            }
+                        }
+                    } else {
+                        // All-day task: change date only
+                        let dateFormatter = DateFormatter()
+                        dateFormatter.dateFormat = "yyyy-MM-dd"
+                        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                        updatedTask.due = dateFormatter.string(from: targetDate)
+                    }
+
+                    Task {
+                        await tasksVM.updateTask(updatedTask, in: listId, for: kind)
+                        refreshWeekCaches(force: true)
+                    }
+
+                } else if itemType == "event" {
+                    let isPersonal = accountKind == "personal"
+                    let events = isPersonal ? calendarVM.personalEvents : calendarVM.professionalEvents
+                    guard let event = events.first(where: { $0.id == itemId }) else { return }
+
+                    Task {
+                        await calendarVM.moveEventToDate(event, to: targetDate)
+                        refreshWeekCaches(force: true)
+                    }
+                }
+            }
+        }
+        return true
+    }
 }
