@@ -1031,4 +1031,48 @@ class CalendarViewModel: ObservableObject {
             devLog("Failed to move event: \(error)", level: .error, category: .calendar)
         }
     }
+
+    // MARK: - Move Event to Specific Date and Time
+
+    func moveEventToDateTime(_ event: GoogleCalendarEvent, to targetDateTime: Date) async {
+        guard let originalStart = event.startTime, let originalEnd = event.endTime else { return }
+
+        let duration = originalEnd.timeIntervalSince(originalStart)
+        let newEnd = targetDateTime.addingTimeInterval(duration)
+
+        let isPersonal = personalEvents.contains { $0.id == event.id }
+        let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+
+        do {
+            let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
+            let calId = event.calendarId ?? "primary"
+            let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
+            let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
+            let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("*", forHTTPHeaderField: "If-Match")
+
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime]
+            iso.timeZone = TimeZone.current
+            let body: [String: Any] = [
+                "start": ["dateTime": iso.string(from: targetDateTime), "timeZone": TimeZone.current.identifier],
+                "end": ["dateTime": iso.string(from: newEnd), "timeZone": TimeZone.current.identifier]
+            ]
+
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                devLog("Failed to move event to time: bad response", level: .error, category: .calendar)
+                return
+            }
+            await loadCalendarDataForWeek(containing: targetDateTime)
+        } catch {
+            devLog("Failed to move event to time: \(error)", level: .error, category: .calendar)
+        }
+    }
 }

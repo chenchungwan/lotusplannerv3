@@ -1,8 +1,29 @@
 import SwiftUI
 import Combine
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 #endif
+
+// MARK: - Drop Delegate for Timebox Columns
+struct TimeboxDropDelegate: DropDelegate {
+    let targetDate: Date
+    let allDayHeight: CGFloat
+    let onDrop: ([NSItemProvider], CGFloat) -> Bool
+
+    func performDrop(info: DropInfo) -> Bool {
+        let providers = info.itemProviders(for: [.plainText])
+        return onDrop(providers, info.location.y)
+    }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.plainText])
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+}
 
 struct TimeboxView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
@@ -722,9 +743,13 @@ struct TimeboxView: View {
             )
             .frame(width: columnWidth)
         }
-        .onDrop(of: [.text], isTargeted: nil) { providers in
-            handleTimeboxItemDrop(providers: providers, targetDate: date)
-        }
+        .onDrop(of: [.plainText], delegate: TimeboxDropDelegate(
+            targetDate: date,
+            allDayHeight: maxAllDayHeight,
+            onDrop: { providers, dropY in
+                handleTimeboxItemDrop(providers: providers, targetDate: date, dropY: dropY, allDayHeight: maxAllDayHeight)
+            }
+        ))
 
         // Divider between days (except for the last one)
         if index < weekDates.count - 1 {
@@ -916,12 +941,26 @@ struct TimeboxView: View {
 
     // MARK: - Timebox Drag & Drop
 
-    private func handleTimeboxItemDrop(providers: [NSItemProvider], targetDate: Date) -> Bool {
+    private let timeboxHourHeight: CGFloat = 60
+
+    private func timeFromDropY(_ dropY: CGFloat, allDayHeight: CGFloat, on date: Date) -> Date? {
+        let adjustedY = dropY - allDayHeight
+        guard adjustedY > 0 else { return nil }
+        let totalMinutes = Int(adjustedY / timeboxHourHeight * 60)
+        let snapped = max(0, min((totalMinutes / 15) * 15, 24 * 60 - 15))
+        return Calendar.current.date(bySettingHour: snapped / 60, minute: snapped % 60, second: 0, of: date)
+    }
+
+    private func handleTimeboxItemDrop(providers: [NSItemProvider], targetDate: Date, dropY: CGFloat, allDayHeight: CGFloat) -> Bool {
         guard let provider = providers.first else { return false }
 
-        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
-            guard let data = data as? Data,
-                  let json = String(data: data, encoding: .utf8),
+        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+            let json: String?
+            if let str = item as? String { json = str }
+            else if let data = item as? Data { json = String(data: data, encoding: .utf8) }
+            else { return }
+
+            guard let json,
                   let jsonData = json.data(using: .utf8),
                   let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
                   let itemType = dict["type"],
@@ -929,6 +968,7 @@ struct TimeboxView: View {
                   let accountKind = dict["accountKind"] else { return }
 
             let cal = Calendar.current
+            let droppedOnTimeline = timeFromDropY(dropY, allDayHeight: allDayHeight, on: targetDate)
 
             DispatchQueue.main.async {
                 if itemType == "task" {
@@ -939,8 +979,23 @@ struct TimeboxView: View {
                     guard let task = tasksDict[listId]?.first(where: { $0.id == itemId }) else { return }
 
                     var updatedTask = task
-                    if task.hasSpecificDueTime {
-                        // Timed task: preserve time, change date
+
+                    if let targetDateTime = droppedOnTimeline, task.hasSpecificDueTime {
+                        // Timed task dropped on timeline: use drop Y for new time
+                        let isoFormatter = ISO8601DateFormatter()
+                        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        isoFormatter.timeZone = TimeZone(identifier: "UTC")
+                        updatedTask.due = isoFormatter.string(from: targetDateTime)
+
+                        let duration: TimeInterval = {
+                            if let tw = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
+                                return tw.endTime.timeIntervalSince(tw.startTime)
+                            }
+                            return 3600
+                        }()
+                        TaskTimeWindowManager.shared.saveTimeWindow(taskId: task.id, startTime: targetDateTime, endTime: targetDateTime.addingTimeInterval(duration), isAllDay: false)
+                    } else if task.hasSpecificDueTime {
+                        // Timed task dropped in all-day area: preserve time, change date
                         let originalTime = task.dueDate ?? Date()
                         let h = cal.component(.hour, from: originalTime)
                         let m = cal.component(.minute, from: originalTime)
@@ -977,9 +1032,18 @@ struct TimeboxView: View {
                     let events = isPersonal ? calendarVM.personalEvents : calendarVM.professionalEvents
                     guard let event = events.first(where: { $0.id == itemId }) else { return }
 
-                    Task {
-                        await calendarVM.moveEventToDate(event, to: targetDate)
-                        refreshWeekCaches(force: true)
+                    if let targetDateTime = droppedOnTimeline, !event.isAllDay {
+                        // Timed event dropped on timeline: use drop Y for new time
+                        Task {
+                            await calendarVM.moveEventToDateTime(event, to: targetDateTime)
+                            refreshWeekCaches(force: true)
+                        }
+                    } else {
+                        // All-day event or dropped in all-day area: change date only
+                        Task {
+                            await calendarVM.moveEventToDate(event, to: targetDate)
+                            refreshWeekCaches(force: true)
+                        }
                     }
                 }
             }

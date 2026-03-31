@@ -447,10 +447,15 @@ struct TimeboxComponent: View {
                     onTaskTap?(task, listId)
                 }
             }
+            .onDrag {
+                let json: [String: String] = ["type": "task", "id": task.id, "listId": listId, "accountKind": layout.isPersonal ? "personal" : "professional"]
+                let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
+                return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
+            }
             .offset(x: layout.xOffset, y: layout.startOffset)
             .allowsHitTesting(true)
         } else {
-            // Event style (unchanged)
+            // Event style
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
@@ -487,6 +492,14 @@ struct TimeboxComponent: View {
                 if let event = layout.item as? GoogleCalendarEvent {
                     onEventTap?(event)
                 }
+            }
+            .onDrag {
+                if let event = layout.item as? GoogleCalendarEvent {
+                    let json: [String: String] = ["type": "event", "id": event.id, "accountKind": layout.isPersonal ? "personal" : "professional", "calendarId": event.calendarId ?? "primary"]
+                    let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
+                    return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
+                }
+                return NSItemProvider()
             }
             .offset(x: layout.xOffset, y: layout.startOffset)
             .allowsHitTesting(true)

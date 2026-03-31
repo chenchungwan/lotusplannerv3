@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 #endif
@@ -603,7 +604,7 @@ extension WeeklyView {
                                         .frame(width: 0.5),
                                     alignment: .trailing
                                 )
-                                .onDrop(of: [.text], isTargeted: nil) { providers in
+                                .onDrop(of: [.plainText], isTargeted: nil) { providers in
                                     handleEventDrop(providers: providers, targetDate: date)
                                 }
                                 .id("event_day_\(index)")
@@ -2431,9 +2432,13 @@ extension WeeklyView {
     private func handleEventDrop(providers: [NSItemProvider], targetDate: Date) -> Bool {
         guard let provider = providers.first else { return false }
 
-        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
-            guard let data = data as? Data,
-                  let json = String(data: data, encoding: .utf8),
+        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+            let json: String?
+            if let str = item as? String { json = str }
+            else if let data = item as? Data { json = String(data: data, encoding: .utf8) }
+            else { return }
+
+            guard let json,
                   let jsonData = json.data(using: .utf8),
                   let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
                   dict["type"] == "event",
