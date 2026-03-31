@@ -595,7 +595,7 @@ extension WeeklyView {
                         // 7-day event columns with fixed width
                         ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                             weekEventColumn(date: date)
-                                .frame(width: dayColumnWidth, alignment: .top) // Fixed width matching timeline
+                                .frame(width: dayColumnWidth, alignment: .top)
                                 .background(Color(.systemBackground))
                                 .overlay(
                                     Rectangle()
@@ -603,6 +603,9 @@ extension WeeklyView {
                                         .frame(width: 0.5),
                                     alignment: .trailing
                                 )
+                                .onDrop(of: [.text], isTargeted: nil) { providers in
+                                    handleEventDrop(providers: providers, targetDate: date)
+                                }
                                 .id("event_day_\(index)")
                         }
                     }
@@ -2025,8 +2028,19 @@ extension WeeklyView {
             )
         }
         .buttonStyle(.plain)
+        .onDrag {
+            let json: [String: String] = [
+                "type": "event",
+                "id": event.id,
+                "accountKind": isPersonal ? "personal" : "professional",
+                "calendarId": event.calendarId ?? "primary"
+            ]
+            let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
+            let str = String(data: data, encoding: .utf8) ?? ""
+            return NSItemProvider(object: str as NSString)
+        }
     }
-    
+
     private func formatEventTimeShort(_ date: Date) -> String {
         DateFormatter.shortTime.string(from: date)
     }
@@ -2414,6 +2428,31 @@ extension WeeklyView {
         }
     }
     
+    private func handleEventDrop(providers: [NSItemProvider], targetDate: Date) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
+            guard let data = data as? Data,
+                  let json = String(data: data, encoding: .utf8),
+                  let jsonData = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
+                  dict["type"] == "event",
+                  let eventId = dict["id"],
+                  let accountKind = dict["accountKind"] else { return }
+
+            DispatchQueue.main.async {
+                let isPersonal = accountKind == "personal"
+                let events = isPersonal ? calendarViewModel.personalEvents : calendarViewModel.professionalEvents
+                guard let event = events.first(where: { $0.id == eventId }) else { return }
+
+                Task {
+                    await calendarViewModel.moveEventToDate(event, to: targetDate)
+                }
+            }
+        }
+        return true
+    }
+
     private func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {
         let tasksDict = accountKind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
         

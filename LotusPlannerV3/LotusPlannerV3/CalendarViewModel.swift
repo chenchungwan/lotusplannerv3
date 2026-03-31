@@ -970,4 +970,65 @@ class CalendarViewModel: ObservableObject {
             return start1 < start2
         }
     }
+
+    // MARK: - Move Event to Different Date (Preserve Time)
+
+    func moveEventToDate(_ event: GoogleCalendarEvent, to targetDate: Date) async {
+        guard let originalStart = event.startTime, let originalEnd = event.endTime else { return }
+
+        let calendar = Calendar.current
+        let originalDay = calendar.startOfDay(for: originalStart)
+        let targetDay = calendar.startOfDay(for: targetDate)
+        guard !calendar.isDate(originalDay, inSameDayAs: targetDay) else { return }
+
+        let dayOffset = calendar.dateComponents([.day], from: originalDay, to: targetDay).day ?? 0
+        guard let newStart = calendar.date(byAdding: .day, value: dayOffset, to: originalStart),
+              let newEnd = calendar.date(byAdding: .day, value: dayOffset, to: originalEnd) else { return }
+
+        let isPersonal = personalEvents.contains { $0.id == event.id }
+        let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+
+        do {
+            let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
+            let calId = event.calendarId ?? "primary"
+            let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
+            let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
+            let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("*", forHTTPHeaderField: "If-Match")
+
+            var body: [String: Any]
+            if event.isAllDay {
+                let df = DateFormatter()
+                df.dateFormat = "yyyy-MM-dd"
+                let newEndAllDay = calendar.date(byAdding: .day, value: 1, to: newStart) ?? newEnd
+                body = [
+                    "start": ["date": df.string(from: newStart)],
+                    "end": ["date": df.string(from: newEndAllDay)]
+                ]
+            } else {
+                let iso = ISO8601DateFormatter()
+                iso.formatOptions = [.withInternetDateTime]
+                iso.timeZone = TimeZone.current
+                body = [
+                    "start": ["dateTime": iso.string(from: newStart), "timeZone": TimeZone.current.identifier],
+                    "end": ["dateTime": iso.string(from: newEnd), "timeZone": TimeZone.current.identifier]
+                ]
+            }
+
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                devLog("Failed to move event: bad response", level: .error, category: .calendar)
+                return
+            }
+            await loadCalendarDataForWeek(containing: targetDate)
+        } catch {
+            devLog("Failed to move event: \(error)", level: .error, category: .calendar)
+        }
+    }
 }
