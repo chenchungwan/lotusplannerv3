@@ -354,7 +354,7 @@ struct GlobalNavBar: View {
                                 Button(action: {
                                     navigationManager.switchToGoals()
                                 }) {
-                                    Label("Goals", systemImage: "target")
+                                    Label("Goals (Beta)", systemImage: "target")
                                 }
                             }
                             Divider()
@@ -451,11 +451,7 @@ struct GlobalNavBar: View {
                                     }
                                     if navigationManager.currentView != .goals {
                                         Button {
-                                            if navigationManager.currentView == .timebox {
-                                                // Already in timebox, do nothing or stay
-                                            } else {
-                                                navigationManager.switchToTimebox()
-                                            }
+                                            navigationManager.switchToTimebox()
                                         } label: {
                                             Image(systemName: "t.circle")
                                                 .font(adaptiveIconSize)
@@ -796,11 +792,7 @@ struct GlobalNavBar: View {
                                     }
                                     if navigationManager.currentView != .goals {
                                         Button {
-                                            if navigationManager.currentView == .timebox {
-                                                // Already in timebox, do nothing or stay
-                                            } else {
-                                                navigationManager.switchToTimebox()
-                                            }
+                                            navigationManager.switchToTimebox()
                                         } label: {
                                             Image(systemName: "t.circle")
                                                 .font(adaptiveIconSize)

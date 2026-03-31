@@ -127,15 +127,14 @@ class GoalsManager: ObservableObject {
             }
             var newGoals = deduplicatedGoals(from: mappedGoals)
 
-            // Preserve linked tasks from in-memory goals if Core Data lost them
+            // Preserve linked tasks from in-memory goals if Core Data version lost them
+            // (Don't re-save to Core Data here to avoid sync loops)
             let existingGoalsById = Dictionary(goals.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             for i in newGoals.indices {
                 if newGoals[i].linkedTasks.isEmpty,
                    let existing = existingGoalsById[newGoals[i].id],
                    !existing.linkedTasks.isEmpty {
                     newGoals[i].linkedTasks = existing.linkedTasks
-                    // Re-save to Core Data to persist the links
-                    updateGoalInCoreData(newGoals[i])
                     devLog("🎯 Preserved \(existing.linkedTasks.count) linked tasks for '\(newGoals[i].title)' during reload", level: .info, category: .goals)
                 }
             }

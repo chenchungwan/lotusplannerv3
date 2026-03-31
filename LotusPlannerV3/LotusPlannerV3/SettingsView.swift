@@ -118,6 +118,7 @@ class NavigationManager: ObservableObject {
     @Published var showTasksView = false
     @Published var currentInterval: TimelineInterval = .day
     @Published var currentDate: Date = Date()
+    @Published var viewRefreshCounter: Int = 0
     @Published var showingSettings = false
     @Published var showingAllTasks = false
     @Published var isShowingTimebox = false
@@ -187,7 +188,9 @@ class NavigationManager: ObservableObject {
     func switchToTimebox() {
         currentView = .timebox
         showTasksView = false
-        currentInterval = .week // Timebox is a weekly 7-column view
+        currentInterval = .week
+        currentDate = Date()
+        viewRefreshCounter += 1
     }
 
     func switchToBookView() {
@@ -1398,7 +1401,17 @@ struct SettingsView: View {
                             .padding(.top, 8)
                     }
                 } header: {
-                    Text("Goal Preferences")
+                    HStack(spacing: 8) {
+                        Text("Goal Preferences")
+                        Text("Beta")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
                 }
 
                 // Book View section - temporarily hidden

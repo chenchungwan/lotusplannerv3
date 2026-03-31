@@ -83,7 +83,7 @@ struct ContentView: View {
                     .id("CalendarYearlyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
             case .timebox:
                 TimeboxView(bulkEditManager: timeboxBulkEditManager)
-                    .id("TimeboxView-\(navigationManager.currentDate)")
+                    .id("TimeboxView-\(navigationManager.viewRefreshCounter)")
             case .bookView:
                 BookView()
                     .id("BookView")
