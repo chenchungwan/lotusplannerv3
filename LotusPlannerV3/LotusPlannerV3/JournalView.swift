@@ -37,6 +37,8 @@ struct JournalView: View {
     @State private var editingAnnotationId: UUID? = nil
     /// Text field content for the text input alert.
     @State private var annotationInputText: String = ""
+    /// ID of a newly created annotation (to auto-enter editing mode)
+    @State private var newlyCreatedAnnotationId: UUID? = nil
     /// Show confirmation alert before erasing journal content
     @State private var showingEraseConfirmation = false
     /// Loading states for sync status indicators
@@ -587,9 +589,20 @@ struct JournalView: View {
                 .id(isSyncing)
 
                 Button(action: {
-                    editingAnnotationId = nil
-                    annotationInputText = ""
-                    showTextInput = true
+                    // Create a new empty text box at center of canvas
+                    let center = CGPoint(
+                        x: max(canvasSize.width / 2, 100),
+                        y: max(canvasSize.height / 2, 100)
+                    )
+                    let newAnnotation = JournalTextAnnotation(
+                        id: UUID(),
+                        text: "",
+                        position: center,
+                        size: CGSize(width: 200, height: 60)
+                    )
+                    textAnnotations.append(newAnnotation)
+                    // The DraggableTextView will handle inline editing
+                    newlyCreatedAnnotationId = newAnnotation.id
                 }) {
                     Image(systemName: "character.cursor.ibeam")
                 }
@@ -793,19 +806,21 @@ struct JournalView: View {
                                     await saveTextAnnotations()
                                 }
                             },
-                            onEdit: {
-                                editingAnnotationId = textAnnotations[idx].id
-                                annotationInputText = textAnnotations[idx].text
-                                showTextInput = true
-                            },
+                            onEdit: { },
                             onChanged: {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                     Task { @MainActor in
                                         await saveTextAnnotations()
                                     }
                                 }
-                            }
+                            },
+                            startInEditMode: newlyCreatedAnnotationId == textAnnotations[idx].id
                         )
+                        .onAppear {
+                            if newlyCreatedAnnotationId == textAnnotations[idx].id {
+                                newlyCreatedAnnotationId = nil
+                            }
+                        }
                     }
                 }
             )
@@ -1640,54 +1655,111 @@ struct JournalView: View {
         var onDelete: () -> Void
         var onEdit: () -> Void
         var onChanged: () -> Void = {}
+        var startInEditMode: Bool = false
 
+        enum Mode { case idle, editing, selected }
+
+        @State private var mode: Mode = .idle
         @State private var dragOffset: CGSize = .zero
-        @State private var showControls: Bool = false
+        @State private var resizeOffset: CGSize = .zero
+        @State private var editText: String = ""
+        @FocusState private var isFocused: Bool
+
+        private let handleSize: CGFloat = 12
+        private let minSize: CGFloat = 60
 
         var body: some View {
-            ZStack(alignment: .topTrailing) {
-                Text(annotation.text)
-                    .font(.system(size: 16))
-                    .foregroundColor(.black)
-                    .padding(8)
-                    .frame(
-                        minWidth: 60,
-                        maxWidth: max(60, annotation.size.width),
-                        alignment: .topLeading
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-                    .background(Color.white.opacity(0.85))
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(showControls ? Color.accentColor : Color.gray.opacity(0.4), lineWidth: showControls ? 2 : 1)
-                    )
+            let currentWidth = max(minSize, annotation.size.width + resizeOffset.width)
+            let currentHeight = max(30, annotation.size.height + resizeOffset.height)
 
-                if showControls {
-                    HStack(spacing: 4) {
-                        Button(action: onEdit) {
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.accentColor)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                        }
-                        Button(action: onDelete) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                                .background(Color.red)
-                                .clipShape(Circle())
-                        }
+            ZStack {
+                // The text box
+                Group {
+                    if mode == .editing {
+                        // Active editing mode: solid blue border, editable text
+                        TextEditor(text: $editText)
+                            .font(.system(size: 16))
+                            .scrollContentBackground(.hidden)
+                            .background(Color.white.opacity(0.9))
+                            .focused($isFocused)
+                            .frame(width: currentWidth, height: currentHeight)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.accentColor, lineWidth: 2)
+                            )
+                            .cornerRadius(4)
+                    } else {
+                        // Idle or selected: display text
+                        Text(annotation.text.isEmpty ? "Text box" : annotation.text)
+                            .font(.system(size: 16))
+                            .foregroundColor(annotation.text.isEmpty ? .secondary : .black)
+                            .padding(6)
+                            .frame(width: currentWidth, height: currentHeight, alignment: .topLeading)
+                            .background(Color.white.opacity(0.9))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(
+                                        mode == .selected ? Color.accentColor : Color.accentColor.opacity(0.5),
+                                        style: mode == .selected ? StrokeStyle(lineWidth: 1.5, dash: [6, 3]) : StrokeStyle(lineWidth: 1)
+                                    )
+                            )
+                            .cornerRadius(4)
                     }
-                    .offset(x: 8, y: -8)
+                }
+
+                // Resize handles (only in selected mode)
+                if mode == .selected {
+                    // Delete button top-right
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(.red)
+                            .background(Color.white.clipShape(Circle()))
+                    }
+                    .offset(x: currentWidth / 2 + 4, y: -currentHeight / 2 - 4)
+
+                    // Left handle
+                    resizeHandle()
+                        .offset(x: -currentWidth / 2, y: 0)
+
+                    // Right handle
+                    resizeHandle()
+                        .offset(x: currentWidth / 2, y: 0)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    resizeOffset = CGSize(width: value.translation.width, height: 0)
+                                }
+                                .onEnded { value in
+                                    annotation.size.width = max(minSize, annotation.size.width + value.translation.width)
+                                    resizeOffset = .zero
+                                    onChanged()
+                                }
+                        )
+
+                    // Bottom handle
+                    resizeHandle()
+                        .offset(x: 0, y: currentHeight / 2)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    resizeOffset = CGSize(width: 0, height: value.translation.height)
+                                }
+                                .onEnded { value in
+                                    annotation.size.height = max(30, annotation.size.height + value.translation.height)
+                                    resizeOffset = .zero
+                                    onChanged()
+                                }
+                        )
                 }
             }
+            .frame(width: currentWidth + handleSize, height: currentHeight + handleSize)
             .position(
                 x: annotation.position.x + dragOffset.width,
                 y: annotation.position.y + dragOffset.height
             )
             .gesture(
+                mode == .selected ?
                 DragGesture()
                     .onChanged { value in
                         dragOffset = value.translation
@@ -1698,10 +1770,55 @@ struct JournalView: View {
                         dragOffset = .zero
                         onChanged()
                     }
+                : nil
             )
-            .onTapGesture {
-                withAnimation { showControls.toggle() }
+            .onTapGesture(count: 2) {
+                // Double-tap to enter editing mode
+                editText = annotation.text
+                withAnimation { mode = .editing }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { isFocused = true }
             }
+            .onTapGesture(count: 1) {
+                if mode == .editing {
+                    // Tapping while editing: commit and go to selected
+                    commitEdit()
+                } else if mode == .selected {
+                    // Tapping while selected: go to idle
+                    withAnimation { mode = .idle }
+                } else {
+                    // Tapping while idle: go to selected
+                    withAnimation { mode = .selected }
+                }
+            }
+            .onChange(of: isFocused) { _, focused in
+                if !focused && mode == .editing {
+                    commitEdit()
+                }
+            }
+            .onAppear {
+                if startInEditMode {
+                    editText = annotation.text
+                    mode = .editing
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { isFocused = true }
+                }
+            }
+        }
+
+        private func commitEdit() {
+            let trimmed = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                annotation.text = trimmed
+            }
+            isFocused = false
+            withAnimation { mode = .selected }
+            onChanged()
+        }
+
+        private func resizeHandle() -> some View {
+            Circle()
+                .fill(Color.accentColor)
+                .frame(width: handleSize, height: handleSize)
+                .shadow(color: .black.opacity(0.2), radius: 1)
         }
     }
 
