@@ -147,17 +147,10 @@ struct WeeklyView: View {
 
     private var baseViewWithSheets: some View {
         baseViewWithNavigation
-        .onAppear {
-            // Listen for bulk edit toggle notification
-            NotificationCenter.default.addObserver(
-                forName: Notification.Name("ToggleWeeklyCalendarBulkEdit"),
-                object: nil,
-                queue: .main
-            ) { _ in
-                bulkEditManager.state.isActive.toggle()
-                if !bulkEditManager.state.isActive {
-                    bulkEditManager.state.selectedTaskIds.removeAll()
-                }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleWeeklyCalendarBulkEdit"))) { _ in
+            bulkEditManager.state.isActive.toggle()
+            if !bulkEditManager.state.isActive {
+                bulkEditManager.state.selectedTaskIds.removeAll()
             }
         }
         .sheet(item: Binding<GoogleCalendarEvent?>(

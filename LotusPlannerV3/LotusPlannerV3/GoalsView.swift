@@ -380,11 +380,27 @@ struct GoalCardGridView: View {
             } else {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                     ForEach(orderedGoals, id: \.goal.id) { item in
+                        // Resolve tasks at THIS level where @ObservedObject tasksVM triggers re-render
+                        let tasks = item.goal.linkedTasks.compactMap { linked -> GoalCardTaskInfo? in
+                            for (_, tasks) in tasksVM.personalTasks {
+                                if let t = tasks.first(where: { $0.id == linked.taskId }) {
+                                    return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
+                                }
+                            }
+                            for (_, tasks) in tasksVM.professionalTasks {
+                                if let t = tasks.first(where: { $0.id == linked.taskId }) {
+                                    return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
+                                }
+                            }
+                            return GoalCardTaskInfo(id: linked.taskId, title: linked.taskTitle ?? "Task", isCompleted: false, dueDate: nil)
+                        }.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+
                         GoalCard(
                             goal: item.goal,
                             category: item.category,
                             onTap: { onGoalTap(item.goal) },
-                            onEdit: { onGoalEdit(item.goal) }
+                            onEdit: { onGoalEdit(item.goal) },
+                            taskInfos: tasks
                         )
                         .draggable(item.goal.id.uuidString)
                         .dropDestination(for: String.self) { droppedItems, _ in
@@ -411,14 +427,22 @@ struct GoalCardGridView: View {
     }
 }
 
+// MARK: - Task Info for Goal Card
+struct GoalCardTaskInfo: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let isCompleted: Bool
+    let dueDate: Date?
+}
+
 // MARK: - Individual Goal Card
 struct GoalCard: View {
     let goal: GoalData
     let category: GoalCategoryData
     let onTap: () -> Void
     let onEdit: () -> Void
+    var taskInfos: [GoalCardTaskInfo] = []
 
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
     @ObservedObject private var goalsManager = GoalsManager.shared
 
     private static let dueDateFormatter: DateFormatter = {
@@ -465,16 +489,33 @@ struct GoalCard: View {
                 )
                 .fixedSize()
 
-            // Tasks — each in its own rounded white card, scrollable if needed
-            if !goal.linkedTasks.isEmpty {
-                let sorted = goal.linkedTasks.sorted { a, b in
-                    let aDate = lookupTask(a)?.dueDate ?? .distantFuture
-                    let bDate = lookupTask(b)?.dueDate ?? .distantFuture
-                    return aDate < bDate
-                }
+            // Tasks from pre-resolved taskInfos
+            if !taskInfos.isEmpty {
                 VStack(spacing: 6) {
-                    ForEach(sorted, id: \.taskId) { linkedTask in
-                        goalTaskRow(linkedTask)
+                    ForEach(taskInfos) { info in
+                        HStack(spacing: 8) {
+                            Image(systemName: info.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(info.isCompleted ? .green : .secondary)
+                                .font(.body)
+                            Text(info.title)
+                                .font(.subheadline)
+                                .strikethrough(info.isCompleted)
+                                .foregroundColor(info.isCompleted ? .secondary : .primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            if let dueDate = info.dueDate {
+                                let tag = dueDateTagInfo(dueDate, isCompleted: info.isCompleted)
+                                Text(tag.text)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(tag.bgColor)
+                                    .foregroundColor(tag.textColor)
+                                    .cornerRadius(4)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 6)
                     }
                 }
             }
@@ -485,52 +526,6 @@ struct GoalCard: View {
         .cornerRadius(10)
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }
-    }
-
-    private func lookupTask(_ linked: LinkedTaskData) -> GoogleTask? {
-        let allTasks = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-        for (_, tasks) in allTasks {
-            if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                return task
-            }
-        }
-        return nil
-    }
-
-    @ViewBuilder
-    private func goalTaskRow(_ linked: LinkedTaskData) -> some View {
-        let task = lookupTask(linked)
-        let isCompleted = task?.isCompleted ?? false
-
-        HStack(spacing: 8) {
-            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                .foregroundColor(isCompleted ? .green : .secondary)
-                .font(.body)
-
-            Text(task?.title ?? linked.taskTitle ?? "Task")
-                .font(.subheadline)
-                .strikethrough(isCompleted)
-                .foregroundColor(isCompleted ? .secondary : .primary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer()
-
-            if let dueDate = task?.dueDate {
-                let tag = dueDateTagInfo(dueDate, isCompleted: isCompleted)
-                Text(tag.text)
-                    .font(.caption2)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(tag.bgColor)
-                    .foregroundColor(tag.textColor)
-                    .cornerRadius(4)
-            }
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(Color(.systemBackground))
-        .cornerRadius(8)
-        .shadow(color: .black.opacity(0.04), radius: 1, x: 0, y: 1)
     }
 
     private func dueDateTagInfo(_ date: Date, isCompleted: Bool) -> (text: String, textColor: Color, bgColor: Color) {

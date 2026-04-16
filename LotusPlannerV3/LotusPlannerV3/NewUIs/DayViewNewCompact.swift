@@ -496,9 +496,10 @@ struct DayViewNewCompact: View {
     }
 
     private func filteredTasksDictForDay(_ dict: [String: [GoogleTask]], on date: Date) -> [String: [GoogleTask]] {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        let calendar = Calendar.mondayFirst
+        let startOfViewedDate = calendar.startOfDay(for: date)
+        let startOfToday = calendar.startOfDay(for: Date())
+        let isViewingToday = startOfViewedDate == startOfToday
 
         var result: [String: [GoogleTask]] = [:]
         for (listId, tasks) in dict {
@@ -510,9 +511,17 @@ struct DayViewNewCompact: View {
                     }
                     return false
                 }
+
                 // For incomplete tasks
                 if let dueDate = task.dueDate {
-                    return dueDate >= startOfDay && dueDate < endOfDay
+                    let startOfDueDate = calendar.startOfDay(for: dueDate)
+                    let isViewingDueDate = startOfViewedDate == startOfDueDate
+                    let isOverdue = startOfDueDate < startOfToday
+
+                    // Show if:
+                    // 1. We're viewing its due date (past or future), OR
+                    // 2. We're viewing today AND it's overdue
+                    return isViewingDueDate || (isViewingToday && isOverdue)
                 }
                 return false
             }

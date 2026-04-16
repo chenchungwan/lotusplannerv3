@@ -374,7 +374,8 @@ struct TimeframeColumnView: View {
                                         goal: goal,
                                         category: category,
                                         onTap: { onGoalTap(goal) },
-                                        onEdit: { onGoalEdit(goal) }
+                                        onEdit: { onGoalEdit(goal) },
+                                        taskInfos: resolveTasksForGoal(goal)
                                     )
                                 }
                             }
@@ -464,6 +465,24 @@ struct TimeframeColumnView: View {
             TimeframeGroup(from: goal) == timeframe
         }
         .sorted { $0.displayOrder < $1.displayOrder }
+    }
+
+    private func resolveTasksForGoal(_ goal: GoalData) -> [GoalCardTaskInfo] {
+        goal.linkedTasks.compactMap { linked -> GoalCardTaskInfo? in
+            let tasksVM = DataManager.shared.tasksViewModel
+            for (_, tasks) in tasksVM.personalTasks {
+                if let t = tasks.first(where: { $0.id == linked.taskId }) {
+                    return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
+                }
+            }
+            for (_, tasks) in tasksVM.professionalTasks {
+                if let t = tasks.first(where: { $0.id == linked.taskId }) {
+                    return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
+                }
+            }
+            return GoalCardTaskInfo(id: linked.taskId, title: linked.taskTitle ?? "Task", isCompleted: false, dueDate: nil)
+        }
+        .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
     }
 
     private func isCurrentWeek(_ timeframe: TimeframeGroup) -> Bool {
