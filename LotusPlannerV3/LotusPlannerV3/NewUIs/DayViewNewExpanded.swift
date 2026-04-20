@@ -131,7 +131,7 @@ struct DayViewNewExpanded: View {
             )
         }
     }
-    
+
     // MARK: - Left Section
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {

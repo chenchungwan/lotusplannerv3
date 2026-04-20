@@ -113,7 +113,7 @@ struct DayViewNewClassic: View {
             )
         }
     }
-    
+
     // MARK: - Left Section (from Timebox)
     private func leftDaySectionWithDivider(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {

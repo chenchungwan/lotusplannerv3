@@ -21,6 +21,8 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save snapshots of your calendar day and week views to Photos.</string>
 	<key>GOOGLE_CLIENT_ID</key>
 	<string>1079954098512-aahk5s97468gvetqdoog6ccsmfkaf04c.apps.googleusercontent.com</string>
 	<key>UIBackgroundModes</key>
