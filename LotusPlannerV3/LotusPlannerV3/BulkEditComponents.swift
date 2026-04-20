@@ -386,10 +386,31 @@ struct BulkMoveDestinationPicker: View {
     }
 }
 
+// MARK: - Open Task ID Helpers
+
+extension Dictionary where Key == String, Value == [GoogleTask] {
+    /// Set of task IDs whose tasks are not completed across every list in this dict.
+    var openTaskIds: Set<String> {
+        var result: Set<String> = []
+        for tasks in self.values {
+            for task in tasks where !task.isCompleted {
+                result.insert(task.id)
+            }
+        }
+        return result
+    }
+}
+
 // MARK: - Bulk Edit Toolbar View
 
 struct BulkEditToolbarView: View {
     @ObservedObject var bulkEditManager: BulkEditManager
+    var visibleOpenTaskIds: Set<String> = []
+
+    private var allVisibleSelected: Bool {
+        !visibleOpenTaskIds.isEmpty &&
+            visibleOpenTaskIds.isSubset(of: bulkEditManager.state.selectedTaskIds)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -414,6 +435,21 @@ struct BulkEditToolbarView: View {
                 Text("\(bulkEditManager.state.selectedTaskIds.count) selected")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+
+                // Select All / Deselect All toggle
+                Button {
+                    if allVisibleSelected {
+                        bulkEditManager.state.selectedTaskIds.subtract(visibleOpenTaskIds)
+                    } else {
+                        bulkEditManager.state.selectedTaskIds.formUnion(visibleOpenTaskIds)
+                    }
+                } label: {
+                    Text(allVisibleSelected ? "Deselect All" : "Select All")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.plain)
+                .disabled(visibleOpenTaskIds.isEmpty)
 
                 Spacer()
 

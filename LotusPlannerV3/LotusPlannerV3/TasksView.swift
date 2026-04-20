@@ -1918,8 +1918,12 @@ struct TasksView: View {
                     .background(.ultraThinMaterial)
 
                 if bulkEditManager.state.isActive {
-                    BulkEditToolbarView(bulkEditManager: bulkEditManager)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                    BulkEditToolbarView(
+                        bulkEditManager: bulkEditManager,
+                        visibleOpenTaskIds: filteredPersonalTasks.openTaskIds
+                            .union(filteredProfessionalTasks.openTaskIds)
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
         }

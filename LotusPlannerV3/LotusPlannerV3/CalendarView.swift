@@ -965,6 +965,7 @@ struct CalendarView: View {
             HStack(spacing: 12) {
                 bulkEditExitButton
                 bulkEditSelectionCount
+                bulkEditSelectAllButton
                 Spacer()
                 bulkEditActionButtons
             }
@@ -974,6 +975,32 @@ struct CalendarView: View {
 
             Divider()
         }
+    }
+
+    private var visibleOpenTaskIds: Set<String> {
+        cachedMonthPersonalTasks.openTaskIds.union(cachedMonthProfessionalTasks.openTaskIds)
+    }
+
+    private var allVisibleOpenTasksSelected: Bool {
+        !visibleOpenTaskIds.isEmpty &&
+            visibleOpenTaskIds.isSubset(of: bulkEditManager.state.selectedTaskIds)
+    }
+
+    private var bulkEditSelectAllButton: some View {
+        Button {
+            let ids = visibleOpenTaskIds
+            if allVisibleOpenTasksSelected {
+                bulkEditManager.state.selectedTaskIds.subtract(ids)
+            } else {
+                bulkEditManager.state.selectedTaskIds.formUnion(ids)
+            }
+        } label: {
+            Text(allVisibleOpenTasksSelected ? "Deselect All" : "Select All")
+                .font(.subheadline)
+                .fontWeight(.medium)
+        }
+        .buttonStyle(.plain)
+        .disabled(visibleOpenTaskIds.isEmpty)
     }
 
     private var bulkEditExitButton: some View {

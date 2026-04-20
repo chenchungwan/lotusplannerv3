@@ -288,7 +288,11 @@ struct DayViewNewExpanded: View {
         VStack(spacing: 0) {
             // Bulk Edit Toolbar (shown when in bulk edit mode)
             if bulkEditManager.state.isActive {
-                BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                BulkEditToolbarView(
+                    bulkEditManager: bulkEditManager,
+                    visibleOpenTaskIds: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate).openTaskIds
+                        .union(filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate).openTaskIds)
+                )
             }
 
             // Show different layouts based on which accounts are linked

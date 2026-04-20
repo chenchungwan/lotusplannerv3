@@ -691,6 +691,24 @@ struct TasksDetailColumn: View {
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
 
+                                    // Select All / Deselect All toggle
+                                    let visibleOpenIds = Set(tasks.filter { !$0.isCompleted }.map { $0.id })
+                                    let allVisibleSelected = !visibleOpenIds.isEmpty &&
+                                        visibleOpenIds.isSubset(of: bulkEditManager.state.selectedTaskIds)
+                                    Button {
+                                        if allVisibleSelected {
+                                            bulkEditManager.state.selectedTaskIds.subtract(visibleOpenIds)
+                                        } else {
+                                            bulkEditManager.state.selectedTaskIds.formUnion(visibleOpenIds)
+                                        }
+                                    } label: {
+                                        Text(allVisibleSelected ? "Deselect All" : "Select All")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(visibleOpenIds.isEmpty)
+
                                     Spacer()
 
                                     // Action buttons

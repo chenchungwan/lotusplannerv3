@@ -126,7 +126,10 @@ struct WeeklyView: View {
         VStack(spacing: 0) {
             // Bulk Edit Toolbar (shown when in bulk edit mode)
             if bulkEditManager.state.isActive {
-                BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                BulkEditToolbarView(
+                    bulkEditManager: bulkEditManager,
+                    visibleOpenTaskIds: visibleOpenTaskIdsForWeek()
+                )
             }
 
             if !hideNavBar {
@@ -441,6 +444,15 @@ struct WeeklyView: View {
     }
 
     // MARK: - Bulk Edit Helper
+    private func visibleOpenTaskIdsForWeek() -> Set<String> {
+        var ids: Set<String> = []
+        for date in weekDates {
+            ids.formUnion(getFilteredTasksForSpecificDate(date: date, accountKind: .personal).openTaskIds)
+            ids.formUnion(getFilteredTasksForSpecificDate(date: date, accountKind: .professional).openTaskIds)
+        }
+        return ids
+    }
+
     private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 

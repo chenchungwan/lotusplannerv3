@@ -130,6 +130,14 @@ struct TimeboxView: View {
         calendarVM.events(for: date)
     }
     
+    private func visibleOpenTaskIdsForWeek() -> Set<String> {
+        var ids: Set<String> = []
+        for date in weekDates {
+            ids.formUnion(getTasksForDate(date).openTaskIds)
+        }
+        return ids
+    }
+
     private func getTasksForDate(_ date: Date) -> [String: [GoogleTask]] {
         let calendar = Calendar.mondayFirst
         var filteredTasks: [String: [GoogleTask]] = [:]
@@ -214,7 +222,10 @@ struct TimeboxView: View {
         VStack(spacing: 0) {
             // Bulk Edit Toolbar (shown when in bulk edit mode)
             if bulkEditManager.state.isActive {
-                BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                BulkEditToolbarView(
+                    bulkEditManager: bulkEditManager,
+                    visibleOpenTaskIds: visibleOpenTaskIdsForWeek()
+                )
             }
 
             // Global Navigation Bar

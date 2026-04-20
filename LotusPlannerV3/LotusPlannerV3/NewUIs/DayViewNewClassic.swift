@@ -242,7 +242,11 @@ struct DayViewNewClassic: View {
             VStack(spacing: 0) {
                 // Bulk Edit Toolbar (shown when in bulk edit mode)
                 if bulkEditManager.state.isActive {
-                    BulkEditToolbarView(bulkEditManager: bulkEditManager)
+                    BulkEditToolbarView(
+                        bulkEditManager: bulkEditManager,
+                        visibleOpenTaskIds: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate).openTaskIds
+                            .union(filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate).openTaskIds)
+                    )
                 }
 
                 // Personal & Professional tasks (full width) with vertical scrolling
