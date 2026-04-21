@@ -778,41 +778,47 @@ extension WeeklyView {
                     // Logs content (collapsible)
                     if logsExpanded {
                         VStack(spacing: 0) {
-                            // Built-in logs in user-configured order
-                            let visibleBuiltInLogs = appPrefs.logDisplayOrder.filter { isBuiltInLogVisible($0) }
-                            let hasCustom = appPrefs.showCustomLogs && hasCustomLogsForWeek()
-                            ForEach(Array(visibleBuiltInLogs.enumerated()), id: \.element) { idx, logType in
-                                weekLogRow(for: logType, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
+                            // Logs in user-configured order (custom entry is
+                            // interleaved with built-ins instead of always last).
+                            let visibleEntries = appPrefs.logDisplayOrder.filter { entry in
+                                switch entry {
+                                case .builtIn(let t):
+                                    return isBuiltInLogVisible(t)
+                                case .custom:
+                                    return appPrefs.showCustomLogs && hasCustomLogsForWeek()
+                                }
+                            }
+                            ForEach(Array(visibleEntries.enumerated()), id: \.element) { idx, entry in
+                                switch entry {
+                                case .builtIn(let t):
+                                    weekLogRow(for: t, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
+                                case .custom:
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 0) {
+                                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                                                weekCustomLogColumn(date: date)
+                                                    .frame(width: dayColumnWidth)
+                                                    .background(Color(.systemBackground))
+                                                    .overlay(
+                                                        Rectangle()
+                                                            .fill(Color(.systemGray4))
+                                                            .frame(width: 0.5),
+                                                        alignment: .trailing
+                                                    )
+                                                    .id("customlog_day_\(index)")
+                                            }
+                                        }
+                                        .frame(width: fixedWidth)
+                                    }
+                                    .padding(.all, 8)
+                                    .background(Color(.systemGray6).opacity(0.15))
+                                }
 
-                                // Divider if not the last visible item
-                                if idx < visibleBuiltInLogs.count - 1 || hasCustom {
+                                if idx < visibleEntries.count - 1 {
                                     Rectangle()
                                         .fill(Color(.systemGray3))
                                         .frame(height: 1)
                                 }
-                            }
-
-                            // Custom Logs Row
-                            if hasCustom {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 0) {
-                                        ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                            weekCustomLogColumn(date: date)
-                                                .frame(width: dayColumnWidth)
-                                                .background(Color(.systemBackground))
-                                                .overlay(
-                                                    Rectangle()
-                                                        .fill(Color(.systemGray4))
-                                                        .frame(width: 0.5),
-                                                    alignment: .trailing
-                                                )
-                                                .id("customlog_day_\(index)")
-                                        }
-                                    }
-                                    .frame(width: fixedWidth)
-                                }
-                                .padding(.all, 8)
-                                .background(Color(.systemGray6).opacity(0.15))
                             }
                         }
                     }
@@ -1269,24 +1275,27 @@ extension WeeklyView {
     
     private func weekDayRowLogsColumn(date: Date) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            ForEach(appPrefs.logDisplayOrder) { logType in
-                if isBuiltInLogVisible(logType) {
-                    weekDayRowLogCell(for: logType, date: date)
-                    Divider()
-                }
-            }
-
-            // Custom Logs
-            if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        let enabledItems = customLogManager.items.filter { $0.isEnabled }
-                        customLogSummary(items: enabledItems, date: date)
+            ForEach(appPrefs.logDisplayOrder) { entry in
+                switch entry {
+                case .builtIn(let t):
+                    if isBuiltInLogVisible(t) {
+                        weekDayRowLogCell(for: t, date: date)
+                        Divider()
                     }
-                    .padding(.all, 8)
+                case .custom:
+                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                                customLogSummary(items: enabledItems, date: date)
+                            }
+                            .padding(.all, 8)
+                        }
+                        .frame(width: logColumnWidth(), alignment: .topLeading)
+                        .frame(minHeight: 80)
+                        Divider()
+                    }
                 }
-                .frame(width: logColumnWidth(), alignment: .topLeading)
-                .frame(minHeight: 80)
             }
         }
     }
@@ -1439,10 +1448,26 @@ extension WeeklyView {
             }
 
             // Log columns in user-configured order
-            ForEach(appPrefs.logDisplayOrder) { logType in
-                if isBuiltInLogVisible(logType) {
-                    weekDayFixedLogCell(for: logType, date: date, width: 228.6)
-                    Divider()
+            ForEach(appPrefs.logDisplayOrder) { entry in
+                switch entry {
+                case .builtIn(let t):
+                    if isBuiltInLogVisible(t) {
+                        weekDayFixedLogCell(for: t, date: date, width: 228.6)
+                        Divider()
+                    }
+                case .custom:
+                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                                customLogSummary(items: enabledItems, date: date)
+                            }
+                            .padding(.all, 8)
+                        }
+                        .frame(width: 228.6, alignment: .topLeading)
+                        .frame(minHeight: 80)
+                        Divider()
+                    }
                 }
             }
         }
@@ -1592,14 +1617,36 @@ extension WeeklyView {
                 Divider()
             }
 
-            // Log columns in user-configured order
-            let visibleLogs = appPrefs.logDisplayOrder.filter { isBuiltInLogVisible($0) }
-            if let first = visibleLogs.first {
-                weekDayRowFlexLogCell(for: first, date: date, useFixedWidth: true)
-                Divider()
+            // Log columns in user-configured order (custom log interleaves with built-ins).
+            let visibleEntries = appPrefs.logDisplayOrder.filter { entry in
+                switch entry {
+                case .builtIn(let t): return isBuiltInLogVisible(t)
+                case .custom:         return appPrefs.showCustomLogs && hasCustomLogsForDate(date)
+                }
             }
-            ForEach(visibleLogs.dropFirst().map { $0 }, id: \.self) { logType in
-                weekDayRowFlexLogCell(for: logType, date: date, useFixedWidth: false)
+            ForEach(Array(visibleEntries.enumerated()), id: \.element) { idx, entry in
+                let isFirst = idx == 0
+                switch entry {
+                case .builtIn(let t):
+                    weekDayRowFlexLogCell(for: t, date: date, useFixedWidth: isFirst)
+                case .custom:
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                            customLogSummary(items: enabledItems, date: date)
+                        }
+                        .padding(.all, 8)
+                    }
+                    .frame(
+                        minWidth: isFirst ? 228.6 : 200,
+                        maxWidth: isFirst ? 228.6 : .infinity,
+                        alignment: .topLeading
+                    )
+                    .frame(minHeight: 80)
+                }
+                if isFirst {
+                    Divider()
+                }
             }
         }
         .frame(minHeight: 120)

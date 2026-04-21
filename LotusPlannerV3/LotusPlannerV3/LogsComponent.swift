@@ -8,34 +8,67 @@ struct LogsComponent: View {
     let horizontal: Bool
     let allowInternalScrolling: Bool
     let compactHorizontal: Bool
+    /// When non-nil, render only these built-in log types regardless of the
+    /// app-wide visibility prefs. Used by the custom day view to drop a single
+    /// log section (e.g. just Weight) into a cell with the same styling as the
+    /// other day views.
+    let visibleLogsOverride: Set<BuiltInLogType>?
+    /// When non-nil, overrides `appPrefs.showCustomLogs`. Use `true` to force
+    /// the custom-log section, `false` to hide it.
+    let includeCustomOverride: Bool?
+    /// When false, the "Logs" header + add button at the top is hidden.
+    let showHeader: Bool
 
-    init(currentDate: Date = Date(), horizontal: Bool = false, allowInternalScrolling: Bool = true, compactHorizontal: Bool = false) {
+    init(currentDate: Date = Date(),
+         horizontal: Bool = false,
+         allowInternalScrolling: Bool = true,
+         compactHorizontal: Bool = false,
+         visibleLogsOverride: Set<BuiltInLogType>? = nil,
+         includeCustomOverride: Bool? = nil,
+         showHeader: Bool = true) {
         self.currentDate = currentDate
         self.horizontal = horizontal
         self.allowInternalScrolling = allowInternalScrolling
         self.compactHorizontal = compactHorizontal
+        self.visibleLogsOverride = visibleLogsOverride
+        self.includeCustomOverride = includeCustomOverride
+        self.showHeader = showHeader
+    }
+
+    private var showCustomLogsComputed: Bool {
+        includeCustomOverride ?? appPrefs.showCustomLogs
+    }
+
+    private var anythingToShow: Bool {
+        if visibleLogsOverride != nil || includeCustomOverride != nil {
+            let anyLogs = (visibleLogsOverride?.isEmpty == false)
+            return anyLogs || showCustomLogsComputed
+        }
+        return appPrefs.showAnyLogs
     }
     
     var body: some View {
-        if appPrefs.showAnyLogs {
+        if anythingToShow {
             VStack(alignment: .leading, spacing: 8) {
                 // Header with + button
-                HStack {
-                    Text("Logs")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        viewModel.showingAddLogSheet = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(viewModel.accentColor)
+                if showHeader {
+                    HStack {
+                        Text("Logs")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+
+                        Spacer()
+
+                        Button(action: {
+                            viewModel.showingAddLogSheet = true
+                        }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(viewModel.accentColor)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 
                 // All log sections (scrollable only in horizontal mode)
@@ -45,20 +78,18 @@ struct LogsComponent: View {
                     } else if horizontal {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 8) {
-                                let visibleLogs = appPrefs.logDisplayOrder.filter { isLogVisible($0) }
-                                ForEach(stride(from: 0, to: visibleLogs.count, by: 2).map({ $0 }), id: \.self) { index in
-                                    HStack(alignment: .top, spacing: 8) {
-                                        builtInLogSection(for: visibleLogs[index])
-                                        if index + 1 < visibleLogs.count {
-                                            builtInLogSection(for: visibleLogs[index + 1])
-                                        }
-                                        Spacer()
+                                let visibleEntries = appPrefs.logDisplayOrder.filter { entry in
+                                    switch entry {
+                                    case .builtIn(let t): return isLogVisible(t)
+                                    case .custom:         return showCustomLogsComputed
                                     }
                                 }
-
-                                if appPrefs.showCustomLogs {
+                                ForEach(stride(from: 0, to: visibleEntries.count, by: 2).map({ $0 }), id: \.self) { index in
                                     HStack(alignment: .top, spacing: 8) {
-                                        customLogSectionHorizontal
+                                        logSectionView(for: visibleEntries[index], horizontal: true)
+                                        if index + 1 < visibleEntries.count {
+                                            logSectionView(for: visibleEntries[index + 1], horizontal: true)
+                                        }
                                         Spacer()
                                     }
                                 }
@@ -67,15 +98,17 @@ struct LogsComponent: View {
                     } else {
                         // Vertical layout - conditionally scrollable based on allowInternalScrolling
                         let content = VStack(spacing: 8) {
-                            ForEach(appPrefs.logDisplayOrder) { logType in
-                                if isLogVisible(logType) {
-                                    builtInLogSection(for: logType)
+                            ForEach(appPrefs.logDisplayOrder) { entry in
+                                switch entry {
+                                case .builtIn(let t):
+                                    if isLogVisible(t) {
+                                        builtInLogSection(for: t)
+                                    }
+                                case .custom:
+                                    if showCustomLogsComputed {
+                                        customLogSection
+                                    }
                                 }
-                            }
-
-                            // Custom Log Section
-                            if appPrefs.showCustomLogs {
-                                customLogSection
                             }
                         }
                         
@@ -507,14 +540,17 @@ extension LogsComponent {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: spacing) {
-                    ForEach(appPrefs.logDisplayOrder) { logType in
-                        if isLogVisible(logType) {
-                            compactLogCard(section: builtInLogSection(for: logType), width: cardWidth)
+                    ForEach(appPrefs.logDisplayOrder) { entry in
+                        switch entry {
+                        case .builtIn(let t):
+                            if isLogVisible(t) {
+                                compactLogCard(section: builtInLogSection(for: t), width: cardWidth)
+                            }
+                        case .custom:
+                            if showCustomLogsComputed {
+                                compactLogCard(section: customLogSectionHorizontal, width: cardWidth)
+                            }
                         }
-                    }
-
-                    if appPrefs.showCustomLogs {
-                        compactLogCard(section: customLogSectionHorizontal, width: cardWidth)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -528,6 +564,9 @@ extension LogsComponent {
     }
 
     private func isLogVisible(_ logType: BuiltInLogType) -> Bool {
+        if let override = visibleLogsOverride {
+            return override.contains(logType)
+        }
         switch logType {
         case .food: return appPrefs.showFoodLogs
         case .sleep: return appPrefs.showSleepLogs
@@ -545,6 +584,22 @@ extension LogsComponent {
         case .water: waterSection
         case .weight: weightSection
         case .workout: workoutSection
+        }
+    }
+
+    /// Resolves a LogDisplayEntry to its corresponding section view, picking
+    /// the horizontal variant of the custom section when requested.
+    @ViewBuilder
+    private func logSectionView(for entry: LogDisplayEntry, horizontal: Bool) -> some View {
+        switch entry {
+        case .builtIn(let t):
+            builtInLogSection(for: t)
+        case .custom:
+            if horizontal {
+                customLogSectionHorizontal
+            } else {
+                customLogSection
+            }
         }
     }
 

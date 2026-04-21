@@ -23,9 +23,10 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case mobile = 4
     case timebox = 6
     case newClassic = 8
+    case custom = 10
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.newClassic, .compact, .timebox, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.newClassic, .compact, .timebox, .mobile, .custom] }
 
     var displayName: String {
         switch self {
@@ -33,16 +34,22 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .mobile: "Mobile"
         case .timebox: "Expanded"
         case .newClassic: "Classic"
+        case .custom: "Custom"
         }
     }
-    
+
     var description: String {
         switch self {
         case .compact: "Events and Tasks on left with collapsible logs, Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .timebox: "Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page)"
         case .newClassic: "Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)"
+        case .custom: "A blank day view you can configure yourself."
         }
+    }
+
+    var isBeta: Bool {
+        self == .custom
     }
 }
 
@@ -261,6 +268,38 @@ enum BuiltInLogType: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+/// A single entry in the user-reorderable list of log sections. The custom
+/// log section is a first-class entry alongside the built-in log types so
+/// users can drag it anywhere in the list.
+enum LogDisplayEntry: Hashable, Identifiable {
+    case builtIn(BuiltInLogType)
+    case custom
+
+    var id: String { stringValue }
+
+    var stringValue: String {
+        switch self {
+        case .builtIn(let t): return "builtin.\(t.rawValue)"
+        case .custom:         return "custom"
+        }
+    }
+
+    init?(stringValue: String) {
+        if stringValue == "custom" {
+            self = .custom
+            return
+        }
+        if stringValue.hasPrefix("builtin."),
+           let t = BuiltInLogType(rawValue: String(stringValue.dropFirst("builtin.".count))) {
+            self = .builtIn(t)
+            return
+        }
+        return nil
+    }
+
+    static let defaultOrder: [LogDisplayEntry] = BuiltInLogType.allCases.map { .builtIn($0) } + [.custom]
+}
+
 // MARK: - App Preferences
 class AppPreferences: ObservableObject {
     static let shared = AppPreferences()
@@ -458,10 +497,10 @@ class AppPreferences: ObservableObject {
         showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs || showSleepLogs || showCustomLogs
     }
 
-    @Published var logDisplayOrder: [BuiltInLogType] {
+    @Published var logDisplayOrder: [LogDisplayEntry] {
         didSet {
-            let rawValues = logDisplayOrder.map { $0.rawValue }
-            UserDefaults.standard.set(rawValues, forKey: "logDisplayOrder")
+            let stringValues = logDisplayOrder.map { $0.stringValue }
+            UserDefaults.standard.set(stringValues, forKey: "logDisplayOrder")
         }
     }
 
@@ -758,14 +797,29 @@ class AppPreferences: ObservableObject {
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.customLogSectionName = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName") ?? "Custom Logs"
 
-        // Load log display order
-        if let savedRawValues = UserDefaults.standard.stringArray(forKey: "logDisplayOrder") {
-            let decoded = savedRawValues.compactMap { BuiltInLogType(rawValue: $0) }
-            // Ensure all types are present (handles new types added in future)
-            let missing = BuiltInLogType.allCases.filter { !decoded.contains($0) }
-            self.logDisplayOrder = decoded + missing
+        // Load log display order. Legacy saves stored only `BuiltInLogType`
+        // rawValues (e.g. "food", "sleep"); current format also supports the
+        // custom entry as "custom" and built-ins as "builtin.<raw>".
+        if let saved = UserDefaults.standard.stringArray(forKey: "logDisplayOrder") {
+            var decoded: [LogDisplayEntry] = []
+            for value in saved {
+                if let entry = LogDisplayEntry(stringValue: value) {
+                    decoded.append(entry)
+                } else if let t = BuiltInLogType(rawValue: value) {
+                    decoded.append(.builtIn(t))
+                }
+            }
+            // Make sure every built-in and the custom entry are present, even
+            // if the saved list was incomplete or predates new additions.
+            for t in BuiltInLogType.allCases where !decoded.contains(.builtIn(t)) {
+                decoded.append(.builtIn(t))
+            }
+            if !decoded.contains(.custom) {
+                decoded.append(.custom)
+            }
+            self.logDisplayOrder = decoded
         } else {
-            self.logDisplayOrder = BuiltInLogType.allCases
+            self.logDisplayOrder = LogDisplayEntry.defaultOrder
         }
 
         // Pull latest iCloud KVS data before reading workout settings
@@ -1132,10 +1186,21 @@ struct SettingsView: View {
     @State private var showingSyncProgress = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     @State private var diagnosticsExpanded = false
+    @State private var showingCustomConfigurator = false
+    /// Bumped after the custom configurator dismisses so the Configured/
+    /// Re-configure label updates.
+    @State private var customConfigVersion = 0
     
     // Check if device forces stacked layout (iPhone portrait)
     private var shouldUseStackedLayout: Bool {
         horizontalSizeClass == .compact && verticalSizeClass == .regular
+    }
+
+    /// Reading `customConfigVersion` creates a SwiftUI dependency so the row
+    /// re-renders after the configurator saves a new config.
+    private var isCustomDayViewConfigured: Bool {
+        _ = customConfigVersion
+        return CustomDayViewConfig.load() != nil
     }
     
 
@@ -1216,19 +1281,59 @@ struct SettingsView: View {
                                     Image(systemName: appPrefs.dayViewLayout == option ? "largecircle.fill.circle" : "circle")
                                         .foregroundColor(appPrefs.dayViewLayout == option ? .accentColor : .secondary)
                                         .font(.title2)
-                                    
+
                                     Text(option.displayName)
                                         .font(.body)
                                         .fontWeight(appPrefs.dayViewLayout == option ? .semibold : .regular)
+
+                                    if option.isBeta {
+                                        Text("Beta")
+                                            .font(.caption2)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule().fill(Color.orange)
+                                            )
+                                    }
+
+                                    if option == .custom, isCustomDayViewConfigured {
+                                        Text("Configured")
+                                            .font(.caption2)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule().fill(Color.green)
+                                            )
+                                    }
                                 }
-                                
+
                                 Text(option.description)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .padding(.leading, 28)
                             }
-                            
+
                             Spacer()
+
+                            if option == .custom {
+                                Button {
+                                    showingCustomConfigurator = true
+                                } label: {
+                                    Text(isCustomDayViewConfigured ? "Re-configure" : "Configure")
+                                        .font(.footnote.weight(.semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            Capsule().fill(Color.accentColor)
+                                        )
+                                        .foregroundColor(.white)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -1326,40 +1431,16 @@ struct SettingsView: View {
                 }
 
                 Section("Log Preferences") {
-                    ForEach(appPrefs.logDisplayOrder) { logType in
-                        logToggleRow(for: logType)
+                    ForEach(appPrefs.logDisplayOrder) { entry in
+                        switch entry {
+                        case .builtIn(let logType):
+                            logToggleRow(for: logType)
+                        case .custom:
+                            customLogToggleRow
+                        }
                     }
                     .onMove { source, destination in
                         appPrefs.moveLog(from: source, to: destination)
-                    }
-
-                    Toggle(isOn: Binding(
-                        get: { appPrefs.showCustomLogs },
-                        set: { appPrefs.updateShowCustomLogs($0) }
-                    )) {
-                        HStack {
-                            Image(systemName: "list.bullet.rectangle")
-                                .foregroundColor(appPrefs.showCustomLogs ? .accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                TextField("Custom Logs", text: $appPrefs.customLogSectionName)
-                                    .font(.body)
-                                    .textFieldStyle(.plain)
-                                Text("Show custom checklist items in day views")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .moveDisabled(true)
-
-                    // Custom Logs Items subsection
-                    if appPrefs.showCustomLogs {
-                        VStack(alignment: .leading, spacing: 0) {
-                            CustomLogItemsInlineView()
-                        }
-                        .padding(.leading, 20)
-                        .padding(.top, 8)
-                        .moveDisabled(true)
                     }
                 }
                 
@@ -1758,6 +1839,11 @@ struct SettingsView: View {
             } message: {
                 Text("You will stop syncing data for this account. You can re-link anytime in Settings.")
             }
+            .fullScreenCover(isPresented: $showingCustomConfigurator, onDismiss: {
+                customConfigVersion &+= 1
+            }) {
+                DayViewCustomConfigurator()
+            }
         }
     }
     
@@ -1890,6 +1976,37 @@ struct SettingsView: View {
         
         showingSyncProgress = isSyncing
         syncButtonDisabled = disabled
+    }
+
+    @ViewBuilder
+    private var customLogToggleRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(
+                get: { appPrefs.showCustomLogs },
+                set: { appPrefs.updateShowCustomLogs($0) }
+            )) {
+                HStack {
+                    Image(systemName: "list.bullet.rectangle")
+                        .foregroundColor(appPrefs.showCustomLogs ? .accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        TextField("Custom Logs", text: $appPrefs.customLogSectionName)
+                            .font(.body)
+                            .textFieldStyle(.plain)
+                        Text("Show custom checklist items in day views")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            // Custom items editor — nested inside the row so it drags with it
+            // when the user reorders the custom log card.
+            if appPrefs.showCustomLogs {
+                CustomLogItemsInlineView()
+                    .padding(.leading, 20)
+                    .padding(.top, 4)
+            }
+        }
     }
 
     @ViewBuilder
