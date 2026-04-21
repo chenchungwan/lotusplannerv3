@@ -23,9 +23,10 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     case mobile = 4
     case timebox = 6
     case newClassic = 8
+    case custom = 10
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.newClassic, .compact, .timebox, .mobile] }
+    static var allCases: [DayViewLayoutOption] { [.newClassic, .compact, .timebox, .mobile, .custom] }
 
     var displayName: String {
         switch self {
@@ -33,16 +34,22 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
         case .mobile: "Mobile"
         case .timebox: "Expanded"
         case .newClassic: "Classic"
+        case .custom: "Custom"
         }
     }
-    
+
     var description: String {
         switch self {
         case .compact: "Events and Tasks on left with collapsible logs, Journal on right"
         case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
         case .timebox: "Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page)"
         case .newClassic: "Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)"
+        case .custom: "A blank day view you can configure yourself."
         }
+    }
+
+    var isBeta: Bool {
+        self == .custom
     }
 }
 
@@ -1220,6 +1227,18 @@ struct SettingsView: View {
                                     Text(option.displayName)
                                         .font(.body)
                                         .fontWeight(appPrefs.dayViewLayout == option ? .semibold : .regular)
+
+                                    if option.isBeta {
+                                        Text("Beta")
+                                            .font(.caption2)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule().fill(Color.orange)
+                                            )
+                                    }
                                 }
                                 
                                 Text(option.description)
