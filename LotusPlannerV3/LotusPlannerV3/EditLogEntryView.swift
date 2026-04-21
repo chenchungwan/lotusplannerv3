@@ -57,36 +57,40 @@ struct EditLogEntryView: View {
         .alert("Delete \(viewModel.selectedLogType.displayName)", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
-                deleteCurrentEntry()
-                dismiss()
+                guard let editing = viewModel.editingEntry else { return }
+                viewModel.showingEditLogSheet = false
+                viewModel.editingEntry = nil
+                // Run delete after the sheet binding flips so the resulting
+                // @Published mutations don't race the dismissal.
+                Task { @MainActor in
+                    performDelete(editing)
+                }
             }
         } message: {
             Text("Are you sure you want to delete this \(viewModel.selectedLogType.displayName.lowercased()) entry? This action cannot be undone.")
         }
     }
     
-    private func deleteCurrentEntry() {
-        guard let editingEntry = viewModel.editingEntry else { return }
-        
-        switch editingEntry.type {
+    private func performDelete(_ editing: (type: LogType, id: String)) {
+        switch editing.type {
         case .weight:
-            if let entry = viewModel.weightEntries.first(where: { $0.id == editingEntry.id }) {
+            if let entry = viewModel.weightEntries.first(where: { $0.id == editing.id }) {
                 viewModel.deleteWeightEntry(entry)
             }
         case .workout:
-            if let entry = viewModel.workoutEntries.first(where: { $0.id == editingEntry.id }) {
+            if let entry = viewModel.workoutEntries.first(where: { $0.id == editing.id }) {
                 viewModel.deleteWorkoutEntry(entry)
             }
         case .food:
-            if let entry = viewModel.foodEntries.first(where: { $0.id == editingEntry.id }) {
+            if let entry = viewModel.foodEntries.first(where: { $0.id == editing.id }) {
                 viewModel.deleteFoodEntry(entry)
             }
         case .water:
-            if let entry = viewModel.waterEntries.first(where: { $0.id == editingEntry.id }) {
+            if let entry = viewModel.waterEntries.first(where: { $0.id == editing.id }) {
                 viewModel.deleteWaterEntry(entry)
             }
         case .sleep:
-            if let entry = viewModel.sleepEntries.first(where: { $0.id == editingEntry.id }) {
+            if let entry = viewModel.sleepEntries.first(where: { $0.id == editing.id }) {
                 viewModel.deleteSleepEntry(entry)
             }
         }

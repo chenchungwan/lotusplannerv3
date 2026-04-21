@@ -13,6 +13,7 @@ struct CalendarView: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
+    @ObservedObject private var logsViewModel = LogsViewModel.shared
     
     init() {
         // Initialize divider positions from AppPreferences
@@ -507,6 +508,16 @@ struct CalendarView: View {
 
     private var finalContent: some View {
         toolbarAndSheetsContent
+        // Log sheets are attached once at CalendarView scope. LogsComponent is
+        // instantiated inside each day view, so attaching .sheet there caused
+        // multiple observers of the same singleton binding, which produced a
+        // race on dismissal. Attaching here gives a single owner.
+        .sheet(isPresented: $logsViewModel.showingEditLogSheet) {
+            EditLogEntryView(viewModel: logsViewModel)
+        }
+        .sheet(isPresented: $logsViewModel.showingAddLogSheet) {
+            AddLogEntryView(viewModel: logsViewModel)
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleCalendarBulkEdit"))) { _ in
             bulkEditManager.state.isActive.toggle()
             if !bulkEditManager.state.isActive {

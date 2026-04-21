@@ -908,9 +908,10 @@ struct GlobalNavBar: View {
                                 .disabled(eyeInactive)
                             }
 
-                            // Save snapshot to Photos (day and week calendar views)
+                            // Save snapshot to Photos (day and week calendar views, iPad/Mac only)
                             if navigationManager.currentView == .calendar &&
-                                (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week) {
+                                (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week) &&
+                                UIDevice.current.userInterfaceIdiom != .phone {
                                 Button {
                                     let formatter = DateFormatter()
                                     if navigationManager.currentInterval == .week,
@@ -1271,9 +1272,10 @@ struct GlobalNavBar: View {
                                 .disabled(eyeInactive)
                             }
 
-                            // Save snapshot to Photos (day and week calendar views)
+                            // Save snapshot to Photos (day and week calendar views, iPad/Mac only)
                             if navigationManager.currentView == .calendar &&
-                                (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week) {
+                                (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week) &&
+                                UIDevice.current.userInterfaceIdiom != .phone {
                                 Button {
                                     let formatter = DateFormatter()
                                     if navigationManager.currentInterval == .week,

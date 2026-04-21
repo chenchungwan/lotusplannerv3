@@ -104,12 +104,9 @@ struct LogsComponent: View {
             .padding(.vertical, 8)
             .background(Color(.tertiarySystemBackground))
             .cornerRadius(8)
-            .sheet(isPresented: $viewModel.showingAddLogSheet) {
-                AddLogEntryView(viewModel: viewModel)
-            }
-            .sheet(isPresented: $viewModel.showingEditLogSheet) {
-                EditLogEntryView(viewModel: viewModel)
-            }
+            // Log sheets (add + edit) are attached at the CalendarView level to
+            // avoid multiple observers of the same singleton binding, which
+            // caused the edit sheet to get stuck on delete.
             .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
                 Button("OK") {
                     viewModel.errorMessage = nil
