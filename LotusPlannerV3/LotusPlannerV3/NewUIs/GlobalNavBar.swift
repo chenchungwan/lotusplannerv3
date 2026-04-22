@@ -1003,6 +1003,9 @@ struct GlobalNavBar: View {
                                     Button("Task") {
                                         showingAddTask = true
                                     }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
+                                    }
                                 } label: {
                                     Image(systemName: "plus")
                                         .font(adaptiveIconSize)
@@ -1019,6 +1022,9 @@ struct GlobalNavBar: View {
                                     }
                                     Button("List") {
                                         showingAddList = true
+                                    }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
                                     }
                                 } label: {
                                     Image(systemName: "plus")
@@ -1037,19 +1043,25 @@ struct GlobalNavBar: View {
                                     Button("Goal") {
                                         NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                     }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
+                                    }
                                 } label: {
                                     Image(systemName: "plus")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 }
                             } else {
-                                // In other views: menu with Event and Task only
+                                // In other views: Event, Task, and Log.
                                 Menu {
                                     Button("Event") {
                                         showingAddEvent = true
                                     }
                                     Button("Task") {
                                         showingAddTask = true
+                                    }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
                                     }
                                 } label: {
                                     Image(systemName: "plus")
@@ -1367,6 +1379,9 @@ struct GlobalNavBar: View {
                                     Button("Task") {
                                         showingAddTask = true
                                     }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
+                                    }
                                 } label: {
                                     Image(systemName: "plus")
                                         .font(adaptiveIconSize)
@@ -1383,6 +1398,9 @@ struct GlobalNavBar: View {
                                     }
                                     Button("List") {
                                         showingAddList = true
+                                    }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
                                     }
                                 } label: {
                                     Image(systemName: "plus")
@@ -1401,19 +1419,25 @@ struct GlobalNavBar: View {
                                     Button("Goal") {
                                         NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
                                     }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
+                                    }
                                 } label: {
                                     Image(systemName: "plus")
                                         .font(adaptiveIconSize)
                                         .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
                                 }
                             } else {
-                                // In other views: menu with Event and Task only
+                                // In other views: Event, Task, and Log.
                                 Menu {
                                     Button("Event") {
                                         showingAddEvent = true
                                     }
                                     Button("Task") {
                                         showingAddTask = true
+                                    }
+                                    Button("Log") {
+                                        LogsViewModel.shared.showingAddLogSheet = true
                                     }
                                 } label: {
                                     Image(systemName: "plus")

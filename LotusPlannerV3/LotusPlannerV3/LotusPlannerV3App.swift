@@ -36,6 +36,9 @@ struct LotusPlannerV3App: App {
 
         // Force iCloudManager to initialize (this will set up notification observers)
         _ = iCloudManager.shared
+
+        // Start syncing the custom day view layout across devices via iCloud KVS.
+        CustomDayViewConfig.startSync()
     }
 
     var body: some Scene {

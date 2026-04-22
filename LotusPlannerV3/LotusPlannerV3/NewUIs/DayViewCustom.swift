@@ -53,6 +53,9 @@ struct DayViewCustom: View {
         }) {
             DayViewCustomConfigurator()
         }
+        .onReceive(NotificationCenter.default.publisher(for: CustomDayViewConfig.didChangeNotification)) { _ in
+            configVersion &+= 1
+        }
         .sheet(isPresented: Binding(
             get: { showingTaskDetails && selectedTask != nil && selectedTaskListId != nil && selectedTaskAccount != nil },
             set: { showingTaskDetails = $0 }
@@ -131,27 +134,43 @@ struct DayViewCustom: View {
             let cellH = max(0, (innerH - spacing * CGFloat(pageConfig.rows - 1)) / CGFloat(pageConfig.rows))
 
             ZStack(alignment: .topLeading) {
+                // Plain / merged cells that are NOT part of any group.
                 ForEach(visibleCells(pageConfig: pageConfig)) { cell in
-                    let region = mergedRegion(at: cell.row, col: cell.col, in: pageConfig)
-                    let rowSpan = region?.rowSpan ?? 1
-                    let colSpan = region?.colSpan ?? 1
-                    let width = CGFloat(colSpan) * cellW + CGFloat(colSpan - 1) * spacing
-                    let height = CGFloat(rowSpan) * cellH + CGFloat(rowSpan - 1) * spacing
-                    let x = CGFloat(cell.col) * (cellW + spacing) + padding
-                    let y = CGFloat(cell.row) * (cellH + spacing) + padding
-                    let placement = pageConfig.placements.first {
-                        $0.row == cell.row && $0.col == cell.col
-                    }
-                    let component = placement.flatMap { CustomComponent(rawValue: $0.component) }
+                    if !cellIsInGroup(row: cell.row, col: cell.col, pageConfig: pageConfig) {
+                        let region = mergedRegion(at: cell.row, col: cell.col, in: pageConfig)
+                        let rowSpan = region?.rowSpan ?? 1
+                        let colSpan = region?.colSpan ?? 1
+                        let width = CGFloat(colSpan) * cellW + CGFloat(colSpan - 1) * spacing
+                        let height = CGFloat(rowSpan) * cellH + CGFloat(rowSpan - 1) * spacing
+                        let x = CGFloat(cell.col) * (cellW + spacing) + padding
+                        let y = CGFloat(cell.row) * (cellH + spacing) + padding
+                        let placement = pageConfig.placements.first {
+                            $0.row == cell.row && $0.col == cell.col
+                        }
+                        let component = placement.flatMap { CustomComponent(rawValue: $0.component) }
 
-                    liveCell(component: component)
-                        .frame(width: width, height: height)
-                        .position(x: x + width / 2, y: y + height / 2)
+                        liveCell(component: component)
+                            .frame(width: width, height: height)
+                            .position(x: x + width / 2, y: y + height / 2)
+                    }
+                }
+
+                // Each group renders as a single tight-packed flex container
+                // occupying the union of its cells.
+                let groups: [CustomDayViewConfig.GroupDTO] = pageConfig.groups ?? []
+                ForEach(Array(groups.enumerated()), id: \.offset) { _, dto in
+                    groupContainer(
+                        dto: dto,
+                        pageConfig: pageConfig,
+                        cellW: cellW,
+                        cellH: cellH,
+                        spacing: spacing,
+                        padding: padding
+                    )
                 }
             }
         }
     }
-
 
     private struct VisiblePosition: Identifiable {
         let row: Int
@@ -178,6 +197,79 @@ struct DayViewCustom: View {
 
     private func mergedRegion(at row: Int, col: Int, in pageConfig: CustomDayViewConfig.PageConfig) -> CustomDayViewConfig.MergeDTO? {
         pageConfig.merges.first { $0.topRow == row && $0.leftCol == col }
+    }
+
+    private func cellIsInGroup(row: Int, col: Int, pageConfig: CustomDayViewConfig.PageConfig) -> Bool {
+        for dto in (pageConfig.groups ?? []) {
+            let (rs, cs) = dto.resolvedSpans()
+            if row >= dto.startRow && row < dto.startRow + rs &&
+               col >= dto.startCol && col < dto.startCol + cs {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Collects component placements inside a group's rect, sorted along the
+    /// group's primary axis.
+    private func groupComponents(dto: CustomDayViewConfig.GroupDTO,
+                                 pageConfig: CustomDayViewConfig.PageConfig) -> [CustomComponent] {
+        let (rs, cs) = dto.resolvedSpans()
+        let isHorizontal = dto.orientation == "horizontal"
+        let filtered = pageConfig.placements.filter { placement in
+            let insideRow = placement.row >= dto.startRow && placement.row < dto.startRow + rs
+            let insideCol = placement.col >= dto.startCol && placement.col < dto.startCol + cs
+            return insideRow && insideCol
+        }
+        let sorted = isHorizontal
+            ? filtered.sorted { $0.col < $1.col }
+            : filtered.sorted { $0.row < $1.row }
+        return sorted.compactMap { CustomComponent(rawValue: $0.component) }
+    }
+
+    /// Renders a group: a flex container at the union of its cells with
+    /// minimal spacing between contained components, so shorter components
+    /// pack tight and taller ones scroll instead of truncating.
+    @ViewBuilder
+    private func groupContainer(
+        dto: CustomDayViewConfig.GroupDTO,
+        pageConfig: CustomDayViewConfig.PageConfig,
+        cellW: CGFloat,
+        cellH: CGFloat,
+        spacing: CGFloat,
+        padding: CGFloat
+    ) -> some View {
+        let (rs, cs) = dto.resolvedSpans()
+        let isHorizontal = dto.orientation == "horizontal"
+        let width = CGFloat(cs) * cellW + CGFloat(cs - 1) * spacing
+        let height = CGFloat(rs) * cellH + CGFloat(rs - 1) * spacing
+        let x = CGFloat(dto.startCol) * (cellW + spacing) + padding
+        let y = CGFloat(dto.startRow) * (cellH + spacing) + padding
+        let components = groupComponents(dto: dto, pageConfig: pageConfig)
+
+        Group {
+            if isHorizontal {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 2) {
+                        ForEach(Array(components.enumerated()), id: \.offset) { _, component in
+                            liveCell(component: component)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                    }
+                }
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(components.enumerated()), id: \.offset) { _, component in
+                            liveCell(component: component)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .position(x: x + width / 2, y: y + height / 2)
     }
 
     // MARK: - Cell content

@@ -86,6 +86,9 @@ struct ComponentDragPayload: Codable, Transferable {
 /// render the saved layout with live data.
 struct CustomDayViewConfig: Codable {
     static let userDefaultsKey = "customDayViewConfig.v1"
+    /// Posted on the main queue when the saved config changes externally
+    /// (either a local save or a sync from another device via iCloud KVS).
+    static let didChangeNotification = Notification.Name("CustomDayViewConfigDidChange")
 
     var pageMode: Int
     var page1: PageConfig
@@ -96,6 +99,7 @@ struct CustomDayViewConfig: Codable {
         var cols: Int
         var merges: [MergeDTO]
         var placements: [PlacementDTO]
+        var groups: [GroupDTO]? = nil
     }
 
     struct MergeDTO: Codable {
@@ -111,12 +115,88 @@ struct CustomDayViewConfig: Codable {
         var component: String
     }
 
-    static func load() -> CustomDayViewConfig? {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let config = try? JSONDecoder().decode(CustomDayViewConfig.self, from: data) else {
-            return nil
+    struct GroupDTO: Codable {
+        var orientation: String // GroupRegion.Orientation.rawValue
+        var startRow: Int
+        var startCol: Int
+        // Current format: explicit rectangle.
+        var rowSpan: Int?
+        var colSpan: Int?
+        /// Legacy: length along the primary axis. Kept for back-compat with
+        /// saves that predate multi-column/multi-row groups.
+        var length: Int?
+
+        /// Resolves rowSpan/colSpan, falling back to the legacy single-axis
+        /// representation if the new fields are absent.
+        func resolvedSpans() -> (rowSpan: Int, colSpan: Int) {
+            if let r = rowSpan, let c = colSpan { return (r, c) }
+            let n = length ?? 1
+            switch orientation {
+            case "horizontal": return (rowSpan: 1, colSpan: n)
+            case "vertical":   return (rowSpan: n, colSpan: 1)
+            default:           return (rowSpan: n, colSpan: 1)
+            }
         }
-        return config
+    }
+
+    static func load() -> CustomDayViewConfig? {
+        // Prefer iCloud KVS when it has a value (it's the canonical cross-device
+        // copy). Fall back to UserDefaults for the local cache.
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let data = kvs.data(forKey: userDefaultsKey),
+           let config = try? JSONDecoder().decode(CustomDayViewConfig.self, from: data) {
+            return config
+        }
+        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+           let config = try? JSONDecoder().decode(CustomDayViewConfig.self, from: data) {
+            return config
+        }
+        return nil
+    }
+
+    /// Writes to both UserDefaults (local cache) and NSUbiquitousKeyValueStore
+    /// (iCloud sync). Posts `didChangeNotification` so views can re-render.
+    static func save(_ config: CustomDayViewConfig) {
+        guard let data = try? JSONEncoder().encode(config) else { return }
+        UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        NSUbiquitousKeyValueStore.default.set(data, forKey: userDefaultsKey)
+        NSUbiquitousKeyValueStore.default.synchronize()
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    /// Starts observing external iCloud KVS changes and mirrors them to
+    /// UserDefaults so `load()` always sees the latest value. Call once at app
+    /// launch.
+    @MainActor
+    static func startSync() {
+        let kvs = NSUbiquitousKeyValueStore.default
+        kvs.synchronize()
+
+        // One-time migration: if the local device has a config in UserDefaults
+        // but iCloud KVS is empty, push the local copy up so other devices
+        // receive it. Covers users who saved before iCloud sync shipped.
+        if kvs.data(forKey: userDefaultsKey) == nil,
+           let localData = UserDefaults.standard.data(forKey: userDefaultsKey) {
+            kvs.set(localData, forKey: userDefaultsKey)
+            kvs.synchronize()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: kvs,
+            queue: .main
+        ) { notification in
+            let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+            guard changedKeys.isEmpty || changedKeys.contains(userDefaultsKey) else { return }
+
+            let kvs = NSUbiquitousKeyValueStore.default
+            if let data = kvs.data(forKey: userDefaultsKey) {
+                UserDefaults.standard.set(data, forKey: userDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+            }
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
     }
 }
 
@@ -158,6 +238,37 @@ private struct VisibleCell: Identifiable {
     var id: String { "\(page)_\(row)_\(col)" }
 }
 
+/// A "group" is a flex container covering a rectangle of cells. Components
+/// inside a group render with minimal spacing — the orientation dictates
+/// whether they pack vertically (column of components) or horizontally (row
+/// of components).
+struct GroupRegion: Hashable, Identifiable {
+    enum Orientation: String, Codable, Hashable {
+        case horizontal // row of components stacked left-to-right
+        case vertical   // column of components stacked top-to-bottom
+    }
+    let orientation: Orientation
+    let startRow: Int
+    let startCol: Int
+    let rowSpan: Int
+    let colSpan: Int
+
+    var id: String {
+        "\(orientation.rawValue)_\(startRow)_\(startCol)_\(rowSpan)_\(colSpan)"
+    }
+
+    func contains(row: Int, col: Int) -> Bool {
+        row >= startRow && row < startRow + rowSpan &&
+        col >= startCol && col < startCol + colSpan
+    }
+
+    var cells: [(row: Int, col: Int)] {
+        (0..<rowSpan).flatMap { dr in
+            (0..<colSpan).map { dc in (row: startRow + dr, col: startCol + dc) }
+        }
+    }
+}
+
 
 /// Configuration UI for the Custom day view layout.
 /// Shell only — drag-and-drop persistence of components isn't wired yet.
@@ -172,6 +283,7 @@ struct DayViewCustomConfigurator: View {
 
     @State private var pageMode: PageMode = .one
     @State private var mergesByPage: [Int: [MergedRegion]] = [1: [], 2: []]
+    @State private var groupsByPage: [Int: [GroupRegion]] = [1: [], 2: []]
     @State private var selectedCells: Set<CellPos> = []
     @State private var rowsByPage: [Int: Int] = [1: 3, 2: 3]
     @State private var colsByPage: [Int: Int] = [1: 3, 2: 3]
@@ -267,6 +379,18 @@ struct DayViewCustomConfigurator: View {
             }
         }
 
+        groupsByPage[1] = (config.page1.groups ?? []).compactMap { dto in
+            guard let orientation = GroupRegion.Orientation(rawValue: dto.orientation) else { return nil }
+            let (rs, cs) = dto.resolvedSpans()
+            return GroupRegion(
+                orientation: orientation,
+                startRow: dto.startRow,
+                startCol: dto.startCol,
+                rowSpan: rs,
+                colSpan: cs
+            )
+        }
+
         if let p2 = config.page2 {
             rowsByPage[2] = max(minRowsOrCols, min(maxRowsOrCols, p2.rows))
             colsByPage[2] = max(minRowsOrCols, min(maxRowsOrCols, p2.cols))
@@ -281,8 +405,20 @@ struct DayViewCustomConfigurator: View {
                     loaded[CellPos(page: 2, row: dto.row, col: dto.col)] = component
                 }
             }
+            groupsByPage[2] = (p2.groups ?? []).compactMap { dto in
+                guard let orientation = GroupRegion.Orientation(rawValue: dto.orientation) else { return nil }
+                let (rs, cs) = dto.resolvedSpans()
+                return GroupRegion(
+                    orientation: orientation,
+                    startRow: dto.startRow,
+                    startCol: dto.startCol,
+                    rowSpan: rs,
+                    colSpan: cs
+                )
+            }
         } else {
             mergesByPage[2] = []
+            groupsByPage[2] = []
             rowsByPage[2] = 3
             colsByPage[2] = 3
         }
@@ -329,6 +465,16 @@ struct DayViewCustomConfigurator: View {
                 Label("Unmerge", systemImage: "rectangle.split.2x1")
             }
             .disabled(!canUnmerge)
+
+            Button { performGroup() } label: {
+                Label("Group", systemImage: "rectangle.stack")
+            }
+            .disabled(!canGroup)
+
+            Button { performUngroup() } label: {
+                Label("Ungroup", systemImage: "rectangle.stack.badge.minus")
+            }
+            .disabled(!canUngroup)
 
             if !selectedCells.isEmpty {
                 Button("Clear") { selectedCells.removeAll() }
@@ -559,6 +705,7 @@ struct DayViewCustomConfigurator: View {
         let isSelected = isCellSelected(cell: cell, region: region)
         let anchorPos = CellPos(page: cell.page, row: cell.row, col: cell.col)
         let placed = placements[anchorPos]
+        let group = groupContaining(page: cell.page, row: cell.row, col: cell.col)
 
         return gridCell(
             row: cell.row,
@@ -566,6 +713,7 @@ struct DayViewCustomConfigurator: View {
             columns: columns,
             isSelected: isSelected,
             isMerged: isMerged,
+            isGrouped: group != nil,
             component: placed
         )
         .frame(width: width, height: height)
@@ -601,15 +749,29 @@ struct DayViewCustomConfigurator: View {
         .position(x: x + width / 2, y: y + height / 2)
     }
 
-    private func gridCell(row: Int, col: Int, columns: Int, isSelected: Bool, isMerged: Bool, component: CustomComponent?) -> some View {
-        let stroke: Color = isSelected ? .accentColor : .secondary.opacity(0.5)
-        let fill: Color = component != nil
-            ? Color.accentColor.opacity(0.08)
-            : (isSelected ? Color.accentColor.opacity(0.18) : Color(.secondarySystemBackground))
+    private func gridCell(row: Int, col: Int, columns: Int, isSelected: Bool, isMerged: Bool, isGrouped: Bool, component: CustomComponent?) -> some View {
+        let stroke: Color
+        if isSelected {
+            stroke = .accentColor
+        } else if isGrouped {
+            stroke = .purple
+        } else {
+            stroke = .secondary.opacity(0.5)
+        }
+        let fill: Color
+        if isSelected {
+            fill = Color.accentColor.opacity(0.18)
+        } else if component != nil {
+            fill = Color.accentColor.opacity(0.08)
+        } else if isGrouped {
+            fill = Color.purple.opacity(0.08)
+        } else {
+            fill = Color(.secondarySystemBackground)
+        }
         let lineWidth: CGFloat = isSelected ? 2 : 1
 
         return RoundedRectangle(cornerRadius: 8)
-            .stroke(style: StrokeStyle(lineWidth: lineWidth, dash: (isMerged || component != nil) ? [] : [6]))
+            .stroke(style: StrokeStyle(lineWidth: lineWidth, dash: (isMerged || isGrouped || component != nil) ? [] : [6]))
             .foregroundColor(stroke)
             .background(
                 RoundedRectangle(cornerRadius: 8)
@@ -794,6 +956,19 @@ struct DayViewCustomConfigurator: View {
                 colSpan: region.colSpan
             )
         }
+        groupsByPage[page] = (groupsByPage[page] ?? []).compactMap { group in
+            if group.startRow >= newCount { return nil }
+            let newRowSpan = min(group.rowSpan, newCount - group.startRow)
+            // Drop if the resulting rect no longer contains at least 2 cells.
+            if newRowSpan * group.colSpan < 2 { return nil }
+            return GroupRegion(
+                orientation: group.orientation,
+                startRow: group.startRow,
+                startCol: group.startCol,
+                rowSpan: newRowSpan,
+                colSpan: group.colSpan
+            )
+        }
         selectedCells = selectedCells.filter { !($0.page == page && $0.row >= newCount) }
         rowsByPage[page] = newCount
     }
@@ -822,6 +997,18 @@ struct DayViewCustomConfigurator: View {
                 colSpan: newColSpan
             )
         }
+        groupsByPage[page] = (groupsByPage[page] ?? []).compactMap { group in
+            if group.startCol >= newCount { return nil }
+            let newColSpan = min(group.colSpan, newCount - group.startCol)
+            if group.rowSpan * newColSpan < 2 { return nil }
+            return GroupRegion(
+                orientation: group.orientation,
+                startRow: group.startRow,
+                startCol: group.startCol,
+                rowSpan: group.rowSpan,
+                colSpan: newColSpan
+            )
+        }
         selectedCells = selectedCells.filter { !($0.page == page && $0.col >= newCount) }
         colsByPage[page] = newCount
     }
@@ -840,6 +1027,7 @@ struct DayViewCustomConfigurator: View {
             selectedCells.removeAll()
         }
 
+        // If the cell is part of a merge, select/deselect the whole merge.
         if let region = mergedRegion(page: page, row: row, col: col) {
             let regionCells = Set(region.cellPositions.map { CellPos(page: page, row: $0.row, col: $0.col) })
             if regionCells.isSubset(of: selectedCells) {
@@ -847,13 +1035,26 @@ struct DayViewCustomConfigurator: View {
             } else {
                 selectedCells.formUnion(regionCells)
             }
-        } else {
-            let pos = CellPos(page: page, row: row, col: col)
-            if selectedCells.contains(pos) {
-                selectedCells.remove(pos)
+            return
+        }
+
+        // If the cell is part of a group, select/deselect the whole group.
+        if let group = groupContaining(page: page, row: row, col: col) {
+            let groupCells = Set(group.cells.map { CellPos(page: page, row: $0.row, col: $0.col) })
+            if groupCells.isSubset(of: selectedCells) {
+                selectedCells.subtract(groupCells)
             } else {
-                selectedCells.insert(pos)
+                selectedCells.formUnion(groupCells)
             }
+            return
+        }
+
+        // Plain cell — toggle individually.
+        let pos = CellPos(page: page, row: row, col: col)
+        if selectedCells.contains(pos) {
+            selectedCells.remove(pos)
+        } else {
+            selectedCells.insert(pos)
         }
     }
 
@@ -928,6 +1129,163 @@ struct DayViewCustomConfigurator: View {
         selectedCells.removeAll()
     }
 
+    // MARK: - Group / Ungroup
+
+    private func groups(for page: Int) -> [GroupRegion] {
+        groupsByPage[page] ?? []
+    }
+
+    private func groupContaining(page: Int, row: Int, col: Int) -> GroupRegion? {
+        groups(for: page).first { $0.contains(row: row, col: col) }
+    }
+
+    /// Footprint of a component (an unmerged placement or a merged region
+    /// that carries a placement).
+    private struct Footprint: Hashable {
+        let rowStart: Int
+        let rowEnd: Int     // inclusive
+        let colStart: Int
+        let colEnd: Int     // inclusive
+    }
+
+    /// Returns the per-component footprints covered by the current selection,
+    /// or nil if the selection contains an empty cell or an unresolved merge.
+    private func selectedFootprints(page: Int, cells: Set<CellPos>) -> [Footprint]? {
+        let existingMerges = merges(for: page)
+        var seenAnchors = Set<CellPos>()
+        var footprints: [Footprint] = []
+        for cell in cells {
+            let pos = CellPos(page: page, row: cell.row, col: cell.col)
+            if let merge = existingMerges.first(where: { $0.contains(row: cell.row, col: cell.col) }) {
+                let anchor = CellPos(page: page, row: merge.topRow, col: merge.leftCol)
+                guard placements[anchor] != nil else { return nil }
+                if seenAnchors.insert(anchor).inserted {
+                    footprints.append(Footprint(
+                        rowStart: merge.topRow,
+                        rowEnd: merge.topRow + merge.rowSpan - 1,
+                        colStart: merge.leftCol,
+                        colEnd: merge.leftCol + merge.colSpan - 1
+                    ))
+                }
+            } else if placements[pos] != nil {
+                if seenAnchors.insert(pos).inserted {
+                    footprints.append(Footprint(
+                        rowStart: cell.row,
+                        rowEnd: cell.row,
+                        colStart: cell.col,
+                        colEnd: cell.col
+                    ))
+                }
+            } else {
+                return nil
+            }
+        }
+        return footprints
+    }
+
+    /// Valid grouping: selection covers 2+ components that all share the same
+    /// column range (→ vertical group) OR the same row range (→ horizontal
+    /// group), are adjacent with no gaps along their primary axis, and their
+    /// combined footprint matches the selected cells exactly.
+    private var canGroup: Bool {
+        _ = determinedGroupOrientation
+        return determinedGroupOrientation != nil
+    }
+
+    /// Returns the orientation + bounding rect + component footprints for the
+    /// current selection if it's groupable. Nil otherwise.
+    private var determinedGroupOrientation: (orientation: GroupRegion.Orientation, startRow: Int, startCol: Int, rowSpan: Int, colSpan: Int)? {
+        guard let page = selectionPage else { return nil }
+        let cells = selectedCells.filter { $0.page == page }
+        guard cells.count >= 2 else { return nil }
+
+        guard let footprints = selectedFootprints(page: page, cells: cells) else { return nil }
+        guard footprints.count >= 2 else { return nil }
+
+        // Selection must equal the union of all component footprints (user
+        // selected full components — not partial merges).
+        var expected = Set<CellPos>()
+        for fp in footprints {
+            for r in fp.rowStart...fp.rowEnd {
+                for c in fp.colStart...fp.colEnd {
+                    expected.insert(CellPos(page: page, row: r, col: c))
+                }
+            }
+        }
+        guard cells == expected else { return nil }
+
+        // Vertical group: all components share the same (colStart, colEnd)
+        // and are stacked consecutively by row.
+        let firstColRange = (footprints[0].colStart, footprints[0].colEnd)
+        let firstRowRange = (footprints[0].rowStart, footprints[0].rowEnd)
+        let allSameCols = footprints.allSatisfy { ($0.colStart, $0.colEnd) == firstColRange }
+        let allSameRows = footprints.allSatisfy { ($0.rowStart, $0.rowEnd) == firstRowRange }
+
+        let orientation: GroupRegion.Orientation
+        if allSameCols {
+            let sorted = footprints.sorted { $0.rowStart < $1.rowStart }
+            for i in 1..<sorted.count {
+                if sorted[i].rowStart != sorted[i - 1].rowEnd + 1 { return nil }
+            }
+            orientation = .vertical
+        } else if allSameRows {
+            let sorted = footprints.sorted { $0.colStart < $1.colStart }
+            for i in 1..<sorted.count {
+                if sorted[i].colStart != sorted[i - 1].colEnd + 1 { return nil }
+            }
+            orientation = .horizontal
+        } else {
+            return nil
+        }
+
+        // No overlap with existing groups.
+        let existingGroups = groups(for: page)
+        for cell in cells {
+            if existingGroups.contains(where: { $0.contains(row: cell.row, col: cell.col) }) {
+                return nil
+            }
+        }
+
+        let minR = footprints.map { $0.rowStart }.min() ?? 0
+        let maxR = footprints.map { $0.rowEnd   }.max() ?? 0
+        let minC = footprints.map { $0.colStart }.min() ?? 0
+        let maxC = footprints.map { $0.colEnd   }.max() ?? 0
+        return (orientation, minR, minC, maxR - minR + 1, maxC - minC + 1)
+    }
+
+    private func performGroup() {
+        guard let info = determinedGroupOrientation,
+              let page = selectionPage else { return }
+        let region = GroupRegion(
+            orientation: info.orientation,
+            startRow: info.startRow,
+            startCol: info.startCol,
+            rowSpan: info.rowSpan,
+            colSpan: info.colSpan
+        )
+        groupsByPage[page, default: []].append(region)
+        selectedCells.removeAll()
+    }
+
+    /// Selection must exactly match one group's cells.
+    private var groupForUngroup: (page: Int, region: GroupRegion)? {
+        guard let page = selectionPage else { return nil }
+        let cellsOnPage = selectedCells.filter { $0.page == page }
+        for region in groups(for: page) {
+            let regionCells = Set(region.cells.map { CellPos(page: page, row: $0.row, col: $0.col) })
+            if regionCells == cellsOnPage { return (page, region) }
+        }
+        return nil
+    }
+
+    private var canUngroup: Bool { groupForUngroup != nil }
+
+    private func performUngroup() {
+        guard let info = groupForUngroup else { return }
+        groupsByPage[info.page]?.removeAll { $0 == info.region }
+        selectedCells.removeAll()
+    }
+
     /// Removes the placement at the given anchor cell so the component
     /// reappears in the palette. Leaves any merged region intact so the user
     /// can place a different component into the same layout slot.
@@ -943,24 +1301,23 @@ struct DayViewCustomConfigurator: View {
         rowsByPage = [1: 3, 2: 3]
         colsByPage = [1: 3, 2: 3]
         mergesByPage = [1: [], 2: []]
+        groupsByPage = [1: [], 2: []]
         placements = [:]
         selectedCells = []
     }
 
     // MARK: - Persistence
 
-    /// Serializes the current configuration and stores it in UserDefaults.
-    /// DayViewCustom reads this on appear to decide whether to show the empty
-    /// state or render the saved layout.
+    /// Serializes the current configuration and stores it to both UserDefaults
+    /// and iCloud KVS via `CustomDayViewConfig.save`, so other signed-in
+    /// devices pick it up.
     private func saveConfiguration() {
         let config = CustomDayViewConfig(
             pageMode: pageMode == .one ? 1 : 2,
             page1: pageConfig(for: 1),
             page2: pageMode == .two ? pageConfig(for: 2) : nil
         )
-        if let data = try? JSONEncoder().encode(config) {
-            UserDefaults.standard.set(data, forKey: CustomDayViewConfig.userDefaultsKey)
-        }
+        CustomDayViewConfig.save(config)
     }
 
     private func pageConfig(for page: Int) -> CustomDayViewConfig.PageConfig {
@@ -981,11 +1338,22 @@ struct DayViewCustomConfigurator: View {
                     component: component.rawValue
                 )
             }
+        let groupsList = groupsByPage[page]?.map {
+            CustomDayViewConfig.GroupDTO(
+                orientation: $0.orientation.rawValue,
+                startRow: $0.startRow,
+                startCol: $0.startCol,
+                rowSpan: $0.rowSpan,
+                colSpan: $0.colSpan,
+                length: nil
+            )
+        } ?? []
         return CustomDayViewConfig.PageConfig(
             rows: rows(for: page),
             cols: columns(for: page),
             merges: merges,
-            placements: placementsList
+            placements: placementsList,
+            groups: groupsList.isEmpty ? nil : groupsList
         )
     }
 

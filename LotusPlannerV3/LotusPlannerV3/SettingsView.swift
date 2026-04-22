@@ -1202,6 +1202,12 @@ struct SettingsView: View {
         _ = customConfigVersion
         return CustomDayViewConfig.load() != nil
     }
+
+    /// The custom day view configurator currently only runs on iPad; layouts
+    /// saved there sync to Mac via iCloud but Mac doesn't show the edit UI.
+    private var isRunningOnMac: Bool {
+        ProcessInfo.processInfo.isiOSAppOnMac || ProcessInfo.processInfo.isMacCatalystApp
+    }
     
 
 
@@ -1319,7 +1325,10 @@ struct SettingsView: View {
 
                             Spacer()
 
-                            if option == .custom {
+                            // Configuration UI is iPad-only. On Mac the saved
+                            // layout is rendered from iCloud but configured
+                            // elsewhere, so we don't show the button.
+                            if option == .custom, !isRunningOnMac {
                                 Button {
                                     showingCustomConfigurator = true
                                 } label: {
@@ -1843,6 +1852,9 @@ struct SettingsView: View {
                 customConfigVersion &+= 1
             }) {
                 DayViewCustomConfigurator()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: CustomDayViewConfig.didChangeNotification)) { _ in
+                customConfigVersion &+= 1
             }
         }
     }
