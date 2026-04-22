@@ -25,6 +25,14 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case goalsMonth
     case goalsYear
     case goalsPicker
+    case weightGraph
+    case weightGraphWeek
+    case weightGraphMonth
+    case weightGraphYear
+    case workoutStreakGraph
+    case workoutStreakGraphWeek
+    case workoutStreakGraphMonth
+    case workoutStreakGraphYear
 
     var id: String { rawValue }
 
@@ -50,6 +58,14 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .goalsMonth:                return "Monthly Goals"
         case .goalsYear:                 return "Yearly Goals"
         case .goalsPicker:               return "Goals (W/M/Y)"
+        case .weightGraph:               return "Weight Graph (W/M/Y)"
+        case .weightGraphWeek:           return "Weekly Weight Graph"
+        case .weightGraphMonth:          return "Monthly Weight Graph"
+        case .weightGraphYear:           return "Yearly Weight Graph"
+        case .workoutStreakGraph:        return "Workout Streak Graph (W/M/Y)"
+        case .workoutStreakGraphWeek:    return "Weekly Workout Streak"
+        case .workoutStreakGraphMonth:   return "Monthly Workout Streak"
+        case .workoutStreakGraphYear:    return "Yearly Workout Streak"
         }
     }
 
@@ -73,6 +89,14 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .goalsMonth:                                       return "target"
         case .goalsYear:                                        return "target"
         case .goalsPicker:                                      return "target"
+        case .weightGraph,
+             .weightGraphWeek,
+             .weightGraphMonth,
+             .weightGraphYear:                                  return "chart.xyaxis.line"
+        case .workoutStreakGraph,
+             .workoutStreakGraphWeek,
+             .workoutStreakGraphMonth,
+             .workoutStreakGraphYear:                           return "chart.line.uptrend.xyaxis"
         }
     }
 }
@@ -909,8 +933,20 @@ struct DayViewCustomConfigurator: View {
             .tasksPersonalCompact,
             .tasksProfessionalCompact,
         ]
-        if appPrefs.showWeightLogs  { items.append(.logWeight) }
-        if appPrefs.showWorkoutLogs { items.append(.logWorkout) }
+        if appPrefs.showWeightLogs  {
+            items.append(.logWeight)
+            items.append(.weightGraph)
+            items.append(.weightGraphWeek)
+            items.append(.weightGraphMonth)
+            items.append(.weightGraphYear)
+        }
+        if appPrefs.showWorkoutLogs {
+            items.append(.logWorkout)
+            items.append(.workoutStreakGraph)
+            items.append(.workoutStreakGraphWeek)
+            items.append(.workoutStreakGraphMonth)
+            items.append(.workoutStreakGraphYear)
+        }
         if appPrefs.showFoodLogs    { items.append(.logFood) }
         if appPrefs.showWaterLogs   { items.append(.logWater) }
         if appPrefs.showSleepLogs   { items.append(.logSleep) }

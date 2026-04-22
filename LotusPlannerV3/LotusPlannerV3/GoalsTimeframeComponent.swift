@@ -123,9 +123,9 @@ struct GoalsTimeframePickerComponent: View {
                 // currently selected range and opens a dropdown with all
                 // three options when tapped.
                 Picker("Timeframe", selection: $selectedTimeframe) {
-                    Text(GoalsTimeframeHeaderFormatter.periodLabel(for: .week,  on: date)).tag(GoalTimeframe.week)
-                    Text(GoalsTimeframeHeaderFormatter.periodLabel(for: .month, on: date)).tag(GoalTimeframe.month)
-                    Text(GoalsTimeframeHeaderFormatter.periodLabel(for: .year,  on: date)).tag(GoalTimeframe.year)
+                    Text("Week").tag(GoalTimeframe.week)
+                    Text("Month").tag(GoalTimeframe.month)
+                    Text("Year").tag(GoalTimeframe.year)
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()

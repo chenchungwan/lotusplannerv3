@@ -398,6 +398,22 @@ struct DayViewCustom: View {
             GoalsTimeframeComponent(timeframe: .year, date: date)
         case .goalsPicker:
             GoalsTimeframePickerComponent(date: date)
+        case .weightGraph:
+            WeightGraphComponent(currentDate: date)
+        case .weightGraphWeek:
+            WeightGraphComponent(currentDate: date, fixedTimeframe: .week)
+        case .weightGraphMonth:
+            WeightGraphComponent(currentDate: date, fixedTimeframe: .month)
+        case .weightGraphYear:
+            WeightGraphComponent(currentDate: date, fixedTimeframe: .year)
+        case .workoutStreakGraph:
+            WorkoutStreakGraphComponent(currentDate: date)
+        case .workoutStreakGraphWeek:
+            WorkoutStreakGraphComponent(currentDate: date, fixedTimeframe: .week)
+        case .workoutStreakGraphMonth:
+            WorkoutStreakGraphComponent(currentDate: date, fixedTimeframe: .month)
+        case .workoutStreakGraphYear:
+            WorkoutStreakGraphComponent(currentDate: date, fixedTimeframe: .year)
         }
     }
 
