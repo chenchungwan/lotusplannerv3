@@ -1186,21 +1186,30 @@ struct SettingsView: View {
     @State private var showingSyncProgress = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     @State private var diagnosticsExpanded = false
-    @State private var showingCustomConfigurator = false
-    /// Bumped after the custom configurator dismisses so the Configured/
-    /// Re-configure label updates.
+    /// Non-nil when a custom-day-view version is being edited; drives the
+    /// configurator sheet. `UUID` identifies the slot in
+    /// `CustomDayViewLibrary` being edited (pre-existing or brand-new).
+    private struct ConfiguratorTarget: Identifiable { let id: UUID }
+    @State private var configuratorTarget: ConfiguratorTarget?
+    @State private var pendingDeleteVersionId: UUID?
+    /// Bumped after the configurator dismisses or the library changes so the
+    /// versions list re-renders with the latest names / active selection.
     @State private var customConfigVersion = 0
-    
+
     // Check if device forces stacked layout (iPhone portrait)
     private var shouldUseStackedLayout: Bool {
         horizontalSizeClass == .compact && verticalSizeClass == .regular
     }
 
-    /// Reading `customConfigVersion` creates a SwiftUI dependency so the row
-    /// re-renders after the configurator saves a new config.
-    private var isCustomDayViewConfigured: Bool {
+    /// Reading `customConfigVersion` creates a SwiftUI dependency so this
+    /// recomputes after the configurator saves a new version.
+    private var customDayViewLibrary: CustomDayViewLibrary {
         _ = customConfigVersion
-        return CustomDayViewConfig.load() != nil
+        return CustomDayViewLibrary.load()
+    }
+
+    private var isCustomDayViewConfigured: Bool {
+        !customDayViewLibrary.versions.isEmpty
     }
 
     /// The custom day view configurator currently only runs on iPad; layouts
@@ -1208,7 +1217,141 @@ struct SettingsView: View {
     private var isRunningOnMac: Bool {
         ProcessInfo.processInfo.isiOSAppOnMac || ProcessInfo.processInfo.isMacCatalystApp
     }
-    
+
+    // MARK: - Custom day view versions
+
+    /// Sub-rows rendered under the Custom option in Daily View Preferences:
+    /// each saved version (up to `CustomDayViewLibrary.maxVersions`) with
+    /// radio-button selection of the live version, plus per-row Edit / Delete
+    /// actions and an "Add Version" button when capacity remains.
+    @ViewBuilder
+    private var customDayViewVersionRows: some View {
+        let library = customDayViewLibrary
+        let canAddMore = library.versions.count < CustomDayViewLibrary.maxVersions
+
+        ForEach(library.versions) { version in
+            customDayViewVersionRow(version: version, activeId: library.activeId)
+        }
+
+        if canAddMore {
+            Button {
+                addCustomDayViewVersion()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.body)
+                        .foregroundColor(.accentColor)
+                    Text(library.versions.isEmpty ? "Add Version" : "Add Another Version")
+                        .font(.footnote)
+                        .foregroundColor(.accentColor)
+                    Spacer()
+                    Text("\(library.versions.count) / \(CustomDayViewLibrary.maxVersions)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.leading, 28)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+        } else {
+            Text("You've reached the limit of \(CustomDayViewLibrary.maxVersions) versions. Delete one to add another.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.leading, 28)
+        }
+    }
+
+    @ViewBuilder
+    private func customDayViewVersionRow(version: NamedCustomDayViewConfig, activeId: UUID?) -> some View {
+        let isActive = version.id == activeId
+        HStack(spacing: 10) {
+            Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                .foregroundColor(isActive ? .accentColor : .secondary)
+                .font(.body)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    setActiveCustomDayViewVersion(id: version.id)
+                }
+
+            // Inline editable name — reads from the library, writes back on
+            // every change so renames persist without opening the configurator.
+            TextField("Version name", text: Binding(
+                get: {
+                    customDayViewLibrary.versions.first(where: { $0.id == version.id })?.name ?? version.name
+                },
+                set: { newName in
+                    renameCustomDayViewVersion(id: version.id, to: newName)
+                }
+            ))
+            .textFieldStyle(.plain)
+            .font(.footnote)
+            .fontWeight(isActive ? .semibold : .regular)
+            .lineLimit(1)
+            .submitLabel(.done)
+
+            Spacer(minLength: 4)
+
+            Button {
+                configuratorTarget = ConfiguratorTarget(id: version.id)
+            } label: {
+                Text("Edit Layout")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                    .foregroundColor(.accentColor)
+            }
+            .buttonStyle(.plain)
+
+            Button(role: .destructive) {
+                pendingDeleteVersionId = version.id
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundColor(.red)
+                    .font(.footnote)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 28)
+    }
+
+    /// Creates a blank new version with a default name and immediately opens
+    /// the configurator to edit it. The version isn't persisted until the
+    /// user taps Save in the configurator.
+    private func addCustomDayViewVersion() {
+        let library = customDayViewLibrary
+        guard library.versions.count < CustomDayViewLibrary.maxVersions else { return }
+        configuratorTarget = ConfiguratorTarget(id: UUID())
+    }
+
+    private func setActiveCustomDayViewVersion(id: UUID) {
+        var library = CustomDayViewLibrary.load()
+        guard library.versions.contains(where: { $0.id == id }) else { return }
+        guard library.activeId != id else { return }
+        library.activeId = id
+        CustomDayViewLibrary.save(library)
+    }
+
+    /// Persists an inline name change for a specific version. Called on every
+    /// keystroke from the TextField in the settings row.
+    private func renameCustomDayViewVersion(id: UUID, to newName: String) {
+        var library = CustomDayViewLibrary.load()
+        guard let idx = library.versions.firstIndex(where: { $0.id == id }) else { return }
+        guard library.versions[idx].name != newName else { return }
+        library.versions[idx].name = newName
+        CustomDayViewLibrary.save(library)
+    }
+
+    private func deleteCustomDayViewVersion(id: UUID) {
+        var library = CustomDayViewLibrary.load()
+        library.versions.removeAll { $0.id == id }
+        if library.activeId == id {
+            // Fall back to the first remaining version (if any) so the Custom
+            // day view keeps rendering something sensible.
+            library.activeId = library.versions.first?.id
+        }
+        CustomDayViewLibrary.save(library)
+    }
 
 
 
@@ -1281,72 +1424,63 @@ struct SettingsView: View {
                 Section("Daily View Preferences") {
                     // Day View Layout Options with Radio Buttons
                     ForEach(appPrefs.availableDayViewLayouts) { option in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: appPrefs.dayViewLayout == option ? "largecircle.fill.circle" : "circle")
-                                        .foregroundColor(appPrefs.dayViewLayout == option ? .accentColor : .secondary)
-                                        .font(.title2)
+                        Group {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Image(systemName: appPrefs.dayViewLayout == option ? "largecircle.fill.circle" : "circle")
+                                            .foregroundColor(appPrefs.dayViewLayout == option ? .accentColor : .secondary)
+                                            .font(.title2)
 
-                                    Text(option.displayName)
-                                        .font(.body)
-                                        .fontWeight(appPrefs.dayViewLayout == option ? .semibold : .regular)
+                                        Text(option.displayName)
+                                            .font(.body)
+                                            .fontWeight(appPrefs.dayViewLayout == option ? .semibold : .regular)
 
-                                    if option.isBeta {
-                                        Text("Beta")
-                                            .font(.caption2)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(
-                                                Capsule().fill(Color.orange)
-                                            )
+                                        if option.isBeta {
+                                            Text("Beta")
+                                                .font(.caption2)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(
+                                                    Capsule().fill(Color.orange)
+                                                )
+                                        }
+
+                                        if option == .custom, isCustomDayViewConfigured {
+                                            Text("Configured")
+                                                .font(.caption2)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(
+                                                    Capsule().fill(Color.green)
+                                                )
+                                        }
                                     }
 
-                                    if option == .custom, isCustomDayViewConfigured {
-                                        Text("Configured")
-                                            .font(.caption2)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(
-                                                Capsule().fill(Color.green)
-                                            )
-                                    }
+                                    Text(option.description)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .padding(.leading, 28)
                                 }
 
-                                Text(option.description)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 28)
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                appPrefs.updateDayViewLayout(option)
                             }
 
-                            Spacer()
-
-                            // Configuration UI is iPad-only. On Mac the saved
-                            // layout is rendered from iCloud but configured
-                            // elsewhere, so we don't show the button.
-                            if option == .custom, !isRunningOnMac {
-                                Button {
-                                    showingCustomConfigurator = true
-                                } label: {
-                                    Text(isCustomDayViewConfigured ? "Re-configure" : "Configure")
-                                        .font(.footnote.weight(.semibold))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            Capsule().fill(Color.accentColor)
-                                        )
-                                        .foregroundColor(.white)
-                                }
-                                .buttonStyle(.plain)
+                            // Render the saved-versions manager as sub-rows
+                            // directly under the Custom option, so users can
+                            // add / rename / pick active versions without
+                            // leaving the Daily View Preferences section.
+                            if option == .custom {
+                                customDayViewVersionRows
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            appPrefs.updateDayViewLayout(option)
                         }
                     }
                 }
@@ -1848,13 +1982,33 @@ struct SettingsView: View {
             } message: {
                 Text("You will stop syncing data for this account. You can re-link anytime in Settings.")
             }
-            .fullScreenCover(isPresented: $showingCustomConfigurator, onDismiss: {
+            .fullScreenCover(item: $configuratorTarget, onDismiss: {
                 customConfigVersion &+= 1
-            }) {
-                DayViewCustomConfigurator()
+            }) { target in
+                DayViewCustomConfigurator(versionId: target.id)
             }
-            .onReceive(NotificationCenter.default.publisher(for: CustomDayViewConfig.didChangeNotification)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: CustomDayViewLibrary.didChangeNotification)) { _ in
                 customConfigVersion &+= 1
+            }
+            .confirmationDialog(
+                "Delete this custom day view?",
+                isPresented: Binding(
+                    get: { pendingDeleteVersionId != nil },
+                    set: { if !$0 { pendingDeleteVersionId = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let id = pendingDeleteVersionId {
+                        deleteCustomDayViewVersion(id: id)
+                    }
+                    pendingDeleteVersionId = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteVersionId = nil
+                }
+            } message: {
+                Text("The layout for this version will be removed. This cannot be undone.")
             }
         }
     }

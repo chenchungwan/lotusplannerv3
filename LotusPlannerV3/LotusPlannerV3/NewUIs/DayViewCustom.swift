@@ -14,7 +14,6 @@ struct DayViewCustom: View {
 
     var onEventTap: ((GoogleCalendarEvent) -> Void)?
 
-    @State private var showingConfigurator = false
     @State private var configVersion: Int = 0
     @State private var selectedTask: GoogleTask?
     @State private var selectedTaskListId: String?
@@ -22,9 +21,16 @@ struct DayViewCustom: View {
     @State private var showingTaskDetails = false
     @State private var selectedEvent: GoogleCalendarEvent?
 
+    /// Identifiable wrapper so the configurator can be presented via
+    /// `.fullScreenCover(item:)` and receive a concrete version id.
+    private struct ConfiguratorTarget: Identifiable { let id: UUID }
+    @State private var configuratorTarget: ConfiguratorTarget?
+
+    /// The active version from the library (the one `DayViewCustom` renders).
+    /// Returns `nil` when no versions exist or none is marked active.
     private var savedConfig: CustomDayViewConfig? {
         _ = configVersion
-        return CustomDayViewConfig.load()
+        return CustomDayViewLibrary.load().activeConfig
     }
 
     private var isConfigured: Bool { savedConfig != nil }
@@ -48,12 +54,12 @@ struct DayViewCustom: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
-        .fullScreenCover(isPresented: $showingConfigurator, onDismiss: {
+        .fullScreenCover(item: $configuratorTarget, onDismiss: {
             configVersion &+= 1
-        }) {
-            DayViewCustomConfigurator()
+        }) { target in
+            DayViewCustomConfigurator(versionId: target.id)
         }
-        .onReceive(NotificationCenter.default.publisher(for: CustomDayViewConfig.didChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: CustomDayViewLibrary.didChangeNotification)) { _ in
             configVersion &+= 1
         }
         .sheet(isPresented: Binding(
@@ -531,7 +537,7 @@ struct DayViewCustom: View {
                 .padding(.horizontal, 32)
 
             Button {
-                showingConfigurator = true
+                configuratorTarget = ConfiguratorTarget(id: UUID())
             } label: {
                 Label("Configure", systemImage: "slider.horizontal.3")
                     .fontWeight(.semibold)

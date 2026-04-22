@@ -81,14 +81,13 @@ struct ComponentDragPayload: Codable, Transferable {
 
 // MARK: - Persisted configuration
 
-/// Snapshot of what the user built in the configurator. Stored as JSON in
-/// UserDefaults so DayViewCustom can check whether a layout exists and later
-/// render the saved layout with live data.
+/// A single saved layout the user can put together in the configurator.
+/// Pure data — loading/saving happens through `CustomDayViewLibrary`.
 struct CustomDayViewConfig: Codable {
-    static let userDefaultsKey = "customDayViewConfig.v1"
-    /// Posted on the main queue when the saved config changes externally
-    /// (either a local save or a sync from another device via iCloud KVS).
-    static let didChangeNotification = Notification.Name("CustomDayViewConfigDidChange")
+    /// Legacy storage key for single-config saves (pre-library). Kept so
+    /// `CustomDayViewLibrary.load()` can migrate users who had a layout from
+    /// before multi-version support shipped.
+    static let legacyUserDefaultsKey = "customDayViewConfig.v1"
 
     var pageMode: Int
     var page1: PageConfig
@@ -139,42 +138,92 @@ struct CustomDayViewConfig: Codable {
         }
     }
 
-    static func load() -> CustomDayViewConfig? {
-        // Prefer iCloud KVS when it has a value (it's the canonical cross-device
-        // copy). Fall back to UserDefaults for the local cache.
+    /// A fresh blank layout used when creating a new version from scratch.
+    static func blank() -> CustomDayViewConfig {
+        CustomDayViewConfig(
+            pageMode: 1,
+            page1: PageConfig(rows: 3, cols: 3, merges: [], placements: [], groups: nil),
+            page2: nil
+        )
+    }
+}
+
+/// A named saved layout. The `id` is stable for the lifetime of the version
+/// so the library can associate edits back to the same slot.
+struct NamedCustomDayViewConfig: Codable, Identifiable {
+    var id: UUID
+    var name: String
+    var config: CustomDayViewConfig
+}
+
+/// Holds up to `maxVersions` named layouts plus the id of the one currently
+/// rendered by `DayViewCustom`. Persisted as JSON in UserDefaults and iCloud
+/// KVS under `userDefaultsKey`.
+struct CustomDayViewLibrary: Codable {
+    static let userDefaultsKey = "customDayViewLibrary.v1"
+    /// Posted on the main queue when the library changes (local save or a
+    /// sync from another device via iCloud KVS).
+    static let didChangeNotification = Notification.Name("CustomDayViewLibraryDidChange")
+    static let maxVersions = 3
+
+    var activeId: UUID?
+    var versions: [NamedCustomDayViewConfig]
+
+    /// The currently-selected version's config, if any.
+    var activeConfig: CustomDayViewConfig? {
+        guard let id = activeId,
+              let version = versions.first(where: { $0.id == id }) else { return nil }
+        return version.config
+    }
+
+    static func empty() -> CustomDayViewLibrary {
+        CustomDayViewLibrary(activeId: nil, versions: [])
+    }
+
+    /// Load the library, preferring iCloud KVS over the local cache.
+    /// On first run after the multi-version update, migrates a pre-existing
+    /// single-config save into a one-version library.
+    static func load() -> CustomDayViewLibrary {
         let kvs = NSUbiquitousKeyValueStore.default
         if let data = kvs.data(forKey: userDefaultsKey),
-           let config = try? JSONDecoder().decode(CustomDayViewConfig.self, from: data) {
-            return config
+           let lib = try? JSONDecoder().decode(CustomDayViewLibrary.self, from: data) {
+            return lib
         }
         if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-           let config = try? JSONDecoder().decode(CustomDayViewConfig.self, from: data) {
-            return config
+           let lib = try? JSONDecoder().decode(CustomDayViewLibrary.self, from: data) {
+            return lib
         }
-        return nil
+        // Migrate legacy single-config save, preferring KVS over local.
+        let legacyKey = CustomDayViewConfig.legacyUserDefaultsKey
+        if let data = kvs.data(forKey: legacyKey) ?? UserDefaults.standard.data(forKey: legacyKey),
+           let legacy = try? JSONDecoder().decode(CustomDayViewConfig.self, from: data) {
+            let named = NamedCustomDayViewConfig(id: UUID(), name: "My Custom View", config: legacy)
+            let lib = CustomDayViewLibrary(activeId: named.id, versions: [named])
+            save(lib)
+            return lib
+        }
+        return .empty()
     }
 
     /// Writes to both UserDefaults (local cache) and NSUbiquitousKeyValueStore
-    /// (iCloud sync). Posts `didChangeNotification` so views can re-render.
-    static func save(_ config: CustomDayViewConfig) {
-        guard let data = try? JSONEncoder().encode(config) else { return }
+    /// (iCloud sync). Posts `didChangeNotification` so views re-render.
+    static func save(_ library: CustomDayViewLibrary) {
+        guard let data = try? JSONEncoder().encode(library) else { return }
         UserDefaults.standard.set(data, forKey: userDefaultsKey)
         NSUbiquitousKeyValueStore.default.set(data, forKey: userDefaultsKey)
         NSUbiquitousKeyValueStore.default.synchronize()
         NotificationCenter.default.post(name: didChangeNotification, object: nil)
     }
 
-    /// Starts observing external iCloud KVS changes and mirrors them to
-    /// UserDefaults so `load()` always sees the latest value. Call once at app
-    /// launch.
+    /// Registers the iCloud KVS observer that mirrors remote changes to the
+    /// local cache. Call once at app launch.
     @MainActor
     static func startSync() {
         let kvs = NSUbiquitousKeyValueStore.default
         kvs.synchronize()
 
-        // One-time migration: if the local device has a config in UserDefaults
-        // but iCloud KVS is empty, push the local copy up so other devices
-        // receive it. Covers users who saved before iCloud sync shipped.
+        // One-time migration: if this device has a library locally but KVS is
+        // empty, push it up so other devices pick it up.
         if kvs.data(forKey: userDefaultsKey) == nil,
            let localData = UserDefaults.standard.data(forKey: userDefaultsKey) {
             kvs.set(localData, forKey: userDefaultsKey)
@@ -189,7 +238,6 @@ struct CustomDayViewConfig: Codable {
             let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
             guard changedKeys.isEmpty || changedKeys.contains(userDefaultsKey) else { return }
 
-            let kvs = NSUbiquitousKeyValueStore.default
             if let data = kvs.data(forKey: userDefaultsKey) {
                 UserDefaults.standard.set(data, forKey: userDefaultsKey)
             } else {
@@ -270,10 +318,18 @@ struct GroupRegion: Hashable, Identifiable {
 }
 
 
-/// Configuration UI for the Custom day view layout.
-/// Shell only — drag-and-drop persistence of components isn't wired yet.
+/// Configuration UI for a single Custom day view layout version.
+///
+/// Callers present this in a sheet/cover and pass the `versionId` of the
+/// `NamedCustomDayViewConfig` to edit. On Save, the configurator writes back
+/// to the same slot in `CustomDayViewLibrary`, preserving the id so the
+/// library's other versions and `activeId` stay intact.
 struct DayViewCustomConfigurator: View {
     @Environment(\.dismiss) private var dismiss
+
+    /// Stable id of the version this configurator edits. Passed in by the
+    /// caller (Settings) so saves land in the right slot in the library.
+    private let versionId: UUID
 
     enum PageMode: String, CaseIterable, Identifiable {
         case one = "1 page"
@@ -281,6 +337,7 @@ struct DayViewCustomConfigurator: View {
         var id: String { rawValue }
     }
 
+    @State private var versionName: String = ""
     @State private var pageMode: PageMode = .one
     @State private var mergesByPage: [Int: [MergedRegion]] = [1: [], 2: []]
     @State private var groupsByPage: [Int: [GroupRegion]] = [1: [], 2: []]
@@ -297,6 +354,10 @@ struct DayViewCustomConfigurator: View {
 
     private let maxRowsOrCols = 10
     private let minRowsOrCols = 1
+
+    init(versionId: UUID) {
+        self.versionId = versionId
+    }
 
     var body: some View {
         NavigationStack {
@@ -316,6 +377,13 @@ struct DayViewCustomConfigurator: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .principal) {
+                    TextField("Version name", text: $versionName)
+                        .multilineTextAlignment(.center)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(minWidth: 180, maxWidth: 260)
+                        .submitLabel(.done)
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
                     Button(role: .destructive) {
@@ -357,10 +425,18 @@ struct DayViewCustomConfigurator: View {
         }
     }
 
-    /// Hydrates the configurator's `@State` from the saved config, if any.
-    /// Runs on `.onAppear` so reconfigure continues from where Save left off.
+    /// Hydrates the configurator's `@State` from the library entry matching
+    /// `versionId`. Runs on `.onAppear` so reconfigure continues from where
+    /// Save left off. If the id no longer exists (version was deleted in
+    /// another tab before we appeared), start from a blank layout.
     private func loadSavedConfiguration() {
-        guard let config = CustomDayViewConfig.load() else { return }
+        let library = CustomDayViewLibrary.load()
+        guard let version = library.versions.first(where: { $0.id == versionId }) else {
+            versionName = "My Custom View"
+            return
+        }
+        versionName = version.name
+        let config = version.config
 
         pageMode = config.pageMode == 2 ? .two : .one
         rowsByPage[1] = max(minRowsOrCols, min(maxRowsOrCols, config.page1.rows))
@@ -1308,16 +1384,35 @@ struct DayViewCustomConfigurator: View {
 
     // MARK: - Persistence
 
-    /// Serializes the current configuration and stores it to both UserDefaults
-    /// and iCloud KVS via `CustomDayViewConfig.save`, so other signed-in
-    /// devices pick it up.
+    /// Serializes the current configuration into the library entry matching
+    /// `versionId`, then saves the whole library (UserDefaults + iCloud KVS).
+    /// Creates the slot if it doesn't exist yet (first-save of a new version).
     private func saveConfiguration() {
         let config = CustomDayViewConfig(
             pageMode: pageMode == .one ? 1 : 2,
             page1: pageConfig(for: 1),
             page2: pageMode == .two ? pageConfig(for: 2) : nil
         )
-        CustomDayViewConfig.save(config)
+        let trimmedName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = trimmedName.isEmpty ? "My Custom View" : trimmedName
+
+        var library = CustomDayViewLibrary.load()
+        if let idx = library.versions.firstIndex(where: { $0.id == versionId }) {
+            library.versions[idx].name = finalName
+            library.versions[idx].config = config
+        } else {
+            // Slot was deleted elsewhere; add it back (up to the version cap).
+            guard library.versions.count < CustomDayViewLibrary.maxVersions else { return }
+            library.versions.append(
+                NamedCustomDayViewConfig(id: versionId, name: finalName, config: config)
+            )
+        }
+        // If nothing was active before, make this version active so the user
+        // sees it immediately without an extra tap.
+        if library.activeId == nil {
+            library.activeId = versionId
+        }
+        CustomDayViewLibrary.save(library)
     }
 
     private func pageConfig(for page: Int) -> CustomDayViewConfig.PageConfig {
@@ -1535,5 +1630,5 @@ private struct CellDragModifier: ViewModifier {
 }
 
 #Preview {
-    DayViewCustomConfigurator()
+    DayViewCustomConfigurator(versionId: UUID())
 }
