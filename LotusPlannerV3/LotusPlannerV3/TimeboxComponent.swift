@@ -130,16 +130,7 @@ struct TimeboxComponent: View {
             }
             .onAppear {
                 startCurrentTimeTimer()
-                // Auto-scroll to current hour when viewing today
-                if Calendar.current.isDate(date, inSameDayAs: Date()) {
-                    let currentHour = Calendar.current.component(.hour, from: Date())
-                    let targetHour = min(max(currentHour, startHour), endHour - 1)
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo(targetHour, anchor: .top)
-                        }
-                    }
-                }
+                scrollToCurrentHour(proxy: proxy)
             }
             .onDisappear {
                 stopCurrentTimeTimer()
@@ -529,6 +520,28 @@ struct TimeboxComponent: View {
         .opacity(hour >= startHour && hour <= endHour ? 1 : 0)
     }
     
+    /// Scrolls so the current-time redline is visible on first render. Only
+    /// meaningful when viewing today. We fire the scroll twice with growing
+    /// delays because on iPad the outer ScrollView's content layout isn't
+    /// finished when `.onAppear` first runs — a synchronous `scrollTo` at
+    /// that point silently no-ops because the target `.id(hour)` view
+    /// doesn't have a position yet. The two-shot approach covers both the
+    /// quick iPhone case and the slower iPad layout pass.
+    private func scrollToCurrentHour(proxy: ScrollViewProxy) {
+        guard Calendar.current.isDate(date, inSameDayAs: Date()) else { return }
+        let currentHour = Calendar.current.component(.hour, from: Date())
+        let targetHour = min(max(currentHour, startHour), endHour - 1)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            proxy.scrollTo(targetHour, anchor: .top)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(targetHour, anchor: .top)
+            }
+        }
+    }
+
     private func startCurrentTimeTimer() {
         currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
             currentTime = Date()

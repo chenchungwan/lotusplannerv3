@@ -17,8 +17,14 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case logWater
     case logSleep
     case logCustom
+    case logCustomWeek
     case logsAll
     case journal
+    case healthBar
+    case goalsWeek
+    case goalsMonth
+    case goalsYear
+    case goalsPicker
 
     var id: String { rawValue }
 
@@ -36,8 +42,14 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .logWater:                  return "Water"
         case .logSleep:                  return "Sleep"
         case .logCustom:                 return "Custom Logs"
+        case .logCustomWeek:             return "Custom Logs (Week)"
         case .logsAll:                   return "All Logs"
         case .journal:                   return "Journal"
+        case .healthBar:                 return "Health Bar"
+        case .goalsWeek:                 return "Weekly Goals"
+        case .goalsMonth:                return "Monthly Goals"
+        case .goalsYear:                 return "Yearly Goals"
+        case .goalsPicker:               return "Goals (W/M/Y)"
         }
     }
 
@@ -53,8 +65,14 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .logWater:                                         return "drop"
         case .logSleep:                                         return "bed.double"
         case .logCustom:                                        return "square.grid.2x2"
+        case .logCustomWeek:                                    return "calendar.badge.checkmark"
         case .logsAll:                                          return "chart.bar"
         case .journal:                                          return "book"
+        case .healthBar:                                        return "heart.text.square"
+        case .goalsWeek:                                        return "target"
+        case .goalsMonth:                                       return "target"
+        case .goalsYear:                                        return "target"
+        case .goalsPicker:                                      return "target"
         }
     }
 }
@@ -164,7 +182,7 @@ struct CustomDayViewLibrary: Codable {
     /// Posted on the main queue when the library changes (local save or a
     /// sync from another device via iCloud KVS).
     static let didChangeNotification = Notification.Name("CustomDayViewLibraryDidChange")
-    static let maxVersions = 3
+    static let maxVersions = 5
 
     var activeId: UUID?
     var versions: [NamedCustomDayViewConfig]
@@ -352,7 +370,7 @@ struct DayViewCustomConfigurator: View {
 
     @ObservedObject private var appPrefs = AppPreferences.shared
 
-    private let maxRowsOrCols = 10
+    private let maxRowsOrCols = 20
     private let minRowsOrCols = 1
 
     init(versionId: UUID) {
@@ -896,8 +914,23 @@ struct DayViewCustomConfigurator: View {
         if appPrefs.showFoodLogs    { items.append(.logFood) }
         if appPrefs.showWaterLogs   { items.append(.logWater) }
         if appPrefs.showSleepLogs   { items.append(.logSleep) }
-        if appPrefs.showCustomLogs  { items.append(.logCustom) }
+        if appPrefs.showCustomLogs  {
+            items.append(.logCustom)
+            items.append(.logCustomWeek)
+        }
         if appPrefs.showAnyLogs     { items.append(.logsAll) }
+        // The Health Bar only pulls from sleep, weight, and workout logs —
+        // offer it whenever any of those three is enabled.
+        if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs {
+            items.append(.healthBar)
+        }
+        // Goals timeframe components are only useful if goals aren't hidden.
+        if !appPrefs.hideGoals {
+            items.append(.goalsWeek)
+            items.append(.goalsMonth)
+            items.append(.goalsYear)
+            items.append(.goalsPicker)
+        }
         items.append(.journal)
 
         let placed = Set(placements.values)

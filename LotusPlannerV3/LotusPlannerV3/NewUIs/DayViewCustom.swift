@@ -130,6 +130,11 @@ struct DayViewCustom: View {
         }
     }
 
+    /// Rows that contain a single-row Health Bar placement render at this
+    /// fixed height instead of stretching to their share of the page. Keeps
+    /// the bar flush against the next row's top instead of leaving a gap.
+    private let compactRowHeight: CGFloat = 36
+
     private func pageView(pageConfig: CustomDayViewConfig.PageConfig) -> some View {
         GeometryReader { proxy in
             let spacing: CGFloat = 6
@@ -137,7 +142,7 @@ struct DayViewCustom: View {
             let innerW = proxy.size.width - padding * 2
             let innerH = proxy.size.height - padding * 2
             let cellW = max(0, (innerW - spacing * CGFloat(pageConfig.cols - 1)) / CGFloat(pageConfig.cols))
-            let cellH = max(0, (innerH - spacing * CGFloat(pageConfig.rows - 1)) / CGFloat(pageConfig.rows))
+            let rowHs = rowHeights(pageConfig: pageConfig, innerH: innerH, spacing: spacing)
 
             ZStack(alignment: .topLeading) {
                 // Plain / merged cells that are NOT part of any group.
@@ -147,9 +152,9 @@ struct DayViewCustom: View {
                         let rowSpan = region?.rowSpan ?? 1
                         let colSpan = region?.colSpan ?? 1
                         let width = CGFloat(colSpan) * cellW + CGFloat(colSpan - 1) * spacing
-                        let height = CGFloat(rowSpan) * cellH + CGFloat(rowSpan - 1) * spacing
+                        let height = spannedRowsHeight(startRow: cell.row, rowSpan: rowSpan, rowHeights: rowHs, spacing: spacing)
                         let x = CGFloat(cell.col) * (cellW + spacing) + padding
-                        let y = CGFloat(cell.row) * (cellH + spacing) + padding
+                        let y = rowYStart(row: cell.row, rowHeights: rowHs, spacing: spacing, padding: padding)
                         let placement = pageConfig.placements.first {
                             $0.row == cell.row && $0.col == cell.col
                         }
@@ -165,17 +170,69 @@ struct DayViewCustom: View {
                 // occupying the union of its cells.
                 let groups: [CustomDayViewConfig.GroupDTO] = pageConfig.groups ?? []
                 ForEach(Array(groups.enumerated()), id: \.offset) { _, dto in
-                    groupContainer(
-                        dto: dto,
-                        pageConfig: pageConfig,
-                        cellW: cellW,
-                        cellH: cellH,
-                        spacing: spacing,
-                        padding: padding
-                    )
+                    let (rs, cs) = dto.resolvedSpans()
+                    let width = CGFloat(cs) * cellW + CGFloat(cs - 1) * spacing
+                    let height = spannedRowsHeight(startRow: dto.startRow, rowSpan: rs, rowHeights: rowHs, spacing: spacing)
+                    let x = CGFloat(dto.startCol) * (cellW + spacing) + padding
+                    let y = rowYStart(row: dto.startRow, rowHeights: rowHs, spacing: spacing, padding: padding)
+                    groupContainer(dto: dto, pageConfig: pageConfig, width: width, height: height, x: x, y: y)
                 }
             }
         }
+    }
+
+    // MARK: - Row height calculation
+
+    /// Which rows should be rendered at `compactRowHeight` — i.e. host a
+    /// single-row Health Bar. Multi-row merges containing a Health Bar are
+    /// respected: if the user merged vertically, we keep their requested
+    /// height instead of forcing the row small.
+    private func compactRows(pageConfig: CustomDayViewConfig.PageConfig) -> Set<Int> {
+        var set: Set<Int> = []
+        for placement in pageConfig.placements where placement.component == CustomComponent.healthBar.rawValue {
+            let region = mergedRegion(at: placement.row, col: placement.col, in: pageConfig)
+            let rowSpan = region?.rowSpan ?? 1
+            if rowSpan == 1 {
+                set.insert(placement.row)
+            }
+        }
+        return set
+    }
+
+    /// Returns the height for every row on the page. Compact rows get
+    /// `compactRowHeight` and the remaining inner height is split evenly
+    /// across the other rows.
+    private func rowHeights(pageConfig: CustomDayViewConfig.PageConfig, innerH: CGFloat, spacing: CGFloat) -> [CGFloat] {
+        let rows = pageConfig.rows
+        guard rows > 0 else { return [] }
+        let compact = compactRows(pageConfig: pageConfig)
+        let totalSpacing = spacing * CGFloat(max(0, rows - 1))
+        let compactTotal = CGFloat(compact.count) * compactRowHeight
+        let remaining = max(0, innerH - totalSpacing - compactTotal)
+        let regularCount = rows - compact.count
+        let regularRowH = regularCount > 0 ? remaining / CGFloat(regularCount) : 0
+        return (0..<rows).map { compact.contains($0) ? compactRowHeight : regularRowH }
+    }
+
+    /// Y offset of the top of `row`, in the page's inner space.
+    private func rowYStart(row: Int, rowHeights: [CGFloat], spacing: CGFloat, padding: CGFloat) -> CGFloat {
+        var y = padding
+        for r in 0..<row where r < rowHeights.count {
+            y += rowHeights[r] + spacing
+        }
+        return y
+    }
+
+    /// Total rendered height for a cell that spans `rowSpan` rows starting at
+    /// `startRow`, including spacing between the rows it spans.
+    private func spannedRowsHeight(startRow: Int, rowSpan: Int, rowHeights: [CGFloat], spacing: CGFloat) -> CGFloat {
+        let endExclusive = min(startRow + rowSpan, rowHeights.count)
+        var h: CGFloat = 0
+        for r in startRow..<endExclusive {
+            h += rowHeights[r]
+        }
+        h += spacing * CGFloat(max(0, endExclusive - startRow - 1))
+        return h
     }
 
     private struct VisiblePosition: Identifiable {
@@ -240,17 +297,12 @@ struct DayViewCustom: View {
     private func groupContainer(
         dto: CustomDayViewConfig.GroupDTO,
         pageConfig: CustomDayViewConfig.PageConfig,
-        cellW: CGFloat,
-        cellH: CGFloat,
-        spacing: CGFloat,
-        padding: CGFloat
+        width: CGFloat,
+        height: CGFloat,
+        x: CGFloat,
+        y: CGFloat
     ) -> some View {
-        let (rs, cs) = dto.resolvedSpans()
         let isHorizontal = dto.orientation == "horizontal"
-        let width = CGFloat(cs) * cellW + CGFloat(cs - 1) * spacing
-        let height = CGFloat(rs) * cellH + CGFloat(rs - 1) * spacing
-        let x = CGFloat(dto.startCol) * (cellW + spacing) + padding
-        let y = CGFloat(dto.startRow) * (cellH + spacing) + padding
         let components = groupComponents(dto: dto, pageConfig: pageConfig)
 
         Group {
@@ -327,6 +379,8 @@ struct DayViewCustom: View {
                 includeCustomOverride: true,
                 showHeader: false
             )
+        case .logCustomWeek:
+            CustomLogWeekComponent(currentDate: date)
         case .logsAll:
             LogsComponent(currentDate: date, horizontal: false, allowInternalScrolling: true)
         case .journal:
@@ -334,6 +388,16 @@ struct DayViewCustom: View {
                         embedded: true,
                         layoutType: .compact)
                 .id(date)
+        case .healthBar:
+            HealthBarComponent(date: date)
+        case .goalsWeek:
+            GoalsTimeframeComponent(timeframe: .week, date: date)
+        case .goalsMonth:
+            GoalsTimeframeComponent(timeframe: .month, date: date)
+        case .goalsYear:
+            GoalsTimeframeComponent(timeframe: .year, date: date)
+        case .goalsPicker:
+            GoalsTimeframePickerComponent(date: date)
         }
     }
 
@@ -343,37 +407,39 @@ struct DayViewCustom: View {
         let personalEvents = calendarVM.personalEvents.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
         let professionalEvents = calendarVM.professionalEvents.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
         let all = calendarVM.events(for: date)
-        return ScrollView(.vertical, showsIndicators: true) {
-            TimeboxComponent(
-                date: date,
-                events: all,
-                personalEvents: personalEvents,
-                professionalEvents: professionalEvents,
-                personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: date),
-                professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: date),
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                onEventTap: { ev in
-                    onEventTap?(ev)
-                    selectedEvent = ev
-                },
-                onTaskTap: { task, listId in
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    selectedTask = task
-                    selectedTaskListId = listId
-                    selectedTaskAccount = accountKind
-                    showingTaskDetails = true
-                },
-                onTaskToggle: { task, listId in
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind) }
-                },
-                showAllDaySection: true,
-                isBulkEditMode: false,
-                selectedTaskIds: [],
-                onTaskSelectionToggle: nil
-            )
-        }
+        // `TimeboxComponent` owns its own ScrollView + ScrollViewReader and
+        // auto-scrolls to the current hour on appear. Wrapping it in another
+        // ScrollView here would swallow that programmatic scroll, so render
+        // it directly — this keeps the "now" redline in view on first render.
+        return TimeboxComponent(
+            date: date,
+            events: all,
+            personalEvents: personalEvents,
+            professionalEvents: professionalEvents,
+            personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: date),
+            professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: date),
+            personalColor: appPrefs.personalColor,
+            professionalColor: appPrefs.professionalColor,
+            onEventTap: { ev in
+                onEventTap?(ev)
+                selectedEvent = ev
+            },
+            onTaskTap: { task, listId in
+                let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                selectedTask = task
+                selectedTaskListId = listId
+                selectedTaskAccount = accountKind
+                showingTaskDetails = true
+            },
+            onTaskToggle: { task, listId in
+                let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind) }
+            },
+            showAllDaySection: true,
+            isBulkEditMode: false,
+            selectedTaskIds: [],
+            onTaskSelectionToggle: nil
+        )
     }
 
     private func eventsListView(date: Date) -> some View {

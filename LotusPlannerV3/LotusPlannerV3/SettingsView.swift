@@ -538,6 +538,47 @@ class AppPreferences: ObservableObject {
         }
     }
 
+    // MARK: - Health Bar
+
+    /// User-configured order of items rendered in the Health Bar component.
+    /// Toggling an item off removes it from `healthBarHiddenItems` instead of
+    /// the order array, so its position is preserved across on/off cycles.
+    @Published var healthBarOrder: [HealthBarItem] {
+        didSet {
+            let raw = healthBarOrder.map { $0.rawValue }
+            UserDefaults.standard.set(raw, forKey: "healthBarOrder")
+            NSUbiquitousKeyValueStore.default.set(raw, forKey: "healthBarOrder")
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+
+    /// Set of `HealthBarItem.rawValue`s the user has turned off in Settings.
+    /// Stored as an array for UserDefaults/KVS Codable compatibility.
+    @Published var healthBarHiddenItems: Set<String> {
+        didSet {
+            let raw = Array(healthBarHiddenItems)
+            UserDefaults.standard.set(raw, forKey: "healthBarHiddenItems")
+            NSUbiquitousKeyValueStore.default.set(raw, forKey: "healthBarHiddenItems")
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+
+    func isHealthBarItemVisible(_ item: HealthBarItem) -> Bool {
+        !healthBarHiddenItems.contains(item.rawValue)
+    }
+
+    func setHealthBarItem(_ item: HealthBarItem, visible: Bool) {
+        if visible {
+            healthBarHiddenItems.remove(item.rawValue)
+        } else {
+            healthBarHiddenItems.insert(item.rawValue)
+        }
+    }
+
+    func moveHealthBarItem(from source: IndexSet, to destination: Int) {
+        healthBarOrder.move(fromOffsets: source, toOffset: destination)
+    }
+
     // Per-workout-type icon colors (rawValue → hex string)
     @Published var workoutTypeColors: [String: String] {
         didSet {
@@ -848,6 +889,27 @@ class AppPreferences: ObservableObject {
         self.workoutTypeColors = kvsColors ?? localColors ?? [:]
 
         self.showActivityRings = UserDefaults.standard.object(forKey: "showActivityRings") as? Bool ?? false
+
+        // Load Health Bar order (iCloud KVS → UserDefaults → default).
+        // Any known items missing from the saved list are appended so new
+        // items added in future versions show up automatically.
+        let kvsHealthBarOrder = NSUbiquitousKeyValueStore.default.array(forKey: "healthBarOrder") as? [String]
+        let localHealthBarOrder = UserDefaults.standard.stringArray(forKey: "healthBarOrder")
+        if let saved = kvsHealthBarOrder ?? localHealthBarOrder {
+            var decoded = saved.compactMap { HealthBarItem(rawValue: $0) }
+            for item in HealthBarItem.allCases where !decoded.contains(item) {
+                decoded.append(item)
+            }
+            self.healthBarOrder = decoded
+        } else {
+            self.healthBarOrder = HealthBarItem.defaultOrder
+        }
+
+        // Load Health Bar hidden-items set (iCloud KVS → UserDefaults → empty).
+        let kvsHealthBarHidden = NSUbiquitousKeyValueStore.default.array(forKey: "healthBarHiddenItems") as? [String]
+        let localHealthBarHidden = UserDefaults.standard.stringArray(forKey: "healthBarHiddenItems")
+        self.healthBarHiddenItems = Set(kvsHealthBarHidden ?? localHealthBarHidden ?? [])
+
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
         self.useGoalCardView = UserDefaults.standard.object(forKey: "useGoalCardView") as? Bool ?? false
@@ -1586,7 +1648,20 @@ struct SettingsView: View {
                         appPrefs.moveLog(from: source, to: destination)
                     }
                 }
-                
+
+                Section("Health Bar Preferences") {
+                    Text("Contents of the Health Bar component in the Custom Day View, in the order they appear. Drag to reorder and toggle to show or hide.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    ForEach(appPrefs.healthBarOrder) { item in
+                        healthBarItemRow(item)
+                    }
+                    .onMove { source, destination in
+                        appPrefs.moveHealthBarItem(from: source, to: destination)
+                    }
+                }
+
                 Section {
                     Toggle(isOn: Binding(
                         get: { !appPrefs.hideGoals },
@@ -2171,6 +2246,23 @@ struct SettingsView: View {
                 CustomLogItemsInlineView()
                     .padding(.leading, 20)
                     .padding(.top, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func healthBarItemRow(_ item: HealthBarItem) -> some View {
+        let visible = appPrefs.isHealthBarItemVisible(item)
+        Toggle(isOn: Binding(
+            get: { visible },
+            set: { appPrefs.setHealthBarItem(item, visible: $0) }
+        )) {
+            HStack {
+                Image(systemName: item.systemImage)
+                    .foregroundColor(visible ? .accentColor : .secondary)
+                    .frame(width: 22)
+                Text(item.displayName)
+                    .font(.body)
             }
         }
     }
