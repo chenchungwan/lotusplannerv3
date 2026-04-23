@@ -184,7 +184,6 @@ struct TimeboxComponent: View {
             
             if hasAllDayEvents || hasAllDayTasks {
                 Divider()
-                    .background(Color(.systemGray4))
             }
         }
     }

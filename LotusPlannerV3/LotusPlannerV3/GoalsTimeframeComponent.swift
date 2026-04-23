@@ -55,9 +55,6 @@ struct GoalsTimeframeComponent: View {
                     Text("\(filteredGoals.count)")
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color(.systemGray5)))
                 }
             }
 
@@ -80,6 +77,18 @@ struct GoalsTimeframeComponent: View {
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemBackground))
+        // Only draw the outer border when this view is standalone. When a
+        // wrapper (the picker variant) embeds it with `showsHeader: false`,
+        // the wrapper draws its own border and an inner one would double up.
+        .cornerRadius(showsHeader ? 8 : 0)
+        .overlay(
+            Group {
+                if showsHeader {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                }
+            }
+        )
     }
 
     private func goalRow(_ goal: GoalData) -> some View {
@@ -147,6 +156,11 @@ struct GoalsTimeframePickerComponent: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
 }
 

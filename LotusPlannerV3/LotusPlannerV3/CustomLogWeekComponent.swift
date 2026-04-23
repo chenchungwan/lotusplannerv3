@@ -61,6 +61,11 @@ struct CustomLogWeekComponent: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
 
     // MARK: - Header

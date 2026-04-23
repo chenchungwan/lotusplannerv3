@@ -39,6 +39,11 @@ struct WeightGraphComponent: View {
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemBackground))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
     }
 
     private var headerRow: some View {
@@ -60,15 +65,12 @@ struct WeightGraphComponent: View {
 
             Spacer()
 
-            // Unit pill — lets the user see what units they're reading without
+            // Unit label — tells the user what units they're reading without
             // overloading the chart's axis labels.
             if !dataPoints.isEmpty {
                 Text(displayUnit.displayName)
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color(.systemGray5)))
             }
         }
     }

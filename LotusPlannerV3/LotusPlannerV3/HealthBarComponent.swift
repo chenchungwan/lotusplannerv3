@@ -75,7 +75,11 @@ struct HealthBarComponent: View {
                 .padding(.vertical, 4)
             }
             .frame(maxWidth: .infinity)
-            .background(Color(.secondarySystemBackground))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+            )
             .task(id: date) {
                 guard appPrefs.showActivityRings else { return }
                 await healthKit.fetchActivityRings(for: date)

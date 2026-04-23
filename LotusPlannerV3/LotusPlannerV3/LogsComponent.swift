@@ -133,9 +133,6 @@ struct LogsComponent: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: compactHorizontal ? nil : .infinity, alignment: .topLeading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.tertiarySystemBackground))
             .cornerRadius(8)
             // Log sheets (add + edit) are attached at the CalendarView level to
             // avoid multiple observers of the same singleton binding, which
@@ -188,7 +185,6 @@ extension LogsComponent {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -252,7 +248,6 @@ extension LogsComponent {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -284,7 +279,6 @@ extension LogsComponent {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -313,7 +307,6 @@ extension LogsComponent {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -418,7 +411,6 @@ extension LogsComponent {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -494,7 +486,6 @@ extension LogsComponent {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -516,7 +507,6 @@ extension LogsComponent {
         .frame(alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
