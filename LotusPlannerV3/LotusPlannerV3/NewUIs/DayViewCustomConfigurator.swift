@@ -617,19 +617,24 @@ struct DayViewCustomConfigurator: View {
                 - labelHeight - labelSpacing
                 - stepperHeight - stepperSpacing
         )
-        let aspect = screenAspectRatio()
+        let aspect = max(0.1, screenAspectRatio())
         var cardH = availableCardH
         var cardW = cardH * aspect
 
         if pageMode == .one {
-            let maxW = containerSize.width - 2 * outerPadding
+            // Clamp to 0 so a tiny / still-measuring container doesn't yield
+            // a negative max width that cascades into negative frame
+            // dimensions downstream.
+            let maxW = max(0, containerSize.width - 2 * outerPadding)
             if cardW > maxW {
                 cardW = maxW
                 cardH = cardW / aspect
             }
         }
 
-        let cardSize = CGSize(width: cardW, height: cardH)
+        // Final safety clamp — ensures no frame downstream is ever passed
+        // a negative or non-finite dimension on the initial layout pass.
+        let cardSize = CGSize(width: max(0, cardW), height: max(0, cardH))
         let totalContentW: CGFloat = pageMode == .one
             ? cardW + 2 * outerPadding
             : cardW * 2 + pageSpacing + 2 * outerPadding
