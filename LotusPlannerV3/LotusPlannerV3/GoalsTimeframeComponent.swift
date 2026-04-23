@@ -93,19 +93,23 @@ struct GoalsTimeframeComponent: View {
 
     private func goalRow(_ goal: GoalData) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: goal.isCompleted ? "checkmark.circle.fill" : "circle")
+            Text(goal.isCompleted ? "🚀" : "🎯")
                 .font(.body)
-                .foregroundColor(goal.isCompleted ? .accentColor : .secondary)
                 .padding(.top, 1)
 
             Text(goal.title)
                 .font(.body)
                 .fontWeight(.medium)
-                .foregroundColor(goal.isCompleted ? .secondary : .primary)
-                .strikethrough(goal.isCompleted)
+                .foregroundColor(.primary)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(goal.isCompleted ? Color.green.opacity(0.25) : Color.clear)
+        )
     }
 }
 

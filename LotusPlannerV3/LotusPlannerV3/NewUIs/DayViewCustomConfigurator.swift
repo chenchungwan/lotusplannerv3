@@ -25,6 +25,7 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case goalsMonth
     case goalsYear
     case goalsPicker
+    case weeklyGoalsBar
     case weightGraph
     case weightGraphWeek
     case weightGraphMonth
@@ -58,6 +59,7 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .goalsMonth:                return "Monthly Goals"
         case .goalsYear:                 return "Yearly Goals"
         case .goalsPicker:               return "Goals (W/M/Y)"
+        case .weeklyGoalsBar:            return "Weekly Goals Bar"
         case .weightGraph:               return "Weight Graph (W/M/Y)"
         case .weightGraphWeek:           return "Weekly Weight Graph"
         case .weightGraphMonth:          return "Monthly Weight Graph"
@@ -89,6 +91,7 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .goalsMonth:                                       return "target"
         case .goalsYear:                                        return "target"
         case .goalsPicker:                                      return "target"
+        case .weeklyGoalsBar:                                   return "target"
         case .weightGraph,
              .weightGraphWeek,
              .weightGraphMonth,
@@ -865,6 +868,13 @@ struct DayViewCustomConfigurator: View {
                     Label("Delete Component", systemImage: "trash")
                 }
             }
+            if canMergeToPageEdge(page: cell.page, row: cell.row, col: cell.col) {
+                Button {
+                    mergeToPageEdge(page: cell.page, row: cell.row, col: cell.col)
+                } label: {
+                    Label("Merge to Page Edge", systemImage: "arrow.down.right.square")
+                }
+            }
         }
         // Use `.position` (not `.offset`) so each cell has its own real layout
         // frame. `.offset` only shifts visuals, leaving all siblings stacked at
@@ -971,6 +981,7 @@ struct DayViewCustomConfigurator: View {
             items.append(.goalsMonth)
             items.append(.goalsYear)
             items.append(.goalsPicker)
+            items.append(.weeklyGoalsBar)
         }
         items.append(.journal)
 
@@ -1441,6 +1452,61 @@ struct DayViewCustomConfigurator: View {
     /// can place a different component into the same layout slot.
     private func removePlacement(page: Int, row: Int, col: Int) {
         placements.removeValue(forKey: CellPos(page: page, row: row, col: col))
+    }
+
+    /// Whether a merge from (row, col) spanning down+right to the page edge
+    /// would succeed. Blocks if any cell in the target rectangle hosts a
+    /// different component, or sits inside a merged region whose anchor is
+    /// outside the rectangle (so we'd half-eat another layout block).
+    private func canMergeToPageEdge(page: Int, row: Int, col: Int) -> Bool {
+        let totalRows = rows(for: page)
+        let totalCols = columns(for: page)
+        // Nothing to do if the cell is already at the bottom-right corner.
+        guard totalRows - row > 1 || totalCols - col > 1 else { return false }
+
+        let selfAnchor = placementAnchor(page: page, row: row, col: col)
+
+        for r in row..<totalRows {
+            for c in col..<totalCols {
+                if let existing = placementAnchor(page: page, row: r, col: c),
+                   existing != selfAnchor {
+                    return false
+                }
+                if let m = mergedRegion(page: page, row: r, col: c),
+                   (m.topRow < row || m.leftCol < col) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
+    /// Merges every cell from (row, col) to the page's bottom-right corner
+    /// into a single rectangular region, preserving any component already
+    /// anchored at (row, col). Callers must guarantee `canMergeToPageEdge`
+    /// is true first (we no-op otherwise).
+    private func mergeToPageEdge(page: Int, row: Int, col: Int) {
+        let totalRows = rows(for: page)
+        let totalCols = columns(for: page)
+        guard canMergeToPageEdge(page: page, row: row, col: col) else { return }
+
+        // Drop any merges fully contained within the target rectangle; in
+        // practice this is just the current cell's own merge (if any) since
+        // the canMergeToPageEdge check blocks everything else.
+        mergesByPage[page] = (mergesByPage[page] ?? []).filter { m in
+            !(m.topRow >= row && m.leftCol >= col &&
+              m.topRow + m.rowSpan <= totalRows &&
+              m.leftCol + m.colSpan <= totalCols)
+        }
+
+        mergesByPage[page, default: []].append(
+            MergedRegion(
+                topRow: row,
+                leftCol: col,
+                rowSpan: totalRows - row,
+                colSpan: totalCols - col
+            )
+        )
     }
 
     /// Clears every in-memory editing state so the configurator is back to a
