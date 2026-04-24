@@ -45,7 +45,19 @@ struct DayViewCustom: View {
     }
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            // Bulk Edit Toolbar (shown when in bulk edit mode). Mirrors the
+            // pattern used by DayViewNewCompact / DayViewNewClassic so the
+            // nav bar's "checkmark.rectangle.stack" toggle works identically
+            // when the active layout is `.custom`.
+            if bulkEditManager.state.isActive {
+                BulkEditToolbarView(
+                    bulkEditManager: bulkEditManager,
+                    visibleOpenTaskIds: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate).openTaskIds
+                        .union(filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate).openTaskIds)
+                )
+            }
+
             if let config = savedConfig {
                 liveView(config: config)
             } else {
@@ -454,9 +466,15 @@ struct DayViewCustom: View {
                 Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind) }
             },
             showAllDaySection: true,
-            isBulkEditMode: false,
-            selectedTaskIds: [],
-            onTaskSelectionToggle: nil
+            isBulkEditMode: bulkEditManager.state.isActive,
+            selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+            onTaskSelectionToggle: { task in
+                if bulkEditManager.state.selectedTaskIds.contains(task.id) {
+                    bulkEditManager.state.selectedTaskIds.remove(task.id)
+                } else {
+                    bulkEditManager.state.selectedTaskIds.insert(task.id)
+                }
+            }
         )
     }
 
@@ -504,7 +522,16 @@ struct DayViewCustom: View {
                     horizontalCards: false,
                     isSingleDayView: true,
                     showTitle: true,
-                    showTaskStartTime: true
+                    showTaskStartTime: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
                 )
             }
         } else {
@@ -531,6 +558,15 @@ struct DayViewCustom: View {
                         selectedTaskListId = listId
                         selectedTaskAccount = account
                         showingTaskDetails = true
+                    },
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
                     }
                 )
                 .padding(8)

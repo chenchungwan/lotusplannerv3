@@ -539,21 +539,21 @@ struct JournalView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "icloud.and.arrow.up")
-                            .font(.system(size: 16, weight: .medium))
-                        
+                            .font(.body)
+
                         switch saveStatus {
                         case .idle:
                             Text("Save")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.footnote.weight(.medium))
                         case .saving:
                             Text("Saving...")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.footnote.weight(.medium))
                         case .saved:
                             Text("Saved")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.footnote.weight(.medium))
                         case .error:
                             Text("Error")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.footnote.weight(.medium))
                         }
                     }
                     .foregroundColor({
@@ -581,7 +581,7 @@ struct JournalView: View {
                             .frame(width: 16, height: 16)
                     } else {
                         Image(systemName: "arrow.trianglehead.clockwise.icloud")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.body)
                             .foregroundColor(.accentColor)
                     }
                 }
@@ -605,26 +605,39 @@ struct JournalView: View {
                     newlyCreatedAnnotationId = newAnnotation.id
                 }) {
                     Image(systemName: "character.cursor.ibeam")
+                        .font(.body)
                 }
 
                 Button(action: { showToolPicker.toggle() }) {
                     Image(systemName: "pencil.and.scribble")
+                        .font(.body)
                 }
                 if #available(iOS 17, *) {
                     PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
                         Image(systemName: "photo.badge.plus.fill")
+                            .font(.body)
                     }
                 } else {
                     PhotosPicker(selection: $pickerItems, matching: .images, photoLibrary: .shared()) {
                         Image(systemName: "photo.badge.plus.fill")
+                            .font(.body)
                     }
                 }
                 Button(action: { showingEraseConfirmation = true }) {
                     Image(systemName: "trash")
+                        .font(.body)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            // Match the nav bar's icon size (`adaptiveIconSize` resolves to
+            // .body on Catalyst). Icons without an explicit .font() were
+            // inheriting a larger size and rendered noticeably bigger than
+            // the nav bar buttons.
+            .font(.body)
+            // Strip the default Mac Catalyst .bordered button chrome (grey
+            // rounded backgrounds) from the journal toolbar's icon buttons.
+            .buttonStyle(.borderless)
         }
         .padding(.horizontal, 12)
         .frame(height: 44)

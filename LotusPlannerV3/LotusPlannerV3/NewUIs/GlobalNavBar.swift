@@ -317,19 +317,55 @@ struct GlobalNavBar: View {
     }
     
     private var adaptivePadding: CGFloat {
-        isCompact ? 8 : 12
+        #if targetEnvironment(macCatalyst)
+        return 6
+        #else
+        return isCompact ? 8 : 12
+        #endif
     }
-    
+
     private var adaptiveButtonSpacing: CGFloat {
-        isCompact ? 8 : 10
+        #if targetEnvironment(macCatalyst)
+        return 4
+        #else
+        return isCompact ? 8 : 10
+        #endif
     }
-    
+
     private var adaptiveIconSize: Font {
-        isCompact ? .body : .title2
+        #if targetEnvironment(macCatalyst)
+        return .body
+        #else
+        return isCompact ? .body : .title2
+        #endif
     }
-    
+
     private var adaptiveButtonSize: CGFloat {
-        isCompact ? 36 : 44
+        #if targetEnvironment(macCatalyst)
+        return 28
+        #else
+        return isCompact ? 36 : 44
+        #endif
+    }
+
+    /// Nav bar row height. On Mac the iOS 50pt bar is too tall for a toolbar;
+    /// 36pt matches native Mac toolbar conventions.
+    private var adaptiveBarHeight: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return shouldShowTwoRows ? 72 : 36
+        #else
+        return shouldShowTwoRows ? 100 : 50
+        #endif
+    }
+
+    /// Vertical padding inside each row. Smaller on Mac so the 28pt buttons
+    /// fit within the 36pt bar without overflowing.
+    private var adaptiveRowVPadding: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 4
+        #else
+        return 8
+        #endif
     }
 
     /// Treat bookView the same as calendar for nav bar layout purposes
@@ -1072,9 +1108,9 @@ struct GlobalNavBar: View {
                             }
                     }
                     .padding(.horizontal, max(adaptivePadding + horizontalSafeInset, 4))
-                    .padding(.top, 8)
-                    .padding(.bottom, shouldShowTwoRows ? 2 : 8)
-                    
+                    .padding(.top, adaptiveRowVPadding)
+                    .padding(.bottom, shouldShowTwoRows ? 2 : adaptiveRowVPadding)
+
                     // Second row on compact portrait devices: Interval and action buttons
                     if shouldShowTwoRows {
                         HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
@@ -1448,13 +1484,18 @@ struct GlobalNavBar: View {
                         }
                         .padding(.horizontal, max(adaptivePadding + horizontalSafeInset, 4))
                         .padding(.top, 2)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, adaptiveRowVPadding)
                     }
                 }
-                .frame(height: shouldShowTwoRows ? 100 : 50)
+                .frame(height: adaptiveBarHeight)
             }
         }
-        .frame(height: shouldShowTwoRows ? 100 : 50)
+        .frame(height: adaptiveBarHeight)
+        // Strip the default Mac Catalyst .bordered button chrome (grey rounded
+        // backgrounds) from every icon Button in the nav bar. The hamburger
+        // menu already used .borderless explicitly; this propagates the same
+        // treatment to chevrons, interval circles, eye, cloud, etc.
+        .buttonStyle(.borderless)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
