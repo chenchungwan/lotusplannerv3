@@ -1,4 +1,5 @@
 import SwiftUI
+import HealthKit
 
 /// A single reorderable/toggleable item in the Health Bar. The user's order
 /// and per-item visibility live in `AppPreferences`; `HealthBarComponent`
@@ -10,6 +11,9 @@ enum HealthBarItem: String, CaseIterable, Identifiable, Codable, Hashable {
     case workoutStreak
     case workouts
     case activityRings
+    case steps
+    case activeEnergy
+    case restingEnergy
 
     var id: String { rawValue }
 
@@ -21,6 +25,9 @@ enum HealthBarItem: String, CaseIterable, Identifiable, Codable, Hashable {
         case .workoutStreak:  return "Workout Streak"
         case .workouts:       return "Workouts"
         case .activityRings:  return "Activity Rings"
+        case .steps:          return "Steps"
+        case .activeEnergy:   return "Active Energy"
+        case .restingEnergy:  return "Resting Energy"
         }
     }
 
@@ -32,13 +39,17 @@ enum HealthBarItem: String, CaseIterable, Identifiable, Codable, Hashable {
         case .workoutStreak:  return "trophy.fill"
         case .workouts:       return "figure.run"
         case .activityRings:  return "figure.walk.motion"
+        case .steps:          return "shoeprints.fill"
+        case .activeEnergy:   return "figure.arms.open"
+        case .restingEnergy:  return "gauge.medium"
         }
     }
 
     /// Default order used for new users and to backfill any items the saved
     /// order is missing (so future additions appear automatically).
     static let defaultOrder: [HealthBarItem] = [
-        .sleep, .weight, .water, .workoutStreak, .workouts, .activityRings
+        .sleep, .weight, .water, .workoutStreak, .workouts, .activityRings,
+        .steps, .activeEnergy, .restingEnergy
     ]
 }
 
@@ -76,27 +87,56 @@ struct HealthBarComponent: View {
             }
             .frame(maxWidth: .infinity)
             .task(id: date) {
-                guard appPrefs.showActivityRings else { return }
-                await healthKit.fetchActivityRings(for: date)
+                await fetchActiveHealthKitMetrics()
             }
             .task(id: appPrefs.showActivityRings) {
-                guard appPrefs.showActivityRings else { return }
-                await healthKit.fetchActivityRings(for: date)
+                if appPrefs.showActivityRings { await healthKit.fetchActivityRings(for: date) }
+            }
+            .task(id: appPrefs.showHKSteps) {
+                if appPrefs.showHKSteps { await healthKit.fetchSteps(for: date) }
+            }
+            .task(id: appPrefs.showHKActiveEnergy) {
+                if appPrefs.showHKActiveEnergy { await healthKit.fetchActiveEnergy(for: date) }
+            }
+            .task(id: appPrefs.showHKRestingEnergy) {
+                if appPrefs.showHKRestingEnergy { await healthKit.fetchRestingEnergy(for: date) }
+            }
+            .task(id: appPrefs.weightSource) {
+                if appPrefs.weightSource == .appleHealth { await healthKit.fetchWeight(for: date) }
+            }
+            .task(id: appPrefs.workoutSource) {
+                if appPrefs.workoutSource == .appleHealth { await healthKit.fetchWorkouts(for: date) }
             }
 
             Spacer(minLength: 0)
         }
     }
 
+    /// Fires every active HealthKit fetch for the current date in parallel —
+    /// triggered when `date` changes so each chip refreshes for the new day.
+    private func fetchActiveHealthKitMetrics() async {
+        await withTaskGroup(of: Void.self) { group in
+            if appPrefs.showActivityRings { group.addTask { await healthKit.fetchActivityRings(for: date) } }
+            if appPrefs.showHKSteps { group.addTask { await healthKit.fetchSteps(for: date) } }
+            if appPrefs.showHKActiveEnergy { group.addTask { await healthKit.fetchActiveEnergy(for: date) } }
+            if appPrefs.showHKRestingEnergy { group.addTask { await healthKit.fetchRestingEnergy(for: date) } }
+            if appPrefs.weightSource == .appleHealth { group.addTask { await healthKit.fetchWeight(for: date) } }
+            if appPrefs.workoutSource == .appleHealth { group.addTask { await healthKit.fetchWorkouts(for: date) } }
+        }
+    }
+
     @ViewBuilder
     private func content(for item: HealthBarItem) -> some View {
         switch item {
-        case .sleep:         sleepChip
-        case .weight:        weightChip
-        case .water:         waterChip
-        case .workoutStreak: workoutStreakChip
-        case .workouts:      workoutChips
-        case .activityRings: activityRingsChip
+        case .sleep:          sleepChip
+        case .weight:         weightChip
+        case .water:          waterChip
+        case .workoutStreak:  workoutStreakChip
+        case .workouts:       workoutChips
+        case .activityRings:  activityRingsChip
+        case .steps:          stepsChip
+        case .activeEnergy:   activeEnergyChip
+        case .restingEnergy:  restingEnergyChip
         }
     }
 
@@ -123,13 +163,43 @@ struct HealthBarComponent: View {
 
     @ViewBuilder
     private var weightChip: some View {
-        if let entry = logsVM.weightLogs(on: date).last {
-            chip(
-                systemImage: "scalemass.fill",
-                iconColor: .teal,
-                text: "\(formattedWeight(entry.weight)) \(entry.unit.displayName)"
-            )
+        switch appPrefs.weightSource {
+        case .app:
+            // `weightLogs(on:)` returns entries sorted newest-first
+            // (LogsViewModel.rebuildWeightCache uses `$0.timestamp > $1.timestamp`),
+            // so .first is the newest entry. When a day has multiple weigh-ins
+            // we collapse to that one rather than showing each.
+            if let entry = logsVM.weightLogs(on: date).first {
+                chip(
+                    systemImage: "scalemass.fill",
+                    iconColor: .teal,
+                    text: "\(formattedWeight(entry.weight)) \(entry.unit.displayName)"
+                )
+            }
+        case .appleHealth:
+            if let metric = healthKit.weight(for: date) {
+                let displayed = displayWeight(kilograms: metric.value)
+                chip(
+                    systemImage: "scalemass.fill",
+                    iconColor: .teal,
+                    text: displayed
+                )
+            }
         }
+    }
+
+    /// Renders the HK weight (always stored in kg) using the user's preferred
+    /// in-app unit so the chip stays visually consistent regardless of source.
+    private func displayWeight(kilograms: Double) -> String {
+        let unit = logsVM.selectedWeightUnit
+        let value: Double
+        switch unit {
+        case .pounds:
+            value = kilograms * 2.2046226218
+        case .kilograms:
+            value = kilograms
+        }
+        return "\(formattedWeight(value)) \(unit.displayName)"
     }
 
     private func formattedWeight(_ value: Double) -> String {
@@ -195,14 +265,22 @@ struct HealthBarComponent: View {
 
     // MARK: - Workouts
 
-    /// One chip per workout logged for the day. Shows the workout-type icon;
-    /// if the user entered a description (`name`) it's appended as text,
-    /// otherwise the chip is icon-only.
+    /// One chip per workout logged for the day. Source comes from the user's
+    /// `workoutSource` preference: in-app `WorkoutLog` rows, or HealthKit
+    /// `HKWorkout` samples (Apple Watch, third-party trackers, etc).
     @ViewBuilder
     private var workoutChips: some View {
-        let workouts = logsVM.workoutLogs(on: date)
-        ForEach(workouts) { workout in
-            workoutChip(workout)
+        switch appPrefs.workoutSource {
+        case .app:
+            let workouts = logsVM.workoutLogs(on: date)
+            ForEach(workouts) { workout in
+                workoutChip(workout)
+            }
+        case .appleHealth:
+            let workouts = healthKit.workouts(for: date)
+            ForEach(workouts, id: \.uuid) { workout in
+                hkWorkoutChip(workout)
+            }
         }
     }
 
@@ -225,6 +303,62 @@ struct HealthBarComponent: View {
         .padding(.vertical, 3)
         .background(Capsule().fill(Color(.systemBackground)))
         .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 0.5))
+    }
+
+    private func hkWorkoutChip(_ workout: HKWorkout) -> some View {
+        // HKWorkoutActivityType doesn't map cleanly to our app's WorkoutType
+        // enum, so use a generic running figure plus the duration as the
+        // label. Could be enriched later with per-activity-type icons.
+        let minutes = Int((workout.duration / 60).rounded())
+        return HStack(spacing: 4) {
+            Image(systemName: "figure.run")
+                .font(.caption)
+                .foregroundColor(.pink)
+            Text("\(minutes) min")
+                .font(.caption)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(Color(.systemBackground)))
+        .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 0.5))
+    }
+
+    // MARK: - Steps / energy
+
+    @ViewBuilder
+    private var stepsChip: some View {
+        if appPrefs.showHKSteps, let metric = healthKit.steps(for: date), metric.value > 0 {
+            chip(
+                systemImage: "shoeprints.fill",
+                iconColor: .green,
+                text: "\(Int(metric.value.rounded())) steps"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var activeEnergyChip: some View {
+        if appPrefs.showHKActiveEnergy, let metric = healthKit.activeEnergy(for: date), metric.value > 0 {
+            chip(
+                systemImage: "figure.arms.open",
+                iconColor: .orange,
+                text: "\(Int(metric.value.rounded())) calories active"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var restingEnergyChip: some View {
+        if appPrefs.showHKRestingEnergy, let metric = healthKit.restingEnergy(for: date), metric.value > 0 {
+            chip(
+                systemImage: "gauge.medium",
+                iconColor: .indigo,
+                text: "\(Int(metric.value.rounded())) calories resting"
+            )
+        }
     }
 
     // MARK: - Activity rings

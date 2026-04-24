@@ -285,17 +285,40 @@ struct GlobalNavBar: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
-    // Sheet states
-    @State private var showingSettings = false
-    @State private var showingAbout = false
-    @State private var showingReportIssues = false
-    @State private var showingDatePicker = false
-    @State private var showingAddEvent = false
-    @State private var showingAddTask = false
-    @State private var showingAddList = false
+    // Sheet state — consolidated into a single enum-driven `activeSheet`.
+    // SwiftUI does not reliably support multiple sibling `.sheet` modifiers
+    // on a single view (especially under Mac Catalyst's Mac idiom, where
+    // stacking eight independent `.sheet(isPresented:)` modifiers caused
+    // the Settings sheet to become un-dismissable — `dismiss()` and
+    // tap-outside both stopped clearing the binding). One `.sheet(item:)`
+    // driven by `activeSheet` avoids that whole class of issue.
+    private enum NavSheet: Identifiable {
+        case settings
+        case about
+        case reportIssues
+        case datePicker
+        case addEvent
+        case addTask
+        case addList
+
+        var id: String {
+            switch self {
+            case .settings: return "settings"
+            case .about: return "about"
+            case .reportIssues: return "reportIssues"
+            case .datePicker: return "datePicker"
+            case .addEvent: return "addEvent"
+            case .addTask: return "addTask"
+            case .addList: return "addList"
+            }
+        }
+    }
+    @State private var activeSheet: NavSheet?
+
+    // Per-sheet input state still lives at the view level so the sheet
+    // bodies (in the .sheet(item:) switch below) can read/write it.
     @State private var newListName = ""
     @State private var newListAccountKind: GoogleAuthManager.AccountKind?
-    @State private var showingAddLog = false
 
     // Sync state
     @State private var isSyncing = false
@@ -669,17 +692,17 @@ struct GlobalNavBar: View {
                             Divider()
                             
                             Button(action: {
-                                showingSettings = true
+                                activeSheet = .settings
                             }) {
                                 Label("Settings", systemImage: "gearshape")
                             }
                             Button(action: {
-                                showingAbout = true
+                                activeSheet = .about
                             }) {
                                 Label("About", systemImage: "info.circle")
                             }
                             Button(action: {
-                                showingReportIssues = true
+                                activeSheet = .reportIssues
                             }) {
                                 Label("Report Issue / Request Features", systemImage: "exclamationmark.bubble")
                             }
@@ -711,7 +734,7 @@ struct GlobalNavBar: View {
                             // Only open date picker if not in Lists view or Goals All Goals view
                             if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
                                 selectedDateForPicker = navigationManager.currentDate
-                                showingDatePicker = true
+                                activeSheet = .datePicker
                             }
                         } label: {
                             Text(dateLabel)
@@ -1034,10 +1057,10 @@ struct GlobalNavBar: View {
                                 // In Journal Day Views: menu with Event and Task only
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("Log") {
                                         LogsViewModel.shared.showingAddLogSheet = true
@@ -1051,13 +1074,13 @@ struct GlobalNavBar: View {
                                 // In Lists view: menu with Event, Task, and List
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("List") {
-                                        showingAddList = true
+                                        activeSheet = .addList
                                     }
                                     Button("Log") {
                                         LogsViewModel.shared.showingAddLogSheet = true
@@ -1071,10 +1094,10 @@ struct GlobalNavBar: View {
                                 // In Goals view: menu with Event, Task, and Goal
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("Goal") {
                                         NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
@@ -1091,10 +1114,10 @@ struct GlobalNavBar: View {
                                 // In other views: Event, Task, and Log.
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("Log") {
                                         LogsViewModel.shared.showingAddLogSheet = true
@@ -1410,10 +1433,10 @@ struct GlobalNavBar: View {
                                 // In Journal Day Views: menu with Event and Task only
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("Log") {
                                         LogsViewModel.shared.showingAddLogSheet = true
@@ -1427,13 +1450,13 @@ struct GlobalNavBar: View {
                                 // In Lists view: menu with Event, Task, and List
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("List") {
-                                        showingAddList = true
+                                        activeSheet = .addList
                                     }
                                     Button("Log") {
                                         LogsViewModel.shared.showingAddLogSheet = true
@@ -1447,10 +1470,10 @@ struct GlobalNavBar: View {
                                 // In Goals view: menu with Event, Task, and Goal
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("Goal") {
                                         NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
@@ -1467,10 +1490,10 @@ struct GlobalNavBar: View {
                                 // In other views: Event, Task, and Log.
                                 Menu {
                                     Button("Event") {
-                                        showingAddEvent = true
+                                        activeSheet = .addEvent
                                     }
                                     Button("Task") {
-                                        showingAddTask = true
+                                        activeSheet = .addTask
                                     }
                                     Button("Log") {
                                         LogsViewModel.shared.showingAddLogSheet = true
@@ -1496,124 +1519,124 @@ struct GlobalNavBar: View {
         // menu already used .borderless explicitly; this propagates the same
         // treatment to chevrons, interval circles, eye, cloud, etc.
         .buttonStyle(.borderless)
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showingAbout) {
-            AboutView()
-        }
-        .sheet(isPresented: $showingReportIssues) {
-            ReportIssuesView()
-        }
-        .sheet(isPresented: $showingDatePicker) {
-            NavigationStack {
-                DatePicker(
-                    "Select Date",
-                    selection: $selectedDateForPicker,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.graphical)
-                .environment(\.calendar, Calendar.mondayFirst)
-                .navigationTitle("Select Date")
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationBarItems(
-                    leading: Button("Cancel") { showingDatePicker = false },
-                    trailing: Button("Done") {
-                        // Navigate based on current view context
-                        if navigationManager.showTasksView && navigationManager.showingAllTasks {
-                            // If in Tasks view filtered to ALL, go to yearly view
-                            navigationManager.updateInterval(.year, date: selectedDateForPicker)
-                        } else {
-                            // Otherwise, respect current interval but use selected date
-                            navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .settings:
+                SettingsView()
+
+            case .about:
+                AboutView()
+
+            case .reportIssues:
+                ReportIssuesView()
+
+            case .datePicker:
+                NavigationStack {
+                    DatePicker(
+                        "Select Date",
+                        selection: $selectedDateForPicker,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .environment(\.calendar, Calendar.mondayFirst)
+                    .navigationTitle("Select Date")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationBarItems(
+                        leading: Button("Cancel") { activeSheet = nil },
+                        trailing: Button("Done") {
+                            // Navigate based on current view context
+                            if navigationManager.showTasksView && navigationManager.showingAllTasks {
+                                // If in Tasks view filtered to ALL, go to yearly view
+                                navigationManager.updateInterval(.year, date: selectedDateForPicker)
+                            } else {
+                                // Otherwise, respect current interval but use selected date
+                                navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
+                            }
+                            activeSheet = nil
                         }
-                        showingDatePicker = false
+                    )
+                }
+                .presentationDetents([.large])
+
+            case .addEvent:
+                NavigationStack {
+                    AddItemView(
+                        currentDate: navigationManager.currentDate,
+                        tasksViewModel: tasksVM,
+                        calendarViewModel: calendarVM,
+                        appPrefs: appPrefs,
+                        showEventOnly: true
+                    )
+                }
+
+            case .addTask:
+                let personalLinked = auth.isLinked(kind: .personal)
+                let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
+                let defaultLists = defaultAccount == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+                let defaultListId = defaultLists.first?.id ?? ""
+                let newTask = GoogleTask(
+                    id: UUID().uuidString,
+                    title: "",
+                    notes: nil,
+                    status: "needsAction",
+                    due: nil,
+                    completed: nil,
+                    updated: nil,
+                    position: "0"
+                )
+
+                NavigationStack {
+                    TaskDetailsView(
+                        task: newTask,
+                        taskListId: defaultListId,
+                        accountKind: defaultAccount,
+                        accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                        personalTaskLists: tasksVM.personalTaskLists,
+                        professionalTaskLists: tasksVM.professionalTaskLists,
+                        appPrefs: appPrefs,
+                        viewModel: tasksVM,
+                        onSave: { updatedTask in
+                            Task {
+                                await tasksVM.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
+                            }
+                        },
+                        onDelete: {
+                            // No-op for new task creation
+                        },
+                        onMove: { updatedTask, targetListId in
+                            Task {
+                                await tasksVM.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
+                            }
+                        },
+                        onCrossAccountMove: { updatedTask, targetAccount, targetListId in
+                            Task {
+                                await tasksVM.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
+                            }
+                        },
+                        isNew: true
+                    )
+                }
+
+            case .addList:
+                NewListSheet(
+                    appPrefs: appPrefs,
+                    accountKind: newListAccountKind,
+                    hasPersonal: auth.isLinked(kind: .personal),
+                    hasProfessional: auth.isLinked(kind: .professional),
+                    personalColor: appPrefs.personalColor,
+                    professionalColor: appPrefs.professionalColor,
+                    listName: $newListName,
+                    selectedAccount: $newListAccountKind,
+                    onCreate: {
+                        createNewList()
                     }
                 )
-            }
-            .presentationDetents([.large])
-        }
-        .sheet(isPresented: $showingAddEvent) {
-            NavigationStack {
-                AddItemView(
-                    currentDate: navigationManager.currentDate,
-                    tasksViewModel: tasksVM,
-                    calendarViewModel: calendarVM,
-                    appPrefs: appPrefs,
-                    showEventOnly: true
-                )
-            }
-        }
-        .sheet(isPresented: $showingAddTask) {
-            let personalLinked = auth.isLinked(kind: .personal)
-            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
-            let defaultLists = defaultAccount == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
-            let defaultListId = defaultLists.first?.id ?? ""
-            let newTask = GoogleTask(
-                id: UUID().uuidString,
-                title: "",
-                notes: nil,
-                status: "needsAction",
-                due: nil,
-                completed: nil,
-                updated: nil,
-                position: "0"
-            )
-            
-            NavigationStack {
-                TaskDetailsView(
-                    task: newTask,
-                    taskListId: defaultListId,
-                    accountKind: defaultAccount,
-                    accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: tasksVM.personalTaskLists,
-                    professionalTaskLists: tasksVM.professionalTaskLists,
-                    appPrefs: appPrefs,
-                    viewModel: tasksVM,
-                    onSave: { updatedTask in
-                        Task {
-                            await tasksVM.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
-                        }
-                    },
-                    onDelete: {
-                        // No-op for new task creation
-                    },
-                    onMove: { updatedTask, targetListId in
-                        Task {
-                            await tasksVM.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
-                        }
-                    },
-                    onCrossAccountMove: { updatedTask, targetAccount, targetListId in
-                        Task {
-                            await tasksVM.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
-                        }
-                    },
-                    isNew: true
-                )
-            }
-        }
-        .sheet(isPresented: $showingAddList) {
-            NewListSheet(
-                appPrefs: appPrefs,
-                accountKind: newListAccountKind,
-                hasPersonal: auth.isLinked(kind: .personal),
-                hasProfessional: auth.isLinked(kind: .professional),
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                listName: $newListName,
-                selectedAccount: $newListAccountKind,
-                onCreate: {
-                    createNewList()
+                .onAppear {
+                    // Reset state when sheet appears
+                    newListName = ""
+                    newListAccountKind = nil
                 }
-            )
-            .onAppear {
-                // Reset state when sheet appears
-                newListName = ""
-                newListAccountKind = nil
             }
-        }
-        .sheet(isPresented: $showingAddLog) {
-            AddLogEntryView(viewModel: logsVM)
         }
     }
     
@@ -1624,7 +1647,7 @@ struct GlobalNavBar: View {
         Task {
             let _ = await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
             await MainActor.run {
-                showingAddList = false
+                activeSheet = nil
                 newListName = ""
                 newListAccountKind = nil
             }

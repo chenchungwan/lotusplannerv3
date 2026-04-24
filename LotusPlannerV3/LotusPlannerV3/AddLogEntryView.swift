@@ -4,92 +4,51 @@ struct AddLogEntryView: View {
     @ObservedObject var viewModel: LogsViewModel
     @ObservedObject private var appPrefs = AppPreferences.shared
     @Environment(\.dismiss) private var dismiss
-    
-    private func getFirstAvailableLogType() -> LogType {
-        if appPrefs.showFoodLogs { return .food }
-        if appPrefs.showSleepLogs { return .sleep }
-        if appPrefs.showWaterLogs { return .water }
-        if appPrefs.showWeightLogs { return .weight }
-        if appPrefs.showWorkoutLogs { return .workout }
-        return .food // Fallback, though this case shouldn't happen as the + button should be hidden
+
+    /// True when at least one enabled section has data valid enough to
+    /// submit — drives the Create button's enabled state.
+    private var hasAnyValidEntry: Bool {
+        (appPrefs.showFoodLogs && viewModel.canAddFood) ||
+        (appPrefs.showSleepLogs && viewModel.canAddSleep) ||
+        (appPrefs.showWaterLogs && viewModel.waterCupsConsumed > 0) ||
+        (appPrefs.showWeightLogs && viewModel.canAddWeight) ||
+        (appPrefs.showWorkoutLogs && viewModel.canAddWorkout)
     }
-    
+
+    /// Submits every section that has valid data; untouched sections are
+    /// silently skipped. Water uses cups > 0 explicitly because
+    /// `canAddWater` returns true even at zero cups (legacy behavior from
+    /// the old single-type flow).
+    private func addAllValidEntries() {
+        if appPrefs.showFoodLogs && viewModel.canAddFood {
+            viewModel.addFoodEntry()
+        }
+        if appPrefs.showSleepLogs && viewModel.canAddSleep {
+            viewModel.addSleepEntry()
+        }
+        if appPrefs.showWaterLogs && viewModel.waterCupsConsumed > 0 {
+            viewModel.addWaterEntry()
+        }
+        if appPrefs.showWeightLogs && viewModel.canAddWeight {
+            viewModel.addWeightEntry()
+        }
+        if appPrefs.showWorkoutLogs && viewModel.canAddWorkout {
+            viewModel.addWorkoutEntry()
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Log Type") {
-                    Picker("Type", selection: Binding(
-                        get: { viewModel.selectedLogType },
-                        set: { newValue in
-                            // Only set if the corresponding log type is enabled
-                            switch newValue {
-                            case .food where appPrefs.showFoodLogs:
-                                viewModel.selectedLogType = .food
-                            case .sleep where appPrefs.showSleepLogs:
-                                viewModel.selectedLogType = .sleep
-                            case .water where appPrefs.showWaterLogs:
-                                viewModel.selectedLogType = .water
-                            case .weight where appPrefs.showWeightLogs:
-                                viewModel.selectedLogType = .weight
-                            case .workout where appPrefs.showWorkoutLogs:
-                                viewModel.selectedLogType = .workout
-                            default:
-                                // If trying to select a disabled type, select the first available one
-                                viewModel.selectedLogType = getFirstAvailableLogType()
-                            }
-                        }
-                    )) {
-                        if appPrefs.showFoodLogs {
-                            Label(LogType.food.displayName, systemImage: LogType.food.icon)
-                                .tag(LogType.food)
-                        }
-                        if appPrefs.showSleepLogs {
-                            Label(LogType.sleep.displayName, systemImage: LogType.sleep.icon)
-                                .tag(LogType.sleep)
-                        }
-                        if appPrefs.showWaterLogs {
-                            Label(LogType.water.displayName, systemImage: LogType.water.icon)
-                                .tag(LogType.water)
-                        }
-                        if appPrefs.showWeightLogs {
-                            Label(LogType.weight.displayName, systemImage: LogType.weight.icon)
-                                .tag(LogType.weight)
-                        }
-                        if appPrefs.showWorkoutLogs {
-                            Label(LogType.workout.displayName, systemImage: LogType.workout.icon)
-                                .tag(LogType.workout)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .onAppear {
-                        // When view appears, make sure selected type is available
-                        switch viewModel.selectedLogType {
-                        case .food where !appPrefs.showFoodLogs,
-                             .sleep where !appPrefs.showSleepLogs,
-                             .water where !appPrefs.showWaterLogs,
-                             .weight where !appPrefs.showWeightLogs,
-                             .workout where !appPrefs.showWorkoutLogs:
-                            viewModel.selectedLogType = getFirstAvailableLogType()
-                        default:
-                            break
-                        }
-                    }
-                }
-
-                // Form fields based on log type and visibility settings
-                if case .food = viewModel.selectedLogType, appPrefs.showFoodLogs {
-                    foodForm
-                } else if case .sleep = viewModel.selectedLogType, appPrefs.showSleepLogs {
-                    sleepForm
-                } else if case .water = viewModel.selectedLogType, appPrefs.showWaterLogs {
-                    waterForm
-                } else if case .weight = viewModel.selectedLogType, appPrefs.showWeightLogs {
-                    weightForm
-                } else if case .workout = viewModel.selectedLogType, appPrefs.showWorkoutLogs {
-                    workoutForm
-                }
+                // Show every enabled log type at once. The user can fill in
+                // any subset; Create submits all valid sections in one tap.
+                if appPrefs.showFoodLogs { foodForm }
+                if appPrefs.showSleepLogs { sleepForm }
+                if appPrefs.showWaterLogs { waterForm }
+                if appPrefs.showWeightLogs { weightForm }
+                if appPrefs.showWorkoutLogs { workoutForm }
             }
-            .navigationTitle("Add \(viewModel.selectedLogType.displayName)")
+            .navigationTitle("Add Log Entries")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -97,16 +56,16 @@ struct AddLogEntryView: View {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Create") {
-                        viewModel.addCurrentLogEntry()
+                        addAllValidEntries()
                         dismiss()
                     }
-                    .disabled(!viewModel.canAddCurrentLogType)
+                    .disabled(!hasAnyValidEntry)
                     .fontWeight(.semibold)
-                    .foregroundColor(viewModel.canAddCurrentLogType ? viewModel.accentColor : .secondary)
-                    .opacity(viewModel.canAddCurrentLogType ? 1.0 : 0.5)
+                    .foregroundColor(hasAnyValidEntry ? viewModel.accentColor : .secondary)
+                    .opacity(hasAnyValidEntry ? 1.0 : 0.5)
                 }
             }
         }
@@ -154,7 +113,7 @@ struct AddLogEntryView: View {
                         .tag(type)
                 }
             }
-            TextField("Description (optional)", text: $viewModel.workoutName)
+            TextField("Description", text: $viewModel.workoutName)
             DatePicker("Date", selection: $viewModel.workoutDate, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.calendar, Calendar.mondayFirst)
         }

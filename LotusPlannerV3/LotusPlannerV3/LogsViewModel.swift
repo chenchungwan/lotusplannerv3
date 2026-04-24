@@ -458,7 +458,10 @@ class LogsViewModel: ObservableObject {
     }
     
     var canAddWorkout: Bool {
-        return true // A workout type is always selected from the picker
+        // Workout type is always selected, but description is now required so
+        // a fresh untouched workout section in AddLogEntryView doesn't get
+        // submitted accidentally when the user taps Create.
+        return !workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
     var canAddFood: Bool {

@@ -531,11 +531,64 @@ class AppPreferences: ObservableObject {
         }
     }
 
-    // Show activity rings from Apple Health in workout log
+    // MARK: - Apple Health Kit Preferences
+    //
+    // Each `showHK*` flag gates a single chip in the Health Bar. Toggling one
+    // on triggers HealthKitManager's lazy auth prompt the next time the bar
+    // tries to fetch the corresponding metric.
+
     @Published var showActivityRings: Bool {
         didSet {
             UserDefaults.standard.set(showActivityRings, forKey: "showActivityRings")
         }
+    }
+
+    @Published var showHKSteps: Bool {
+        didSet { UserDefaults.standard.set(showHKSteps, forKey: "showHKSteps") }
+    }
+
+    @Published var showHKActiveEnergy: Bool {
+        didSet { UserDefaults.standard.set(showHKActiveEnergy, forKey: "showHKActiveEnergy") }
+    }
+
+    @Published var showHKRestingEnergy: Bool {
+        didSet { UserDefaults.standard.set(showHKRestingEnergy, forKey: "showHKRestingEnergy") }
+    }
+
+    /// Source of the Health Bar's *weight* chip. Picking `.appleHealth` reads
+    /// from HealthKit's body-mass samples; `.app` reads from the in-app
+    /// `WeightLog` Core Data store the user has been writing manually.
+    enum WeightSource: String, CaseIterable, Identifiable {
+        case app
+        case appleHealth
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .app: return "App"
+            case .appleHealth: return "Apple Health"
+            }
+        }
+    }
+    @Published var weightSource: WeightSource {
+        didSet { UserDefaults.standard.set(weightSource.rawValue, forKey: "weightSource") }
+    }
+
+    /// Source of the Health Bar's *workouts* chips. Same idea as
+    /// `WeightSource`: app-tracked `WorkoutLog` entries vs. HealthKit
+    /// `HKWorkout` samples (Apple Watch, third-party trackers, etc).
+    enum WorkoutSource: String, CaseIterable, Identifiable {
+        case app
+        case appleHealth
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .app: return "App"
+            case .appleHealth: return "Apple Health"
+            }
+        }
+    }
+    @Published var workoutSource: WorkoutSource {
+        didSet { UserDefaults.standard.set(workoutSource.rawValue, forKey: "workoutSource") }
     }
 
     // MARK: - Health Bar
@@ -889,6 +942,13 @@ class AppPreferences: ObservableObject {
         self.workoutTypeColors = kvsColors ?? localColors ?? [:]
 
         self.showActivityRings = UserDefaults.standard.object(forKey: "showActivityRings") as? Bool ?? false
+        self.showHKSteps = UserDefaults.standard.object(forKey: "showHKSteps") as? Bool ?? false
+        self.showHKActiveEnergy = UserDefaults.standard.object(forKey: "showHKActiveEnergy") as? Bool ?? false
+        self.showHKRestingEnergy = UserDefaults.standard.object(forKey: "showHKRestingEnergy") as? Bool ?? false
+        let savedWeightSource = UserDefaults.standard.string(forKey: "weightSource") ?? WeightSource.app.rawValue
+        self.weightSource = WeightSource(rawValue: savedWeightSource) ?? .app
+        let savedWorkoutSource = UserDefaults.standard.string(forKey: "workoutSource") ?? WorkoutSource.app.rawValue
+        self.workoutSource = WorkoutSource(rawValue: savedWorkoutSource) ?? .app
 
         // Load Health Bar order (iCloud KVS → UserDefaults → default).
         // Any known items missing from the saved list are appended so new
@@ -1674,6 +1734,10 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Apple Health Kit Preferences") {
+                    appleHealthKitSection()
+                }
+
                 Section {
                     Toggle(isOn: Binding(
                         get: { !appPrefs.hideGoals },
@@ -2409,44 +2473,96 @@ struct SettingsView: View {
                         }
                     }
                     .padding(.leading, 20)
-
-                    Divider().padding(.vertical, 8)
-
-                    if HealthKitManager.shared.isHealthKitAvailable {
-                        Toggle(isOn: $appPrefs.showActivityRings) {
-                            HStack {
-                                Image(systemName: "circle.circle")
-                                    .foregroundColor(appPrefs.showActivityRings ? .red : .secondary)
-                                    .frame(width: 20)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Activity Rings")
-                                        .font(.body)
-                                    Text("Show Move, Exercise, and Stand rings from Apple Health")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .padding(.leading, 20)
-                    } else {
-                        HStack {
-                            Image(systemName: "circle.circle")
-                                .foregroundColor(.secondary)
-                                .frame(width: 20)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Activity Rings")
-                                    .font(.body)
-                                    .foregroundColor(.secondary)
-                                Text("Apple Health is not available on this device")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture { }
-                        .padding(.leading, 20)
-                    }
+                    // Activity Rings + other Apple Health toggles now live in
+                    // their own "Apple Health Kit Preferences" section.
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func appleHealthKitSection() -> some View {
+        if HealthKitManager.shared.isHealthKitAvailable {
+            Toggle(isOn: $appPrefs.showActivityRings) {
+                healthKitRowLabel(
+                    icon: "circle.circle",
+                    iconColor: appPrefs.showActivityRings ? .red : .secondary,
+                    title: "Activity Rings",
+                    subtitle: "Move, Exercise, and Stand rings"
+                )
+            }
+
+            Toggle(isOn: $appPrefs.showHKSteps) {
+                healthKitRowLabel(
+                    icon: "shoeprints.fill",
+                    iconColor: appPrefs.showHKSteps ? .green : .secondary,
+                    title: "Steps",
+                    subtitle: "Daily step count from Apple Health"
+                )
+            }
+
+            Toggle(isOn: $appPrefs.showHKActiveEnergy) {
+                healthKitRowLabel(
+                    icon: "figure.arms.open",
+                    iconColor: appPrefs.showHKActiveEnergy ? .orange : .secondary,
+                    title: "Active Energy",
+                    subtitle: "Calories burned moving today"
+                )
+            }
+
+            Toggle(isOn: $appPrefs.showHKRestingEnergy) {
+                healthKitRowLabel(
+                    icon: "gauge.medium",
+                    iconColor: appPrefs.showHKRestingEnergy ? .indigo : .secondary,
+                    title: "Resting Energy",
+                    subtitle: "Basal calories burned today"
+                )
+            }
+
+            Picker(selection: $appPrefs.weightSource) {
+                ForEach(AppPreferences.WeightSource.allCases) { source in
+                    Text(source.displayName).tag(source)
+                }
+            } label: {
+                healthKitRowLabel(
+                    icon: "scalemass.fill",
+                    iconColor: .teal,
+                    title: "Weight Source",
+                    subtitle: "Where the Weight chip's value comes from"
+                )
+            }
+
+            Picker(selection: $appPrefs.workoutSource) {
+                ForEach(AppPreferences.WorkoutSource.allCases) { source in
+                    Text(source.displayName).tag(source)
+                }
+            } label: {
+                healthKitRowLabel(
+                    icon: "figure.run",
+                    iconColor: .pink,
+                    title: "Workout Source",
+                    subtitle: "Where the Workout chips come from"
+                )
+            }
+        } else {
+            healthKitRowLabel(
+                icon: "heart.slash",
+                iconColor: .secondary,
+                title: "Apple Health unavailable",
+                subtitle: "This device does not support Apple Health."
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func healthKitRowLabel(icon: String, iconColor: Color, title: String, subtitle: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(iconColor)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body)
+                Text(subtitle).font(.caption).foregroundColor(.secondary)
             }
         }
     }
