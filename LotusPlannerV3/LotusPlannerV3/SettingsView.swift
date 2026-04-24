@@ -1253,6 +1253,9 @@ struct SettingsView: View {
     /// `CustomDayViewLibrary` being edited (pre-existing or brand-new).
     private struct ConfiguratorTarget: Identifiable { let id: UUID }
     @State private var configuratorTarget: ConfiguratorTarget?
+    /// Used on Mac Catalyst to open the configurator in its own native window
+    /// instead of the cramped .fullScreenCover sheet.
+    @Environment(\.openWindow) private var openWindow
     @State private var pendingDeleteVersionId: UUID?
     /// Bumped after the configurator dismisses or the library changes so the
     /// versions list re-renders with the latest names / active selection.
@@ -1354,7 +1357,11 @@ struct SettingsView: View {
             Spacer(minLength: 4)
 
             Button {
+                #if targetEnvironment(macCatalyst)
+                openWindow(id: "configurator", value: version.id)
+                #else
                 configuratorTarget = ConfiguratorTarget(id: version.id)
+                #endif
             } label: {
                 Text("Edit Layout")
                     .font(.caption.weight(.semibold))
@@ -1383,7 +1390,12 @@ struct SettingsView: View {
     private func addCustomDayViewVersion() {
         let library = customDayViewLibrary
         guard library.versions.count < CustomDayViewLibrary.maxVersions else { return }
-        configuratorTarget = ConfiguratorTarget(id: UUID())
+        let newId = UUID()
+        #if targetEnvironment(macCatalyst)
+        openWindow(id: "configurator", value: newId)
+        #else
+        configuratorTarget = ConfiguratorTarget(id: newId)
+        #endif
     }
 
     private func setActiveCustomDayViewVersion(id: UUID) {
@@ -2057,11 +2069,13 @@ struct SettingsView: View {
             } message: {
                 Text("You will stop syncing data for this account. You can re-link anytime in Settings.")
             }
+            #if !targetEnvironment(macCatalyst)
             .fullScreenCover(item: $configuratorTarget, onDismiss: {
                 customConfigVersion &+= 1
             }) { target in
                 DayViewCustomConfigurator(versionId: target.id)
             }
+            #endif
             .onReceive(NotificationCenter.default.publisher(for: CustomDayViewLibrary.didChangeNotification)) { _ in
                 customConfigVersion &+= 1
             }

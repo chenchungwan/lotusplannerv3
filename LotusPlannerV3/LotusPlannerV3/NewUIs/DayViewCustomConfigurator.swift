@@ -468,6 +468,12 @@ struct DayViewCustomConfigurator: View {
                 loadSavedConfiguration()
             }
         }
+        #if targetEnvironment(macCatalyst)
+        // Configurator runs in its own native window on Mac (see WindowGroup
+        // in LotusPlannerV3App). Pin a minimum so the user can't shrink the
+        // window below a usable size for the 2/3 + 1/3 layout.
+        .frame(minWidth: 1000, minHeight: 680)
+        #endif
     }
 
     /// Hydrates the configurator's `@State` from the library entry matching

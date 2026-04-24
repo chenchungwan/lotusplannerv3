@@ -49,5 +49,22 @@ struct LotusPlannerV3App: App {
                 .environmentObject(appPrefs)
                 .preferredColorScheme(appPrefs.isDarkMode ? .dark : .light)
         }
+
+        #if targetEnvironment(macCatalyst)
+        // The custom day-view configurator needs a real, resizable window to
+        // be usable. Under Mac Catalyst's Mac idiom .fullScreenCover collapses
+        // to a too-small modal sheet, so on Mac we open it as its own window
+        // via openWindow(id:value:) from SettingsView. iOS still uses the
+        // .fullScreenCover path.
+        WindowGroup("Customize Day View", id: "configurator", for: UUID.self) { $versionId in
+            if let versionId {
+                DayViewCustomConfigurator(versionId: versionId)
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                    .environmentObject(appPrefs)
+                    .preferredColorScheme(appPrefs.isDarkMode ? .dark : .light)
+            }
+        }
+        .defaultSize(width: 1280, height: 820)
+        #endif
     }
 }
