@@ -40,6 +40,10 @@ struct LotusPlannerV3App: App {
         // Start syncing the custom day view library (all named versions +
         // active selection) across devices via iCloud KVS.
         CustomDayViewLibrary.startSync()
+
+        // Same KVS sync wiring for task recurrence rules. Rules created on
+        // one device replicate to others without any extra work.
+        RecurrenceLibrary.startSync()
     }
 
     var body: some Scene {

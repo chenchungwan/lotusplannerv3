@@ -58,6 +58,10 @@ class DataManager: ObservableObject {
     /// Load tasks on-demand when popup is opened (performance optimization)
     func loadTasksOnDemand() async {
         await tasksViewModel.loadTasksOnDemand()
+        // Once tasks are loaded, give the recurrence layer a chance to spawn
+        // any successors for instances that were completed externally (e.g.
+        // in tasks.google.com) while the app was offline.
+        await RecurrenceManager.shared.catchUpMissedInstances(tasksVM: tasksViewModel)
     }
     
     private func initializeData() async {

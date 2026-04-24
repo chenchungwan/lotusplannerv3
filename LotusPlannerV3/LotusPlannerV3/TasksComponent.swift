@@ -486,6 +486,7 @@ private struct TaskComponentRow: View {
     let onSelectionToggle: () -> Void
     @Environment(\.hideDueDate) private var hideDueDate: Bool
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
+    @ObservedObject private var recurrenceManager = RecurrenceManager.shared
     
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -523,6 +524,13 @@ private struct TaskComponentRow: View {
                     .strikethrough(task.isCompleted)
                     .lineLimit(1)
                     .truncationMode(.tail)
+
+                if recurrenceManager.hasRule(for: task.id) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .accessibilityLabel("Repeats")
+                }
 
                 Spacer()
 

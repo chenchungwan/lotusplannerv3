@@ -556,15 +556,16 @@ class TasksViewModel: ObservableObject {
     }
     
     func toggleTaskCompletion(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
+        let wasCompleted = task.isCompleted
         let newStatus = task.isCompleted ? "needsAction" : "completed"
-        
+
         // Google Tasks API expects RFC 3339 format in UTC
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
         formatter.timeZone = TimeZone(identifier: "UTC")
         let now = Date()
         let updatedTimestamp = formatter.string(from: now)
-        
+
         // Set completion timestamp when marking as completed, clear when marking incomplete
         let completedTimestamp: String?
         if newStatus == "completed" {
@@ -572,7 +573,7 @@ class TasksViewModel: ObservableObject {
         } else {
             completedTimestamp = nil
         }
-        
+
         let updatedTask = GoogleTask(
             id: task.id,
             title: task.title,
@@ -582,11 +583,74 @@ class TasksViewModel: ObservableObject {
             completed: completedTimestamp,
             updated: updatedTimestamp
         )
-        
+
         // Update the task first
         await updateTask(updatedTask, in: listId, for: kind)
-        
 
+        // If this transition completed the task, give RecurrenceManager a
+        // chance to spawn the next instance. The manager no-ops when the
+        // task has no recurrence rule, so this is cheap for most tasks.
+        if !wasCompleted && newStatus == "completed" {
+            await RecurrenceManager.shared.handleTaskCompleted(
+                updatedTask,
+                listId: listId,
+                account: kind,
+                tasksVM: self
+            )
+        }
+    }
+
+    /// Used by `RecurrenceManager` to create the next instance of a recurring
+    /// task series. Unlike `createTask`, this awaits the server response so
+    /// the new task's id is available immediately for re-keying the rule.
+    func spawnRecurringInstance(
+        title: String,
+        notes: String?,
+        dueDate: Date?,
+        in listId: String,
+        for kind: GoogleAuthManager.AccountKind
+    ) async throws -> GoogleTask {
+        let dueString: String?
+        if let dueDate = dueDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone.current
+            dueString = formatter.string(from: dueDate)
+        } else {
+            dueString = nil
+        }
+
+        let stub = GoogleTask(
+            id: UUID().uuidString,
+            title: title,
+            notes: notes,
+            status: "needsAction",
+            due: dueString,
+            completed: nil,
+            updated: nil
+        )
+
+        let createdTask = try await createTaskOnServer(stub, in: listId, for: kind)
+
+        await MainActor.run {
+            switch kind {
+            case .personal:
+                if personalTasks[listId] != nil {
+                    personalTasks[listId]?.append(createdTask)
+                } else {
+                    personalTasks[listId] = [createdTask]
+                }
+            case .professional:
+                if professionalTasks[listId] != nil {
+                    professionalTasks[listId]?.append(createdTask)
+                } else {
+                    professionalTasks[listId] = [createdTask]
+                }
+            }
+        }
+
+        return createdTask
     }
     
     func updateTask(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) async {
@@ -3155,18 +3219,29 @@ struct TaskDetailsView: View {
     @State private var isCompleted: Bool = false
     @State private var selectedPriority: TaskPriorityData?
 
+    // Recurrence (existing tasks only; new tasks lack a stable server id to
+    // key a RecurrenceRule under).
+    @State private var repeatFrequency: RecurrenceFrequency?
+    @State private var repeatInterval: Int = 1
+    @State private var repeatEndDate: Date?
+
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     @ObservedObject private var taskGoalLinkManager = TaskGoalLinkManager.shared
-    
+
     // Track original due date to detect changes properly
     private let originalDueDate: Date?
-    
+
     // Track original time window values to detect changes
     private let originalIsAllDay: Bool
     private let originalStartTime: Date
     private let originalEndTime: Date
     private let originalIsCompleted: Bool
     private let originalCompletedTimestamp: String?
+
+    // Track original recurrence values so hasChanges fires for repeat edits.
+    private let originalRepeatFrequency: RecurrenceFrequency?
+    private let originalRepeatInterval: Int
+    private let originalRepeatEndDate: Date?
     
     private var linkedGoals: [GoalData] {
         let goalIds = taskGoalLinkManager.goalIds(for: task.id)
@@ -3252,6 +3327,15 @@ struct TaskDetailsView: View {
             self.originalStartTime = defaultStartTime
             self.originalEndTime = defaultEndTime
         }
+
+        // Hydrate the repeat picker from the existing rule (if any).
+        let existingRule = isNew ? nil : RecurrenceManager.shared.rule(for: task.id)
+        _repeatFrequency = State(initialValue: existingRule?.frequency)
+        _repeatInterval = State(initialValue: existingRule?.interval ?? 1)
+        _repeatEndDate = State(initialValue: existingRule?.endDate)
+        self.originalRepeatFrequency = existingRule?.frequency
+        self.originalRepeatInterval = existingRule?.interval ?? 1
+        self.originalRepeatEndDate = existingRule?.endDate
     }
     
     var availableTaskLists: [GoogleTaskList] {
@@ -3277,7 +3361,10 @@ struct TaskDetailsView: View {
         !areTimesEqual(startTime, originalStartTime) ||
         !areTimesEqual(endTime, originalEndTime) ||
         isCompleted != originalIsCompleted ||
-        selectedPriority != task.priority
+        selectedPriority != task.priority ||
+        repeatFrequency != originalRepeatFrequency ||
+        (repeatFrequency != nil && repeatInterval != originalRepeatInterval) ||
+        (repeatFrequency != nil && repeatEndDate != originalRepeatEndDate)
     }
     
     // Helper function to compare times (ignoring seconds and milliseconds)
@@ -3624,6 +3711,51 @@ struct TaskDetailsView: View {
                         .frame(maxWidth: .infinity)
                 }
 
+                // Repeat (recurrence). Only shown for existing tasks because
+                // the rule is keyed by the Google Task id, which doesn't
+                // exist until the server responds for new tasks.
+                if !isNew {
+                    Section("Repeat") {
+                        Picker("Frequency", selection: $repeatFrequency) {
+                            Text("Never").tag(nil as RecurrenceFrequency?)
+                            ForEach(RecurrenceFrequency.allCases) { freq in
+                                Text(freq.displayName).tag(freq as RecurrenceFrequency?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        if let freq = repeatFrequency {
+                            Stepper(value: $repeatInterval, in: 1...30) {
+                                Text("Every \(repeatInterval) \(repeatInterval == 1 ? freq.unitName : "\(freq.unitName)s")")
+                            }
+
+                            Toggle("End on date", isOn: Binding(
+                                get: { repeatEndDate != nil },
+                                set: { hasEnd in
+                                    if hasEnd {
+                                        repeatEndDate = repeatEndDate
+                                            ?? Calendar.current.date(byAdding: .month, value: 6, to: Date())
+                                    } else {
+                                        repeatEndDate = nil
+                                    }
+                                }
+                            ))
+
+                            if repeatEndDate != nil {
+                                DatePicker(
+                                    "End date",
+                                    selection: Binding(
+                                        get: { repeatEndDate ?? Date() },
+                                        set: { repeatEndDate = $0 }
+                                    ),
+                                    in: Date()...,
+                                    displayedComponents: .date
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Add empty section at bottom to provide space when time pickers are visible
                 if !isNew && !isAllDay {
                     Section {
@@ -3673,6 +3805,8 @@ struct TaskDetailsView: View {
         .alert("Delete Task", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
+                // Clean up any recurrence rule before the task itself goes away.
+                RecurrenceManager.shared.deleteRule(for: task.id)
                 onDelete()
                 dismiss()
             }
@@ -3894,9 +4028,43 @@ struct TaskDetailsView: View {
         return formatter.string(from: time)
     }
 
+    /// Writes the user's selection from the Repeat section into
+    /// `RecurrenceManager`. A nil frequency means the user removed the rule.
+    private func persistRecurrenceRule() {
+        if let freq = repeatFrequency {
+            let existing = RecurrenceManager.shared.rule(for: task.id)
+            let now = Date()
+            let rule = RecurrenceRule(
+                seriesId: existing?.seriesId ?? UUID(),
+                currentTaskId: task.id,
+                accountKind: selectedAccountKind == .professional ? "professional" : "personal",
+                listId: selectedListId,
+                frequency: freq,
+                interval: max(1, repeatInterval),
+                endDate: repeatEndDate,
+                endCount: nil,
+                occurrencesSpawned: existing?.occurrencesSpawned ?? 0,
+                lastSpawnedDate: existing?.lastSpawnedDate,
+                createdAt: existing?.createdAt ?? now,
+                updatedAt: now
+            )
+            RecurrenceManager.shared.setRule(rule)
+        } else if RecurrenceManager.shared.hasRule(for: task.id) {
+            RecurrenceManager.shared.deleteRule(for: task.id)
+        }
+    }
+
     private func saveTask() {
         isSaving = true
-        
+
+        // Persist the repeat rule synchronously (against the existing task id).
+        // Cross-account moves rewrite the task id; for that edge case the rule
+        // is left keyed to the old id and will be cleaned up by the catch-up
+        // sweep when the old task disappears. Acceptable for MVP.
+        if !isNew {
+            persistRecurrenceRule()
+        }
+
         Task {
             let targetListId: String
             
