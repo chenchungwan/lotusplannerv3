@@ -8,7 +8,6 @@ struct GoalsView: View {
     @State private var showingCreateCategory = false
     @State private var goalToEdit: GoalData?
     @State private var selectedGoal: GoalData?
-    @State private var showingGoalDetail = false
     
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -129,7 +128,6 @@ struct GoalsView: View {
                     getFilteredGoals: getFilteredGoalsForCategory,
                     onGoalTap: { goal in
                         selectedGoal = goal
-                        showingGoalDetail = true
                     },
                     onGoalEdit: { goal in
                         goalToEdit = goal
@@ -148,7 +146,6 @@ struct GoalsView: View {
                                 goals: getFilteredGoalsForCategory(category.id),
                                 onGoalTap: { goal in
                                     selectedGoal = goal
-                                    showingGoalDetail = true
                                 },
                                 onGoalEdit: { goal in
                                     goalToEdit = goal
@@ -184,10 +181,11 @@ struct GoalsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingGoalDetail) {
-            if let goal = selectedGoal {
-                GoalDetailSheet(goal: goal)
-            }
+        // Use `.sheet(item:)` here instead of the (isPresented:, state:) pair:
+        // on Mac Catalyst the two separate state flips race and the sheet
+        // builder was running with `selectedGoal == nil`, crashing the app.
+        .sheet(item: $selectedGoal) { goal in
+            GoalDetailSheet(goal: goal)
         }
         .sheet(item: $goalToEdit) { goal in
             CreateGoalView(editingGoal: goal) {
@@ -1217,40 +1215,58 @@ struct CreateGoalView: View {
         return .professional
     }
 
+    @ViewBuilder
+    private var formContent: some View {
+        // Goal Details
+        goalDetailsSection
+
+        // Tasks
+        tasksSection
+
+        // Notes
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Notes")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            TextField("Optional notes...", text: $notes, axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.roundedBorder)
+        }
+
+        // Delete
+        if editingGoal != nil {
+            Button(action: { showingDeleteAlert = true }) {
+                HStack {
+                    Spacer()
+                    Text("Delete Goal")
+                        .foregroundColor(.red)
+                    Spacer()
+                }
+            }
+            .padding(.top, 8)
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Goal Details
-                    goalDetailsSection
-
-                    // Tasks
-                    tasksSection
-
-                    // Notes
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Notes")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        TextField("Optional notes...", text: $notes, axis: .vertical)
-                            .lineLimit(2...4)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    // Delete
-                    if editingGoal != nil {
-                        Button(action: { showingDeleteAlert = true }) {
-                            HStack {
-                                Spacer()
-                                Text("Delete Goal")
-                                    .foregroundColor(.red)
-                                Spacer()
-                            }
-                        }
-                        .padding(.top, 8)
-                    }
+            Group {
+                #if targetEnvironment(macCatalyst)
+                // Form is bridged to NSStackView under Mac Catalyst's Mac idiom
+                // and produces stable, deterministic layout. ScrollView+VStack
+                // with the nested HStacks/Menus in this view triggers an Auto
+                // Layout cycle that locks the main thread (CreateCategoryView,
+                // which uses Form, doesn't exhibit the freeze; this view did).
+                Form {
+                    formContent
                 }
-                .padding()
+                #else
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        formContent
+                    }
+                    .padding()
+                }
+                #endif
             }
             .navigationTitle(editingGoal != nil ? "Edit Goal" : "New Goal")
             .navigationBarTitleDisplayMode(.inline)
@@ -1382,6 +1398,23 @@ struct CreateGoalView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 4) {
+                        #if targetEnvironment(macCatalyst)
+                        // The custom Year/Month/Week picker views use `.menu` style
+                        // on Catalyst (wheel pickers crash under the Mac idiom),
+                        // and stacking several `NSPopUpButton`-backed pickers inside
+                        // the ScrollView triggers a layout feedback loop that locks
+                        // the main thread. The native compact DatePicker is bridged
+                        // to a lightweight popover and avoids that path entirely;
+                        // calculateDueDate() still snaps to the selected timeframe.
+                        DatePicker(
+                            "Due Date",
+                            selection: $selectedDate,
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                        .environment(\.calendar, Calendar.mondayFirst)
+                        #else
                         Group {
                             switch selectedTimeframe {
                             case .year: YearPickerView(selectedDate: $selectedDate)
@@ -1391,6 +1424,7 @@ struct CreateGoalView: View {
                         }
                         .frame(height: 100)
                         .clipped()
+                        #endif
 
                         Text("Due: \(calculateDueDate().formatted(date: .abbreviated, time: .omitted))")
                             .foregroundColor(.secondary)
@@ -2430,6 +2464,20 @@ struct GoalDetailSheet: View {
 
 // MARK: - Custom Picker Views
 
+// UIPickerView is unsupported under the Mac idiom of Mac Catalyst — adding
+// one to a window throws _throwForUnsupportedNonMacIdiomBehavior and crashes
+// the app. Substitute the menu style when running on Catalyst.
+private extension View {
+    @ViewBuilder
+    func wheelOrMenuPickerStyle() -> some View {
+        #if targetEnvironment(macCatalyst)
+        self.pickerStyle(.menu)
+        #else
+        self.pickerStyle(.wheel)
+        #endif
+    }
+}
+
 struct YearPickerView: View {
     @Binding var selectedDate: Date
     
@@ -2460,7 +2508,7 @@ struct YearPickerView: View {
                             .tag(year)
                     }
                 }
-            .pickerStyle(.wheel)
+            .wheelOrMenuPickerStyle()
         }
     }
 }
@@ -2503,7 +2551,7 @@ struct MonthPickerView: View {
                             .tag(year)
                     }
                 }
-                .pickerStyle(.wheel)
+                .wheelOrMenuPickerStyle()
             }
             
             VStack {
@@ -2529,7 +2577,7 @@ struct MonthPickerView: View {
                             .tag(month)
                     }
                 }
-                .pickerStyle(.wheel)
+                .wheelOrMenuPickerStyle()
             }
         }
         .padding(.vertical, 4)
@@ -2589,7 +2637,7 @@ struct WeekPickerView: View {
                             .tag(year)
                     }
                 }
-                .pickerStyle(.wheel)
+                .wheelOrMenuPickerStyle()
                 .onChange(of: selectedYear) { _ in
                     updateSelectedDate()
                 }
@@ -2608,7 +2656,7 @@ struct WeekPickerView: View {
                             .tag(week.weekNumber)
                     }
                 }
-                .pickerStyle(.wheel)
+                .wheelOrMenuPickerStyle()
                 .onChange(of: selectedWeek) { _ in
                     updateSelectedDate()
                 }
