@@ -1690,7 +1690,7 @@ struct CreateGoalView: View {
                         }
                     )) {
                         ForEach(availableTaskLists, id: \.list.id) { entry in
-                            let prefix = entry.kind == .personal ? "Personal" : "Work"
+                            let prefix = appPrefs.accountName(for: entry.kind)
                             Text("\(prefix): \(entry.list.title)")
                                 .tag("\(entry.kind == .personal ? "p" : "w"):\(entry.list.id)")
                         }
@@ -2098,6 +2098,7 @@ struct CreateGoalView: View {
 struct TaskPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var tasksVM: TasksViewModel
+    @ObservedObject private var appPrefs = AppPreferences.shared
     let alreadyLinkedIds: Set<String>
     let onSelect: (GoogleTask, String, GoogleAuthManager.AccountKind) -> Void
 
@@ -2144,7 +2145,7 @@ struct TaskPickerSheet: View {
                                     HStack {
                                         Image(systemName: account == .personal ? "person.fill" : "briefcase.fill")
                                             .font(.caption)
-                                        Text(account == .personal ? "Personal" : "Work")
+                                        Text(appPrefs.accountName(for: account))
                                             .font(.callout)
                                         Spacer()
                                         if selectedAccount == account {

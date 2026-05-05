@@ -389,7 +389,7 @@ struct TimeboxView: View {
             get: { selectedEvent },
             set: { selectedEvent = $0 }
         )) { ev in
-            let accountKind: GoogleAuthManager.AccountKind = calendarVM.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            let accountKind = calendarVM.accountKind(for: ev)
             AddItemView(
                 currentDate: ev.startTime ?? Date(),
                 tasksViewModel: tasksVM,
@@ -829,7 +829,7 @@ struct TimeboxView: View {
             if !allDayEvents.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(allDayEvents, id: \.id) { event in
-                        let isPersonal = calendarVM.personalEvents.contains { $0.id == event.id }
+                        let isPersonal = calendarVM.accountKind(for: event) == .personal
                         let color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
                         
                         HStack(spacing: 8) {
@@ -1084,16 +1084,33 @@ struct TimeboxView: View {
                     let events = isPersonal ? calendarVM.personalEvents : calendarVM.professionalEvents
                     guard let event = events.first(where: { $0.id == itemId }) else { return }
 
-                    if let targetDateTime = droppedOnTimeline, !event.isAllDay {
-                        // Timed event dropped on timeline: use drop Y for new time
-                        Task {
-                            await calendarVM.moveEventToDateTime(event, to: targetDateTime)
-                            refreshWeekCaches(force: true)
+                    if let targetDateTime = droppedOnTimeline {
+                        if event.isAllDay {
+                            // All-day event dropped on the timeline →
+                            // convert to a timed event at the drop slot
+                            // with a default 1-hour duration. The
+                            // previous logic skipped this branch when
+                            // `event.isAllDay` was true and silently
+                            // moved it as a date-only change instead.
+                            Task {
+                                await calendarVM.scheduleEvent(event, startTime: targetDateTime, duration: 3600)
+                                refreshWeekCaches(force: true)
+                            }
+                        } else {
+                            // Already-timed event dropped on timeline:
+                            // shift to the new time, keep the duration.
+                            Task {
+                                await calendarVM.moveEventToDateTime(event, to: targetDateTime)
+                                refreshWeekCaches(force: true)
+                            }
                         }
                     } else {
-                        // All-day event or dropped in all-day area: change date only
+                        // Dropped in the all-day area: convert to
+                        // all-day on the target date. `forceAllDay`
+                        // also handles timed → all-day on the same
+                        // day (which was previously a no-op).
                         Task {
-                            await calendarVM.moveEventToDate(event, to: targetDate)
+                            await calendarVM.moveEventToDate(event, to: targetDate, forceAllDay: true)
                             refreshWeekCaches(force: true)
                         }
                     }

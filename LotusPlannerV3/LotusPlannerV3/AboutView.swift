@@ -2,7 +2,16 @@ import SwiftUI
 
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
-    
+    @ObservedObject private var iCloud = iCloudManager.shared
+
+    private var deploymentEnvironmentText: String {
+        #if DEBUG
+        return "🔧 Development"
+        #else
+        return "🚀 Production"
+        #endif
+    }
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
@@ -64,6 +73,14 @@ struct AboutView: View {
                         .foregroundColor(.secondary)
                     
                     Text("© 2026 Lotus Planner")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("iCloud: \(iCloud.syncStatus.description)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("Environment: \(deploymentEnvironmentText)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

@@ -169,9 +169,19 @@ struct AddItemView: View {
             
             if showEventOnly {
                 _selectedTab = State(initialValue: 1)
-                // Default to Personal account if available
-                if authManager.isLinked(kind: .personal) {
+                // Auto-pick the account only when exactly one is linked.
+                // When both are linked, leave it unset so the user is
+                // forced to choose explicitly — the Create button is
+                // already disabled until `selectedAccountKind != nil`.
+                // Hard-defaulting to `.personal` here was sending events
+                // into the wrong Gmail when the user meant to create on
+                // the professional account.
+                let personalLinked = authManager.isLinked(kind: .personal)
+                let professionalLinked = authManager.isLinked(kind: .professional)
+                if personalLinked && !professionalLinked {
                     _selectedAccountKind = State(initialValue: .personal)
+                } else if professionalLinked && !personalLinked {
+                    _selectedAccountKind = State(initialValue: .professional)
                 }
             }
         }
@@ -603,7 +613,24 @@ struct AddItemView: View {
         Task {
             do {
                 let accessToken = try await authManager.getAccessToken(for: accountKind)
-                
+                let savedEmail = authManager.getEmail(for: accountKind)
+
+                // Ask Google whose token this actually is. If the
+                // returned email doesn't match the account we think we
+                // selected, the keychain entries got crossed at link
+                // time and that's why events keep landing in the wrong
+                // Gmail.
+                var tokenActualEmail = "?"
+                if let userinfoURL = URL(string: "https://www.googleapis.com/oauth2/v2/userinfo") {
+                    var ureq = URLRequest(url: userinfoURL)
+                    ureq.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+                    if let (uData, _) = try? await URLSession.shared.data(for: ureq),
+                       let info = try? JSONSerialization.jsonObject(with: uData) as? [String: Any] {
+                        tokenActualEmail = (info["email"] as? String) ?? "?"
+                    }
+                }
+                devLog("📅 createEvent kind=\(accountKind.rawValue) savedEmail=\(savedEmail) tokenActualEmail=\(tokenActualEmail) isAllDay=\(isAllDay)", level: .info, category: .calendar)
+
                 let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/primary/events")!
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
@@ -640,9 +667,23 @@ struct AddItemView: View {
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                 let (data, response) = try await URLSession.shared.data(for: request)
-                
+
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw PlannerCalendarError.invalidResponse
+                }
+
+                // Log whatever the server actually persisted so we can
+                // see which Gmail / calendar the event landed in. The
+                // `creator.email` and `organizer.email` fields name the
+                // owning account — which is the source of truth even if
+                // the local `accountKind` says otherwise.
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let createdId = (json["id"] as? String) ?? "?"
+                    let creatorEmail = ((json["creator"] as? [String: Any])?["email"] as? String) ?? "?"
+                    let organizerEmail = ((json["organizer"] as? [String: Any])?["email"] as? String) ?? "?"
+                    devLog("📅 createEvent response status=\(httpResponse.statusCode) id=\(createdId) creator=\(creatorEmail) organizer=\(organizerEmail)", level: .info, category: .calendar)
+                } else {
+                    devLog("📅 createEvent response status=\(httpResponse.statusCode) body=\(String(data: data, encoding: .utf8) ?? "")", level: .info, category: .calendar)
                 }
 
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
@@ -834,27 +875,56 @@ struct AddItemView: View {
     
     // MARK: - Delete Event
     private func deleteEvent() {
-        guard let ev = existingEvent, let accountKind = existingEventAccountKind ?? selectedAccountKind else { return }
+        guard let ev = existingEvent else {
+            devLog("🗑️ deleteEvent: no existingEvent — aborting", level: .warning, category: .calendar)
+            return
+        }
+        // Always re-resolve via calendarId rather than trusting the
+        // sheet's stashed `existingEventAccountKind`. If the stashed
+        // kind is stale (e.g. the event was reassigned by a refresh),
+        // we'd build the DELETE URL with the wrong token and the call
+        // would 404 — and the previous code swallowed that error,
+        // leaving the sheet open with no feedback.
+        let accountKind = calendarViewModel.accountKind(for: ev)
+        let calId = ev.calendarId ?? "primary"
+        // Google's DELETE endpoint accepts the bare event id — and
+        // when the id contains characters like `_` it encodes fine
+        // as-is. Older code double-encoded it which produced a 404.
+        let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
+        let encodedEventId = ev.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ev.id
+        let urlString = "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)"
+        devLog("🗑️ deleteEvent kind=\(accountKind.rawValue) calendarId=\(calId) eventId=\(ev.id) url=\(urlString)", level: .info, category: .calendar)
+
         isCreating = true
         Task {
             do {
                 let accessToken = try await authManager.getAccessToken(for: accountKind)
-                let calId = ev.calendarId ?? "primary"
-                let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
-                let encodedEventId = ev.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ev.id
-                let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
+                guard let url = URL(string: urlString) else {
+                    devLog("🗑️ deleteEvent: bad url \(urlString)", level: .error, category: .calendar)
+                    await MainActor.run { isCreating = false }
+                    return
+                }
                 var request = URLRequest(url: url)
                 request.httpMethod = "DELETE"
                 request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
                 request.setValue("*", forHTTPHeaderField: "If-Match")
 
-                let (_, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 204 else {
-                    throw CalendarManager.shared.handleHttpError((response as? HTTPURLResponse)?.statusCode ?? -1)
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                let bodyText = String(data: data, encoding: .utf8) ?? ""
+                devLog("🗑️ deleteEvent response status=\(status) body=\(bodyText.prefix(200))", level: .info, category: .calendar)
+
+                // Google returns 204 No Content on success and 410
+                // Gone if the event is already deleted — both should
+                // dismiss the sheet and refresh. Anything else is a
+                // real error we want to surface so the user knows.
+                guard status == 204 || status == 410 else {
+                    throw CalendarManager.shared.handleHttpError(status)
                 }
                 await calendarViewModel.refreshDataForCurrentView()
                 await MainActor.run { dismiss() }
             } catch {
+                devLog("🗑️ deleteEvent failed: \(error)", level: .error, category: .calendar)
                 await MainActor.run { isCreating = false }
             }
         }

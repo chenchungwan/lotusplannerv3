@@ -203,7 +203,7 @@ struct TimelineBaseView: View {
     }
     
     private func allDayEventView(_ event: GoogleCalendarEvent) -> some View {
-        let isPersonal = personalEvents.contains { $0.id == event.id }
+        let isPersonal = event.ownerAccountKind == .personal
         let color = isPersonal ? personalColor : professionalColor
         
         return HStack(spacing: 4) {
@@ -398,7 +398,7 @@ struct TimelineBaseView: View {
                 let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
                 let height = max(20, CGFloat(dayDuration / 3600.0) * config.hourHeight)
                 
-                let isPersonal = personalEvents.contains { $0.id == event.id }
+                let isPersonal = event.ownerAccountKind == .personal
                 
                 let layout = EventLayout(
                     event: event,

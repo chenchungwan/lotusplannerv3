@@ -144,7 +144,7 @@ struct TimeboxComponent: View {
         return events
             .filter { $0.isAllDay }
             .map { event in
-            let isPersonal = personalEvents.contains { $0.id == event.id }
+            let isPersonal = event.ownerAccountKind == .personal
                 return (event, isPersonal)
             }
         }
@@ -630,7 +630,7 @@ struct TimeboxComponent: View {
         // Add events
         for event in timedEvents {
             guard let startTime = event.startTime, let endTime = event.endTime else { continue }
-            let isPersonal = personalEvents.contains { $0.id == event.id }
+            let isPersonal = event.ownerAccountKind == .personal
             allItems.append((isTask: false, item: event, startTime: startTime, endTime: endTime, isPersonal: isPersonal))
         }
         

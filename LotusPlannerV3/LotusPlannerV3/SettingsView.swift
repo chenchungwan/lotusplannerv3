@@ -988,8 +988,8 @@ class AppPreferences: ObservableObject {
         self.professionalColor = Color(hex: professionalHex) ?? Color(hex: "#38eb50") ?? .green
 
         // Load custom account names or use defaults
-        self.personalAccountName = UserDefaults.standard.string(forKey: "personalAccountName") ?? "Personal"
-        self.professionalAccountName = UserDefaults.standard.string(forKey: "professionalAccountName") ?? "Professional"
+        self.personalAccountName = UserDefaults.standard.string(forKey: "personalAccountName") ?? "Linked Account 1"
+        self.professionalAccountName = UserDefaults.standard.string(forKey: "professionalAccountName") ?? "Linked Account 2"
 
         // Load divider positions from UserDefaults or use defaults
         self.dayViewCompactTasksHeight = UserDefaults.standard.object(forKey: "dayViewCompactTasksHeight") as? CGFloat ?? 300

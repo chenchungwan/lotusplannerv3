@@ -160,7 +160,7 @@ struct WeeklyView: View {
             get: { selectedCalendarEvent },
             set: { selectedCalendarEvent = $0 }
         )) { ev in
-            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            let accountKind = ev.ownerAccountKind
             AddItemView(
                 currentDate: ev.startTime ?? Date(),
                 tasksViewModel: tasksViewModel,
@@ -1653,7 +1653,7 @@ extension WeeklyView {
     }
 
     private func rowEventCard(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
+        let isPersonal = event.ownerAccountKind == .personal
         let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
         
         return Button(action: {
@@ -2040,7 +2040,7 @@ extension WeeklyView {
     }
     
     private func weekEventCard(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
+        let isPersonal = event.ownerAccountKind == .personal
         let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
         
         return Button(action: {

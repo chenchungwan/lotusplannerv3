@@ -131,7 +131,7 @@ struct CalendarView: View {
             get: { selectedCalendarEvent },
             set: { selectedCalendarEvent = $0 }
         )) { ev in
-            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            let accountKind = calendarViewModel.accountKind(for: ev)
             AddItemView(
                 currentDate: ev.startTime ?? Date(),
                 tasksViewModel: tasksViewModel,
@@ -1774,7 +1774,7 @@ struct CalendarView: View {
     @ViewBuilder
     private var eventDetailsSheet: some View {
         if let ev = selectedCalendarEvent {
-            let accountKind: GoogleAuthManager.AccountKind = calendarViewModel.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            let accountKind = calendarViewModel.accountKind(for: ev)
             AddItemView(
                 currentDate: ev.startTime ?? Date(),
                 tasksViewModel: tasksViewModel,
@@ -2793,7 +2793,7 @@ struct CalendarView: View {
     }
     
     private func allDayEventBlock(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = calendarViewModel.personalEvents.contains { $0.id == event.id }
+        let isPersonal = calendarViewModel.accountKind(for: event) == .personal
         let color: Color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
         
         return HStack(spacing: 8) {

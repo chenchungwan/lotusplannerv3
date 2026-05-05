@@ -585,7 +585,7 @@ struct DraggableTimeboxComponent: View {
     private var allDaySection: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(events.filter { $0.isAllDay }, id: \.id) { event in
-                let isPersonal = personalEvents.contains { $0.id == event.id }
+                let isPersonal = event.ownerAccountKind == .personal
                 let bg = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
                 let id = "event_\(event.id)"
                 let isDragging = dragState?.itemId == id
@@ -696,7 +696,7 @@ struct DraggableTimeboxComponent: View {
         for event in events where !event.isAllDay {
             guard let start = event.startTime, let end = event.endTime,
                   Calendar.current.isDate(start, inSameDayAs: date) else { continue }
-            let isPersonal = personalEvents.contains { $0.id == event.id }
+            let isPersonal = event.ownerAccountKind == .personal
             let id = "event_\(event.id)"
             let duration = end.timeIntervalSince(start)
             let effStart = pendingStarts[id] ?? start

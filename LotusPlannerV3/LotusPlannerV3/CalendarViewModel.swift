@@ -59,6 +59,58 @@ class CalendarViewModel: ObservableObject {
 
     }
 
+    /// Returns the account that *owns* `event` — used by edit and
+    /// delete flows to know which token + calendar URL to use. Owning
+    /// account is derived from the event's `calendarId` (which holds
+    /// the originating Gmail when the event was fetched via a calendar
+    /// subscription), falling back to whichever account's array
+    /// uniquely contains it. Without this, an event that appears in
+    /// both arrays via cross-account subscription gets misattributed
+    /// to whichever array we check first and DELETE/PATCH calls fail
+    /// with 404 because the URL is built against the wrong calendar.
+    /// Strip events that belong to the *other* account from a fetch
+    /// result. Called whenever we assign `personalEvents` /
+    /// `professionalEvents` so that an event whose `calendarId` matches
+    /// the opposite account's saved email never sneaks into the wrong
+    /// array via cross-account calendar subscription. Without this, an
+    /// event the user created on professional ends up duplicated in
+    /// personalEvents and the personal-only views show it as a personal
+    /// event — including events created directly in Google Calendar's
+    /// web UI.
+    func eventsOwned(by kind: GoogleAuthManager.AccountKind, from events: [GoogleCalendarEvent]) -> [GoogleCalendarEvent] {
+        let auth = GoogleAuthManager.shared
+        let otherKind: GoogleAuthManager.AccountKind = (kind == .personal) ? .professional : .personal
+        let otherEmail = auth.getEmail(for: otherKind).lowercased()
+        guard !otherEmail.isEmpty else { return events }
+        return events.filter { event in
+            let owner = (event.calendarId ?? "").lowercased()
+            return owner != otherEmail
+        }
+    }
+
+    func accountKind(for event: GoogleCalendarEvent) -> GoogleAuthManager.AccountKind {
+        let auth = GoogleAuthManager.shared
+        let owner = (event.calendarId ?? "").lowercased()
+        let professionalEmail = auth.getEmail(for: .professional).lowercased()
+        let personalEmail = auth.getEmail(for: .personal).lowercased()
+
+        if !professionalEmail.isEmpty, owner == professionalEmail {
+            return .professional
+        }
+        if !personalEmail.isEmpty, owner == personalEmail {
+            return .personal
+        }
+
+        // Fallback when calendarId is a non-primary calendar (e.g. a
+        // shared "Family" calendar or a holiday calendar). Trust the
+        // array that uniquely owns the event id.
+        let inPersonal = personalEvents.contains { $0.id == event.id }
+        let inProfessional = professionalEvents.contains { $0.id == event.id }
+        if inProfessional && !inPersonal { return .professional }
+        if inPersonal && !inProfessional { return .personal }
+        return event.ownerAccountKind
+    }
+
     func events(for date: Date, account: GoogleAuthManager.AccountKind? = nil) -> [GoogleCalendarEvent] {
         let key = normalizedDay(date)
         let result: [GoogleCalendarEvent]
@@ -75,7 +127,21 @@ class CalendarViewModel: ObservableObject {
             } else if professional.isEmpty {
                 result = personal
             } else {
-                result = (personal + professional).sorted(by: eventSortComparator)
+                // Dedupe by event id so a single Google event that
+                // appears in both accounts' fetches (via Workspace
+                // calendar sharing or one account subscribing to the
+                // other's calendar) doesn't render twice. Personal
+                // wins on collision so the card stays personal-colored.
+                var seen = Set<String>()
+                var merged: [GoogleCalendarEvent] = []
+                merged.reserveCapacity(personal.count + professional.count)
+                for event in personal where seen.insert(event.id).inserted {
+                    merged.append(event)
+                }
+                for event in professional where seen.insert(event.id).inserted {
+                    merged.append(event)
+                }
+                result = merged.sorted(by: eventSortComparator)
             }
         }
 
@@ -172,7 +238,7 @@ class CalendarViewModel: ObservableObject {
                         let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
                         let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
                         await MainActor.run {
-                            self.personalEvents = events
+                            self.personalEvents = self.eventsOwned(by: .personal, from: events)
                             self.personalCalendars = calendars
                         }
                     } catch {
@@ -186,7 +252,7 @@ class CalendarViewModel: ObservableObject {
                         let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
                         let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
                         await MainActor.run {
-                            self.professionalEvents = events
+                            self.professionalEvents = self.eventsOwned(by: .professional, from: events)
                             self.professionalCalendars = calendars
                         }
                     } catch {
@@ -670,7 +736,7 @@ class CalendarViewModel: ObservableObject {
             let personalKey = monthCacheKey(for: date, accountKind: .personal)
             if let cachedEvents = getCachedEvents(for: personalKey),
                let cachedCalendars = getCachedCalendars(for: personalKey) {
-                personalEvents = cachedEvents
+                personalEvents = eventsOwned(by: .personal, from: cachedEvents)
                 personalCalendars = cachedCalendars
             }
         }
@@ -679,7 +745,7 @@ class CalendarViewModel: ObservableObject {
             let professionalKey = monthCacheKey(for: date, accountKind: .professional)
             if let cachedEvents = getCachedEvents(for: professionalKey),
                let cachedCalendars = getCachedCalendars(for: professionalKey) {
-                professionalEvents = cachedEvents
+                professionalEvents = eventsOwned(by: .professional, from: cachedEvents)
                 professionalCalendars = cachedCalendars
             }
         }
@@ -708,7 +774,7 @@ class CalendarViewModel: ObservableObject {
                         let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
                         let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
                         await MainActor.run {
-                            self.personalEvents = events
+                            self.personalEvents = self.eventsOwned(by: .personal, from: events)
                             self.personalCalendars = calendars
                         }
                     } catch {
@@ -722,7 +788,7 @@ class CalendarViewModel: ObservableObject {
                         let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
                         let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
                         await MainActor.run {
-                            self.professionalEvents = events
+                            self.professionalEvents = self.eventsOwned(by: .professional, from: events)
                             self.professionalCalendars = calendars
                         }
                     } catch {
@@ -771,10 +837,10 @@ class CalendarViewModel: ObservableObject {
             switch kind {
             case .personal:
                 self.personalCalendars = calendars
-                self.personalEvents = events
+                self.personalEvents = self.eventsOwned(by: .personal, from: events)
             case .professional:
                 self.professionalCalendars = calendars
-                self.professionalEvents = events
+                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
             }
         }
     }
@@ -889,10 +955,10 @@ class CalendarViewModel: ObservableObject {
             switch kind {
             case .personal:
                 self.personalCalendars = calendars
-                self.personalEvents = events
+                self.personalEvents = self.eventsOwned(by: .personal, from: events)
             case .professional:
                 self.professionalCalendars = calendars
-                self.professionalEvents = events
+                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
             }
         }
     }
@@ -911,10 +977,10 @@ class CalendarViewModel: ObservableObject {
             switch kind {
             case .personal:
                 self.personalCalendars = calendars
-                self.personalEvents = events
+                self.personalEvents = self.eventsOwned(by: .personal, from: events)
             case .professional:
                 self.professionalCalendars = calendars
-                self.professionalEvents = events
+                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
             }
         }
     }
@@ -973,20 +1039,37 @@ class CalendarViewModel: ObservableObject {
 
     // MARK: - Move Event to Different Date (Preserve Time)
 
-    func moveEventToDate(_ event: GoogleCalendarEvent, to targetDate: Date) async {
+    /// Move `event` to `targetDate`. By default, preserve the event's
+    /// timed/all-day status. Pass `forceAllDay: true` (called when the
+    /// user drops a timed event onto the all-day band) to convert the
+    /// event to all-day on `targetDate` regardless of its prior state;
+    /// in that mode we also explicitly null the `dateTime` field so
+    /// Google clears the prior timed values (date and dateTime are
+    /// mutually exclusive on the API).
+    func moveEventToDate(_ event: GoogleCalendarEvent, to targetDate: Date, forceAllDay: Bool = false) async {
         guard let originalStart = event.startTime, let originalEnd = event.endTime else { return }
 
         let calendar = Calendar.current
         let originalDay = calendar.startOfDay(for: originalStart)
         let targetDay = calendar.startOfDay(for: targetDate)
-        guard !calendar.isDate(originalDay, inSameDayAs: targetDay) else { return }
+        // When converting timed → all-day on the same day, the day
+        // offset is zero but the event still needs a PATCH. Only short-
+        // circuit when both the day matches AND we'd be re-PATCHing the
+        // same all-day status.
+        let sameDay = calendar.isDate(originalDay, inSameDayAs: targetDay)
+        if sameDay {
+            let alreadyAllDay = event.isAllDay
+            let willBeAllDay = forceAllDay || alreadyAllDay
+            if alreadyAllDay == willBeAllDay {
+                return
+            }
+        }
 
         let dayOffset = calendar.dateComponents([.day], from: originalDay, to: targetDay).day ?? 0
         guard let newStart = calendar.date(byAdding: .day, value: dayOffset, to: originalStart),
               let newEnd = calendar.date(byAdding: .day, value: dayOffset, to: originalEnd) else { return }
 
-        let isPersonal = personalEvents.contains { $0.id == event.id }
-        let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+        let kind: GoogleAuthManager.AccountKind = self.accountKind(for: event)
 
         do {
             let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
@@ -1002,21 +1085,51 @@ class CalendarViewModel: ObservableObject {
             request.setValue("*", forHTTPHeaderField: "If-Match")
 
             var body: [String: Any]
-            if event.isAllDay {
+            let resultIsAllDay = forceAllDay || event.isAllDay
+            if resultIsAllDay {
                 let df = DateFormatter()
                 df.dateFormat = "yyyy-MM-dd"
-                let newEndAllDay = calendar.date(byAdding: .day, value: 1, to: newStart) ?? newEnd
+                // For an all-day event, Google's `end.date` is exclusive
+                // (the day after the last all-day day). Single-day all-
+                // day → end = start + 1 day. When converting a timed
+                // event we collapse to a single-day all-day on the
+                // target date.
+                let baseStart: Date
+                let baseEndExclusive: Date
+                if event.isAllDay {
+                    baseStart = newStart
+                    baseEndExclusive = calendar.date(byAdding: .day, value: 1, to: newStart) ?? newEnd
+                } else {
+                    baseStart = calendar.startOfDay(for: targetDate)
+                    baseEndExclusive = calendar.date(byAdding: .day, value: 1, to: baseStart) ?? baseStart
+                }
                 body = [
-                    "start": ["date": df.string(from: newStart)],
-                    "end": ["date": df.string(from: newEndAllDay)]
+                    "start": [
+                        "date": df.string(from: baseStart),
+                        "dateTime": NSNull(),
+                        "timeZone": NSNull()
+                    ],
+                    "end": [
+                        "date": df.string(from: baseEndExclusive),
+                        "dateTime": NSNull(),
+                        "timeZone": NSNull()
+                    ]
                 ]
             } else {
                 let iso = ISO8601DateFormatter()
                 iso.formatOptions = [.withInternetDateTime]
                 iso.timeZone = TimeZone.current
                 body = [
-                    "start": ["dateTime": iso.string(from: newStart), "timeZone": TimeZone.current.identifier],
-                    "end": ["dateTime": iso.string(from: newEnd), "timeZone": TimeZone.current.identifier]
+                    "start": [
+                        "dateTime": iso.string(from: newStart),
+                        "timeZone": TimeZone.current.identifier,
+                        "date": NSNull()
+                    ],
+                    "end": [
+                        "dateTime": iso.string(from: newEnd),
+                        "timeZone": TimeZone.current.identifier,
+                        "date": NSNull()
+                    ]
                 ]
             }
 
@@ -1041,8 +1154,7 @@ class CalendarViewModel: ObservableObject {
     /// boundary, which is not what the caller wants.
     func scheduleEvent(_ event: GoogleCalendarEvent, startTime: Date, duration: TimeInterval) async {
         let newEnd = startTime.addingTimeInterval(duration)
-        let isPersonal = personalEvents.contains { $0.id == event.id }
-        let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+        let kind: GoogleAuthManager.AccountKind = self.accountKind(for: event)
 
         do {
             let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
@@ -1060,9 +1172,21 @@ class CalendarViewModel: ObservableObject {
             let iso = ISO8601DateFormatter()
             iso.formatOptions = [.withInternetDateTime]
             iso.timeZone = TimeZone.current
+            // Google Calendar treats `date` (all-day) and `dateTime`
+            // (timed) as mutually exclusive. When converting an all-day
+            // event to timed we must explicitly null the existing `date`
+            // field, otherwise the PATCH leaves the event as all-day.
             let body: [String: Any] = [
-                "start": ["dateTime": iso.string(from: startTime), "timeZone": TimeZone.current.identifier],
-                "end": ["dateTime": iso.string(from: newEnd), "timeZone": TimeZone.current.identifier]
+                "start": [
+                    "dateTime": iso.string(from: startTime),
+                    "timeZone": TimeZone.current.identifier,
+                    "date": NSNull()
+                ],
+                "end": [
+                    "dateTime": iso.string(from: newEnd),
+                    "timeZone": TimeZone.current.identifier,
+                    "date": NSNull()
+                ]
             ]
 
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -1083,8 +1207,7 @@ class CalendarViewModel: ObservableObject {
         let duration = originalEnd.timeIntervalSince(originalStart)
         let newEnd = targetDateTime.addingTimeInterval(duration)
 
-        let isPersonal = personalEvents.contains { $0.id == event.id }
-        let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+        let kind: GoogleAuthManager.AccountKind = self.accountKind(for: event)
 
         do {
             let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
@@ -1102,9 +1225,20 @@ class CalendarViewModel: ObservableObject {
             let iso = ISO8601DateFormatter()
             iso.formatOptions = [.withInternetDateTime]
             iso.timeZone = TimeZone.current
+            // Null the all-day `date` field so this works even when the
+            // caller hands us an all-day event (defensive — see
+            // `scheduleEvent` for the canonical conversion path).
             let body: [String: Any] = [
-                "start": ["dateTime": iso.string(from: targetDateTime), "timeZone": TimeZone.current.identifier],
-                "end": ["dateTime": iso.string(from: newEnd), "timeZone": TimeZone.current.identifier]
+                "start": [
+                    "dateTime": iso.string(from: targetDateTime),
+                    "timeZone": TimeZone.current.identifier,
+                    "date": NSNull()
+                ],
+                "end": [
+                    "dateTime": iso.string(from: newEnd),
+                    "timeZone": TimeZone.current.identifier,
+                    "date": NSNull()
+                ]
             ]
 
             request.httpBody = try JSONSerialization.data(withJSONObject: body)

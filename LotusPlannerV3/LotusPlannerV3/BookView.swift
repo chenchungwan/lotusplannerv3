@@ -643,7 +643,7 @@ struct BookMonthPage: View {
         }
         .sheet(item: $selectedEvent) { event in
             let accountKind: GoogleAuthManager.AccountKind =
-                calendarVM.personalEvents.contains(where: { $0.id == event.id }) ? .personal : .professional
+                event.ownerAccountKind
             AddItemView(
                 currentDate: event.startTime ?? Date(),
                 tasksViewModel: DataManager.shared.tasksViewModel,
@@ -697,7 +697,7 @@ struct BookDayPage: View {
             .sheet(item: $selectedEvent) { event in
                 let calendarVM = DataManager.shared.calendarViewModel
                 let accountKind: GoogleAuthManager.AccountKind =
-                    calendarVM.personalEvents.contains(where: { $0.id == event.id }) ? .personal : .professional
+                    event.ownerAccountKind
                 AddItemView(
                     currentDate: event.startTime ?? Date(),
                     tasksViewModel: DataManager.shared.tasksViewModel,

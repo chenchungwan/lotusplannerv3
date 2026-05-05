@@ -119,7 +119,7 @@ struct DayViewNewExpanded: View {
             get: { selectedEvent },
             set: { selectedEvent = $0 }
         )) { ev in
-            let accountKind: GoogleAuthManager.AccountKind = calendarVM.personalEvents.contains(where: { $0.id == ev.id }) ? .personal : .professional
+            let accountKind = ev.ownerAccountKind
             AddItemView(
                 currentDate: ev.startTime ?? Date(),
                 tasksViewModel: tasksVM,

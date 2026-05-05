@@ -269,9 +269,10 @@ struct WeekTimelineComponent: View {
         let constrainedProfessionalHeight = min(professionalRowHeight, maxIndividualHeight)
 
         return VStack(spacing: 0) {
-            // Personal Tasks Row
+            // First-account tasks row (defaults to "Linked Account 1",
+            // user-renameable in Settings).
             dailyTasksRow(
-                title: "Personal",
+                title: appPrefs.accountName(for: .personal),
                 color: personalColor,
                 tasks: personalTasksByDate,
                 dayColumnWidth: dayColumnWidth,
@@ -280,14 +281,15 @@ struct WeekTimelineComponent: View {
                 isPersonal: true
             )
 
-            // Thin separator line between personal and professional
+            // Separator between the two account rows
             Rectangle()
                 .fill(Color.gray.opacity(0.3))
                 .frame(height: 0.5)
 
-            // Professional Tasks Row
+            // Second-account tasks row (defaults to "Linked Account 2",
+            // user-renameable in Settings).
             dailyTasksRow(
-                title: "Professional",
+                title: appPrefs.accountName(for: .professional),
                 color: professionalColor,
                 tasks: professionalTasksByDate,
                 dayColumnWidth: dayColumnWidth,
@@ -682,7 +684,7 @@ struct WeekTimelineComponent: View {
     }
     
     private func allDayEventView(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = personalEvents.contains { $0.id == event.id }
+        let isPersonal = event.ownerAccountKind == .personal
         let color = isPersonal ? personalColor : professionalColor
         
         return HStack(spacing: 4) {
@@ -1059,7 +1061,7 @@ struct WeekTimelineComponent: View {
                 let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
                 let height = max(20, CGFloat(dayDuration / 3600.0) * hourHeight)
                 
-                let isPersonal = personalEvents.contains { $0.id == event.id }
+                let isPersonal = event.ownerAccountKind == .personal
                 
                 let layout = EventLayout(
                     event: event,

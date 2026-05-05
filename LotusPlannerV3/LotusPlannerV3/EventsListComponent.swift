@@ -59,7 +59,7 @@ struct EventsListComponent: View {
                                 }
                             }
                             Spacer()
-                            let isPersonal = personalEvents.contains { $0.id == ev.id }
+                            let isPersonal = ev.ownerAccountKind == .personal
                             Circle()
                                 .fill(isPersonal ? personalColor : professionalColor)
                                 .frame(width: 8, height: 8)
@@ -67,7 +67,7 @@ struct EventsListComponent: View {
                         .padding(10)
                         .background(
                             (
-                                personalEvents.contains { $0.id == ev.id }
+                                (ev.ownerAccountKind == .personal)
                                 ? personalColor.opacity(0.12)
                                 : professionalColor.opacity(0.12)
                             )

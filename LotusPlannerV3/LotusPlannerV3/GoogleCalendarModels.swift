@@ -96,3 +96,27 @@ struct GoogleCalendarListResponse: Codable {
 struct GoogleCalendarEventsResponse: Codable {
     let items: [GoogleCalendarEvent]?
 }
+
+extension GoogleCalendarEvent {
+    /// Owning account derived from `calendarId` (which holds the
+    /// originating Gmail when an event is fetched via a calendar
+    /// subscription) vs. the saved per-kind emails. Used everywhere
+    /// the UI needs to show event color/account or pick a token to
+    /// authorize a PATCH/DELETE — without this, an event that appears
+    /// in both `personalEvents` and `professionalEvents` (cross-account
+    /// subscription) gets misattributed to whichever array we check
+    /// first.
+    var ownerAccountKind: GoogleAuthManager.AccountKind {
+        let auth = GoogleAuthManager.shared
+        let owner = (calendarId ?? "").lowercased()
+        let professionalEmail = auth.getEmail(for: .professional).lowercased()
+        let personalEmail = auth.getEmail(for: .personal).lowercased()
+        if !professionalEmail.isEmpty, owner == professionalEmail {
+            return .professional
+        }
+        if !personalEmail.isEmpty, owner == personalEmail {
+            return .personal
+        }
+        return .personal
+    }
+}

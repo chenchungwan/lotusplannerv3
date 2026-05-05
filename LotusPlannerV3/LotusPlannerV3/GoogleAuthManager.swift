@@ -101,8 +101,8 @@ final class GoogleAuthManager: ObservableObject {
 
     private func defaultName(for kind: AccountKind) -> String {
         switch kind {
-        case .personal: return "Personal"
-        case .professional: return "Professional"
+        case .personal: return "Linked Account 1"
+        case .professional: return "Linked Account 2"
         }
     }
 
@@ -138,26 +138,45 @@ final class GoogleAuthManager: ObservableObject {
         let presentingVC: UIViewController = viewController ?? topViewController()!
         
         do {
+            // Force a sign-out before re-presenting the picker so
+            // GIDSignIn doesn't silently reuse the currently-signed-in
+            // Google account (which is what causes both kinds to end
+            // up bound to the same Gmail and therefore POST/DELETE to
+            // the wrong calendar).
+            GIDSignIn.sharedInstance.signOut()
+
             let result = try await GIDSignIn.sharedInstance.signIn(
                 withPresenting: presentingVC,
                 hint: nil,
                 additionalScopes: scopes
             )
-            
+
+            let userEmail = (result.user.profile?.email ?? "Unknown").lowercased()
+
+            // Refuse to bind the same Gmail to both kinds — every code
+            // path downstream assumes personal != professional, so a
+            // duplicate link silently breaks creation, deletion, and
+            // update flows.
+            let otherKind: AccountKind = (kind == .personal) ? .professional : .personal
+            let otherEmail = (UserDefaults.standard.string(forKey: emailKeyPrefix + otherKind.rawValue) ?? "").lowercased()
+            if !otherEmail.isEmpty, otherEmail == userEmail {
+                GIDSignIn.sharedInstance.signOut()
+                throw AuthError.duplicateAccount
+            }
+
             // Store refresh token securely
             let refreshToken = result.user.refreshToken.tokenString
             saveTokenSecurely(refreshToken, for: tokenKeyPrefix + kind.rawValue)
-            
+
             // Store access token and expiry securely
             let accessToken = result.user.accessToken.tokenString
             let expirationDate = result.user.accessToken.expirationDate
             saveTokenSecurely(accessToken, for: accessTokenKeyPrefix + kind.rawValue)
             UserDefaults.standard.set(expirationDate, forKey: tokenExpiryKeyPrefix + kind.rawValue)
-            
+
             // Store user email
-            let userEmail = result.user.profile?.email ?? "Unknown"
             UserDefaults.standard.set(userEmail, forKey: emailKeyPrefix + kind.rawValue)
-            
+
             updateStates()
         } catch {
             
@@ -303,6 +322,11 @@ final class GoogleAuthManager: ObservableObject {
         case missingClientID
         case noRefreshToken
         case tokenRefreshFailed
+        /// Raised when the user picks a Gmail that is already linked
+        /// to the other account kind. The two kinds must be different
+        /// Google accounts; otherwise downstream create/update/delete
+        /// flows can't tell the accounts apart.
+        case duplicateAccount
     }
 
     // MARK: - Helpers

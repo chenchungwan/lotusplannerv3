@@ -417,7 +417,7 @@ struct DraggableTimeboxWeekContent: View {
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(allDayEvents, id: \.id) { event in
-                    let isPersonal = calendarVM.personalEvents.contains { $0.id == event.id }
+                    let isPersonal = calendarVM.accountKind(for: event) == .personal
                     allDayEventCard(event: event, isPersonal: isPersonal, columnDate: date)
                 }
                 ForEach(allDayTasks, id: \.task.id) { row in
@@ -434,12 +434,13 @@ struct DraggableTimeboxWeekContent: View {
         let bg = isPersonal ? personalColor : professionalColor
         let id = "event_\(event.id)"
         let isDragging = dragState?.itemId == id
-        return HStack(spacing: 4) {
+        return HStack(spacing: 6) {
             Image(systemName: "calendar")
-                .font(.system(size: 9))
+                .font(.body)
                 .foregroundColor(.white.opacity(0.85))
             Text(event.summary)
-                .font(.caption)
+                .font(.body)
+                .fontWeight(.medium)
                 .foregroundColor(.white)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -463,24 +464,25 @@ struct DraggableTimeboxWeekContent: View {
         let id = "task_\(task.id)"
         let isDragging = dragState?.itemId == id
         let isSelected = selectedTaskIds.contains(task.id)
-        return HStack(spacing: 4) {
+        return HStack(spacing: 8) {
             if isBulkEditMode {
                 Button { onTaskSelectionToggle(task) } label: {
                     Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 11))
+                        .font(.body)
                         .foregroundColor(isSelected ? accent : .secondary)
                 }
                 .buttonStyle(.plain)
             } else {
                 Button { onTaskToggle(task, listId) } label: {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 11))
+                        .font(.body)
                         .foregroundColor(task.isCompleted ? accent : .secondary)
                 }
                 .buttonStyle(.plain)
             }
             Text(task.title)
-                .font(.caption)
+                .font(.body)
+                .fontWeight(.medium)
                 .foregroundColor(task.isCompleted ? .secondary : .primary)
                 .strikethrough(task.isCompleted)
                 .lineLimit(1)
@@ -523,7 +525,7 @@ struct DraggableTimeboxWeekContent: View {
         let bg = isPersonal ? personalColor : professionalColor
         return VStack(alignment: .leading, spacing: 1) {
             Text(event.summary)
-                .font(.caption2)
+                .font(.body)
                 .fontWeight(.medium)
                 .foregroundColor(.white)
                 .lineLimit(2)
@@ -540,24 +542,24 @@ struct DraggableTimeboxWeekContent: View {
     private func timedTaskCard(task: GoogleTask, listId: String, isPersonal: Bool) -> some View {
         let accent = isPersonal ? personalColor : professionalColor
         let isSelected = selectedTaskIds.contains(task.id)
-        return HStack(spacing: 4) {
+        return HStack(spacing: 8) {
             if isBulkEditMode {
                 Button { onTaskSelectionToggle(task) } label: {
                     Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 11))
+                        .font(.body)
                         .foregroundColor(isSelected ? accent : .secondary)
                 }
                 .buttonStyle(.plain)
             } else {
                 Button { onTaskToggle(task, listId) } label: {
                     Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 11))
+                        .font(.body)
                         .foregroundColor(task.isCompleted ? accent : .secondary)
                 }
                 .buttonStyle(.plain)
             }
             Text(task.title)
-                .font(.caption2)
+                .font(.body)
                 .fontWeight(.medium)
                 .foregroundColor(task.isCompleted ? .secondary : .primary)
                 .strikethrough(task.isCompleted)
@@ -809,7 +811,7 @@ struct DraggableTimeboxWeekContent: View {
             if targetIsAllDay {
                 // Land in the all-day band → keep all-day status (or
                 // convert timed → all-day on the new date).
-                await calendarVM.moveEventToDate(event, to: state.snappedDate)
+                await calendarVM.moveEventToDate(event, to: state.snappedDate, forceAllDay: true)
             } else if state.wasAllDay {
                 // All-day → timed at the dropped slot on (possibly) a new day.
                 await calendarVM.scheduleEvent(event, startTime: state.snappedStart, duration: state.duration)
@@ -882,7 +884,7 @@ struct DraggableTimeboxWeekContent: View {
 
         for event in events where !event.isAllDay {
             guard let start = event.startTime, let end = event.endTime else { continue }
-            let isPersonal = calendarVM.personalEvents.contains { $0.id == event.id }
+            let isPersonal = calendarVM.accountKind(for: event) == .personal
             let id = "event_\(event.id)"
             let dur = end.timeIntervalSince(start)
             // Apply pending optimistic override.

@@ -228,7 +228,7 @@ struct MonthTimelineComponent: View {
     
     // MARK: - Priority 5: Compact Event Display (No Dot, No Time)
     private func eventBlock(event: GoogleCalendarEvent, columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int)) -> some View {
-        let isPersonal = personalEvents.contains { $0.id == event.id }
+        let isPersonal = event.ownerAccountKind == .personal
         let eventColor = isPersonal ? personalColor : professionalColor
         let padding = adaptivePadding(columnWidth: columnWidth)
         

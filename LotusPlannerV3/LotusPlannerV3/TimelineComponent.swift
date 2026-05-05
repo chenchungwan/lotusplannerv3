@@ -154,7 +154,7 @@ struct TimelineComponent: View {
     
     // Individual all-day event block
     private func allDayEventBlock(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = personalEvents.contains { $0.id == event.id }
+        let isPersonal = event.ownerAccountKind == .personal
         let eventColor = isPersonal ? personalColor : professionalColor
         
         return HStack(spacing: 8) {
@@ -388,7 +388,7 @@ struct TimelineComponent: View {
                 let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
                 let height = max(30.0, CGFloat(dayDuration / 3600.0) * hourHeight)
                 
-                let isPersonal = personalEvents.contains { $0.id == event.id }
+                let isPersonal = event.ownerAccountKind == .personal
                 
                 let layout = EventLayout(
                     event: event,
