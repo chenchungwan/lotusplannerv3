@@ -437,11 +437,11 @@ struct DayViewCustom: View {
         let personalEvents = calendarVM.personalEvents.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
         let professionalEvents = calendarVM.professionalEvents.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
         let all = calendarVM.events(for: date)
-        // `TimeboxComponent` owns its own ScrollView + ScrollViewReader and
-        // auto-scrolls to the current hour on appear. Wrapping it in another
+        // `DraggableTimeboxComponent` owns its own ScrollView + ScrollViewReader
+        // and auto-scrolls to the current hour on appear. Wrapping it in another
         // ScrollView here would swallow that programmatic scroll, so render
         // it directly — this keeps the "now" redline in view on first render.
-        return TimeboxComponent(
+        return DraggableTimeboxComponent(
             date: date,
             events: all,
             personalEvents: personalEvents,

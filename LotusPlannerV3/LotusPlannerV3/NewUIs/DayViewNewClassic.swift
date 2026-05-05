@@ -154,8 +154,8 @@ struct DayViewNewClassic: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
             } else {
-                // Show events in 24-hour timeline (TimeboxComponent)
-                TimeboxComponent(
+                // Show events in 24-hour timeline (drag-to-reschedule).
+                DraggableTimeboxComponent(
                     date: navigationManager.currentDate,
                     events: getAllEventsForDate(navigationManager.currentDate),
                     personalEvents: calendarVM.personalEvents,

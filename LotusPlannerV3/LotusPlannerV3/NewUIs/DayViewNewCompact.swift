@@ -284,8 +284,8 @@ struct DayViewNewCompact: View {
                         }
                     }
                 } else {
-                    // Show TimeboxComponent (timeline view)
-                    TimeboxComponent(
+                    // Show drag-to-reschedule timeline.
+                    DraggableTimeboxComponent(
                         date: navigationManager.currentDate,
                         events: filteredEventsForDay(navigationManager.currentDate),
                         personalEvents: calendarVM.personalEvents,
