@@ -116,14 +116,15 @@ struct TimeboxView: View {
     }
     
     private func dayColumnWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
-        // Account for padding (12 * 2 = 24)
-        let availableContentWidth = availableWidth - 24
+        // Account for padding (12 * 2 = 24) and the leading time-label
+        // gutter that the timeline draws to host hour numbers.
+        let availableContentWidth = availableWidth - 24 - DraggableTimeboxWeekContent.timeColumnWidth
         return availableContentWidth / CGFloat(visibleDays)
     }
-    
+
     private func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
-        // Total width for all 7 days
-        return dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
+        // Total width = gutter + 7 day columns
+        return DraggableTimeboxWeekContent.timeColumnWidth + dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
     }
     
     private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
@@ -244,8 +245,13 @@ struct TimeboxView: View {
                     ScrollView(.horizontal, showsIndicators: true) {
                         VStack(spacing: 0) {
                             if weekDates.count == 7 {
-                                // Fixed header row with day dates (7 columns)
+                                // Fixed header row with day dates (7 columns).
+                                // Leading clear gutter matches the timeline's
+                                // hour-label column below so day headers line
+                                // up directly over their day columns.
                                 HStack(spacing: 0) {
+                                    Color.clear
+                                        .frame(width: DraggableTimeboxWeekContent.timeColumnWidth, height: 60)
                                     ForEach(0..<weekDates.count, id: \.self) { index in
                                         let date = weekDates[index]
                                         let calendar = Calendar.mondayFirst
@@ -254,7 +260,7 @@ struct TimeboxView: View {
                                             .frame(width: columnWidth)
                                             .background(Color(.systemGray6))
                                             .id("day_\(index)")
-                                        
+
                                         // Divider between days (except for the last one)
                                         if index < weekDates.count - 1 {
                                             Rectangle()
@@ -266,15 +272,50 @@ struct TimeboxView: View {
                                 .frame(width: contentWidth, height: 60)
                                 .background(Color(.systemBackground))
                                 
-                                // Unified scrollable timeline for all 7 days with TimeboxComponent
+                                // Unified scrollable timeline with drag-aware
+                                // 7-column rendering. The new component
+                                // owns SwiftUI gestures so users can drag
+                                // events/tasks across both axes (time and
+                                // day); the legacy `timeboxColumn` +
+                                // `TimeboxDropDelegate` path it replaces
+                                // is kept on disk for now in case we need
+                                // to fall back.
                                 ScrollView(.vertical, showsIndicators: true) {
-                                    HStack(alignment: .top, spacing: 0) {
-                                        ForEach(0..<weekDates.count, id: \.self) { index in
-                                            if index < weekDates.count {
-                                                timeboxColumn(for: weekDates[index], index: index, availableWidth: availableWidth, columnWidth: columnWidth)
+                                    DraggableTimeboxWeekContent(
+                                        weekDates: weekDates,
+                                        columnWidth: columnWidth,
+                                        allDayHeight: cachedMaxAllDayHeight > 0
+                                            ? cachedMaxAllDayHeight
+                                            : calculateMaxAllDayHeight(eventsCache: weeklyEventsCache, tasksCache: weeklyTasksCache),
+                                        eventsByDate: weeklyEventsCache,
+                                        tasksByDate: weeklyTasksCache,
+                                        personalColor: appPrefs.personalColor,
+                                        professionalColor: appPrefs.professionalColor,
+                                        isBulkEditMode: bulkEditManager.state.isActive,
+                                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                                        onEventTap: { event in selectedEvent = event },
+                                        onTaskTap: { task, listId in
+                                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                                            taskSheetSelection = TimeboxTaskSelection(
+                                                id: task.id,
+                                                task: task,
+                                                listId: listId,
+                                                accountKind: accountKind
+                                            )
+                                        },
+                                        onTaskToggle: { task, listId in
+                                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                                            Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind) }
+                                        },
+                                        onTaskSelectionToggle: { task in
+                                            if bulkEditManager.state.selectedTaskIds.contains(task.id) {
+                                                bulkEditManager.state.selectedTaskIds.remove(task.id)
+                                            } else {
+                                                bulkEditManager.state.selectedTaskIds.insert(task.id)
                                             }
-                                        }
-                                    }
+                                        },
+                                        onCommit: { refreshWeekCaches(force: true) }
+                                    )
                                     .frame(width: contentWidth)
                                     .padding(.horizontal, 12)
                                 }
