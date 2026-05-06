@@ -219,7 +219,7 @@ struct CustomDayViewLibrary: Codable {
     /// Posted on the main queue when the library changes (local save or a
     /// sync from another device via iCloud KVS).
     static let didChangeNotification = Notification.Name("CustomDayViewLibraryDidChange")
-    static let maxVersions = 5
+    static let maxVersions = 10
 
     var activeId: UUID?
     var versions: [NamedCustomDayViewConfig]
