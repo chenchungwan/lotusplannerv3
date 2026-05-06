@@ -14,11 +14,11 @@ struct GoalsTimeframeComponent: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
 
     /// Goals whose target timeframe matches and whose `dueDate` falls inside
-    /// the period (week / month / year) containing `date`. Ordering matches
-    /// the user's Goals view arrangement: categories are laid out in a 2×3
-    /// grid by `displayPosition` (0 = top-left, then reading left→right,
-    /// top→bottom), and goals within each category follow the user's
-    /// `displayOrder` there.
+    /// the period (week / month / year) containing `date`. Ordering follows
+    /// the global `displayOrder` set by the user in Goals view (which writes
+    /// each goal's index in the user-arranged flat list back to
+    /// `displayOrder`), so dragging a goal across categories in Goals view
+    /// is reflected here too.
     private var filteredGoals: [GoalData] {
         let calendar = Calendar.mondayFirst
         let component = timeframe.calendarComponent
@@ -26,13 +26,7 @@ struct GoalsTimeframeComponent: View {
             goal.targetTimeframe == timeframe &&
             calendar.isDate(goal.dueDate, equalTo: date, toGranularity: component)
         }
-        let positionByCategory: [UUID: Int] = Dictionary(
-            uniqueKeysWithValues: goalsManager.categories.map { ($0.id, $0.displayPosition) }
-        )
         return matching.sorted { lhs, rhs in
-            let lhsPos = positionByCategory[lhs.categoryId] ?? Int.max
-            let rhsPos = positionByCategory[rhs.categoryId] ?? Int.max
-            if lhsPos != rhsPos { return lhsPos < rhsPos }
             if lhs.displayOrder != rhs.displayOrder {
                 return lhs.displayOrder < rhs.displayOrder
             }

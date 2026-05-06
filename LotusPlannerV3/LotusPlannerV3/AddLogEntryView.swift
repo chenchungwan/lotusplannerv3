@@ -5,10 +5,21 @@ struct AddLogEntryView: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     @Environment(\.dismiss) private var dismiss
 
+    /// One row per food entered. All rows share `viewModel.foodDate`
+    /// (date + time).
+    @State private var foodNames: [String] = [""]
+
+    private var trimmedFoodNames: [String] {
+        foodNames.compactMap {
+            let trimmed = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+    }
+
     /// True when at least one enabled section has data valid enough to
     /// submit — drives the Create button's enabled state.
     private var hasAnyValidEntry: Bool {
-        (appPrefs.showFoodLogs && viewModel.canAddFood) ||
+        (appPrefs.showFoodLogs && !trimmedFoodNames.isEmpty) ||
         (appPrefs.showSleepLogs && viewModel.canAddSleep) ||
         (appPrefs.showWaterLogs && viewModel.waterCupsConsumed > 0) ||
         (appPrefs.showWeightLogs && viewModel.canAddWeight) ||
@@ -20,8 +31,13 @@ struct AddLogEntryView: View {
     /// `canAddWater` returns true even at zero cups (legacy behavior from
     /// the old single-type flow).
     private func addAllValidEntries() {
-        if appPrefs.showFoodLogs && viewModel.canAddFood {
-            viewModel.addFoodEntry()
+        if appPrefs.showFoodLogs {
+            let sharedDate = viewModel.foodDate
+            for name in trimmedFoodNames {
+                viewModel.foodDate = sharedDate
+                viewModel.foodName = name
+                viewModel.addFoodEntry()
+            }
         }
         if appPrefs.showSleepLogs && viewModel.canAddSleep {
             viewModel.addSleepEntry()
@@ -121,7 +137,28 @@ struct AddLogEntryView: View {
 
     private var foodForm: some View {
         Section("Food Details") {
-            TextField("Food name", text: $viewModel.foodName)
+            ForEach(foodNames.indices, id: \.self) { index in
+                HStack {
+                    TextField("Food name", text: $foodNames[index])
+                    if foodNames.count > 1 {
+                        Button {
+                            foodNames.remove(at: index)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundColor(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Button {
+                foodNames.append("")
+            } label: {
+                Label("Add another food", systemImage: "plus.circle.fill")
+                    .foregroundColor(.accentColor)
+            }
+
             DatePicker("Date", selection: $viewModel.foodDate, displayedComponents: [.date, .hourAndMinute])
                 .environment(\.calendar, Calendar.mondayFirst)
         }

@@ -1228,7 +1228,8 @@ class TasksViewModel: ObservableObject {
         endTime: Date? = nil,
         isAllDay: Bool = true,
         status: String = "needsAction",
-        completed: String? = nil
+        completed: String? = nil,
+        onServerCreated: ((GoogleTask) -> Void)? = nil
     ) async {
         
         let dueDateString: String?
@@ -1307,6 +1308,7 @@ class TasksViewModel: ObservableObject {
                             }
                         }
                     }
+                    onServerCreated?(createdTask)
                 }
             } catch {
                 // REVERT OPTIMISTIC CREATE on error - remove the temporary task
@@ -3216,6 +3218,10 @@ struct TaskDetailsView: View {
     @State private var startTime: Date = Date()
     @State private var endTime: Date = Date()
     @State private var isAllDay: Bool = true
+    /// One-shot suppression for the startTime onChange handler so the
+    /// freshly-set 30-min window from an all-day toggle isn't immediately
+    /// stretched back to the prior duration.
+    @State private var skipNextEndAutoAdjust: Bool = false
     @State private var isCompleted: Bool = false
     @State private var selectedPriority: TaskPriorityData?
 
@@ -3258,6 +3264,34 @@ struct TaskDetailsView: View {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
+
+    /// Default time-of-day to use when toggling an all-day task to timed:
+    /// start = next half-hour boundary strictly after the current wall-clock
+    /// time, end = start + 30 minutes. The hour/minute is then rebound onto
+    /// `date`'s calendar day (since the user may be editing a task whose due
+    /// date is not today). Mirrored by `AddEventView.defaultTimedWindow` so
+    /// tasks and events behave the same.
+    static func defaultTimedWindow(on date: Date) -> (start: Date, end: Date) {
+        let cal = Calendar.current
+        let now = Date()
+        let comps = cal.dateComponents([.hour, .minute], from: now)
+        let hour = comps.hour ?? 9
+        let minute = comps.minute ?? 0
+        let startHour: Int
+        let startMinute: Int
+        if minute < 30 {
+            startHour = hour
+            startMinute = 30
+        } else {
+            startHour = (hour + 1) % 24
+            startMinute = 0
+        }
+        let start = cal.date(bySettingHour: startHour, minute: startMinute, second: 0, of: date)
+            ?? cal.startOfDay(for: date)
+        let end = cal.date(byAdding: .minute, value: 30, to: start)
+            ?? start.addingTimeInterval(1800)
+        return (start, end)
+    }
     
     init(task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind, accentColor: Color, personalTaskLists: [GoogleTaskList], professionalTaskLists: [GoogleTaskList], appPrefs: AppPreferences, viewModel: TasksViewModel, onSave: @escaping (GoogleTask) -> Void, onDelete: @escaping () -> Void, onMove: @escaping (GoogleTask, String) -> Void, onCrossAccountMove: @escaping (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void, isNew: Bool = false) {
         self.task = task
@@ -3575,67 +3609,18 @@ struct TaskDetailsView: View {
                         set: { newValue in
                             let wasAllDay = isAllDay
                             isAllDay = newValue
-                            
-                            // When switching from all-day to timed, always set default times to next nearest half hour
-                            if !newValue && wasAllDay {
-                                // User toggled from all-day to timed - update times immediately
-                                let calendar = Calendar.current
-                                let dueDate = editedDueDate ?? Date()
-                                let startOfDay = calendar.startOfDay(for: dueDate)
-                                
-                                // Calculate next nearest half hour
-                                // For newly created all-day tasks, always default to 9:00 AM regardless of current time
-                                let hour: Int
-                                let minute: Int
 
-                                if isNew {
-                                    // For new tasks, always default to 9:00 AM
-                                    hour = 9
-                                    minute = 0
-                                } else {
-                                    let now = Date()
-                                    if calendar.isDate(dueDate, inSameDayAs: now) {
-                                        // If due date is today, use current time
-                                        let components = calendar.dateComponents([.hour, .minute], from: now)
-                                        hour = components.hour ?? 9
-                                        minute = components.minute ?? 0
-                                    } else {
-                                        // If due date is in the future, default to 9:00 AM
-                                        hour = 9
-                                        minute = 0
-                                    }
-                                }
-                                
-                                // Calculate next half hour
-                                var nextHour = hour
-                                var nextMinute: Int
-                                
-                                if minute < 30 {
-                                    // Next half hour is :30 of current hour
-                                    nextMinute = 30
-                                } else {
-                                    // Next half hour is :00 of next hour
-                                    nextMinute = 0
-                                    nextHour = (hour + 1) % 24
-                                }
-                                
-                                // Set start time to next half hour on the due date
-                                if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: dueDate) {
-                                    startTime = startTimeDate
-                                    
-                                    // Set end time to 30 minutes after start time
-                                    if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
-                                        endTime = endTimeDate
-                                    } else {
-                                        // Fallback: set to next hour if adding 30 minutes fails
-                                        endTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: dueDate) ?? startOfDay
-                                    }
-                                } else {
-                                    // Fallback: set to 9 AM if calculation fails
-                                    let fallbackStart = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
-                                    startTime = fallbackStart
-                                    endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
-                                }
+                            // When switching from all-day to timed, default to the
+                            // next half-hour boundary after the current wall-clock
+                            // time + 30-minute duration. Same rule for new and
+                            // existing tasks, regardless of whether the due date is
+                            // today or future.
+                            if !newValue && wasAllDay {
+                                let dueDate = editedDueDate ?? Date()
+                                let window = Self.defaultTimedWindow(on: dueDate)
+                                skipNextEndAutoAdjust = true
+                                startTime = window.start
+                                endTime = window.end
                             }
                         }
                     )) {
@@ -3711,47 +3696,42 @@ struct TaskDetailsView: View {
                         .frame(maxWidth: .infinity)
                 }
 
-                // Repeat (recurrence). Only shown for existing tasks because
-                // the rule is keyed by the Google Task id, which doesn't
-                // exist until the server responds for new tasks.
-                if !isNew {
-                    Section("Repeat") {
-                        Picker("Frequency", selection: $repeatFrequency) {
-                            Text("Never").tag(nil as RecurrenceFrequency?)
-                            ForEach(RecurrenceFrequency.allCases) { freq in
-                                Text(freq.displayName).tag(freq as RecurrenceFrequency?)
-                            }
+                Section("Repeat") {
+                    Picker("Frequency", selection: $repeatFrequency) {
+                        Text("Never").tag(nil as RecurrenceFrequency?)
+                        ForEach(RecurrenceFrequency.allCases) { freq in
+                            Text(freq.displayName).tag(freq as RecurrenceFrequency?)
                         }
-                        .pickerStyle(.menu)
+                    }
+                    .pickerStyle(.menu)
 
-                        if let freq = repeatFrequency {
-                            Stepper(value: $repeatInterval, in: 1...30) {
-                                Text("Every \(repeatInterval) \(repeatInterval == 1 ? freq.unitName : "\(freq.unitName)s")")
-                            }
+                    if let freq = repeatFrequency {
+                        Stepper(value: $repeatInterval, in: 1...30) {
+                            Text("Every \(repeatInterval) \(repeatInterval == 1 ? freq.unitName : "\(freq.unitName)s")")
+                        }
 
-                            Toggle("End on date", isOn: Binding(
-                                get: { repeatEndDate != nil },
-                                set: { hasEnd in
-                                    if hasEnd {
-                                        repeatEndDate = repeatEndDate
-                                            ?? Calendar.current.date(byAdding: .month, value: 6, to: Date())
-                                    } else {
-                                        repeatEndDate = nil
-                                    }
+                        Toggle("End on date", isOn: Binding(
+                            get: { repeatEndDate != nil },
+                            set: { hasEnd in
+                                if hasEnd {
+                                    repeatEndDate = repeatEndDate
+                                        ?? Calendar.current.date(byAdding: .month, value: 6, to: Date())
+                                } else {
+                                    repeatEndDate = nil
                                 }
-                            ))
-
-                            if repeatEndDate != nil {
-                                DatePicker(
-                                    "End date",
-                                    selection: Binding(
-                                        get: { repeatEndDate ?? Date() },
-                                        set: { repeatEndDate = $0 }
-                                    ),
-                                    in: Date()...,
-                                    displayedComponents: .date
-                                )
                             }
+                        ))
+
+                        if repeatEndDate != nil {
+                            DatePicker(
+                                "End date",
+                                selection: Binding(
+                                    get: { repeatEndDate ?? Date() },
+                                    set: { repeatEndDate = $0 }
+                                ),
+                                in: Date()...,
+                                displayedComponents: .date
+                            )
                         }
                     }
                 }
@@ -3865,55 +3845,20 @@ struct TaskDetailsView: View {
             if isNew && !isAllDay {
                 let calendar = Calendar.current
                 let dueDate = editedDueDate ?? Date()
-                let startOfDay = calendar.startOfDay(for: dueDate)
-                
-                // Check if times are still at default all-day values
+
+                // Check if times are still at default all-day values; if so,
+                // replace with the next-half-hour + 30 min default.
                 let startHour = calendar.component(.hour, from: startTime)
                 let startMinute = calendar.component(.minute, from: startTime)
                 let endHour = calendar.component(.hour, from: endTime)
                 let endMinute = calendar.component(.minute, from: endTime)
-                
+
                 let isStartAtMidnight = startHour == 0 && startMinute == 0
                 let isEndAtEndOfDay = (endHour == 23 && endMinute == 59) || (endHour == 23 && endMinute == 0)
-                let isDefaultAllDayTime = isStartAtMidnight && isEndAtEndOfDay
-                
-                if isDefaultAllDayTime {
-                    // Calculate next half hour
-                    let now = Date()
-                    let hour: Int
-                    let minute: Int
-                    
-                    if calendar.isDate(dueDate, inSameDayAs: now) {
-                        let components = calendar.dateComponents([.hour, .minute], from: now)
-                        hour = components.hour ?? 9
-                        minute = components.minute ?? 0
-                    } else {
-                        hour = 9
-                        minute = 0
-                    }
-                    
-                    var nextHour = hour
-                    var nextMinute: Int
-                    
-                    if minute < 30 {
-                        nextMinute = 30
-                    } else {
-                        nextMinute = 0
-                        nextHour = (hour + 1) % 24
-                    }
-                    
-                    if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: dueDate) {
-                        startTime = startTimeDate
-                        if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
-                            endTime = endTimeDate
-                        } else {
-                            endTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: dueDate) ?? startOfDay
-                        }
-                    } else {
-                        let fallbackStart = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
-                        startTime = fallbackStart
-                        endTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
-                    }
+                if isStartAtMidnight && isEndAtEndOfDay {
+                    let window = Self.defaultTimedWindow(on: dueDate)
+                    startTime = window.start
+                    endTime = window.end
                 }
             }
         }
@@ -3998,12 +3943,20 @@ struct TaskDetailsView: View {
             .presentationDetents([.large])
         }
         .onChange(of: startTime) { oldValue, newValue in
-            // Preserve duration when start time changes (same as events)
-            let duration = oldValue.distance(to: endTime)
-            if duration > 0 {
-                endTime = newValue.addingTimeInterval(duration)
+            // Skip the auto end-adjust when the all-day toggle just set
+            // both start and end together — otherwise the duration calc
+            // would stretch the freshly-set 30-min window back to the
+            // prior all-day-derived span.
+            if skipNextEndAutoAdjust {
+                skipNextEndAutoAdjust = false
             } else {
-                endTime = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue.addingTimeInterval(1800)
+                // Preserve duration when start time changes (same as events)
+                let duration = oldValue.distance(to: endTime)
+                if duration > 0 {
+                    endTime = newValue.addingTimeInterval(duration)
+                } else {
+                    endTime = Calendar.current.date(byAdding: .minute, value: 30, to: newValue) ?? newValue.addingTimeInterval(1800)
+                }
             }
 
             // Sync due date if the date component changed
@@ -4157,48 +4110,9 @@ struct TaskDetailsView: View {
                                                        calendar.component(.minute, from: startTime) == 0
                         
                         if isDefaultAllDayTime || startTimeMatchesStartOfDay {
-                            // Calculate next half hour for the due date
-                            let now = Date()
-                            let hour: Int
-                            let minute: Int
-                            
-                            if calendar.isDate(dueDate, inSameDayAs: now) {
-                                // If due date is today, use current time
-                                let nowComponents = calendar.dateComponents([.hour, .minute], from: now)
-                                hour = nowComponents.hour ?? 9
-                                minute = nowComponents.minute ?? 0
-                            } else {
-                                // If due date is in the future, default to 9:00 AM
-                                hour = 9
-                                minute = 0
-                            }
-                            
-                            // Calculate next half hour
-                            var nextHour = hour
-                            var nextMinute: Int
-                            
-                            if minute < 30 {
-                                // Next half hour is :30 of current hour
-                                nextMinute = 30
-                            } else {
-                                // Next half hour is :00 of next hour
-                                nextMinute = 0
-                                nextHour = (hour + 1) % 24
-                            }
-                            
-                            // Set start time to next half hour on the due date
-                            if let startTimeDate = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: dueDate) {
-                                finalStartTime = startTimeDate
-                                // Set end time to 30 minutes after start time
-                                if let endTimeDate = calendar.date(byAdding: .minute, value: 30, to: startTimeDate) {
-                                    finalEndTime = endTimeDate
-                                } else {
-                                    finalEndTime = calendar.date(bySettingHour: (nextHour + 1) % 24, minute: nextMinute, second: 0, of: dueDate) ?? startOfDay
-                                }
-                            } else {
-                                finalStartTime = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: dueDate) ?? startOfDay
-                                finalEndTime = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: dueDate) ?? startOfDay
-                            }
+                            let window = Self.defaultTimedWindow(on: dueDate)
+                            finalStartTime = window.start
+                            finalEndTime = window.end
                         } else {
                             // Use the times as set by the user
                             if let hour = startComponents.hour, let minute = startComponents.minute {
@@ -4219,6 +4133,14 @@ struct TaskDetailsView: View {
                     finalEndTime = nil
                 }
                 
+                // Capture user's repeat selection so we can attach a rule
+                // once the server returns a real task id.
+                let pendingFrequency = repeatFrequency
+                let pendingInterval = max(1, repeatInterval)
+                let pendingEndDate = repeatEndDate
+                let pendingAccountKind = selectedAccountKind == .professional ? "professional" : "personal"
+                let pendingListId = targetListId
+
                 // Create task with time window parameters
                 await viewModel.createTask(
                     title: updatedTask.title,
@@ -4230,7 +4152,26 @@ struct TaskDetailsView: View {
                     endTime: finalEndTime,
                     isAllDay: isAllDay,
                     status: statusString,
-                    completed: completionTimestamp
+                    completed: completionTimestamp,
+                    onServerCreated: { createdTask in
+                        guard let freq = pendingFrequency else { return }
+                        let now = Date()
+                        let rule = RecurrenceRule(
+                            seriesId: UUID(),
+                            currentTaskId: createdTask.id,
+                            accountKind: pendingAccountKind,
+                            listId: pendingListId,
+                            frequency: freq,
+                            interval: pendingInterval,
+                            endDate: pendingEndDate,
+                            endCount: nil,
+                            occurrencesSpawned: 0,
+                            lastSpawnedDate: nil,
+                            createdAt: now,
+                            updatedAt: now
+                        )
+                        RecurrenceManager.shared.setRule(rule)
+                    }
                 )
                 
                 await MainActor.run {

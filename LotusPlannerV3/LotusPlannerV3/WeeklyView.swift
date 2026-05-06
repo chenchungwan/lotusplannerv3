@@ -1990,7 +1990,7 @@ extension WeeklyView {
         }
         
         return VStack(alignment: .leading, spacing: 2) {
-            if !enabledItems.isEmpty && completedCount > 0 {
+            if !enabledItems.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.body)
@@ -2255,48 +2255,43 @@ extension WeeklyView {
         let completedCount = items.reduce(0) { count, item in
             count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
         }
-        
-        return Group {
-            if completedCount > 0 {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "list.bullet.rectangle")
-                            .font(.body)
-                            .foregroundColor(.accentColor)
-                        Text("\(completedCount)/\(items.count)")
-                            .font(.body)
-                            .fontWeight(.medium)
-                    }
-                    
-                    // Show individual items
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(items) { item in
-                            HStack(spacing: 8) {
-                                Button(action: {
-                                    customLogManager.toggleEntry(for: item.id, date: date)
-                                }) {
-                                    Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
-                                        .font(.body)
-                                        .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
-                                }
-                                .buttonStyle(.plain)
-                                
-                                Text(item.title)
-                                    .font(.body)
-                                    .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
-                                    .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
-                                
-                                Spacer()
-                            }
+
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.body)
+                    .foregroundColor(.accentColor)
+                Text("\(completedCount)/\(items.count)")
+                    .font(.body)
+                    .fontWeight(.medium)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(items) { item in
+                    HStack(spacing: 8) {
+                        Button(action: {
+                            customLogManager.toggleEntry(for: item.id, date: date)
+                        }) {
+                            Image(systemName: customLogManager.getCompletionStatus(for: item.id, date: date) ? "checkmark.circle.fill" : "circle")
+                                .font(.body)
+                                .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .accentColor : .secondary)
                         }
+                        .buttonStyle(.plain)
+
+                        Text(item.title)
+                            .font(.body)
+                            .strikethrough(customLogManager.getCompletionStatus(for: item.id, date: date))
+                            .foregroundColor(customLogManager.getCompletionStatus(for: item.id, date: date) ? .secondary : .primary)
+
+                        Spacer()
                     }
                 }
-                .padding(.vertical, 2)
-                .padding(.horizontal, 8)
-                .background(Color(.systemGray6).opacity(0.5))
-                .cornerRadius(6)
             }
         }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(6)
     }
     
     // MARK: - Week Task Functions
@@ -2718,23 +2713,11 @@ extension WeeklyViewMode {
 // MARK: - Custom Log Helpers
 extension WeeklyView {
     private func hasCustomLogsForWeek() -> Bool {
-        let enabledItems = customLogManager.items.filter { $0.isEnabled }
-        guard !enabledItems.isEmpty else { return false }
-        
-        return weekDates.contains { date in
-            hasCustomLogsForDate(date)
-        }
+        customLogManager.items.contains { $0.isEnabled }
     }
-    
+
     private func hasCustomLogsForDate(_ date: Date) -> Bool {
-        let enabledItems = customLogManager.items.filter { $0.isEnabled }
-        guard !enabledItems.isEmpty else { return false }
-        
-        let completedCount = enabledItems.reduce(0) { count, item in
-            count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
-        }
-        
-        return completedCount > 0
+        customLogManager.items.contains { $0.isEnabled }
     }
 }
 

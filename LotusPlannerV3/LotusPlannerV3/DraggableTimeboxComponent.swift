@@ -750,32 +750,55 @@ struct DraggableTimeboxComponent: View {
         return result.sorted { $0.startTime < $1.startTime }
     }
 
-    /// Greedy interval-coloring so overlapping items get distinct columns
-    /// and share the page width equally. Items that don't collide all keep
-    /// column 0 — but the total column count is global, so 4 items where 2
-    /// pairs each overlap will share width into halves, not quarters.
+    /// Mirrors T view's `DraggableTimeboxWeekContent.laidOut` so D view and
+    /// T view render overlapping items the same way: sort by start, partition
+    /// into transitive-overlap groups (a new group starts when the next item
+    /// begins on or after every prior end), then greedy lane-pack within
+    /// each group. Items that don't overlap with anything land in their own
+    /// group and get `total = 1` (full width); shared widths only kick in
+    /// for items that actually collide.
     private func columnAssignment(items: [TimedItem]) -> [String: (col: Int, total: Int)] {
         let sorted = items.sorted { $0.startTime < $1.startTime }
-        var columnEnds: [Date] = []
-        var assigned: [String: Int] = [:]
 
+        var groups: [[TimedItem]] = []
+        var current: [TimedItem] = []
+        var currentMaxEnd: Date = .distantPast
         for item in sorted {
-            var placed = false
-            for c in 0..<columnEnds.count {
-                if columnEnds[c] <= item.startTime {
-                    columnEnds[c] = item.endTime
-                    assigned[item.id] = c
-                    placed = true
-                    break
-                }
-            }
-            if !placed {
-                columnEnds.append(item.endTime)
-                assigned[item.id] = columnEnds.count - 1
+            if current.isEmpty || item.startTime < currentMaxEnd {
+                current.append(item)
+                if item.endTime > currentMaxEnd { currentMaxEnd = item.endTime }
+            } else {
+                groups.append(current)
+                current = [item]
+                currentMaxEnd = item.endTime
             }
         }
-        let total = max(columnEnds.count, 1)
-        return Dictionary(uniqueKeysWithValues: assigned.map { ($0.key, ($0.value, total)) })
+        if !current.isEmpty { groups.append(current) }
+
+        var result: [String: (col: Int, total: Int)] = [:]
+        for group in groups {
+            var laneEnds: [Date] = []
+            var assigned: [(id: String, lane: Int)] = []
+            for item in group {
+                var slot = -1
+                for i in 0..<laneEnds.count where laneEnds[i] <= item.startTime {
+                    slot = i
+                    break
+                }
+                if slot == -1 {
+                    slot = laneEnds.count
+                    laneEnds.append(item.endTime)
+                } else {
+                    laneEnds[slot] = item.endTime
+                }
+                assigned.append((item.id, slot))
+            }
+            let total = max(laneEnds.count, 1)
+            for entry in assigned {
+                result[entry.id] = (entry.lane, total)
+            }
+        }
+        return result
     }
 
     // MARK: - Time math

@@ -24,6 +24,10 @@ struct AddItemView: View {
     @State private var isAllDay = false
     @State private var showingDeleteEventAlert = false
     @State private var showingEndTimePicker = false
+    /// One-shot flag set by `handleAllDayChange` so the eventStart onChange
+    /// handler doesn't immediately stretch our freshly-set 30-min window
+    /// back to the prior duration. Reset on the next eventStart onChange fire.
+    @State private var skipNextEndAutoAdjust = false
     
     let currentDate: Date
     let tasksViewModel: TasksViewModel
@@ -34,11 +38,62 @@ struct AddItemView: View {
     let showEventOnly: Bool
     
     private let authManager = GoogleAuthManager.shared
-    
+
     // Store original event properties to preserve them during updates
     private let originalIsAllDay: Bool
     private let originalEventStart: Date
     private let originalEventEnd: Date
+
+    /// Reacts to the All-Day toggle. Lives outside `body` to keep the view
+    /// builder's type-checker workload small.
+    private func handleAllDayChange(oldValue: Bool, newValue: Bool) {
+        guard oldValue != newValue else { return }
+        let cal = Calendar.current
+        if newValue {
+            // Converting to all-day: clamp to start of day and default to
+            // same-day duration.
+            let startDate = cal.startOfDay(for: eventStart)
+            skipNextEndAutoAdjust = true
+            eventStart = startDate
+            eventEnd = startDate
+        } else if oldValue == true {
+            // Converting all-day → timed: next half-hour boundary after now
+            // + 30 min duration, applied to the event's day. Same rule
+            // whether the day is today or any other day.
+            let eventDate = cal.startOfDay(for: eventStart)
+            let window = Self.defaultTimedWindow(on: eventDate)
+            skipNextEndAutoAdjust = true
+            eventStart = window.start
+            eventEnd = window.end
+        }
+        // If oldValue was false (already timed), don't change the times.
+    }
+
+    /// Default time-of-day for an event when toggling all-day → timed:
+    /// start = next half-hour boundary strictly after now, end = start + 30
+    /// minutes. Mirrors `TaskDetailsView.defaultTimedWindow` so tasks and
+    /// events behave the same.
+    static func defaultTimedWindow(on date: Date) -> (start: Date, end: Date) {
+        let cal = Calendar.current
+        let now = Date()
+        let comps = cal.dateComponents([.hour, .minute], from: now)
+        let hour = comps.hour ?? 9
+        let minute = comps.minute ?? 0
+        let startHour: Int
+        let startMinute: Int
+        if minute < 30 {
+            startHour = hour
+            startMinute = 30
+        } else {
+            startHour = (hour + 1) % 24
+            startMinute = 0
+        }
+        let start = cal.date(bySettingHour: startHour, minute: startMinute, second: 0, of: date)
+            ?? cal.startOfDay(for: date)
+        let end = cal.date(byAdding: .minute, value: 30, to: start)
+            ?? start.addingTimeInterval(1800)
+        return (start, end)
+    }
     
     private var availableTaskLists: [GoogleTaskList] {
         guard let accountKind = selectedAccountKind else { return [] }
@@ -443,6 +498,14 @@ struct AddItemView: View {
                     }
                 }
                 .onChange(of: eventStart) { oldValue, newValue in
+                    // Skip the auto end-adjust when handleAllDayChange just
+                    // set both start and end together — otherwise the
+                    // duration calc would stretch the freshly-set 30-min
+                    // window back to the prior all-day-derived span.
+                    if skipNextEndAutoAdjust {
+                        skipNextEndAutoAdjust = false
+                        return
+                    }
                     // When start date/time changes, preserve the duration by adjusting end date
                     let duration = oldValue.distance(to: eventEnd)
                     if duration > 0 {
@@ -462,51 +525,7 @@ struct AddItemView: View {
                     }
                 }
                 .onChange(of: isAllDay) { oldValue, newValue in
-                    // Only update times if the user explicitly changed isAllDay (not during account switching)
-                    // When editing an existing event and switching accounts, we want to preserve the original times
-                    if oldValue != newValue {
-                        let cal = Calendar.current
-                        if newValue {
-                            // Converting to all-day: clamp to start of day and default to same-day duration
-                            let startDate = cal.startOfDay(for: eventStart)
-                            eventStart = startDate
-                            eventEnd = startDate
-                        } else {
-                            // Only set default times if the event was previously all-day
-                            // If it was already timed, preserve the existing times
-                            if oldValue == true {
-                                // Converting from all-day to timed event: provide sensible default times
-                                let eventDate = cal.startOfDay(for: eventStart)
-                                let isToday = cal.isDateInToday(eventDate)
-                                let isFuture = eventDate > cal.startOfDay(for: Date())
-                                
-                                if isToday {
-                                    // For today, use current time rounded to next 30-min mark
-                                    let now = Date()
-                                    let minute = cal.component(.minute, from: now)
-                                    let rounded = cal.nextDate(
-                                        after: now,
-                                        matching: DateComponents(minute: minute < 30 ? 30 : 0),
-                                        matchingPolicy: .nextTime,
-                                        direction: .forward
-                                    ) ?? now
-                                    eventStart = rounded
-                                    eventEnd = cal.date(byAdding: .minute, value: 30, to: rounded) ?? rounded.addingTimeInterval(1800)
-                                } else {
-                                    // For past or future dates, use 9:00 AM as default
-                                    if let defaultStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: eventDate) {
-                                        eventStart = defaultStart
-                                        eventEnd = cal.date(byAdding: .minute, value: 30, to: defaultStart) ?? defaultStart.addingTimeInterval(1800)
-                                    } else {
-                                        // Fallback if date creation fails
-                                        eventStart = eventDate.addingTimeInterval(9 * 3600) // 9 AM
-                                        eventEnd = eventStart.addingTimeInterval(1800) // 30 minutes later
-                                    }
-                                }
-                            }
-                            // If oldValue was false (already timed), don't change the times
-                        }
-                    }
+                    handleAllDayChange(oldValue: oldValue, newValue: newValue)
                 }
             }
             .navigationTitle(selectedTab == 0 ? "New Task" : (isEditingEvent ? "Event Details" : "New Event"))

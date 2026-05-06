@@ -117,22 +117,40 @@ struct WorkoutStreakGraphComponent: View {
     private var xAxisContent: some AxisContent {
         switch activeTimeframe {
         case .week:
-            AxisMarks(values: .stride(by: .day, count: 1)) { _ in
+            AxisMarks(values: .stride(by: .day, count: 1)) { value in
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel(format: .dateTime.weekday(.narrow))
+                if let date = value.as(Date.self),
+                   Calendar.current.isDate(date, inSameDayAs: Date()) {
+                    AxisValueLabel(format: .dateTime.weekday(.narrow))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    AxisValueLabel(format: .dateTime.weekday(.narrow))
+                }
             }
         case .month:
-            AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+            AxisMarks(values: .stride(by: .day, count: 7)) { value in
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                if let date = value.as(Date.self),
+                   Calendar.current.isDate(date, inSameDayAs: Date()) {
+                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                }
             }
         case .year:
-            AxisMarks(values: .stride(by: .month, count: 1)) { _ in
+            AxisMarks(values: .stride(by: .month, count: 1)) { value in
                 AxisGridLine()
                 AxisTick()
-                AxisValueLabel(format: .dateTime.month(.narrow))
+                if let date = value.as(Date.self),
+                   Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) {
+                    AxisValueLabel(format: .dateTime.month(.narrow))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    AxisValueLabel(format: .dateTime.month(.narrow))
+                }
             }
         }
     }

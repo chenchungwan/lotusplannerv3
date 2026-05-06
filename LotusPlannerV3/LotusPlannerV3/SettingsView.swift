@@ -1355,7 +1355,7 @@ struct SettingsView: View {
         let canAddMore = library.versions.count < CustomDayViewLibrary.maxVersions
 
         ForEach(library.versions) { version in
-            customDayViewVersionRow(version: version, activeId: library.activeId)
+            customDayViewVersionRow(version: version, activeId: library.resolvedActiveId)
         }
 
         if canAddMore {
@@ -1459,11 +1459,13 @@ struct SettingsView: View {
     }
 
     private func setActiveCustomDayViewVersion(id: UUID) {
-        var library = CustomDayViewLibrary.load()
+        let library = CustomDayViewLibrary.load()
         guard library.versions.contains(where: { $0.id == id }) else { return }
-        guard library.activeId != id else { return }
-        library.activeId = id
-        CustomDayViewLibrary.save(library)
+        // Per-device selection. Does NOT touch the synced library, so
+        // selecting a different version on this device leaves other devices'
+        // selections untouched.
+        guard CustomDayViewLibrary.localActiveId != id else { return }
+        CustomDayViewLibrary.localActiveId = id
     }
 
     /// Persists an inline name change for a specific version. Called on every
@@ -1481,8 +1483,14 @@ struct SettingsView: View {
         library.versions.removeAll { $0.id == id }
         if library.activeId == id {
             // Fall back to the first remaining version (if any) so the Custom
-            // day view keeps rendering something sensible.
+            // day view keeps rendering something sensible on devices that
+            // had no per-device override.
             library.activeId = library.versions.first?.id
+        }
+        if CustomDayViewLibrary.localActiveId == id {
+            // This device pointed at the deleted version; clear so it falls
+            // back to the synced default (or the first remaining version).
+            CustomDayViewLibrary.localActiveId = nil
         }
         CustomDayViewLibrary.save(library)
     }

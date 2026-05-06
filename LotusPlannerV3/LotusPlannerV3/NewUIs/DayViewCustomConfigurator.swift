@@ -204,8 +204,18 @@ struct NamedCustomDayViewConfig: Codable, Identifiable {
 /// Holds up to `maxVersions` named layouts plus the id of the one currently
 /// rendered by `DayViewCustom`. Persisted as JSON in UserDefaults and iCloud
 /// KVS under `userDefaultsKey`.
+///
+/// `versions` is shared across all of a user's devices via iCloud KVS. The
+/// active selection, however, is per-device — each device stores its own
+/// `localActiveId` in plain UserDefaults so users can run different layouts
+/// on phone vs. iPad. `activeId` (in this struct, hence in the synced JSON)
+/// is kept as a legacy/seed fallback for first launch on a new device.
 struct CustomDayViewLibrary: Codable {
     static let userDefaultsKey = "customDayViewLibrary.v1"
+    /// Plain UserDefaults key (NOT mirrored to KVS) for this device's active
+    /// version selection. Lives outside the Codable struct so it never gets
+    /// serialized into the synced JSON.
+    static let localActiveIdKey = "customDayViewLibrary.localActiveId.v1"
     /// Posted on the main queue when the library changes (local save or a
     /// sync from another device via iCloud KVS).
     static let didChangeNotification = Notification.Name("CustomDayViewLibraryDidChange")
@@ -214,9 +224,41 @@ struct CustomDayViewLibrary: Codable {
     var activeId: UUID?
     var versions: [NamedCustomDayViewConfig]
 
-    /// The currently-selected version's config, if any.
+    /// Per-device active version id. Nil → fall back to the synced
+    /// `activeId`, then to the first version.
+    static var localActiveId: UUID? {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: localActiveIdKey),
+                  let uuid = UUID(uuidString: raw) else { return nil }
+            return uuid
+        }
+        set {
+            if let id = newValue {
+                UserDefaults.standard.set(id.uuidString, forKey: localActiveIdKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: localActiveIdKey)
+            }
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+
+    /// The id this device should render: per-device override, then the
+    /// synced default, then the first version, then nil.
+    var resolvedActiveId: UUID? {
+        if let local = Self.localActiveId,
+           versions.contains(where: { $0.id == local }) {
+            return local
+        }
+        if let synced = activeId,
+           versions.contains(where: { $0.id == synced }) {
+            return synced
+        }
+        return versions.first?.id
+    }
+
+    /// The currently-selected version's config for this device.
     var activeConfig: CustomDayViewConfig? {
-        guard let id = activeId,
+        guard let id = resolvedActiveId,
               let version = versions.first(where: { $0.id == id }) else { return nil }
         return version.config
     }
@@ -1553,11 +1595,15 @@ struct DayViewCustomConfigurator: View {
                 NamedCustomDayViewConfig(id: versionId, name: finalName, config: config)
             )
         }
-        // If nothing was active before, make this version active so the user
-        // sees it immediately without an extra tap.
+        // If nothing was active before, make this version the synced default
+        // so first-launch on other devices picks it up too.
         if library.activeId == nil {
             library.activeId = versionId
         }
+        // Always pin this device to the version the user is editing so they
+        // see it immediately without an extra tap. Other devices keep their
+        // own per-device selection (or fall back to the synced default).
+        CustomDayViewLibrary.localActiveId = versionId
         CustomDayViewLibrary.save(library)
     }
 

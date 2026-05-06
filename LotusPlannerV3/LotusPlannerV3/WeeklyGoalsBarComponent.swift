@@ -11,22 +11,16 @@ struct WeeklyGoalsBarComponent: View {
 
     @ObservedObject private var goalsManager = GoalsManager.shared
 
-    /// Weekly goals for the week containing `currentDate`, ordered to
-    /// match the user's Goals view arrangement (category display
-    /// position, then goal display order within the category).
+    /// Weekly goals for the week containing `currentDate`, ordered to match
+    /// the user's Goals view arrangement (a global `displayOrder` set by
+    /// drag-and-drop in Goals view).
     private var goals: [GoalData] {
         let calendar = Calendar.mondayFirst
         let matching = goalsManager.goals.filter { goal in
             goal.targetTimeframe == .week &&
             calendar.isDate(goal.dueDate, equalTo: currentDate, toGranularity: .weekOfYear)
         }
-        let positionByCategory: [UUID: Int] = Dictionary(
-            uniqueKeysWithValues: goalsManager.categories.map { ($0.id, $0.displayPosition) }
-        )
         return matching.sorted { lhs, rhs in
-            let lPos = positionByCategory[lhs.categoryId] ?? Int.max
-            let rPos = positionByCategory[rhs.categoryId] ?? Int.max
-            if lPos != rPos { return lPos < rPos }
             if lhs.displayOrder != rhs.displayOrder {
                 return lhs.displayOrder < rhs.displayOrder
             }

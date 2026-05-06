@@ -12,6 +12,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var logsViewModel = LogsViewModel.shared
     @StateObject private var weeklyBulkEditManager = BulkEditManager()
     @StateObject private var timeboxBulkEditManager = BulkEditManager()
 
@@ -24,6 +25,17 @@ struct ContentView: View {
         .background(Color(.systemBackground))
         .sheet(isPresented: $navigationManager.showingSettings) {
             SettingsView()
+        }
+        // Log sheets attached at ContentView scope so they present regardless
+        // of which subview (Day, Week, Tasks, Lists, Goals, Journal, etc.) is
+        // currently active. CalendarView previously hosted these but is only
+        // mounted for the day-interval calendar mode, so the popups silently
+        // queued until the user navigated back to D view.
+        .sheet(isPresented: $logsViewModel.showingAddLogSheet) {
+            AddLogEntryView(viewModel: logsViewModel)
+        }
+        .sheet(isPresented: $logsViewModel.showingEditLogSheet) {
+            EditLogEntryView(viewModel: logsViewModel)
         }
     }
 

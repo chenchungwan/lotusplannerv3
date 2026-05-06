@@ -495,6 +495,10 @@ struct TasksDetailColumn: View {
     // State for renaming list
     @State private var showingRenameSheet = false
     @State private var renameText = ""
+    /// User-selected account in the Edit List sheet. When this differs from
+    /// the list's current account on Save, the list (and all its tasks) is
+    /// moved across accounts.
+    @State private var renameAccount: GoogleAuthManager.AccountKind = .personal
 
     // State for deleting list
     @State private var showingDeleteConfirmation = false
@@ -623,6 +627,7 @@ struct TasksDetailColumn: View {
                 HStack {
                     Button {
                         renameText = listTitle
+                        renameAccount = selectedAccountKind ?? .personal
                         showingRenameSheet = true
                     } label: {
                         Text(listTitle)
@@ -958,9 +963,18 @@ struct TasksDetailColumn: View {
                     listName: listTitle,
                     accountKind: accountKind,
                     accentColor: accentColor,
+                    hasPersonal: auth.isLinked(kind: .personal),
+                    hasProfessional: auth.isLinked(kind: .professional),
                     newName: $renameText,
-                    onRename: {
-                        renameList(listId: listId, accountKind: accountKind)
+                    newAccount: $renameAccount,
+                    onSave: {
+                        editList(
+                            listId: listId,
+                            fromAccount: accountKind,
+                            originalName: listTitle,
+                            newName: renameText.trimmingCharacters(in: .whitespacesAndNewlines),
+                            toAccount: renameAccount
+                        )
                     }
                 )
             }
@@ -1155,13 +1169,64 @@ struct TasksDetailColumn: View {
         }
     }
 
-    private func renameList(listId: String, accountKind: GoogleAuthManager.AccountKind) {
-        guard !renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+    /// Renames the list and/or moves it (with all its tasks) to the other
+    /// linked account. Cross-account move sequence:
+    ///   1. Create a new list on the target account with the (possibly new)
+    ///      name.
+    ///   2. Cross-account-move every task from the source list into it.
+    ///   3. Delete the source list.
+    ///   4. Update the local selection so the user lands on the new list.
+    private func editList(
+        listId: String,
+        fromAccount: GoogleAuthManager.AccountKind,
+        originalName: String,
+        newName: String,
+        toAccount: GoogleAuthManager.AccountKind
+    ) {
+        guard !newName.isEmpty else { return }
+
+        let nameChanged = newName != originalName
+        let accountChanged = toAccount != fromAccount
+
+        guard nameChanged || accountChanged else {
+            // Nothing to do.
+            showingRenameSheet = false
             return
         }
-        
+
         Task {
-            await tasksVM.renameTaskList(listId: listId, newTitle: renameText.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            if !accountChanged {
+                // Simple rename inside the same account.
+                await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: fromAccount)
+            } else {
+                // Snapshot tasks before mutating anything.
+                let sourceTasks: [GoogleTask]
+                switch fromAccount {
+                case .personal:
+                    sourceTasks = tasksVM.personalTasks[listId] ?? []
+                case .professional:
+                    sourceTasks = tasksVM.professionalTasks[listId] ?? []
+                }
+
+                guard let newListId = await tasksVM.createTaskList(title: newName, for: toAccount) else {
+                    return
+                }
+
+                for task in sourceTasks {
+                    _ = await tasksVM.crossAccountMoveTask(
+                        task,
+                        from: (fromAccount, listId),
+                        to: (toAccount, newListId)
+                    )
+                }
+
+                await tasksVM.deleteTaskList(listId: listId, for: fromAccount)
+
+                await MainActor.run {
+                    onNavigateToList(newListId, toAccount)
+                }
+            }
+
             await MainActor.run {
                 showingRenameSheet = false
                 renameText = ""
@@ -1712,52 +1777,95 @@ struct NewListSheet: View {
     }
 }
 
-// MARK: - Rename List Sheet
+// MARK: - Edit List Sheet
 struct RenameListSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var appPrefs: AppPreferences
     let listName: String
     let accountKind: GoogleAuthManager.AccountKind
     let accentColor: Color
+    let hasPersonal: Bool
+    let hasProfessional: Bool
     @Binding var newName: String
-    let onRename: () -> Void
+    @Binding var newAccount: GoogleAuthManager.AccountKind
+    /// Called with the (possibly trimmed) new name and selected account.
+    /// The caller decides whether the change is name-only or also includes
+    /// an account move; the move-confirmation alert is presented here so
+    /// the user must explicitly approve before the save fires.
+    let onSave: () -> Void
     @FocusState private var isTextFieldFocused: Bool
-    
-    private var hasChanges: Bool {
-        let trimmedNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmedNewName.isEmpty && trimmedNewName != listName
+    @State private var showingMoveConfirmation = false
+
+    private var trimmedNewName: String {
+        newName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
+
+    private var canBothAccounts: Bool {
+        hasPersonal && hasProfessional
+    }
+
+    private var nameChanged: Bool {
+        !trimmedNewName.isEmpty && trimmedNewName != listName
+    }
+
+    private var accountChanged: Bool {
+        newAccount != accountKind
+    }
+
     private var canSave: Bool {
-        !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasChanges
+        !trimmedNewName.isEmpty && (nameChanged || accountChanged)
     }
-    
+
+    private var newAccentColor: Color {
+        newAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor
+    }
+
+    private func attemptSave() {
+        guard canSave else { return }
+        if accountChanged {
+            showingMoveConfirmation = true
+        } else {
+            onSave()
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section("Account") {
-                    HStack {
-                        Image(systemName: accountKind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
-                            .foregroundColor(accentColor)
-                        Text(appPrefs.accountName(for: accountKind))
-                            .foregroundColor(accentColor)
-                            .fontWeight(.medium)
+                    if canBothAccounts {
+                        Picker("Account", selection: $newAccount) {
+                            ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
+                                HStack {
+                                    Image(systemName: kind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
+                                    Text(appPrefs.accountName(for: kind))
+                                }
+                                .tag(kind)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        HStack {
+                            Image(systemName: accountKind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
+                                .foregroundColor(accentColor)
+                            Text(appPrefs.accountName(for: accountKind))
+                                .foregroundColor(accentColor)
+                                .fontWeight(.medium)
+                        }
                     }
                 }
-                
+
                 Section("List Name") {
                     TextField("Enter new name", text: $newName)
                         .textFieldStyle(.plain)
                         .focused($isTextFieldFocused)
                         .submitLabel(.done)
                         .onSubmit {
-                            if canSave {
-                                onRename()
-                            }
+                            attemptSave()
                         }
                 }
             }
-            .navigationTitle("Rename List")
+            .navigationTitle("Edit List")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1767,16 +1875,24 @@ struct RenameListSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onRename()
+                        attemptSave()
                     }
                     .disabled(!canSave)
                     .fontWeight(.semibold)
-                    .foregroundColor(canSave ? accentColor : .secondary)
+                    .foregroundColor(canSave ? newAccentColor : .secondary)
                     .opacity(canSave ? 1.0 : 0.5)
                 }
             }
             .onAppear {
                 isTextFieldFocused = true
+            }
+            .alert("Move list to \(appPrefs.accountName(for: newAccount))?", isPresented: $showingMoveConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Move", role: .destructive) {
+                    onSave()
+                }
+            } message: {
+                Text("This will move all tasks in “\(trimmedNewName)” from \(appPrefs.accountName(for: accountKind)) to \(appPrefs.accountName(for: newAccount)).")
             }
         }
     }
