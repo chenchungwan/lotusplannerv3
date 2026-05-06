@@ -1901,11 +1901,11 @@ struct SettingsView: View {
                                 Text("Environment:")
                                 Spacer()
                                 #if DEBUG
-                                Text("🔧 Development")
+                                Text("Development")
                                     .foregroundColor(.orange)
                                     .bold()
                                 #else
-                                Text("🚀 Production")
+                                Text("Production")
                                     .foregroundColor(.green)
                                     .bold()
                                 #endif

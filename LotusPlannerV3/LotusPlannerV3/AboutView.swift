@@ -6,9 +6,9 @@ struct AboutView: View {
 
     private var deploymentEnvironmentText: String {
         #if DEBUG
-        return "🔧 Development"
+        return "Development"
         #else
-        return "🚀 Production"
+        return "Production"
         #endif
     }
 
@@ -27,24 +27,17 @@ struct AboutView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
+            ScrollView {
+                VStack(spacing: 24) {
+                    Spacer(minLength: 24)
                 
-                // App Icon
-                if let appIcon = Bundle.main.icon {
-                    Image(uiImage: appIcon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 120, height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-                } else {
-                    // Fallback icon if app icon not found
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 80))
-                        .foregroundColor(.blue)
-                        .frame(width: 120, height: 120)
-                }
+                // App Logo
+                Image("AppLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 120, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
                 
                 // App Name
                 Text(appName)
@@ -60,8 +53,8 @@ struct AboutView: View {
                         .multilineTextAlignment(.center)
                 }
                 
-                Spacer()
-                
+                Spacer(minLength: 24)
+
                 // Additional Info
                 VStack(spacing: 12) {
                     Text("Version \(appVersion)")
@@ -76,18 +69,35 @@ struct AboutView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    Text("iCloud: \(iCloud.syncStatus.description)")
+                    Text("iCloud Available: \(iCloud.iCloudAvailable ? "Yes" : "No")")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    Text("Environment: \(deploymentEnvironmentText)")
+                    Text("Status: \(iCloud.syncStatus.description)")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    if let lastSync = iCloud.lastSyncDate {
+                        Text("Last Sync: \(lastSync.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Last Sync: Never")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Text("Environment: \(deploymentEnvironmentText)")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(deploymentEnvironmentText == "Development" ? .orange : .green)
                 }
                 
-                Spacer()
+                    Spacer(minLength: 24)
+                }
+                .padding(.horizontal, 32)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 32)
             .navigationTitle("About")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
