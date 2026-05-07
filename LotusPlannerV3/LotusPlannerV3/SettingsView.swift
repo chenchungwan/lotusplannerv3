@@ -2120,6 +2120,14 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
+                        // Toggle the source binding directly. On Mac Catalyst,
+                        // `@Environment(\.dismiss)` becomes unreliable once the
+                        // sheet's content has mutated state — dismiss() silently
+                        // no-ops, leaving the user unable to close Settings until
+                        // backgrounding the app. Setting `showingSettings = false`
+                        // sidesteps that path. Also calling `dismiss()` as a
+                        // belt-and-suspenders for non-Catalyst contexts.
+                        navigationManager.showingSettings = false
                         dismiss()
                     }
                 }
