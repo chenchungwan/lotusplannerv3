@@ -196,12 +196,17 @@ struct DayViewCustom: View {
     // MARK: - Row height calculation
 
     /// Which rows should be rendered at `compactRowHeight` — i.e. host a
-    /// single-row Health Bar. Multi-row merges containing a Health Bar are
-    /// respected: if the user merged vertically, we keep their requested
-    /// height instead of forcing the row small.
+    /// single-row strip-style component (Health Bar or Weekly Goals Bar).
+    /// Multi-row merges containing one of these components are respected:
+    /// if the user merged vertically, we keep their requested height
+    /// instead of forcing the row small.
     private func compactRows(pageConfig: CustomDayViewConfig.PageConfig) -> Set<Int> {
         var set: Set<Int> = []
-        for placement in pageConfig.placements where placement.component == CustomComponent.healthBar.rawValue {
+        let compactComponents: Set<String> = [
+            CustomComponent.healthBar.rawValue,
+            CustomComponent.weeklyGoalsBar.rawValue
+        ]
+        for placement in pageConfig.placements where compactComponents.contains(placement.component) {
             let region = mergedRegion(at: placement.row, col: placement.col, in: pageConfig)
             let rowSpan = region?.rowSpan ?? 1
             if rowSpan == 1 {
