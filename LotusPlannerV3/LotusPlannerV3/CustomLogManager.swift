@@ -347,12 +347,15 @@ class CustomLogManager: ObservableObject {
     
     // MARK: - Visibility Management
     private func updateCustomLogVisibility() {
-        let hasItems = !items.isEmpty
+        // Per-collection auto-enable: each toggle reflects whether its
+        // collection has any items. Matches the legacy single-toggle
+        // behavior, just generalized to N collections.
         let appPrefs = AppPreferences.shared
-        
-        // Enable custom logs if there are items, disable if no items
-        if appPrefs.showCustomLogs != hasItems {
-            appPrefs.updateShowCustomLogs(hasItems)
+        for collection in 0..<CustomLogManager.maxCollections {
+            let hasItems = items.contains { $0.collectionIndex == collection }
+            if appPrefs.showCustomLogs(for: collection) != hasItems {
+                appPrefs.updateShowCustomLogs(hasItems, for: collection)
+            }
         }
     }
 

@@ -394,11 +394,43 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    // Show custom logs
+    // Show custom logs (collection 0 — the legacy single custom log)
     @Published var showCustomLogs: Bool {
         didSet {
             UserDefaults.standard.set(showCustomLogs, forKey: "showCustomLogs")
         }
+    }
+
+    // Show custom logs (collection 1 — second checklist set)
+    @Published var showCustomLogs2: Bool {
+        didSet {
+            UserDefaults.standard.set(showCustomLogs2, forKey: "showCustomLogs2")
+        }
+    }
+
+    /// Convenience: returns the visibility flag for a specific collection
+    /// index. Returns `false` for any out-of-range index so callers don't
+    /// have to special-case beyond the two collections we ship today.
+    func showCustomLogs(for collection: Int) -> Bool {
+        switch collection {
+        case 0: return showCustomLogs
+        case 1: return showCustomLogs2
+        default: return false
+        }
+    }
+
+    func updateShowCustomLogs(_ value: Bool, for collection: Int) {
+        switch collection {
+        case 0: showCustomLogs = value
+        case 1: showCustomLogs2 = value
+        default: break
+        }
+    }
+
+    /// True if any custom log collection is currently shown — used by
+    /// `showAnyLogs` and any other "are custom logs visible at all" checks.
+    var anyCustomLogsShown: Bool {
+        showCustomLogs || showCustomLogs2
     }
 
     // Custom log section name (synced via iCloud KVS).
@@ -530,7 +562,7 @@ class AppPreferences: ObservableObject {
     }
 
     var showAnyLogs: Bool {
-        showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs || showSleepLogs || showCustomLogs
+        showWeightLogs || showWorkoutLogs || showFoodLogs || showWaterLogs || showSleepLogs || showCustomLogs || showCustomLogs2
     }
 
     @Published var logDisplayOrder: [LogDisplayEntry] {
@@ -925,6 +957,7 @@ class AppPreferences: ObservableObject {
         self.showWaterLogs = UserDefaults.standard.object(forKey: "showWaterLogs") as? Bool ?? true
         self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
+        self.showCustomLogs2 = UserDefaults.standard.object(forKey: "showCustomLogs2") as? Bool ?? false
         self.customLogSectionName = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName") ?? "Custom Logs"
         self.customLogSectionName2 = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName2") ?? "Custom Logs 2"
 
@@ -1144,6 +1177,7 @@ class AppPreferences: ObservableObject {
     }
     
     func updateShowCustomLogs(_ value: Bool) {
+        // Legacy single-toggle entry point — sets collection 0 only.
         showCustomLogs = value
     }
     
@@ -2132,44 +2166,36 @@ struct SettingsView: View {
     
     @ViewBuilder
     private var customLogToggleRow: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Master toggle for all custom log collections.
-            Toggle(isOn: Binding(
-                get: { appPrefs.showCustomLogs },
-                set: { appPrefs.updateShowCustomLogs($0) }
-            )) {
-                HStack {
-                    Image(systemName: "list.bullet.rectangle")
-                        .foregroundColor(appPrefs.showCustomLogs ? .accentColor : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Custom Logs")
-                            .font(.body)
-                        Text("Show custom checklist items in day views")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
-            // One inline editor per collection. Each has its own renamable
-            // header and 10-item cap.
-            if appPrefs.showCustomLogs {
-                ForEach(0..<CustomLogManager.maxCollections, id: \.self) { collection in
-                    VStack(alignment: .leading, spacing: 6) {
-                        TextField(
-                            collection == 0 ? "Custom Logs" : "Custom Logs \(collection + 1)",
-                            text: Binding(
-                                get: { appPrefs.customLogSectionName(for: collection) },
-                                set: { appPrefs.updateCustomLogSectionName($0, for: collection) }
+        VStack(alignment: .leading, spacing: 16) {
+            // One toggle + inline editor per collection. Each toggle
+            // independently controls visibility of its collection in
+            // day views; the user can turn one, the other, or both on.
+            ForEach(0..<CustomLogManager.maxCollections, id: \.self) { collection in
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showCustomLogs(for: collection) },
+                        set: { appPrefs.updateShowCustomLogs($0, for: collection) }
+                    )) {
+                        HStack {
+                            Image(systemName: "list.bullet.rectangle")
+                                .foregroundColor(appPrefs.showCustomLogs(for: collection) ? .accentColor : .secondary)
+                            TextField(
+                                collection == 0 ? "Custom Logs" : "Custom Logs \(collection + 1)",
+                                text: Binding(
+                                    get: { appPrefs.customLogSectionName(for: collection) },
+                                    set: { appPrefs.updateCustomLogSectionName($0, for: collection) }
+                                )
                             )
-                        )
-                        .font(.subheadline.weight(.semibold))
-                        .textFieldStyle(.plain)
-
-                        CustomLogItemsInlineView(collectionIndex: collection)
+                            .font(.body)
+                            .textFieldStyle(.plain)
+                        }
                     }
-                    .padding(.leading, 20)
-                    .padding(.top, 4)
+
+                    if appPrefs.showCustomLogs(for: collection) {
+                        CustomLogItemsInlineView(collectionIndex: collection)
+                            .padding(.leading, 20)
+                            .padding(.top, 4)
+                    }
                 }
             }
         }

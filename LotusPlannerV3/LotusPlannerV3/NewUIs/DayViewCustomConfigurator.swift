@@ -1019,10 +1019,12 @@ struct DayViewCustomConfigurator: View {
         if appPrefs.showFoodLogs    { items.append(.logFood) }
         if appPrefs.showWaterLogs   { items.append(.logWater) }
         if appPrefs.showSleepLogs   { items.append(.logSleep) }
-        if appPrefs.showCustomLogs  {
+        if appPrefs.showCustomLogs(for: 0) {
             items.append(.logCustom)
-            items.append(.logCustom2)
             items.append(.logCustomWeek)
+        }
+        if appPrefs.showCustomLogs(for: 1) {
+            items.append(.logCustom2)
             items.append(.logCustomWeek2)
         }
         if appPrefs.showAnyLogs     { items.append(.logsAll) }
