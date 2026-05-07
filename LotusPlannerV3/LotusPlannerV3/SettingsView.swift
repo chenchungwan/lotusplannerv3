@@ -268,12 +268,15 @@ enum BuiltInLogType: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
-/// A single entry in the user-reorderable list of log sections. The custom
-/// log section is a first-class entry alongside the built-in log types so
-/// users can drag it anywhere in the list.
+/// A single entry in the user-reorderable list of log sections. Custom
+/// log sections are first-class entries alongside the built-in log
+/// types so users can drag any of them anywhere in the list. `.custom`
+/// references custom-log collection 0 (legacy); `.custom2` references
+/// collection 1.
 enum LogDisplayEntry: Hashable, Identifiable {
     case builtIn(BuiltInLogType)
     case custom
+    case custom2
 
     var id: String { stringValue }
 
@@ -281,12 +284,17 @@ enum LogDisplayEntry: Hashable, Identifiable {
         switch self {
         case .builtIn(let t): return "builtin.\(t.rawValue)"
         case .custom:         return "custom"
+        case .custom2:        return "custom2"
         }
     }
 
     init?(stringValue: String) {
         if stringValue == "custom" {
             self = .custom
+            return
+        }
+        if stringValue == "custom2" {
+            self = .custom2
             return
         }
         if stringValue.hasPrefix("builtin."),
@@ -297,7 +305,7 @@ enum LogDisplayEntry: Hashable, Identifiable {
         return nil
     }
 
-    static let defaultOrder: [LogDisplayEntry] = BuiltInLogType.allCases.map { .builtIn($0) } + [.custom]
+    static let defaultOrder: [LogDisplayEntry] = BuiltInLogType.allCases.map { .builtIn($0) } + [.custom, .custom2]
 }
 
 // MARK: - App Preferences
@@ -980,6 +988,9 @@ class AppPreferences: ObservableObject {
             }
             if !decoded.contains(.custom) {
                 decoded.append(.custom)
+            }
+            if !decoded.contains(.custom2) {
+                decoded.append(.custom2)
             }
             self.logDisplayOrder = decoded
         } else {
@@ -1793,7 +1804,9 @@ struct SettingsView: View {
                         case .builtIn(let logType):
                             logToggleRow(for: logType)
                         case .custom:
-                            customLogToggleRow
+                            customLogToggleRow(collection: 0)
+                        case .custom2:
+                            customLogToggleRow(collection: 1)
                         }
                     }
                     .onMove { source, destination in
@@ -2164,6 +2177,40 @@ struct SettingsView: View {
         }
     }
     
+    /// Single-collection variant of the custom-log row used in the
+    /// reorderable Log Preferences list. Each `.custom` / `.custom2`
+    /// entry in `logDisplayOrder` renders one of these so the rows can
+    /// be dragged independently.
+    @ViewBuilder
+    private func customLogToggleRow(collection: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(
+                get: { appPrefs.showCustomLogs(for: collection) },
+                set: { appPrefs.updateShowCustomLogs($0, for: collection) }
+            )) {
+                HStack {
+                    Image(systemName: "list.bullet.rectangle")
+                        .foregroundColor(appPrefs.showCustomLogs(for: collection) ? .accentColor : .secondary)
+                    TextField(
+                        collection == 0 ? "Custom Logs" : "Custom Logs \(collection + 1)",
+                        text: Binding(
+                            get: { appPrefs.customLogSectionName(for: collection) },
+                            set: { appPrefs.updateCustomLogSectionName($0, for: collection) }
+                        )
+                    )
+                    .font(.body)
+                    .textFieldStyle(.plain)
+                }
+            }
+
+            if appPrefs.showCustomLogs(for: collection) {
+                CustomLogItemsInlineView(collectionIndex: collection)
+                    .padding(.leading, 20)
+                    .padding(.top, 4)
+            }
+        }
+    }
+
     @ViewBuilder
     private var customLogToggleRow: some View {
         VStack(alignment: .leading, spacing: 16) {

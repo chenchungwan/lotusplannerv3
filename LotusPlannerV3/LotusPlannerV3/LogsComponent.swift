@@ -82,6 +82,7 @@ struct LogsComponent: View {
                                     switch entry {
                                     case .builtIn(let t): return isLogVisible(t)
                                     case .custom:         return showCustomLogsComputed
+                                    case .custom2:        return appPrefs.showCustomLogs2
                                     }
                                 }
                                 ForEach(stride(from: 0, to: visibleEntries.count, by: 2).map({ $0 }), id: \.self) { index in
@@ -107,6 +108,10 @@ struct LogsComponent: View {
                                 case .custom:
                                     if showCustomLogsComputed {
                                         customLogSection
+                                    }
+                                case .custom2:
+                                    if appPrefs.showCustomLogs2 {
+                                        customLogSection2
                                     }
                                 }
                             }
@@ -473,15 +478,31 @@ extension LogsComponent {
     }
 
     var customLogSection: some View {
+        customLogSectionVertical(collectionIndex: 0)
+    }
+
+    var customLogSection2: some View {
+        customLogSectionVertical(collectionIndex: 1)
+    }
+
+    var customLogSectionHorizontal: some View {
+        customLogSectionHorizontalCollection(collectionIndex: 0)
+    }
+
+    var customLogSectionHorizontal2: some View {
+        customLogSectionHorizontalCollection(collectionIndex: 1)
+    }
+
+    private func customLogSectionVertical(collectionIndex: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(appPrefs.customLogSectionName)
+                Text(appPrefs.customLogSectionName(for: collectionIndex))
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
             }
 
-            CustomLogView()
+            CustomLogView(collectionIndex: collectionIndex)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
@@ -492,17 +513,17 @@ extension LogsComponent {
                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
         )
     }
-    
-    var customLogSectionHorizontal: some View {
+
+    private func customLogSectionHorizontalCollection(collectionIndex: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(appPrefs.customLogSectionName)
+                Text(appPrefs.customLogSectionName(for: collectionIndex))
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
             }
 
-            CustomLogView()
+            CustomLogView(collectionIndex: collectionIndex)
         }
         .frame(alignment: .topLeading)
         .padding(.horizontal, 10)
@@ -539,6 +560,10 @@ extension LogsComponent {
                         case .custom:
                             if showCustomLogsComputed {
                                 compactLogCard(section: customLogSectionHorizontal, width: cardWidth)
+                            }
+                        case .custom2:
+                            if appPrefs.showCustomLogs2 {
+                                compactLogCard(section: customLogSectionHorizontal2, width: cardWidth)
                             }
                         }
                     }
@@ -589,6 +614,12 @@ extension LogsComponent {
                 customLogSectionHorizontal
             } else {
                 customLogSection
+            }
+        case .custom2:
+            if horizontal {
+                customLogSectionHorizontal2
+            } else {
+                customLogSection2
             }
         }
     }

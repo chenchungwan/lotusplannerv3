@@ -122,6 +122,225 @@ struct WeeklyView: View {
         self.hideNavBar = hideNavBar
     }
 
+    // MARK: - Past-week summary
+
+    /// True when `currentDate` falls in a week strictly before the week
+    /// containing today. Drives the retrospective summary strip — hidden
+    /// for the current week and any future week.
+    private var isPastWeek: Bool {
+        let cal = Calendar.mondayFirst
+        guard let nowWeek = cal.dateInterval(of: .weekOfYear, for: Date()),
+              let dispWeek = cal.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
+            return false
+        }
+        return dispWeek.end <= nowWeek.start
+    }
+
+    /// Half-open interval `[start, end)` of the displayed week. Used as
+    /// the date filter for every summary stat.
+    private var displayedWeekRange: (start: Date, end: Date)? {
+        let cal = Calendar.mondayFirst
+        guard let interval = cal.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else { return nil }
+        return (interval.start, interval.end)
+    }
+
+    /// Horizontally-scrollable strip of stat tiles for the displayed
+    /// past week. Tier-1 (always shown): Goals, Tasks, Workouts.
+    /// Tier-2 (only when their log type is enabled and has data):
+    /// Sleep, Weight, Custom logs (per collection).
+    private var pastWeekSummaryStrip: some View {
+        let stats = pastWeekStats()
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(stats.indices, id: \.self) { i in
+                    pastWeekStatTile(stats[i])
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .background(Color(.systemGray6))
+    }
+
+    private struct PastWeekStat {
+        let label: String
+        let value: String
+        let systemImage: String
+        let tint: Color
+    }
+
+    private func pastWeekStatTile(_ stat: PastWeekStat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: stat.systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(stat.tint)
+                Text(stat.label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+            Text(stat.value)
+                .font(.title3.weight(.semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(minWidth: 96, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 0.5))
+        )
+    }
+
+    /// Computes the tile values for the displayed past week. Each tile
+    /// corresponds to one source of retrospective data; tier-2 tiles are
+    /// suppressed when their log type is disabled or has no data.
+    private func pastWeekStats() -> [PastWeekStat] {
+        guard let range = displayedWeekRange else { return [] }
+        let cal = Calendar.current
+        var stats: [PastWeekStat] = []
+
+        // Goals — count weekly-timeframe goals due in this week and how
+        // many were marked complete.
+        let weekGoals = GoalsManager.shared.goals.filter { goal in
+            goal.targetTimeframe == .week &&
+            goal.dueDate >= range.start &&
+            goal.dueDate < range.end
+        }
+        let goalsDone = weekGoals.filter { $0.isCompleted }.count
+        stats.append(PastWeekStat(
+            label: "Goals",
+            value: "\(goalsDone) / \(weekGoals.count)",
+            systemImage: "target",
+            tint: .accentColor
+        ))
+
+        // Tasks completed — Google Tasks `completed` is the timestamp of
+        // completion; we count tasks whose completion fell inside this
+        // week, across both accounts.
+        let tasksCompleted = countTasksCompleted(in: range)
+        stats.append(PastWeekStat(
+            label: "Tasks done",
+            value: "\(tasksCompleted)",
+            systemImage: "checkmark.circle",
+            tint: .green
+        ))
+
+        // Workouts logged this week — only when workout logs are enabled.
+        if appPrefs.showWorkoutLogs {
+            let workoutCount = logsViewModel.workoutEntries.filter {
+                $0.date >= range.start && $0.date < range.end
+            }.count
+            stats.append(PastWeekStat(
+                label: "Workouts",
+                value: "\(workoutCount)",
+                systemImage: "figure.run",
+                tint: .orange
+            ))
+        }
+
+        // Sleep average — across non-empty sleep entries this week.
+        if appPrefs.showSleepLogs {
+            let entries = logsViewModel.sleepEntries.filter {
+                $0.date >= range.start && $0.date < range.end
+            }
+            let durations: [TimeInterval] = entries.compactMap { e in
+                guard let bed = e.bedTime, let wake = e.wakeUpTime else { return nil }
+                let dur = wake.timeIntervalSince(bed)
+                return dur > 0 ? dur : nil
+            }
+            if !durations.isEmpty {
+                let avgSec = durations.reduce(0, +) / Double(durations.count)
+                let h = Int(avgSec / 3600)
+                let m = Int((avgSec.truncatingRemainder(dividingBy: 3600)) / 60)
+                stats.append(PastWeekStat(
+                    label: "Sleep avg",
+                    value: String(format: "%dh %02dm", h, m),
+                    systemImage: "bed.double",
+                    tint: .indigo
+                ))
+            }
+        }
+
+        // Weight delta — last weight in this week vs. last weight before
+        // this week. Skipped when the user has fewer than two readings.
+        if appPrefs.showWeightLogs {
+            let entries = logsViewModel.weightEntries
+            let inWeek = entries
+                .filter { $0.date >= range.start && $0.date < range.end }
+                .sorted { $0.date < $1.date }
+            let priorBefore = entries
+                .filter { $0.date < range.start }
+                .sorted { $0.date < $1.date }
+                .last
+            if let last = inWeek.last, let prior = priorBefore {
+                let delta = last.weight - prior.weight
+                let signed = delta > 0 ? "+\(String(format: "%.1f", delta))" : String(format: "%.1f", delta)
+                stats.append(PastWeekStat(
+                    label: "Weight Δ",
+                    value: signed,
+                    systemImage: "scalemass",
+                    tint: .blue
+                ))
+            }
+        }
+
+        // Custom logs — per collection completion ratio (entries marked
+        // complete this week / item-count × days-tracked).
+        for collection in 0..<CustomLogManager.maxCollections where appPrefs.showCustomLogs(for: collection) {
+            let items = customLogManager.items(in: collection).filter { $0.isEnabled }
+            guard !items.isEmpty else { continue }
+            // Count item-day completions falling in this week.
+            let completions = customLogManager.entries.filter { entry in
+                entry.collectionIndex == collection &&
+                entry.isCompleted &&
+                entry.date >= range.start && entry.date < range.end &&
+                items.contains(where: { $0.id == entry.itemId })
+            }.count
+            // Possible total = items × days in the week.
+            let dayCount = cal.dateComponents([.day], from: range.start, to: range.end).day ?? 7
+            let total = items.count * max(1, dayCount)
+            let name = appPrefs.customLogSectionName(for: collection)
+            stats.append(PastWeekStat(
+                label: name,
+                value: "\(completions) / \(total)",
+                systemImage: "list.bullet.rectangle",
+                tint: .purple
+            ))
+        }
+
+        return stats
+    }
+
+    /// Tasks across both accounts whose `completed` ISO timestamp falls
+    /// within `range`. Iterates the in-memory task dictionaries directly
+    /// since Google Tasks doesn't expose a "completed-within" query.
+    private func countTasksCompleted(in range: (start: Date, end: Date)) -> Int {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallback = ISO8601DateFormatter()
+        fallback.formatOptions = [.withInternetDateTime]
+
+        var count = 0
+        let buckets = [tasksViewModel.personalTasks, tasksViewModel.professionalTasks]
+        for dict in buckets {
+            for (_, tasks) in dict {
+                for task in tasks where task.isCompleted {
+                    guard let completedString = task.completed else { continue }
+                    let date = formatter.date(from: completedString) ?? fallback.date(from: completedString)
+                    guard let date else { continue }
+                    if date >= range.start && date < range.end {
+                        count += 1
+                    }
+                }
+            }
+        }
+        return count
+    }
+
     private var baseView: some View {
         VStack(spacing: 0) {
             // Bulk Edit Toolbar (shown when in bulk edit mode)
@@ -135,6 +354,13 @@ struct WeeklyView: View {
             if !hideNavBar {
                 GlobalNavBar()
                     .background(.ultraThinMaterial)
+            }
+
+            // Retrospective summary, only for past weeks. Hidden for the
+            // current week and future weeks since there's nothing to look
+            // back on.
+            if isPastWeek {
+                pastWeekSummaryStrip
             }
 
             mainContent
@@ -746,7 +972,7 @@ extension WeeklyView {
             }
             
             // Logs Section (all log types under one collapsible header)
-            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) || (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)) {
                 // Divider before logs section
                 Rectangle()
                     .fill(Color(.systemGray3))
@@ -785,7 +1011,9 @@ extension WeeklyView {
                                 case .builtIn(let t):
                                     return isBuiltInLogVisible(t)
                                 case .custom:
-                                    return appPrefs.showCustomLogs && hasCustomLogsForWeek()
+                                    return appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)
+                                case .custom2:
+                                    return appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)
                                 }
                             }
                             ForEach(Array(visibleEntries.enumerated()), id: \.element) { idx, entry in
@@ -793,25 +1021,9 @@ extension WeeklyView {
                                 case .builtIn(let t):
                                     weekLogRow(for: t, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
                                 case .custom:
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 0) {
-                                            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                                weekCustomLogColumn(date: date)
-                                                    .frame(width: dayColumnWidth)
-                                                    .background(Color(.systemBackground))
-                                                    .overlay(
-                                                        Rectangle()
-                                                            .fill(Color(.systemGray4))
-                                                            .frame(width: 0.5),
-                                                        alignment: .trailing
-                                                    )
-                                                    .id("customlog_day_\(index)")
-                                            }
-                                        }
-                                        .frame(width: fixedWidth)
-                                    }
-                                    .padding(.all, 8)
-                                    .background(Color(.systemGray6).opacity(0.15))
+                                    customLogRow(collectionIndex: 0, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
+                                case .custom2:
+                                    customLogRow(collectionIndex: 1, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
                                 }
 
                                 if idx < visibleEntries.count - 1 {
@@ -1015,7 +1227,7 @@ extension WeeklyView {
                             }
                             
                             // Logs Columns (no width restrictions - natural sizing)
-                            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek()) {
+                            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) || (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)) {
                                 VStack(spacing: 0) {
                                     // Logs column header
                                     VStack(alignment: .center, spacing: 4) {
@@ -1283,21 +1495,32 @@ extension WeeklyView {
                         Divider()
                     }
                 case .custom:
-                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
-                        ScrollView(.vertical, showsIndicators: false) {
-                            LazyVStack(alignment: .leading, spacing: 2) {
-                                let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
-                                customLogSummary(items: enabledItems, date: date)
-                            }
-                            .padding(.all, 8)
-                        }
-                        .frame(width: logColumnWidth(), alignment: .topLeading)
-                        .frame(minHeight: 80)
+                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date, in: 0) {
+                        weekDayRowCustomLogColumn(date: date, collectionIndex: 0)
+                        Divider()
+                    }
+                case .custom2:
+                    if appPrefs.showCustomLogs2 && hasCustomLogsForDate(date, in: 1) {
+                        weekDayRowCustomLogColumn(date: date, collectionIndex: 1)
                         Divider()
                     }
                 }
             }
         }
+    }
+
+    /// Vertical custom-log column for one date in the row-based layout.
+    /// Factored out so both `.custom` and `.custom2` cases can share it.
+    private func weekDayRowCustomLogColumn(date: Date, collectionIndex: Int) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                let enabledItems = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
+                customLogSummary(items: enabledItems, date: date)
+            }
+            .padding(.all, 8)
+        }
+        .frame(width: logColumnWidth(), alignment: .topLeading)
+        .frame(minHeight: 80)
     }
 
     @ViewBuilder
@@ -1456,21 +1679,50 @@ extension WeeklyView {
                         Divider()
                     }
                 case .custom:
-                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
-                        ScrollView(.vertical, showsIndicators: false) {
-                            LazyVStack(alignment: .leading, spacing: 2) {
-                                let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
-                                customLogSummary(items: enabledItems, date: date)
-                            }
-                            .padding(.all, 8)
-                        }
-                        .frame(width: 228.6, alignment: .topLeading)
-                        .frame(minHeight: 80)
+                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date, in: 0) {
+                        weekDayFixedCustomLogCell(date: date, collectionIndex: 0, width: 228.6)
+                        Divider()
+                    }
+                case .custom2:
+                    if appPrefs.showCustomLogs2 && hasCustomLogsForDate(date, in: 1) {
+                        weekDayFixedCustomLogCell(date: date, collectionIndex: 1, width: 228.6)
                         Divider()
                     }
                 }
             }
         }
+    }
+
+    /// Flex-width custom-log cell used by the variable-width row layout.
+    /// Shared between `.custom` and `.custom2` cases.
+    private func weekDayRowFlexCustomLogCell(date: Date, collectionIndex: Int, isFirst: Bool) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                let enabledItems = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
+                customLogSummary(items: enabledItems, date: date)
+            }
+            .padding(.all, 8)
+        }
+        .frame(
+            minWidth: isFirst ? 228.6 : 200,
+            maxWidth: isFirst ? 228.6 : .infinity,
+            alignment: .topLeading
+        )
+        .frame(minHeight: 80)
+    }
+
+    /// Fixed-width custom-log cell for one date in the row-based table
+    /// layout. Shared between `.custom` and `.custom2` cases.
+    private func weekDayFixedCustomLogCell(date: Date, collectionIndex: Int, width: CGFloat) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                let enabledItems = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
+                customLogSummary(items: enabledItems, date: date)
+            }
+            .padding(.all, 8)
+        }
+        .frame(width: width, alignment: .topLeading)
+        .frame(minHeight: 80)
     }
 
     private func weekDayRow(date: Date, isToday: Bool) -> some View {
@@ -1621,7 +1873,8 @@ extension WeeklyView {
             let visibleEntries = appPrefs.logDisplayOrder.filter { entry in
                 switch entry {
                 case .builtIn(let t): return isBuiltInLogVisible(t)
-                case .custom:         return appPrefs.showCustomLogs && hasCustomLogsForDate(date)
+                case .custom:         return appPrefs.showCustomLogs && hasCustomLogsForDate(date, in: 0)
+                case .custom2:        return appPrefs.showCustomLogs2 && hasCustomLogsForDate(date, in: 1)
                 }
             }
             ForEach(Array(visibleEntries.enumerated()), id: \.element) { idx, entry in
@@ -1630,19 +1883,9 @@ extension WeeklyView {
                 case .builtIn(let t):
                     weekDayRowFlexLogCell(for: t, date: date, useFixedWidth: isFirst)
                 case .custom:
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
-                            customLogSummary(items: enabledItems, date: date)
-                        }
-                        .padding(.all, 8)
-                    }
-                    .frame(
-                        minWidth: isFirst ? 228.6 : 200,
-                        maxWidth: isFirst ? 228.6 : .infinity,
-                        alignment: .topLeading
-                    )
-                    .frame(minHeight: 80)
+                    weekDayRowFlexCustomLogCell(date: date, collectionIndex: 0, isFirst: isFirst)
+                case .custom2:
+                    weekDayRowFlexCustomLogCell(date: date, collectionIndex: 1, isFirst: isFirst)
                 }
                 if isFirst {
                     Divider()
@@ -1760,6 +2003,32 @@ extension WeeklyView {
         case .weight: return appPrefs.showWeightLogs
         case .workout: return appPrefs.showWorkoutLogs
         }
+    }
+
+    /// Renders a single custom-log collection row across the seven day
+    /// columns. Mirrors the body of the legacy inline `.custom` case so
+    /// adding `.custom2` could share the same layout.
+    @ViewBuilder
+    private func customLogRow(collectionIndex: Int, dayColumnWidth: CGFloat, fixedWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 0) {
+                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                    weekCustomLogColumn(date: date, collectionIndex: collectionIndex)
+                        .frame(width: dayColumnWidth)
+                        .background(Color(.systemBackground))
+                        .overlay(
+                            Rectangle()
+                                .fill(Color(.systemGray4))
+                                .frame(width: 0.5),
+                            alignment: .trailing
+                        )
+                        .id("customlog\(collectionIndex)_day_\(index)")
+                }
+            }
+            .frame(width: fixedWidth)
+        }
+        .padding(.all, 8)
+        .background(Color(.systemGray6).opacity(0.15))
     }
 
     @ViewBuilder
@@ -1983,8 +2252,8 @@ extension WeeklyView {
         .padding(.vertical, 4)
     }
     
-    private func weekCustomLogColumn(date: Date) -> some View {
-        let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
+    private func weekCustomLogColumn(date: Date, collectionIndex: Int = 0) -> some View {
+        let enabledItems = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
         let completedCount = enabledItems.reduce(0) { count, item in
             count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
         }
@@ -2712,12 +2981,22 @@ extension WeeklyViewMode {
 
 // MARK: - Custom Log Helpers
 extension WeeklyView {
+    /// True when collection 0 has any enabled items. Legacy helper; new
+    /// callers should pass an explicit collection index.
     private func hasCustomLogsForWeek() -> Bool {
-        customLogManager.items(in: 0).contains { $0.isEnabled }
+        hasCustomLogsForWeek(in: 0)
     }
 
     private func hasCustomLogsForDate(_ date: Date) -> Bool {
-        customLogManager.items(in: 0).contains { $0.isEnabled }
+        hasCustomLogsForDate(date, in: 0)
+    }
+
+    private func hasCustomLogsForWeek(in collection: Int) -> Bool {
+        customLogManager.items(in: collection).contains { $0.isEnabled }
+    }
+
+    private func hasCustomLogsForDate(_ date: Date, in collection: Int) -> Bool {
+        customLogManager.items(in: collection).contains { $0.isEnabled }
     }
 }
 
