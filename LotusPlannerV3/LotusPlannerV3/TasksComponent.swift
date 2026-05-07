@@ -598,7 +598,41 @@ private struct TaskComponentRow: View {
             taskId: task.id,
             listId: listId,
             accountKind: accountKind == .personal ? "personal" : "professional"
-        ))
+        )) {
+            // Custom drag preview: small rounded-rect tile in the
+            // account's accent color, mirroring how a task renders on
+            // the day timeline. This is the floating ghost that follows
+            // the user's finger during a drag.
+            taskDragPreview(task: task, accentColor: accentColor)
+        }
+    }
+
+    /// View used as the floating drag preview when a task is being
+    /// dragged out of the Tasks component. Mirrors the lightly-shaded
+    /// dashed-border "shadow" the timeline draws for in-timeline drags
+    /// (see `DraggableTimeboxComponent.shadowView`) so dropping onto the
+    /// timeline reads continuously.
+    @ViewBuilder
+    private func taskDragPreview(task: GoogleTask, accentColor: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(accentColor)
+            Text(task.title)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(accentColor.opacity(0.9), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(accentColor.opacity(0.18))
+                )
+        )
+        .frame(maxWidth: 220)
     }
     
     private func startTimeTagText(for task: GoogleTask) -> String? {

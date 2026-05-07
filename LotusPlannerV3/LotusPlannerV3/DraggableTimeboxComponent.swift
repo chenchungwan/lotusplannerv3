@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A timeline view of a single day's events and timed tasks where the user
 /// can drag any item vertically to reschedule it.
@@ -46,6 +47,11 @@ struct DraggableTimeboxComponent: View {
     /// update — covers the async Google Calendar PATCH and prevents the
     /// "snaps back to old position then jumps forward" flicker.
     @State private var pendingStarts: [String: Date] = [:]
+    /// Decoded payload of an in-flight drag from the Tasks component.
+    /// Populated once on `dropEntered` (NSItemProvider load is async); we
+    /// then use the cached value to update `dragState` continuously on
+    /// `dropUpdated` so the snapped-time shadow tracks the cursor.
+    @State private var externalDragInfo: DraggableTaskInfo?
 
     private let hourHeight: CGFloat = 60
     private let startHour = 0
@@ -90,7 +96,7 @@ struct DraggableTimeboxComponent: View {
 
     // MARK: - Internal models
 
-    private enum ItemKind {
+    fileprivate enum ItemKind {
         case event(GoogleCalendarEvent, isPersonal: Bool)
         case task(GoogleTask, listId: String, isPersonal: Bool)
     }
@@ -117,7 +123,7 @@ struct DraggableTimeboxComponent: View {
     }
 
     /// Live-tracked translation + snapped landing time during a drag.
-    private struct DragState {
+    fileprivate struct DragState {
         let itemId: String
         let originalStart: Date
         let duration: TimeInterval
@@ -155,6 +161,13 @@ struct DraggableTimeboxComponent: View {
                         let contentWidth = max(0, geometry.size.width - contentOriginX)
 
                         ZStack(alignment: .topLeading) {
+                            // Transparent rectangle fills the full frame so
+                            // the drop target reliably accepts hits across
+                            // the entire timeline (including any gaps
+                            // between hour-grid stripes).
+                            Color.clear
+                                .contentShape(Rectangle())
+
                             hourGrid
                             itemsLayer(contentOriginX: contentOriginX, contentWidth: contentWidth)
 
@@ -182,6 +195,42 @@ struct DraggableTimeboxComponent: View {
                         }
                     }
                     .frame(height: totalHeight)
+                    // Accept tasks dragged in from the Tasks component
+                    // (which broadcasts a DraggableTaskInfo). The
+                    // DropDelegate variant fires `dropUpdated` continuously
+                    // while the cursor is over the timeline, letting us
+                    // drive the same shadow renderer used for in-timeline
+                    // drags so the snapped target time tracks the finger
+                    // live. Attached on the outer .frame() so the drop
+                    // area matches the full visual timeline height.
+                    // Modern Transferable → drop-only path. Reliably
+                    // commits the task drop at the dropped Y. Pairs with
+                    // the legacy delegate below for live hover tracking
+                    // (the modern API doesn't expose continuous location).
+                    .dropDestination(for: DraggableTaskInfo.self) { items, location in
+                        return handleExternalTaskDrop(items: items, atY: location.y)
+                    }
+                    // Legacy delegate purely for the live snapped-time
+                    // shadow. validateDrop always accepts so dropEntered /
+                    // dropUpdated fire regardless of how the bridged
+                    // NSItemProvider advertises its types. If the payload
+                    // can't be decoded the delegate just no-ops.
+                    .onDrop(
+                        of: [UTType.json, UTType.data, UTType.text],
+                        delegate: TimelineExternalTaskDropDelegate(
+                            dragState: $dragState,
+                            externalInfo: $externalDragInfo,
+                            onLocationChanged: { info, y in
+                                updateExternalDragState(info: info, atY: y)
+                            },
+                            onPerformDrop: { _, _ in
+                                // Commit is owned by .dropDestination
+                                // above. Returning false here lets the
+                                // modern handler take over.
+                                return false
+                            }
+                        )
+                    )
                     // The all-day rows above use this name to report the
                     // drag cursor in timeline-local coordinates so we can
                     // map cursor Y → snapped time directly.
@@ -466,6 +515,110 @@ struct DraggableTimeboxComponent: View {
         ) ?? date
     }
 
+    /// Builds (or refreshes) `dragState` for an external task drag while
+    /// the cursor is over the timeline. Re-uses the same `DragState` model
+    /// that in-timeline drags use, so the existing shadow renderer paints
+    /// the ghost + time label without any branching.
+    @MainActor
+    private func updateExternalDragState(info: DraggableTaskInfo, atY y: CGFloat) {
+        let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .personal : .professional
+        let dict = kind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        guard let task = dict[info.listId]?.first(where: { $0.id == info.taskId }) else { return }
+
+        // Preserve prior duration when present; default to 30 min for tasks
+        // that have no time window yet.
+        let priorWindow = timeWindowManager.getTimeWindow(for: task.id)
+        let duration: TimeInterval
+        if let priorWindow, !priorWindow.isAllDay {
+            duration = max(60, priorWindow.endTime.timeIntervalSince(priorWindow.startTime))
+        } else {
+            duration = 30 * 60
+        }
+
+        let snappedStart = snappedTimeFromAbsoluteY(max(0, y), duration: duration)
+        let isPersonal = kind == .personal
+        let internalId = "external_task_\(task.id)"
+
+        if dragState?.itemId == internalId {
+            dragState?.snappedStart = snappedStart
+            dragState?.cursorY = y
+        } else {
+            dragState = DragState(
+                itemId: internalId,
+                originalStart: snappedStart,
+                duration: duration,
+                kind: .task(task, listId: info.listId, isPersonal: isPersonal),
+                wasAllDay: false,
+                translation: 0,
+                snappedStart: snappedStart,
+                cursorY: y
+            )
+        }
+    }
+
+    /// Handles a drop of `DraggableTaskInfo` payloads from the Tasks
+    /// component onto the timeline. Converts the drop Y coordinate (in
+    /// the GeometryReader's local space) into a snapped time via the same
+    /// math used for in-timeline drags, writes a TaskTimeWindow, and
+    /// updates the task's `due` so it lands on this view's day. Existing
+    /// duration is preserved if the task already had a non-all-day
+    /// window; otherwise defaults to 30 minutes.
+    @MainActor
+    private func handleExternalTaskDrop(items: [DraggableTaskInfo], atY y: CGFloat) -> Bool {
+        guard !items.isEmpty else { return false }
+        var didCommit = false
+
+        for info in items {
+            let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .personal : .professional
+            let dict = kind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+            guard let task = dict[info.listId]?.first(where: { $0.id == info.taskId }) else {
+                continue
+            }
+
+            // Preserve prior duration where possible; default to 30 min.
+            let priorWindow = timeWindowManager.getTimeWindow(for: task.id)
+            let duration: TimeInterval
+            if let priorWindow, !priorWindow.isAllDay {
+                duration = max(60, priorWindow.endTime.timeIntervalSince(priorWindow.startTime))
+            } else {
+                duration = 30 * 60
+            }
+
+            // Snap drop Y to the timeline's grid; clamp so the entire item
+            // stays inside [startHour, endHour].
+            let snappedStart = snappedTimeFromAbsoluteY(max(0, y), duration: duration)
+            let newEnd = snappedStart.addingTimeInterval(duration)
+
+            timeWindowManager.saveTimeWindow(
+                taskId: task.id,
+                startTime: snappedStart,
+                endTime: newEnd,
+                isAllDay: false
+            )
+
+            // Re-anchor `task.due` to this view's day so the task is
+            // associated with the day it was dropped on. Google Tasks
+            // discards the time portion, so the local `yyyy-MM-dd` format
+            // is correct (matches the rest of the codebase).
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = TimeZone.current
+            let newDueString = f.string(from: snappedStart)
+
+            if task.due != newDueString {
+                var updated = task
+                updated.due = newDueString
+                Task {
+                    await tasksVM.updateTask(updated, in: info.listId, for: kind)
+                }
+            }
+            didCommit = true
+        }
+
+        return didCommit
+    }
+
     private func commitDrag(state: DragState) {
         // Skip if nothing actually changed (sub-snap drag).
         if state.snappedStart == state.originalStart { return }
@@ -510,6 +663,25 @@ struct DraggableTimeboxComponent: View {
     }
 
     // MARK: - Shadow view
+
+    /// Floating time label anchored to the time-column area at the
+    /// snapped landing time. Lives outside `shadowView` so its position
+    /// is decoupled from the shadow rectangle's frame — keeps the time
+    /// readable even when the cursor or system drag preview overlaps the
+    /// shadow.
+    private func snappedTimePill(time: Date, isPersonal: Bool) -> some View {
+        let accent = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        return Text(timeLabel(for: time))
+            .font(.caption.weight(.semibold))
+            .foregroundColor(.primary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(Color(.systemBackground).opacity(0.95))
+                    .overlay(Capsule().stroke(accent.opacity(0.85), lineWidth: 1.5))
+            )
+    }
 
     private func shadowView(state: DragState, width: CGFloat, height: CGFloat) -> some View {
         let isPersonal: Bool = {
@@ -850,5 +1022,97 @@ struct DraggableTimeboxComponent: View {
                 proxy.scrollTo(target, anchor: .top)
             }
         }
+    }
+}
+
+// MARK: - External task drop delegate
+
+/// Bridges `NSItemProvider`-based drops onto the timeline into the same
+/// `DragState`-driven shadow that in-timeline drags use. The async load
+/// of the JSON payload happens once on `dropEntered`; subsequent
+/// `dropUpdated` calls re-use the cached `DraggableTaskInfo` and only
+/// recompute the snapped target time from the new cursor location.
+private struct TimelineExternalTaskDropDelegate: DropDelegate {
+    @Binding var dragState: DraggableTimeboxComponent.DragState?
+    @Binding var externalInfo: DraggableTaskInfo?
+    let onLocationChanged: (DraggableTaskInfo, CGFloat) -> Void
+    let onPerformDrop: (DraggableTaskInfo, CGFloat) -> Bool
+
+    func validateDrop(info: DropInfo) -> Bool {
+        // Always accept so dropEntered / dropUpdated fire. The Transferable
+        // bridge sometimes advertises non-obvious type identifiers; we'll
+        // try to decode opportunistically inside loadPayload.
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        // If the cache is already populated (drag re-entered the timeline
+        // after a brief exit), just refresh position immediately.
+        if let cached = externalInfo {
+            onLocationChanged(cached, info.location.y)
+            return
+        }
+        loadPayload(from: info) { decoded, location in
+            externalInfo = decoded
+            onLocationChanged(decoded, location.y)
+        }
+    }
+
+    /// Iterates every provider attached to the drop and tries each of its
+    /// registered type identifiers until one yields JSON data we can
+    /// decode into a DraggableTaskInfo. Used for the live-hover path
+    /// only; the modern .dropDestination handles the actual commit.
+    private func loadPayload(from info: DropInfo, completion: @escaping (DraggableTaskInfo, CGPoint) -> Void) {
+        let location = info.location
+        // `.item` matches everything — gets us all providers attached to
+        // this drop, regardless of how the source advertised them.
+        for provider in info.itemProviders(for: [UTType.item]) {
+            for identifier in provider.registeredTypeIdentifiers {
+                provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, _ in
+                    guard let data,
+                          let decoded = try? JSONDecoder().decode(DraggableTaskInfo.self, from: data) else { return }
+                    DispatchQueue.main.async {
+                        completion(decoded, location)
+                    }
+                }
+            }
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        if let cached = externalInfo {
+            // Synchronous refresh — keeps the shadow tightly attached to
+            // the cursor without waiting on another async load.
+            onLocationChanged(cached, info.location.y)
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        // Cursor left the timeline area — drop the ghost. Re-entry will
+        // restore it from the cache on the next `dropEntered`.
+        DispatchQueue.main.async {
+            dragState = nil
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let location = info.location
+        if let cached = externalInfo {
+            _ = onPerformDrop(cached, location.y)
+            DispatchQueue.main.async {
+                dragState = nil
+                externalInfo = nil
+            }
+            return true
+        }
+        // Fallback: cache wasn't populated yet (very fast drop). Try
+        // loading via the same broad-UTI path used during hover.
+        loadPayload(from: info) { decoded, loc in
+            _ = onPerformDrop(decoded, loc.y)
+            dragState = nil
+            externalInfo = nil
+        }
+        return true
     }
 }
