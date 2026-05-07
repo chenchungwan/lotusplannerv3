@@ -1,16 +1,24 @@
 import SwiftUI
 
 struct CustomLogView: View {
+    /// Which collection (0 or 1) this view renders. Defaults to 0 so all
+    /// existing call sites keep showing the original custom log.
+    let collectionIndex: Int
+
+    init(collectionIndex: Int = 0) {
+        self.collectionIndex = collectionIndex
+    }
+
     @ObservedObject private var customLogManager = CustomLogManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
-    
+
     private var enabledItems: [CustomLogItemData] {
-        customLogManager.items.filter { $0.isEnabled }
+        customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
     }
-    
+
     private var entriesForDate: [CustomLogEntryData] {
-        customLogManager.getEntriesForDate(navigationManager.currentDate)
+        customLogManager.getEntriesForDate(navigationManager.currentDate, in: collectionIndex)
     }
     
     var body: some View {

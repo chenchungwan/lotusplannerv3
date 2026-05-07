@@ -6,6 +6,13 @@ import SwiftUI
 /// completion for that day.
 struct CustomLogWeekComponent: View {
     let currentDate: Date
+    /// Which collection (0 or 1) this view renders. Defaults to 0.
+    let collectionIndex: Int
+
+    init(currentDate: Date, collectionIndex: Int = 0) {
+        self.currentDate = currentDate
+        self.collectionIndex = collectionIndex
+    }
 
     @ObservedObject private var manager = CustomLogManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
@@ -33,7 +40,7 @@ struct CustomLogWeekComponent: View {
     }
 
     private var enabledItems: [CustomLogItemData] {
-        manager.items.filter { $0.isEnabled }
+        manager.items(in: collectionIndex).filter { $0.isEnabled }
     }
 
     var body: some View {

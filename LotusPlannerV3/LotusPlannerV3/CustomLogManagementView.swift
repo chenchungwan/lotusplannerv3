@@ -1,15 +1,27 @@
 import SwiftUI
 
 struct CustomLogManagementView: View {
+    /// Which collection (0 or 1) this management view targets. Defaults to 0
+    /// for backward compat.
+    let collectionIndex: Int
+
+    init(collectionIndex: Int = 0) {
+        self.collectionIndex = collectionIndex
+    }
+
     @ObservedObject private var customLogManager = CustomLogManager.shared
     @State private var showingAddItem = false
     @State private var newItemTitle = ""
     @State private var editingItem: CustomLogItemData?
-    
+
+    private var items: [CustomLogItemData] {
+        customLogManager.items(in: collectionIndex)
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(customLogManager.items) { item in
+                ForEach(items) { item in
                     CustomLogItemRow(
                         item: item,
                         onEdit: { editingItem = $0 },
@@ -25,7 +37,7 @@ struct CustomLogManagementView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Add") {
                         showingAddItem = true
@@ -34,10 +46,11 @@ struct CustomLogManagementView: View {
             }
             .sheet(isPresented: $showingAddItem) {
                 AddCustomLogItemView { title in
-                let newItem = CustomLogItemData(
-                    title: title,
-                    displayOrder: customLogManager.items.count
-                )
+                    let newItem = CustomLogItemData(
+                        title: title,
+                        displayOrder: items.count,
+                        collectionIndex: collectionIndex
+                    )
                     customLogManager.addItem(newItem)
                 }
             }
@@ -48,11 +61,11 @@ struct CustomLogManagementView: View {
             }
         }
     }
-    
+
     private func moveItems(from source: IndexSet, to destination: Int) {
-        var reorderedItems = customLogManager.items
+        var reorderedItems = items
         reorderedItems.move(fromOffsets: source, toOffset: destination)
-        
+
         let newOrder = reorderedItems.map { $0.id }
         customLogManager.reorderItems(newOrder)
     }

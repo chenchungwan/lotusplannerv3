@@ -17,7 +17,9 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case logWater
     case logSleep
     case logCustom
+    case logCustom2
     case logCustomWeek
+    case logCustomWeek2
     case logsAll
     case journal
     case healthBar
@@ -50,8 +52,10 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .logFood:                   return "Food"
         case .logWater:                  return "Water"
         case .logSleep:                  return "Sleep"
-        case .logCustom:                 return "Custom Logs"
-        case .logCustomWeek:             return "Custom Logs (Week)"
+        case .logCustom:                 return AppPreferences.shared.customLogSectionName(for: 0)
+        case .logCustom2:                return AppPreferences.shared.customLogSectionName(for: 1)
+        case .logCustomWeek:             return "\(AppPreferences.shared.customLogSectionName(for: 0)) (Week)"
+        case .logCustomWeek2:            return "\(AppPreferences.shared.customLogSectionName(for: 1)) (Week)"
         case .logsAll:                   return "All Logs"
         case .journal:                   return "Journal"
         case .healthBar:                 return "Health Bar"
@@ -83,7 +87,9 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .logWater:                                         return "drop"
         case .logSleep:                                         return "bed.double"
         case .logCustom:                                        return "square.grid.2x2"
+        case .logCustom2:                                       return "square.grid.2x2"
         case .logCustomWeek:                                    return "calendar.badge.checkmark"
+        case .logCustomWeek2:                                   return "calendar.badge.checkmark"
         case .logsAll:                                          return "chart.bar"
         case .journal:                                          return "book"
         case .healthBar:                                        return "heart.text.square"
@@ -1015,7 +1021,9 @@ struct DayViewCustomConfigurator: View {
         if appPrefs.showSleepLogs   { items.append(.logSleep) }
         if appPrefs.showCustomLogs  {
             items.append(.logCustom)
+            items.append(.logCustom2)
             items.append(.logCustomWeek)
+            items.append(.logCustomWeek2)
         }
         if appPrefs.showAnyLogs     { items.append(.logsAll) }
         // The Health Bar only pulls from sleep, weight, and workout logs —

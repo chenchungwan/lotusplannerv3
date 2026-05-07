@@ -8,14 +8,19 @@ struct CustomLogItemData: Identifiable, Codable {
     var title: String
     var isEnabled: Bool
     var displayOrder: Int
+    /// Which custom-log collection this item belongs to. 0 = first
+    /// collection (legacy), 1 = second collection. Capped via
+    /// `CustomLogManager.maxCollections`.
+    var collectionIndex: Int
     var createdAt: Date
     var updatedAt: Date
-    
+
     init(
         id: UUID = UUID(),
         title: String,
         isEnabled: Bool = true,
         displayOrder: Int = 0,
+        collectionIndex: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -23,6 +28,7 @@ struct CustomLogItemData: Identifiable, Codable {
         self.title = title
         self.isEnabled = isEnabled
         self.displayOrder = displayOrder
+        self.collectionIndex = collectionIndex
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -34,14 +40,18 @@ struct CustomLogEntryData: Identifiable, Codable {
     var itemId: UUID
     var date: Date
     var isCompleted: Bool
+    /// Mirrors `CustomLogItemData.collectionIndex`. Stored on the entry too
+    /// so completion lookups don't need to join through items.
+    var collectionIndex: Int
     var createdAt: Date
     var updatedAt: Date
-    
+
     init(
         id: UUID = UUID(),
         itemId: UUID,
         date: Date,
         isCompleted: Bool = false,
+        collectionIndex: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -49,6 +59,7 @@ struct CustomLogEntryData: Identifiable, Codable {
         self.itemId = itemId
         self.date = date
         self.isCompleted = isCompleted
+        self.collectionIndex = collectionIndex
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

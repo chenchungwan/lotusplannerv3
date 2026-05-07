@@ -401,7 +401,8 @@ class AppPreferences: ObservableObject {
         }
     }
 
-    // Custom log section name (synced via iCloud KVS)
+    // Custom log section name (synced via iCloud KVS).
+    // This is the name for collection 0 — the legacy single custom log.
     @Published var customLogSectionName: String {
         didSet {
             let trimmed = String(customLogSectionName.prefix(30))
@@ -410,6 +411,41 @@ class AppPreferences: ObservableObject {
             }
             NSUbiquitousKeyValueStore.default.set(customLogSectionName, forKey: "customLogSectionName")
             NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+
+    // Custom log section name for collection 1 (the second checklist
+    // collection added when multi-log support shipped). Defaults to
+    // "Custom Logs 2" until the user renames it.
+    @Published var customLogSectionName2: String {
+        didSet {
+            let trimmed = String(customLogSectionName2.prefix(30))
+            if trimmed != customLogSectionName2 {
+                customLogSectionName2 = trimmed
+            }
+            NSUbiquitousKeyValueStore.default.set(customLogSectionName2, forKey: "customLogSectionName2")
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+
+    /// Convenience: returns the section name for a given collection index
+    /// (0 or 1). Falls back to a sensible default if a name is empty.
+    func customLogSectionName(for collection: Int) -> String {
+        switch collection {
+        case 0:
+            return customLogSectionName.isEmpty ? "Custom Logs" : customLogSectionName
+        case 1:
+            return customLogSectionName2.isEmpty ? "Custom Logs 2" : customLogSectionName2
+        default:
+            return "Custom Logs"
+        }
+    }
+
+    func updateCustomLogSectionName(_ value: String, for collection: Int) {
+        switch collection {
+        case 0: customLogSectionName = value
+        case 1: customLogSectionName2 = value
+        default: break
         }
     }
 
@@ -890,6 +926,7 @@ class AppPreferences: ObservableObject {
         self.showSleepLogs = UserDefaults.standard.object(forKey: "showSleepLogs") as? Bool ?? true
         self.showCustomLogs = UserDefaults.standard.object(forKey: "showCustomLogs") as? Bool ?? false
         self.customLogSectionName = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName") ?? "Custom Logs"
+        self.customLogSectionName2 = NSUbiquitousKeyValueStore.default.string(forKey: "customLogSectionName2") ?? "Custom Logs 2"
 
         // Load log display order. Legacy saves stored only `BuiltInLogType`
         // rawValues (e.g. "food", "sleep"); current format also supports the
@@ -1048,6 +1085,13 @@ class AppPreferences: ObservableObject {
                 let newName = kvs.string(forKey: "customLogSectionName") ?? "Custom Logs"
                 if self.customLogSectionName != newName {
                     self.customLogSectionName = newName
+                }
+            }
+
+            if changedKeys.isEmpty || changedKeys.contains("customLogSectionName2") {
+                let newName = kvs.string(forKey: "customLogSectionName2") ?? "Custom Logs 2"
+                if self.customLogSectionName2 != newName {
+                    self.customLogSectionName2 = newName
                 }
             }
 
@@ -2088,7 +2132,8 @@ struct SettingsView: View {
     
     @ViewBuilder
     private var customLogToggleRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Master toggle for all custom log collections.
             Toggle(isOn: Binding(
                 get: { appPrefs.showCustomLogs },
                 set: { appPrefs.updateShowCustomLogs($0) }
@@ -2097,9 +2142,8 @@ struct SettingsView: View {
                     Image(systemName: "list.bullet.rectangle")
                         .foregroundColor(appPrefs.showCustomLogs ? .accentColor : .secondary)
                     VStack(alignment: .leading, spacing: 2) {
-                        TextField("Custom Logs", text: $appPrefs.customLogSectionName)
+                        Text("Custom Logs")
                             .font(.body)
-                            .textFieldStyle(.plain)
                         Text("Show custom checklist items in day views")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -2107,12 +2151,26 @@ struct SettingsView: View {
                 }
             }
 
-            // Custom items editor — nested inside the row so it drags with it
-            // when the user reorders the custom log card.
+            // One inline editor per collection. Each has its own renamable
+            // header and 10-item cap.
             if appPrefs.showCustomLogs {
-                CustomLogItemsInlineView()
+                ForEach(0..<CustomLogManager.maxCollections, id: \.self) { collection in
+                    VStack(alignment: .leading, spacing: 6) {
+                        TextField(
+                            collection == 0 ? "Custom Logs" : "Custom Logs \(collection + 1)",
+                            text: Binding(
+                                get: { appPrefs.customLogSectionName(for: collection) },
+                                set: { appPrefs.updateCustomLogSectionName($0, for: collection) }
+                            )
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .textFieldStyle(.plain)
+
+                        CustomLogItemsInlineView(collectionIndex: collection)
+                    }
                     .padding(.leading, 20)
                     .padding(.top, 4)
+                }
             }
         }
     }
@@ -2526,25 +2584,32 @@ struct ColorPickerRow: View {
 
 // MARK: - Custom Logs Items Inline View
 struct CustomLogItemsInlineView: View {
+    /// Which collection (0 or 1) this inline editor manages.
+    let collectionIndex: Int
+
     @ObservedObject private var customLogManager = CustomLogManager.shared
     @State private var showingAddItem = false
     @State private var newItemTitle = ""
     @State private var editingItem: CustomLogItemData?
-    
+
     private let maxItems = 10
     private let maxItemLength = 20
-    
+
+    private var collectionItems: [CustomLogItemData] {
+        customLogManager.items(in: collectionIndex)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Header with add button
             HStack {
-                Text("Items (\(customLogManager.items.count)/\(maxItems))")
+                Text("Items (\(collectionItems.count)/\(maxItems))")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                
+
                 Spacer()
-                
-                if customLogManager.items.count < maxItems {
+
+                if collectionItems.count < maxItems {
                     Button(action: { showingAddItem = true }) {
                         Image(systemName: "plus.circle.fill")
                             .foregroundColor(.accentColor)
@@ -2553,18 +2618,18 @@ struct CustomLogItemsInlineView: View {
                     .buttonStyle(.plain)
                 }
             }
-            
+
             // Items list
-            if customLogManager.items.isEmpty {
+            if collectionItems.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.system(size: 30))
                         .foregroundColor(.secondary)
-                    
+
                     Text("No custom log items")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
+
                     Text("Tap + to add your first item")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -2573,7 +2638,7 @@ struct CustomLogItemsInlineView: View {
                 .padding(.vertical, 20)
             } else {
                 LazyVStack(spacing: 4) {
-                    ForEach(customLogManager.items) { item in
+                    ForEach(collectionItems) { item in
                         CustomLogItemInlineRow(
                             item: item,
                             onEdit: { editingItem = $0 },
@@ -2590,7 +2655,8 @@ struct CustomLogItemsInlineView: View {
                 onSave: { title in
                     let newItem = CustomLogItemData(
                         title: title,
-                        displayOrder: customLogManager.items.count
+                        displayOrder: collectionItems.count,
+                        collectionIndex: collectionIndex
                     )
                     customLogManager.addItem(newItem)
                 }

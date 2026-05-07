@@ -6,11 +6,31 @@ import SwiftUI
 @MainActor
 class CustomLogManager: ObservableObject {
     static let shared = CustomLogManager()
-    
+
+    /// Hard cap on the number of custom log collections. Bumping this means
+    /// also adding more `customLog{N}` cases to `CustomComponent` and the
+    /// matching name slot to `AppPreferences`.
+    static let maxCollections = 2
+
     @Published var items: [CustomLogItemData] = []
     @Published var entries: [CustomLogEntryData] = []
     @Published var isLoading = false
     @Published var syncStatus: SyncStatus = .idle
+
+    /// Items that belong to a specific collection (0 or 1), respecting the
+    /// stable display order set by the user.
+    func items(in collection: Int) -> [CustomLogItemData] {
+        items.filter { $0.collectionIndex == collection }
+    }
+
+    /// Entries on `date` that belong to `collection`.
+    func getEntriesForDate(_ date: Date, in collection: Int) -> [CustomLogEntryData] {
+        let calendar = Calendar.current
+        return entries.filter { entry in
+            entry.collectionIndex == collection &&
+            calendar.isDate(entry.date, inSameDayAs: date)
+        }
+    }
     
     enum SyncStatus {
         case idle
@@ -94,17 +114,18 @@ class CustomLogManager: ObservableObject {
                     title: entity.title ?? "",
                     isEnabled: entity.isEnabled,
                     displayOrder: Int(entity.displayOrder),
+                    collectionIndex: Int(entity.collectionIndex),
                     createdAt: entity.createdAt ?? Date(),
                     updatedAt: entity.updatedAt ?? Date()
                 )
             }
         } catch { }
     }
-    
+
     private func loadEntries() {
         let request: NSFetchRequest<CustomLogEntry> = CustomLogEntry.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \CustomLogEntry.date, ascending: false)]
-        
+
         do {
             let entities = try context.fetch(request)
             entries = entities.compactMap { entity in
@@ -113,6 +134,7 @@ class CustomLogManager: ObservableObject {
                     itemId: UUID(uuidString: entity.itemId ?? "") ?? UUID(),
                     date: entity.date ?? Date(),
                     isCompleted: entity.isCompleted,
+                    collectionIndex: Int(entity.collectionIndex),
                     createdAt: entity.createdAt ?? Date(),
                     updatedAt: entity.updatedAt ?? Date()
                 )
@@ -127,6 +149,7 @@ class CustomLogManager: ObservableObject {
         entity.title = item.title
         entity.isEnabled = item.isEnabled
         entity.displayOrder = Int16(item.displayOrder)
+        entity.collectionIndex = Int16(item.collectionIndex)
         entity.createdAt = item.createdAt
         entity.updatedAt = item.updatedAt
         entity.userId = getUserId()
@@ -136,19 +159,20 @@ class CustomLogManager: ObservableObject {
         updateCustomLogVisibility()
         // CloudKit sync handled automatically by NSPersistentCloudKitContainer
     }
-    
+
     func updateItem(_ item: CustomLogItemData) {
         let request: NSFetchRequest<CustomLogItem> = CustomLogItem.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", item.id.uuidString)
-        
+
         do {
             let entities = try context.fetch(request)
             if let entity = entities.first {
                 entity.title = item.title
                 entity.isEnabled = item.isEnabled
                 entity.displayOrder = Int16(item.displayOrder)
+                entity.collectionIndex = Int16(item.collectionIndex)
                 entity.updatedAt = Date()
-                
+
                 saveContext()
                 loadItems()
                 // CloudKit sync handled automatically by NSPersistentCloudKitContainer
@@ -220,11 +244,14 @@ class CustomLogManager: ObservableObject {
                 }
             } catch { }
         } else {
-            // Create new entry
+            // Create new entry. Mirror the parent item's collectionIndex so
+            // entries lookups by collection don't require a join.
+            let parentCollection = items.first(where: { $0.id == itemId })?.collectionIndex ?? 0
             let entry = CustomLogEntryData(
                 itemId: itemId,
                 date: targetDate,
-                isCompleted: true
+                isCompleted: true,
+                collectionIndex: parentCollection
             )
 
             let entity = CustomLogEntry(context: context)
@@ -232,6 +259,7 @@ class CustomLogManager: ObservableObject {
             entity.itemId = entry.itemId.uuidString
             entity.date = entry.date
             entity.isCompleted = entry.isCompleted
+            entity.collectionIndex = Int16(entry.collectionIndex)
             entity.createdAt = entry.createdAt
             entity.updatedAt = entry.updatedAt
             entity.userId = getUserId()

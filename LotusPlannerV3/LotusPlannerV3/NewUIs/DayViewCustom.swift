@@ -396,8 +396,31 @@ struct DayViewCustom: View {
                 includeCustomOverride: true,
                 showHeader: false
             )
+        case .logCustom2:
+            // Direct CustomLogView render for the second collection — wraps
+            // the body in the same boxed-section styling LogsComponent uses
+            // for `customLogSection`, with the second collection's name.
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(AppPreferences.shared.customLogSectionName(for: 1))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+                CustomLogView(collectionIndex: 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+            )
         case .logCustomWeek:
             CustomLogWeekComponent(currentDate: date)
+        case .logCustomWeek2:
+            CustomLogWeekComponent(currentDate: date, collectionIndex: 1)
         case .logsAll:
             LogsComponent(currentDate: date, horizontal: false, allowInternalScrolling: true)
         case .journal:

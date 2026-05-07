@@ -1286,7 +1286,7 @@ extension WeeklyView {
                     if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(alignment: .leading, spacing: 2) {
-                                let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                                let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
                                 customLogSummary(items: enabledItems, date: date)
                             }
                             .padding(.all, 8)
@@ -1459,7 +1459,7 @@ extension WeeklyView {
                     if appPrefs.showCustomLogs && hasCustomLogsForDate(date) {
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(alignment: .leading, spacing: 2) {
-                                let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                                let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
                                 customLogSummary(items: enabledItems, date: date)
                             }
                             .padding(.all, 8)
@@ -1632,7 +1632,7 @@ extension WeeklyView {
                 case .custom:
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(alignment: .leading, spacing: 2) {
-                            let enabledItems = customLogManager.items.filter { $0.isEnabled }
+                            let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
                             customLogSummary(items: enabledItems, date: date)
                         }
                         .padding(.all, 8)
@@ -1984,7 +1984,7 @@ extension WeeklyView {
     }
     
     private func weekCustomLogColumn(date: Date) -> some View {
-        let enabledItems = customLogManager.items.filter { $0.isEnabled }
+        let enabledItems = customLogManager.items(in: 0).filter { $0.isEnabled }
         let completedCount = enabledItems.reduce(0) { count, item in
             count + (customLogManager.getCompletionStatus(for: item.id, date: date) ? 1 : 0)
         }
@@ -2713,11 +2713,11 @@ extension WeeklyViewMode {
 // MARK: - Custom Log Helpers
 extension WeeklyView {
     private func hasCustomLogsForWeek() -> Bool {
-        customLogManager.items.contains { $0.isEnabled }
+        customLogManager.items(in: 0).contains { $0.isEnabled }
     }
 
     private func hasCustomLogsForDate(_ date: Date) -> Bool {
-        customLogManager.items.contains { $0.isEnabled }
+        customLogManager.items(in: 0).contains { $0.isEnabled }
     }
 }
 
