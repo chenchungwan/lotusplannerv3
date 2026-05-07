@@ -482,6 +482,35 @@ struct AllTaskListsColumn: View {
     }
 }
 
+// MARK: - Lists Sort Mode
+
+/// User-selectable secondary sort order in the Lists view. Completion
+/// status is always the primary sort (incomplete first); this enum picks
+/// the tiebreaker among open tasks (and among completed tasks).
+enum ListsSortMode: String, CaseIterable, Identifiable {
+    case dueDate
+    case priority
+    case alphabetical
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .dueDate:      return "Due Date"
+        case .priority:     return "Priority"
+        case .alphabetical: return "Alphabetical"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .dueDate:      return "calendar"
+        case .priority:     return "exclamationmark.triangle"
+        case .alphabetical: return "textformat.abc"
+        }
+    }
+}
+
 // MARK: - Tasks Detail Column (Right Side)
 struct TasksDetailColumn: View {
     let selectedListId: String?
@@ -505,6 +534,13 @@ struct TasksDetailColumn: View {
 
     // State for deleting completed tasks
     @State private var showingDeleteCompletedConfirmation = false
+
+    // Persisted secondary sort key for the task list. Default is
+    // due-date (closest to the prior fixed behavior).
+    @AppStorage("listsSortMode") private var sortModeRaw: String = ListsSortMode.dueDate.rawValue
+    private var sortMode: ListsSortMode {
+        ListsSortMode(rawValue: sortModeRaw) ?? .dueDate
+    }
 
     // State for inline task creation
     @State private var isCreatingNewTask = false
@@ -547,42 +583,38 @@ struct TasksDetailColumn: View {
     
     var tasks: [GoogleTask] {
         let allTasks = rawTasks
-        
-        // Filter out completed tasks if hideCompletedTasks is enabled
+
+        // Filter out completed tasks if hideCompletedTasks is enabled.
         let filtered = appPrefs.hideCompletedTasks ? allTasks.filter { !$0.isCompleted } : allTasks
-        
-        // Sort by: 1) completion status, 2) due date, 3) priority, 4) alphabetically
+
+        // Primary sort: completion status (incomplete first). Secondary
+        // sort key is user-selected via the header menu; alphabetical
+        // breaks remaining ties so the order is stable.
         let sorted = filtered.sorted { (a, b) in
-            // 1. Sort by completion status (incomplete first)
             if a.isCompleted != b.isCompleted {
-                return !a.isCompleted // incomplete (false) comes before completed (true)
+                return !a.isCompleted
             }
 
-            // 2. Sort by due date (soonest first, no due date goes last)
-            switch (a.dueDate, b.dueDate) {
-            case let (dateA?, dateB?):
-                if dateA != dateB {
-                    return dateA < dateB
+            switch sortMode {
+            case .dueDate:
+                switch (a.dueDate, b.dueDate) {
+                case let (dateA?, dateB?):
+                    if dateA != dateB { return dateA < dateB }
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): break
                 }
-            case (_?, nil):
-                return true // tasks with due dates come before tasks without
-            case (nil, _?):
-                return false // tasks without due dates come after tasks with
-            case (nil, nil):
-                break // both have no due date, continue to priority sort
+            case .priority:
+                let aPriority = a.priority?.sortOrder ?? Int.max
+                let bPriority = b.priority?.sortOrder ?? Int.max
+                if aPriority != bPriority { return aPriority < bPriority }
+            case .alphabetical:
+                break // primary alphabetical match below.
             }
 
-            // 3. Sort by priority (P0 highest first, no priority goes last)
-            let aPriority = a.priority?.sortOrder ?? Int.max
-            let bPriority = b.priority?.sortOrder ?? Int.max
-            if aPriority != bPriority {
-                return aPriority < bPriority
-            }
-
-            // 4. Sort alphabetically by title
             return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
-        
+
         return sorted
     }
     
@@ -638,27 +670,24 @@ struct TasksDetailColumn: View {
                     .buttonStyle(.plain)
                     
                     Spacer()
-                    
+
                     Text("\(incompleteTaskCount) | \(totalTaskCount)")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
                     Menu {
-                        Button(role: .destructive) {
-                            showingDeleteCompletedConfirmation = true
-                        } label: {
-                            Label("Delete Completed Tasks", systemImage: "checkmark.circle")
-                        }
-
-                        Divider()
-
-                        Button(role: .destructive) {
-                            showingDeleteConfirmation = true
-                        } label: {
-                            Label("Delete List", systemImage: "trash")
+                        ForEach(ListsSortMode.allCases) { mode in
+                            Button {
+                                sortModeRaw = mode.rawValue
+                            } label: {
+                                Label(mode.displayName, systemImage: mode.systemImage)
+                                if sortMode == mode {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "arrow.up.arrow.down.circle")
                             .font(.title3)
                             .foregroundColor(.secondary)
                     }
@@ -975,6 +1004,17 @@ struct TasksDetailColumn: View {
                             newName: renameText.trimmingCharacters(in: .whitespacesAndNewlines),
                             toAccount: renameAccount
                         )
+                    },
+                    onDeleteCompletedTasks: {
+                        // Sheet dismisses itself; the parent's existing
+                        // alert (driven by `showingDeleteCompletedConfirmation`)
+                        // does the actual confirm + delete.
+                        showingDeleteCompletedConfirmation = true
+                    },
+                    onDeleteList: {
+                        // Same pattern: sheet dismisses, parent alert
+                        // (driven by `showingDeleteConfirmation`) handles it.
+                        showingDeleteConfirmation = true
                     }
                 )
             }
@@ -1793,6 +1833,12 @@ struct RenameListSheet: View {
     /// an account move; the move-confirmation alert is presented here so
     /// the user must explicitly approve before the save fires.
     let onSave: () -> Void
+    /// Called when the user wants to delete completed tasks for this list.
+    /// The sheet dismisses; the caller surfaces its own confirmation alert.
+    let onDeleteCompletedTasks: () -> Void
+    /// Called when the user wants to delete the entire list. The sheet
+    /// dismisses; the caller surfaces its own confirmation alert.
+    let onDeleteList: () -> Void
     @FocusState private var isTextFieldFocused: Bool
     @State private var showingMoveConfirmation = false
 
@@ -1863,6 +1909,22 @@ struct RenameListSheet: View {
                         .onSubmit {
                             attemptSave()
                         }
+                }
+
+                Section("Danger Zone") {
+                    Button(role: .destructive) {
+                        onDeleteCompletedTasks()
+                        dismiss()
+                    } label: {
+                        Label("Delete Completed Tasks", systemImage: "checkmark.circle")
+                    }
+
+                    Button(role: .destructive) {
+                        onDeleteList()
+                        dismiss()
+                    } label: {
+                        Label("Delete List", systemImage: "trash")
+                    }
                 }
             }
             .navigationTitle("Edit List")
