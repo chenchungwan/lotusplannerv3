@@ -3,8 +3,9 @@ import SwiftUI
 struct SharedNavigationToolbar: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var showingAbout = false
+    @State private var showingDiagnostics = false
     @State private var showingReportIssues = false
-    
+
     var body: some View {
         HStack(spacing: 8) {
             // Hamburger menu with common actions
@@ -14,6 +15,11 @@ struct SharedNavigationToolbar: View {
                 }
                 Button("About") {
                     showingAbout = true
+                }
+                Button {
+                    showingDiagnostics = true
+                } label: {
+                    Label("Diagnostic", systemImage: "stethoscope")
                 }
                 Button("Report Issue / Request Features") {
                     showingReportIssues = true
@@ -56,6 +62,9 @@ struct SharedNavigationToolbar: View {
         }
         .sheet(isPresented: $showingAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showingDiagnostics) {
+            DiagnosticsView()
         }
         .sheet(isPresented: $showingReportIssues) {
             ReportIssuesView()

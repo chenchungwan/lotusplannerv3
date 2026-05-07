@@ -840,14 +840,17 @@ struct DraggableTimeboxWeekContent: View {
             updated.due = f.string(from: state.snappedDate)
             timeWindowManager.deleteTimeWindow(for: task.id)
         } else {
-            // Timed landing: store `due` as a full ISO timestamp on the
-            // new date+time, and write a fresh non-all-day window. Reuse
-            // the prior duration where possible so the visual size is
-            // preserved across days.
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            iso.timeZone = TimeZone(identifier: "UTC")
-            updated.due = iso.string(from: state.snappedStart)
+            // Timed landing: Google Tasks discards the time component of
+            // `due`, so we must store the local calendar date — not a UTC
+            // ISO timestamp, which rolls the date forward by one day for any
+            // drop after ~5 PM local in negative-offset timezones (PDT etc.).
+            // The actual time-of-day is persisted separately via
+            // TaskTimeWindowManager.saveTimeWindow below.
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd"
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.timeZone = TimeZone.current
+            updated.due = f.string(from: state.snappedStart)
 
             // Pick a duration: prior window if it exists, otherwise the
             // default we passed into the drag setup.

@@ -295,6 +295,7 @@ struct GlobalNavBar: View {
     private enum NavSheet: Identifiable {
         case settings
         case about
+        case diagnostics
         case reportIssues
         case datePicker
         case addEvent
@@ -305,6 +306,7 @@ struct GlobalNavBar: View {
             switch self {
             case .settings: return "settings"
             case .about: return "about"
+            case .diagnostics: return "diagnostics"
             case .reportIssues: return "reportIssues"
             case .datePicker: return "datePicker"
             case .addEvent: return "addEvent"
@@ -700,6 +702,11 @@ struct GlobalNavBar: View {
                                 activeSheet = .about
                             }) {
                                 Label("About", systemImage: "info.circle")
+                            }
+                            Button(action: {
+                                activeSheet = .diagnostics
+                            }) {
+                                Label("Diagnostic", systemImage: "stethoscope")
                             }
                             Button(action: {
                                 activeSheet = .reportIssues
@@ -1526,6 +1533,9 @@ struct GlobalNavBar: View {
 
             case .about:
                 AboutView()
+
+            case .diagnostics:
+                DiagnosticsView()
 
             case .reportIssues:
                 ReportIssuesView()
