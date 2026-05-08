@@ -242,10 +242,7 @@ extension TasksComponent {
     /// in `tasksDict` to count raw (unfiltered) tasks.
     private var emptyStateText: String {
         let allRawTasks = localTaskLists.flatMap { tasksDict[$0.id] ?? [] }
-        if !allRawTasks.isEmpty && allRawTasks.allSatisfy({ $0.isCompleted }) {
-            return "All tasks completed 🎉"
-        }
-        return "No tasks"
+        return TasksEmptyState.text(forUnfiltered: allRawTasks)
     }
 }
 

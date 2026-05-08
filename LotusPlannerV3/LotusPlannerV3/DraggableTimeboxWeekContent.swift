@@ -852,8 +852,10 @@ struct DraggableTimeboxWeekContent: View {
         }
 
         // Record optimistic override so the item shows at the new spot
-        // immediately while the async API call is in flight. Cleared after
-        // 3 seconds — a failed update will then revert visually.
+        // immediately while the async API call is in flight. Cleared by
+        // `clearPendingMove(_:)` once the API call returns; the timer is
+        // a safety net for cases where the await path silently swallows
+        // an error.
         let internalId = state.itemId
         let pending = PendingMove(
             date: state.snappedDate,
@@ -861,9 +863,11 @@ struct DraggableTimeboxWeekContent: View {
             isAllDay: targetIsAllDay
         )
         pendingMoves[internalId] = pending
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            pendingMoves.removeValue(forKey: internalId)
-            onCommit()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [internalId] in
+            // No-op when already cleared by the API completion handler.
+            if pendingMoves[internalId] != nil {
+                clearPendingMove(internalId)
+            }
         }
 
         switch state.kind {
@@ -874,7 +878,16 @@ struct DraggableTimeboxWeekContent: View {
         }
     }
 
+    /// Removes the optimistic override for `id` and notifies the parent.
+    /// Mutating @State here triggers a body re-render, which picks up the
+    /// authoritative model state in place of the optimistic pendingMove.
+    private func clearPendingMove(_ id: String) {
+        pendingMoves.removeValue(forKey: id)
+        onCommit()
+    }
+
     private func commitEvent(event: GoogleCalendarEvent, state: WeekDragState, targetIsAllDay: Bool) {
+        let internalId = state.itemId
         Task { @MainActor in
             if targetIsAllDay {
                 // Land in the all-day band → keep all-day status (or
@@ -887,7 +900,7 @@ struct DraggableTimeboxWeekContent: View {
                 // Timed → timed at the dropped slot (same or different day).
                 await calendarVM.moveEventToDateTime(event, to: state.snappedStart)
             }
-            onCommit()
+            clearPendingMove(internalId)
         }
     }
 
@@ -916,7 +929,10 @@ struct DraggableTimeboxWeekContent: View {
                 duration: duration
             )
         }
-        onCommit()
+        // Task commits are sync (TaskScheduler fires-and-forgets the API
+        // call internally) — the in-memory model already reflects the
+        // optimistic change, so we can clear immediately.
+        clearPendingMove(state.itemId)
     }
 
     // MARK: - Item assembly

@@ -150,19 +150,19 @@ The app uses a centralized singleton pattern for shared state management:
 
 ### ViewModels
 
-ViewModels are embedded within their respective view files (not separate files):
+ViewModels live in dedicated files and are exposed as singletons (`static let shared`). Views observe them with `@ObservedObject` directly.
 
-- **`CalendarViewModel`** - Calendar events and navigation
+- **`CalendarViewModel.shared`** - Calendar events and navigation
   - Manages Google Calendar API calls for both Personal and Professional accounts
-  - Month-based caching for performance
+  - Month-based caching for performance with day-keyed `personalEventsByDay` / `professionalEventsByDay` lookups
   - Preloads adjacent months in background
-  - Location: `LotusPlannerV3/LotusPlannerV3/CalendarView.swift` (class definition)
+  - Location: `LotusPlannerV3/LotusPlannerV3/CalendarViewModel.swift`
 
-- **`TasksViewModel`** - Google Tasks management
+- **`TasksViewModel.shared`** - Google Tasks management
   - Manages task lists and tasks from Google Tasks API
   - Supports both Personal and Professional accounts
-  - On-demand loading for performance optimization
-  - Location: `LotusPlannerV3/LotusPlannerV3/TasksView.swift` (class definition)
+  - On-demand loading; day-keyed `personalTasksByDay` / `professionalTasksByDay` caches built via `didSet`
+  - Location: `LotusPlannerV3/LotusPlannerV3/TasksViewModel.swift`
 
 - **`LogsViewModel.shared`** - Custom logging data
   - Singleton pattern for global access
@@ -186,7 +186,7 @@ The app has a modular view structure with specialized day views:
 
 #### Main Views
 - **`CalendarView`** - Calendar display (month/week/day views)
-  - Contains embedded `CalendarViewModel`
+  - Observes `CalendarViewModel.shared`
   - Integrates with Google Calendar API
   - Shows tasks inline with calendar
   - Location: `LotusPlannerV3/LotusPlannerV3/CalendarView.swift`
@@ -196,12 +196,12 @@ The app has a modular view structure with specialized day views:
   - Location: `LotusPlannerV3/LotusPlannerV3/WeeklyView.swift`
 
 - **`TasksView`** - Tasks management interface
-  - Contains embedded `TasksViewModel`
+  - Observes `TasksViewModel.shared`
   - Multiple layout modes (vertical, horizontal cards)
   - Location: `LotusPlannerV3/LotusPlannerV3/TasksView.swift`
 
 - **`GoalsView`** - Goals management
-  - Location: `LotusPlannerV3/LotusPlannerV3/GoalsView.swift`
+  - Location: `LotusPlannerV3/LotusPlannerV3/GoalsView.swift` (split into per-component files: `GoalCard.swift`, `GoalCategoryCard.swift`, `GoalRow.swift`, `CreateGoalView.swift`, `GoalCardGridView.swift`, etc.)
 
 - **`JournalView`** - Journal/drawing interface
   - Location: `LotusPlannerV3/LotusPlannerV3/JournalView.swift`
@@ -254,7 +254,8 @@ Swift data structures:
 - `GoalData`, `GoalCategoryData` - In `GoalsDataModel.swift`
 - `CustomLogData` - In `CustomLogDataModel.swift`
 - `LogsDataModel` - In `LogsDataModel.swift`
-- Google API types - Defined inline in CalendarViewModel and TasksViewModel
+- Google task types (`GoogleTask`, `GoogleTaskList`) - In `GoogleTasksDataModel.swift`
+- Google calendar types - Defined in `CalendarViewModel.swift`
 
 ## Key Patterns and Conventions
 
@@ -368,7 +369,7 @@ See `docs/ICLOUD_SYNC_DIAGNOSTIC.md` for comprehensive troubleshooting guide, es
 
 When editing code, always reference line numbers for specific functions:
 ```
-Example: CalendarViewModel.loadEvents() is at CalendarView.swift:245
+Example: CalendarViewModel.loadEvents() is at CalendarViewModel.swift:245
 ```
 
 ## Dependencies

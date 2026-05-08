@@ -24,9 +24,12 @@ struct TasksCompactComponent: View {
                     .font(.headline)
                     .foregroundColor(accentColor)
                 
-                // Tasks list
-                if allTasks.isEmpty {
-                    Text("No tasks")
+                // Tasks list. Use the sorted-and-filtered list to detect
+                // emptiness so the empty state shows up when hideCompleted
+                // hides every visible task; pass the unfiltered set to the
+                // copy helper so "All tasks completed 🎉" can fire.
+                if sortedTasksWithLists.isEmpty {
+                    Text(TasksEmptyState.text(forUnfiltered: allTasks))
                         .font(.body)
                         .foregroundColor(.secondary)
                         .italic()
