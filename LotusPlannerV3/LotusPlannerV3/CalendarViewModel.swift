@@ -32,8 +32,9 @@ class CalendarViewModel: ObservableObject {
     private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private let appPrefs = AppPreferences.shared
+    let dayFetchPaddingDays = 7
 
-    private func scheduleErrorCheck() {
+    func scheduleErrorCheck() {
         // Cancel any existing error check task
         errorCheckTask?.cancel()
 
@@ -294,33 +295,33 @@ class CalendarViewModel: ObservableObject {
         scheduleErrorCheck()
     }
 
-    private let authManager = GoogleAuthManager.shared
+    let authManager = GoogleAuthManager.shared
 
     // MARK: - Memory Cache
-    private var cachedEvents: [String: [GoogleCalendarEvent]] = [:]
-    private var cachedCalendars: [String: [GoogleCalendar]] = [:]
-    private var cacheTimestamps: [String: Date] = [:]
-    private let cacheTimeout: TimeInterval = 1800 // 30 minutes - longer cache for better performance
+    var cachedEvents: [String: [GoogleCalendarEvent]] = [:]
+    var cachedCalendars: [String: [GoogleCalendar]] = [:]
+    var cacheTimestamps: [String: Date] = [:]
+    let cacheTimeout: TimeInterval = 1800 // 30 minutes - longer cache for better performance
 
     // MARK: - Cache Size Management
-    private var cacheAccessOrder: [String: Date] = [:] // Track last access time for LRU eviction
-    private let maxCacheEntries = 6 // Max number of month entries (e.g., 3 months * 2 accounts)
-    private var estimatedCacheSize: Int = 0 // Rough estimate in bytes
+    var cacheAccessOrder: [String: Date] = [:] // Track last access time for LRU eviction
+    let maxCacheEntries = 6 // Max number of month entries (e.g., 3 months * 2 accounts)
+    var estimatedCacheSize: Int = 0 // Rough estimate in bytes
 
     // MARK: - Smart Prefetching
-    private var lastNavigatedDate: Date?
-    private var navigationDirection: Int = 0 // -1 for backward, 0 for neutral, 1 for forward
-    private var prefetchTask: Task<Void, Never>?
+    var lastNavigatedDate: Date?
+    var navigationDirection: Int = 0 // -1 for backward, 0 for neutral, 1 for forward
+    var prefetchTask: Task<Void, Never>?
 
     // MARK: - Persistent Cache Keys
-    private let diskCacheKeyPrefix = "CalendarCache_"
-    private let diskCacheTimestampPrefix = "CacheTimestamp_"
+    let diskCacheKeyPrefix = "CalendarCache_"
+    let diskCacheTimestampPrefix = "CacheTimestamp_"
 
     // Track current loaded range to avoid unnecessary reloads
-    private var currentLoadedRange: (start: Date, end: Date, accountKind: GoogleAuthManager.AccountKind)?
+    var currentLoadedRange: (start: Date, end: Date, accountKind: GoogleAuthManager.AccountKind)?
 
     // MARK: - Cache Helper Methods
-    private func cacheKey(for accountKind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) -> String {
+    func cacheKey(for accountKind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return "\(accountKind.rawValue)_\(formatter.string(from: startDate))_\(formatter.string(from: endDate))"
@@ -358,19 +359,19 @@ class CalendarViewModel: ObservableObject {
         cacheAccessOrder.removeValue(forKey: professionalKey)
     }
 
-    private func monthCacheKey(for date: Date, accountKind: GoogleAuthManager.AccountKind) -> String {
+    func monthCacheKey(for date: Date, accountKind: GoogleAuthManager.AccountKind) -> String {
         let calendar = Calendar.mondayFirst
         let monthStart = calendar.dateInterval(of: .month, for: date)?.start ?? date
         let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) ?? date
         return cacheKey(for: accountKind, startDate: monthStart, endDate: monthEnd)
     }
 
-    private func isCacheValid(for key: String) -> Bool {
+    func isCacheValid(for key: String) -> Bool {
         guard let timestamp = cacheTimestamps[key] else { return false }
         return Date().timeIntervalSince(timestamp) < cacheTimeout
     }
 
-    private func getCachedEvents(for key: String) -> [GoogleCalendarEvent]? {
+    func getCachedEvents(for key: String) -> [GoogleCalendarEvent]? {
         // First check memory cache
         if isCacheValid(for: key), let memoryCache = cachedEvents[key] {
             // Update access time for LRU tracking
@@ -399,7 +400,7 @@ class CalendarViewModel: ObservableObject {
         return nil
     }
 
-    private func cacheEvents(_ events: [GoogleCalendarEvent], for key: String) {
+    func cacheEvents(_ events: [GoogleCalendarEvent], for key: String) {
         cachedEvents[key] = events
         cacheTimestamps[key] = Date()
         cacheAccessOrder[key] = Date()
@@ -412,7 +413,7 @@ class CalendarViewModel: ObservableObject {
     }
 
     // MARK: - Cache Eviction (LRU Policy)
-    private func evictOldCacheEntriesIfNeeded() {
+    func evictOldCacheEntriesIfNeeded() {
         guard cachedEvents.count > maxCacheEntries else { return }
 
         // Sort cache keys by last access time (oldest first)
@@ -429,7 +430,7 @@ class CalendarViewModel: ObservableObject {
         }
     }
 
-    private func getCachedCalendars(for key: String) -> [GoogleCalendar]? {
+    func getCachedCalendars(for key: String) -> [GoogleCalendar]? {
         guard isCacheValid(for: key) else {
             cachedCalendars.removeValue(forKey: key)
             return nil
@@ -437,13 +438,13 @@ class CalendarViewModel: ObservableObject {
         return cachedCalendars[key]
     }
 
-    private func cacheCalendars(_ calendars: [GoogleCalendar], for key: String) {
+    func cacheCalendars(_ calendars: [GoogleCalendar], for key: String) {
         cachedCalendars[key] = calendars
         cacheTimestamps[key] = Date()
     }
 
     // MARK: - Persistent Disk Cache Methods
-    private func saveEventsToDisk(_ events: [GoogleCalendarEvent], for key: String) {
+    func saveEventsToDisk(_ events: [GoogleCalendarEvent], for key: String) {
         guard !events.isEmpty else { return }
 
         do {
@@ -454,7 +455,7 @@ class CalendarViewModel: ObservableObject {
         }
     }
 
-    private func loadEventsFromDisk(for key: String) -> [GoogleCalendarEvent]? {
+    func loadEventsFromDisk(for key: String) -> [GoogleCalendarEvent]? {
         guard let data = UserDefaults.standard.data(forKey: diskCacheKeyPrefix + key) else {
             return nil
         }
@@ -469,7 +470,7 @@ class CalendarViewModel: ObservableObject {
         }
     }
 
-    private func isDiskCacheValid(for key: String) -> Bool {
+    func isDiskCacheValid(for key: String) -> Bool {
         guard let timestamp = UserDefaults.standard.object(forKey: diskCacheTimestampPrefix + key) as? Date else {
             return false
         }
@@ -477,785 +478,9 @@ class CalendarViewModel: ObservableObject {
         return Date().timeIntervalSince(timestamp) < 86400
     }
 
-    private func clearDiskCache(for key: String) {
+    func clearDiskCache(for key: String) {
         UserDefaults.standard.removeObject(forKey: diskCacheKeyPrefix + key)
         UserDefaults.standard.removeObject(forKey: diskCacheTimestampPrefix + key)
     }
 
-    // MARK: - Preloading Methods
-    func preloadAdjacentMonths(around date: Date) async {
-        let calendar = Calendar.mondayFirst
-
-        await withTaskGroup(of: Void.self) { group in
-            // Preload previous month (cache-only; do not mutate live arrays)
-            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
-                group.addTask {
-                    await self.preloadMonthIntoCache(containing: prevMonth)
-                }
-            }
-
-            // Preload next month (cache-only)
-            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
-                group.addTask {
-                    await self.preloadMonthIntoCache(containing: nextMonth)
-                }
-            }
-        }
-    }
-
-    // MARK: - Smart Prefetching
-    private func smartPrefetch(around date: Date) async {
-        let calendar = Calendar.mondayFirst
-
-        // Prioritize prefetching based on navigation direction
-        if navigationDirection > 0 {
-            // User is moving forward - prioritize future months
-            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
-                await preloadMonthIntoCache(containing: nextMonth)
-
-                // Also prefetch the month after that with lower priority
-                if let nextNextMonth = calendar.date(byAdding: .month, value: 2, to: date) {
-                    await preloadMonthIntoCache(containing: nextNextMonth)
-                }
-            }
-
-            // Then prefetch previous month
-            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
-                await preloadMonthIntoCache(containing: prevMonth)
-            }
-        } else if navigationDirection < 0 {
-            // User is moving backward - prioritize past months
-            if let prevMonth = calendar.date(byAdding: .month, value: -1, to: date) {
-                await preloadMonthIntoCache(containing: prevMonth)
-
-                // Also prefetch the month before that
-                if let prevPrevMonth = calendar.date(byAdding: .month, value: -2, to: date) {
-                    await preloadMonthIntoCache(containing: prevPrevMonth)
-                }
-            }
-
-            // Then prefetch next month
-            if let nextMonth = calendar.date(byAdding: .month, value: 1, to: date) {
-                await preloadMonthIntoCache(containing: nextMonth)
-            }
-        } else {
-            // Neutral - prefetch both adjacent months equally
-            await preloadAdjacentMonths(around: date)
-        }
-    }
-
-    // Preload a month's calendars/events into cache without updating published state
-    func preloadMonthIntoCache(containing date: Date) async {
-        let calendar = Calendar.mondayFirst
-        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
-              let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
-            return
-        }
-
-        // PERFORMANCE OPTIMIZATION: Check cache first to avoid unnecessary API calls
-        let personalKey = monthCacheKey(for: date, accountKind: .personal)
-        let professionalKey = monthCacheKey(for: date, accountKind: .professional)
-
-        let needsPersonalPreload = authManager.isLinked(kind: .personal) && !isCacheValid(for: personalKey)
-        let needsProfessionalPreload = authManager.isLinked(kind: .professional) && !isCacheValid(for: professionalKey)
-
-        guard needsPersonalPreload || needsProfessionalPreload else {
-            return
-        }
-
-        await withTaskGroup(of: Void.self) { group in
-            if needsPersonalPreload {
-                group.addTask {
-                    do {
-                        // Fetch calendars and events in parallel
-                        async let calendars = CalendarManager.shared.fetchCalendars(for: .personal)
-                        async let events = CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
-
-                        let (fetchedCalendars, fetchedEvents) = try await (calendars, events)
-
-                        await MainActor.run {
-                            self.cacheCalendars(fetchedCalendars, for: personalKey)
-                            self.cacheEvents(fetchedEvents, for: personalKey)
-                        }
-                    } catch {
-                    }
-                }
-            }
-            if needsProfessionalPreload {
-                group.addTask {
-                    do {
-                        // Fetch calendars and events in parallel
-                        async let calendars = CalendarManager.shared.fetchCalendars(for: .professional)
-                        async let events = CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
-
-                        let (fetchedCalendars, fetchedEvents) = try await (calendars, events)
-
-                        await MainActor.run {
-                            self.cacheCalendars(fetchedCalendars, for: professionalKey)
-                            self.cacheEvents(fetchedEvents, for: professionalKey)
-                        }
-                    } catch {
-                    }
-                }
-            }
-        }
-    }
-
-    func loadCalendarData(for date: Date) async {
-        isLoading = true
-        errorMessage = nil
-        showError = false
-
-        var personalError: Error?
-        var professionalError: Error?
-
-        await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
-                group.addTask {
-                    do {
-                        try await self.loadCalendarDataForAccountThrowing(.personal, date: date)
-                    } catch {
-                        personalError = error
-                    }
-                }
-            }
-
-            if authManager.isLinked(kind: .professional) {
-                group.addTask {
-                    do {
-                        try await self.loadCalendarDataForAccountThrowing(.professional, date: date)
-                    } catch {
-                        professionalError = error
-                    }
-                }
-            }
-        }
-
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-            if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                }
-            } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
-                self.errorMessage = professionalError!.localizedDescription
-            }
-        }
-
-        isLoading = false
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
-    }
-
-    func loadCalendarDataForWeek(containing date: Date) async {
-        isLoading = true
-        errorMessage = nil
-        showError = false
-
-        // Get the week range using Monday-first calendar, extended by 1 day on each side for all-day events
-        let calendar = Calendar.mondayFirst
-        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date),
-              let weekStart = calendar.date(byAdding: .day, value: -1, to: weekInterval.start),
-              let weekEnd = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .day, value: 7, to: weekInterval.start) ?? weekInterval.end) else {
-            isLoading = false
-            return
-        }
-
-        var personalError: Error?
-        var professionalError: Error?
-
-        await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
-                group.addTask {
-                    do {
-                        try await self.loadCalendarDataForWeekRangeThrowing(.personal, startDate: weekStart, endDate: weekEnd)
-                    } catch {
-                        personalError = error
-                    }
-                }
-            }
-
-            if authManager.isLinked(kind: .professional) {
-                group.addTask {
-                    do {
-                        try await self.loadCalendarDataForWeekRangeThrowing(.professional, startDate: weekStart, endDate: weekEnd)
-                    } catch {
-                        professionalError = error
-                    }
-                }
-            }
-        }
-
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-            if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                }
-            } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
-                self.errorMessage = professionalError!.localizedDescription
-            }
-        }
-
-        isLoading = false
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
-    }
-
-    func loadCalendarDataForMonth(containing date: Date) async {
-        let calendar = Calendar.mondayFirst
-        guard let monthStart = calendar.dateInterval(of: .month, for: date)?.start,
-              let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else {
-            return
-        }
-
-        // Track navigation direction for smart prefetching
-        if let lastDate = lastNavigatedDate {
-            if monthStart > lastDate {
-                navigationDirection = 1 // Moving forward
-            } else if monthStart < lastDate {
-                navigationDirection = -1 // Moving backward
-            }
-        }
-        lastNavigatedDate = monthStart
-
-        // Check cache first - if we have valid cached data, use it immediately
-        if authManager.isLinked(kind: .personal) {
-            let personalKey = monthCacheKey(for: date, accountKind: .personal)
-            if let cachedEvents = getCachedEvents(for: personalKey),
-               let cachedCalendars = getCachedCalendars(for: personalKey) {
-                personalEvents = eventsOwned(by: .personal, from: cachedEvents)
-                personalCalendars = cachedCalendars
-            }
-        }
-
-        if authManager.isLinked(kind: .professional) {
-            let professionalKey = monthCacheKey(for: date, accountKind: .professional)
-            if let cachedEvents = getCachedEvents(for: professionalKey),
-               let cachedCalendars = getCachedCalendars(for: professionalKey) {
-                professionalEvents = eventsOwned(by: .professional, from: cachedEvents)
-                professionalCalendars = cachedCalendars
-            }
-        }
-
-        // If we have valid cache for all linked accounts, return early
-        let needsPersonalRefresh = authManager.isLinked(kind: .personal) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .personal)) == nil
-        let needsProfessionalRefresh = authManager.isLinked(kind: .professional) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .professional)) == nil
-
-        if !needsPersonalRefresh && !needsProfessionalRefresh {
-            return
-        }
-
-        // Only set loading state if we actually need to load fresh data
-        // This prevents the UI from flickering when we have cached data
-        isLoading = true
-        errorMessage = nil
-        showError = false
-
-        var personalError: Error?
-        var professionalError: Error?
-
-        await withTaskGroup(of: Void.self) { group in
-            if needsPersonalRefresh {
-                group.addTask {
-                    do {
-                        let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
-                        await MainActor.run {
-                            self.personalEvents = self.eventsOwned(by: .personal, from: events)
-                            self.personalCalendars = calendars
-                        }
-                    } catch {
-                        personalError = error
-                    }
-                }
-            }
-            if needsProfessionalRefresh {
-                group.addTask {
-                    do {
-                        let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
-                        await MainActor.run {
-                            self.professionalEvents = self.eventsOwned(by: .professional, from: events)
-                            self.professionalCalendars = calendars
-                        }
-                    } catch {
-                        professionalError = error
-                    }
-                }
-            }
-        }
-
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-            if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                }
-            } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
-                self.errorMessage = professionalError!.localizedDescription
-            }
-        }
-
-        isLoading = false
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
-
-        // PROGRESSIVE LOADING: Smart prefetch based on navigation direction
-        prefetchTask?.cancel() // Cancel any ongoing prefetch
-        prefetchTask = Task.detached(priority: .low) {
-            await self.smartPrefetch(around: date)
-        }
-    }
-
-    private func loadCalendarDataForAccountThrowing(_ kind: GoogleAuthManager.AccountKind, date: Date) async throws {
-        let calendars = try await fetchCalendars(for: kind)
-        let events = try await fetchEventsForDate(date, calendars: calendars, for: kind)
-
-        await MainActor.run {
-            switch kind {
-            case .personal:
-                self.personalCalendars = calendars
-                self.personalEvents = self.eventsOwned(by: .personal, from: events)
-            case .professional:
-                self.professionalCalendars = calendars
-                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
-            }
-        }
-    }
-
-    private func fetchCalendars(for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleCalendar] {
-
-        do {
-            let accessToken = try await authManager.getAccessToken(for: kind)
-
-            let url = URL(string: "https://www.googleapis.com/calendar/v3/users/me/calendarList")!
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
-            let (data, httpResponse) = try await URLSession.shared.data(for: request)
-
-            if let response = httpResponse as? HTTPURLResponse {
-                if response.statusCode != 200 {
-                    if String(data: data, encoding: .utf8) != nil {
-                        // Response string available for debugging if needed
-                    }
-
-                    // Handle HTTP errors
-                    if response.statusCode != 200 {
-                        throw CalendarManager.shared.handleHttpError(response.statusCode)
-                    }
-                }
-            }
-
-            let response = try JSONDecoder().decode(GoogleCalendarListResponse.self, from: data)
-            let calendars = response.items ?? []
-
-            // Debug: Print calendar details
-            for calendar in calendars {
-            }
-
-            return calendars
-        } catch {
-
-            // Add more specific error information
-            if error is URLError {
-                // URL error detected for debugging if needed
-            }
-
-            throw error
-        }
-    }
-
-    private let dayFetchPaddingDays = 7
-
-    private func fetchEventsForDate(_ date: Date, calendars: [GoogleCalendar], for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleCalendarEvent] {
-        let accessToken = try await authManager.getAccessToken(for: kind)
-
-        let calendar = Calendar.current
-        let baseStartOfDay = calendar.startOfDay(for: date)
-        let paddedStart = calendar.date(byAdding: .day, value: -dayFetchPaddingDays, to: baseStartOfDay) ?? baseStartOfDay
-        let paddedEnd = calendar.date(byAdding: .day, value: dayFetchPaddingDays + 1, to: baseStartOfDay) ?? calendar.date(byAdding: .day, value: 1, to: baseStartOfDay)!
-
-        let formatter = ISO8601DateFormatter()
-        let timeMin = formatter.string(from: paddedStart)
-        let timeMax = formatter.string(from: paddedEnd)
-
-        var allEvents: [GoogleCalendarEvent] = []
-
-        // Fetch events from all calendars
-        for calendarItem in calendars {
-            let urlString = "https://www.googleapis.com/calendar/v3/calendars/\(calendarItem.id)/events?timeMin=\(timeMin)&timeMax=\(timeMax)&singleEvents=true&orderBy=startTime"
-
-            guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else {
-                continue
-            }
-
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
-            do {
-                let (data, _) = try await URLSession.shared.data(for: request)
-                let response = try JSONDecoder().decode(GoogleCalendarEventsResponse.self, from: data)
-
-                if let events = response.items {
-                    let eventsWithCalendarId = events.map { event in
-                        GoogleCalendarEvent(
-                            id: event.id,
-                            summary: event.summary,
-                            description: event.description,
-                            start: event.start,
-                            end: event.end,
-                            location: event.location,
-                            calendarId: calendarItem.id,
-                            recurringEventId: event.recurringEventId,
-                            recurrence: event.recurrence
-                        )
-                    }
-                    allEvents.append(contentsOf: eventsWithCalendarId)
-                }
-            } catch {
-            }
-        }
-
-        return allEvents.sorted { event1, event2 in
-            guard let start1 = event1.startTime, let start2 = event2.startTime else {
-                return false
-            }
-            return start1 < start2
-        }
-    }
-
-    private func loadCalendarDataForWeekRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
-        let calendars = try await fetchCalendars(for: kind)
-        let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
-
-        await MainActor.run {
-            switch kind {
-            case .personal:
-                self.personalCalendars = calendars
-                self.personalEvents = self.eventsOwned(by: .personal, from: events)
-            case .professional:
-                self.professionalCalendars = calendars
-                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
-            }
-        }
-    }
-
-    private func loadCalendarDataForMonthRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
-        let calendars = try await fetchCalendars(for: kind)
-
-        let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
-
-        // Cache the fresh data
-        let cacheKey = self.cacheKey(for: kind, startDate: startDate, endDate: endDate)
-        cacheEvents(events, for: cacheKey)
-        cacheCalendars(calendars, for: cacheKey)
-
-        await MainActor.run {
-            switch kind {
-            case .personal:
-                self.personalCalendars = calendars
-                self.personalEvents = self.eventsOwned(by: .personal, from: events)
-            case .professional:
-                self.professionalCalendars = calendars
-                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
-            }
-        }
-    }
-
-    private func fetchEventsForDateRange(startDate: Date, endDate: Date, calendars: [GoogleCalendar], for kind: GoogleAuthManager.AccountKind) async throws -> [GoogleCalendarEvent] {
-        let accessToken = try await authManager.getAccessToken(for: kind)
-
-        let formatter = ISO8601DateFormatter()
-        let timeMin = formatter.string(from: startDate)
-        let timeMax = formatter.string(from: endDate)
-
-        var allEvents: [GoogleCalendarEvent] = []
-
-        // Fetch events from all calendars
-        for calendarItem in calendars {
-            let urlString = "https://www.googleapis.com/calendar/v3/calendars/\(calendarItem.id)/events?timeMin=\(timeMin)&timeMax=\(timeMax)&singleEvents=true&orderBy=startTime"
-
-            guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else {
-                continue
-            }
-
-            var request = URLRequest(url: url)
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-
-            do {
-                let (data, _) = try await URLSession.shared.data(for: request)
-                let response = try JSONDecoder().decode(GoogleCalendarEventsResponse.self, from: data)
-
-                if let events = response.items {
-                    let eventsWithCalendarId = events.map { event in
-                        GoogleCalendarEvent(
-                            id: event.id,
-                            summary: event.summary,
-                            description: event.description,
-                            start: event.start,
-                            end: event.end,
-                            location: event.location,
-                            calendarId: calendarItem.id,
-                            recurringEventId: event.recurringEventId,
-                            recurrence: event.recurrence
-                        )
-                    }
-                    allEvents.append(contentsOf: eventsWithCalendarId)
-                }
-            } catch {
-            }
-        }
-
-        return allEvents.sorted { event1, event2 in
-            guard let start1 = event1.startTime, let start2 = event2.startTime else {
-                return false
-            }
-            return start1 < start2
-        }
-    }
-
-    // MARK: - Move Event to Different Date (Preserve Time)
-
-    /// Move `event` to `targetDate`. By default, preserve the event's
-    /// timed/all-day status. Pass `forceAllDay: true` (called when the
-    /// user drops a timed event onto the all-day band) to convert the
-    /// event to all-day on `targetDate` regardless of its prior state;
-    /// in that mode we also explicitly null the `dateTime` field so
-    /// Google clears the prior timed values (date and dateTime are
-    /// mutually exclusive on the API).
-    func moveEventToDate(_ event: GoogleCalendarEvent, to targetDate: Date, forceAllDay: Bool = false) async {
-        guard let originalStart = event.startTime, let originalEnd = event.endTime else { return }
-
-        let calendar = Calendar.current
-        let originalDay = calendar.startOfDay(for: originalStart)
-        let targetDay = calendar.startOfDay(for: targetDate)
-        // When converting timed → all-day on the same day, the day
-        // offset is zero but the event still needs a PATCH. Only short-
-        // circuit when both the day matches AND we'd be re-PATCHing the
-        // same all-day status.
-        let sameDay = calendar.isDate(originalDay, inSameDayAs: targetDay)
-        if sameDay {
-            let alreadyAllDay = event.isAllDay
-            let willBeAllDay = forceAllDay || alreadyAllDay
-            if alreadyAllDay == willBeAllDay {
-                return
-            }
-        }
-
-        let dayOffset = calendar.dateComponents([.day], from: originalDay, to: targetDay).day ?? 0
-        guard let newStart = calendar.date(byAdding: .day, value: dayOffset, to: originalStart),
-              let newEnd = calendar.date(byAdding: .day, value: dayOffset, to: originalEnd) else { return }
-
-        let kind: GoogleAuthManager.AccountKind = self.accountKind(for: event)
-
-        do {
-            let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
-            let calId = event.calendarId ?? "primary"
-            let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
-            let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
-            let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "PATCH"
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("*", forHTTPHeaderField: "If-Match")
-
-            var body: [String: Any]
-            let resultIsAllDay = forceAllDay || event.isAllDay
-            if resultIsAllDay {
-                let df = DateFormatter()
-                df.dateFormat = "yyyy-MM-dd"
-                // For an all-day event, Google's `end.date` is exclusive
-                // (the day after the last all-day day). Single-day all-
-                // day → end = start + 1 day. When converting a timed
-                // event we collapse to a single-day all-day on the
-                // target date.
-                let baseStart: Date
-                let baseEndExclusive: Date
-                if event.isAllDay {
-                    baseStart = newStart
-                    baseEndExclusive = calendar.date(byAdding: .day, value: 1, to: newStart) ?? newEnd
-                } else {
-                    baseStart = calendar.startOfDay(for: targetDate)
-                    baseEndExclusive = calendar.date(byAdding: .day, value: 1, to: baseStart) ?? baseStart
-                }
-                body = [
-                    "start": [
-                        "date": df.string(from: baseStart),
-                        "dateTime": NSNull(),
-                        "timeZone": NSNull()
-                    ],
-                    "end": [
-                        "date": df.string(from: baseEndExclusive),
-                        "dateTime": NSNull(),
-                        "timeZone": NSNull()
-                    ]
-                ]
-            } else {
-                let iso = ISO8601DateFormatter()
-                iso.formatOptions = [.withInternetDateTime]
-                iso.timeZone = TimeZone.current
-                body = [
-                    "start": [
-                        "dateTime": iso.string(from: newStart),
-                        "timeZone": TimeZone.current.identifier,
-                        "date": NSNull()
-                    ],
-                    "end": [
-                        "dateTime": iso.string(from: newEnd),
-                        "timeZone": TimeZone.current.identifier,
-                        "date": NSNull()
-                    ]
-                ]
-            }
-
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                devLog("Failed to move event: bad response", level: .error, category: .calendar)
-                return
-            }
-            await loadCalendarDataForWeek(containing: targetDate)
-        } catch {
-            devLog("Failed to move event: \(error)", level: .error, category: .calendar)
-        }
-    }
-
-    // MARK: - Move Event to Specific Date and Time
-
-    /// Schedule `event` at a specific start time with an explicit duration,
-    /// regardless of whether it's currently timed or all-day. Use this to
-    /// convert an all-day event into a timed one — `moveEventToDateTime`
-    /// would compute a 24-hour duration off the all-day end exclusive
-    /// boundary, which is not what the caller wants.
-    func scheduleEvent(_ event: GoogleCalendarEvent, startTime: Date, duration: TimeInterval) async {
-        let newEnd = startTime.addingTimeInterval(duration)
-        let kind: GoogleAuthManager.AccountKind = self.accountKind(for: event)
-
-        do {
-            let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
-            let calId = event.calendarId ?? "primary"
-            let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
-            let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
-            let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "PATCH"
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("*", forHTTPHeaderField: "If-Match")
-
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime]
-            iso.timeZone = TimeZone.current
-            // Google Calendar treats `date` (all-day) and `dateTime`
-            // (timed) as mutually exclusive. When converting an all-day
-            // event to timed we must explicitly null the existing `date`
-            // field, otherwise the PATCH leaves the event as all-day.
-            let body: [String: Any] = [
-                "start": [
-                    "dateTime": iso.string(from: startTime),
-                    "timeZone": TimeZone.current.identifier,
-                    "date": NSNull()
-                ],
-                "end": [
-                    "dateTime": iso.string(from: newEnd),
-                    "timeZone": TimeZone.current.identifier,
-                    "date": NSNull()
-                ]
-            ]
-
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                devLog("Failed to schedule event: bad response", level: .error, category: .calendar)
-                return
-            }
-            await loadCalendarDataForWeek(containing: startTime)
-        } catch {
-            devLog("Failed to schedule event: \(error)", level: .error, category: .calendar)
-        }
-    }
-
-    func moveEventToDateTime(_ event: GoogleCalendarEvent, to targetDateTime: Date) async {
-        guard let originalStart = event.startTime, let originalEnd = event.endTime else { return }
-
-        let duration = originalEnd.timeIntervalSince(originalStart)
-        let newEnd = targetDateTime.addingTimeInterval(duration)
-
-        let kind: GoogleAuthManager.AccountKind = self.accountKind(for: event)
-
-        do {
-            let accessToken = try await GoogleAuthManager.shared.getAccessToken(for: kind)
-            let calId = event.calendarId ?? "primary"
-            let encodedCalId = calId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? calId
-            let encodedEventId = event.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? event.id
-            let url = URL(string: "https://www.googleapis.com/calendar/v3/calendars/\(encodedCalId)/events/\(encodedEventId)")!
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "PATCH"
-            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("*", forHTTPHeaderField: "If-Match")
-
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime]
-            iso.timeZone = TimeZone.current
-            // Null the all-day `date` field so this works even when the
-            // caller hands us an all-day event (defensive — see
-            // `scheduleEvent` for the canonical conversion path).
-            let body: [String: Any] = [
-                "start": [
-                    "dateTime": iso.string(from: targetDateTime),
-                    "timeZone": TimeZone.current.identifier,
-                    "date": NSNull()
-                ],
-                "end": [
-                    "dateTime": iso.string(from: newEnd),
-                    "timeZone": TimeZone.current.identifier,
-                    "date": NSNull()
-                ]
-            ]
-
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                devLog("Failed to move event to time: bad response", level: .error, category: .calendar)
-                return
-            }
-            await loadCalendarDataForWeek(containing: targetDateTime)
-        } catch {
-            devLog("Failed to move event to time: \(error)", level: .error, category: .calendar)
-        }
-    }
 }
