@@ -57,17 +57,15 @@ enum DevLogger {
 #endif
     }
 
+    /// Returns the call site's explicit level unchanged. Earlier versions
+    /// of this helper auto-promoted messages containing `❌` / `⚠️` /
+    /// `✅` to higher levels — that drowned the console because dozens
+    /// of operational-state messages used those emojis for visual
+    /// emphasis, not because they were genuine errors. Now the level
+    /// passed at the call site (default `.debug`) is the source of
+    /// truth; if a message should always print, pass `level: .error` or
+    /// `level: .warning` explicitly.
     private static func inferredLevel(from message: String, default level: DevLogLevel) -> DevLogLevel {
-        let lowercased = message.lowercased()
-        if message.contains("❌") || lowercased.contains("error") {
-            return .error
-        }
-        if message.contains("⚠️") || lowercased.contains("warning") {
-            return .warning
-        }
-        if message.contains("✅") {
-            return .info
-        }
         return level
     }
 
