@@ -96,7 +96,6 @@ class GoalsManager: ObservableObject {
                    let jsonData = linkedTasksJSON.data(using: .utf8) {
                     do {
                         linkedTasks = try JSONDecoder().decode([LinkedTaskData].self, from: jsonData)
-                        devLog("🎯 Goal '\(entity.title ?? "")' loaded with \(linkedTasks.count) linked tasks", level: .info, category: .goals)
                     } catch {
                         devLog("🎯 Failed to decode linkedTasksJSON for '\(entity.title ?? "")': \(error)", level: .error, category: .goals)
                     }
@@ -135,7 +134,7 @@ class GoalsManager: ObservableObject {
                    let existing = existingGoalsById[newGoals[i].id],
                    !existing.linkedTasks.isEmpty {
                     newGoals[i].linkedTasks = existing.linkedTasks
-                    devLog("🎯 Preserved \(existing.linkedTasks.count) linked tasks for '\(newGoals[i].title)' during reload", level: .info, category: .goals)
+                    devLog("🎯 Preserved \(existing.linkedTasks.count) linked tasks for '\(newGoals[i].title)' during reload", level: .debug, category: .goals)
                 }
             }
 
@@ -232,11 +231,11 @@ class GoalsManager: ObservableObject {
                 updateGoalInCoreData(goals[i])
                 TaskGoalLinkManager.shared.syncLinksFromGoal(goals[i])
                 updated = true
-                devLog("Updated goal link: \(goals[i].title) task \(oldTaskId) -> \(newTaskId) in list \(newListId)", level: .info, category: .goals)
+                devLog("Updated goal link: \(goals[i].title) task \(oldTaskId) -> \(newTaskId) in list \(newListId)", level: .debug, category: .goals)
             }
         }
         if !updated {
-            devLog("No goal found with linked task \(oldTaskId)", level: .info, category: .goals)
+            devLog("No goal found with linked task \(oldTaskId)", level: .debug, category: .goals)
         }
     }
 
@@ -436,7 +435,7 @@ class GoalsManager: ObservableObject {
                     let jsonData = try JSONEncoder().encode(goal.linkedTasks)
                     let jsonString = String(data: jsonData, encoding: .utf8)
                     entity.linkedTasksJSON = jsonString
-                    devLog("🎯 Saving goal '\(goal.title)' with \(goal.linkedTasks.count) linked tasks, JSON length: \(jsonString?.count ?? 0)", level: .info, category: .goals)
+                    devLog("🎯 Saving goal '\(goal.title)' with \(goal.linkedTasks.count) linked tasks, JSON length: \(jsonString?.count ?? 0)", level: .debug, category: .goals)
                 } catch {
                     entity.linkedTasksJSON = nil
                     devLog("🎯 Failed to encode linkedTasks for '\(goal.title)': \(error)", level: .error, category: .goals)
@@ -820,7 +819,7 @@ class GoalsManager: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if Date().timeIntervalSince(self.lastSaveTime) < self.reloadSuppressDuration {
-                    devLog("🎯 GoalsManager: Skipping iCloud reload (recent local save)", level: .info, category: .goals)
+                    devLog("🎯 GoalsManager: Skipping iCloud reload (recent local save)", level: .debug, category: .goals)
                     return
                 }
                 devLog("🎯 GoalsManager: Received .iCloudDataChanged notification - reloading data")
@@ -839,7 +838,7 @@ class GoalsManager: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if Date().timeIntervalSince(self.lastSaveTime) < self.reloadSuppressDuration {
-                    devLog("🎯 GoalsManager: Skipping remote change reload (recent local save)", level: .info, category: .goals)
+                    devLog("🎯 GoalsManager: Skipping remote change reload (recent local save)", level: .debug, category: .goals)
                     return
                 }
                 devLog("🎯 GoalsManager: Received .NSPersistentStoreRemoteChange - reloading data")
