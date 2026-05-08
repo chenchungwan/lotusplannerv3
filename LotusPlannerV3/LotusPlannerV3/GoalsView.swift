@@ -1649,13 +1649,12 @@ struct CreateGoalView: View {
                 tasksVM: tasksVM,
                 alreadyLinkedIds: Set(taskItems.compactMap { $0.existingTaskId }),
                 onSelect: { task, listId, kind in
-                    var dueDate = Date()
-                    if let dueDateStr = task.due {
-                        let formatter = DateFormatter()
-                        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
-                        formatter.locale = Locale(identifier: "en_US_POSIX")
-                        if let parsed = formatter.date(from: dueDateStr) { dueDate = parsed }
-                    }
+                    // `task.dueDate` already handles both date-only ("yyyy-MM-dd")
+                    // and full-ISO formats Google can return. The previous
+                    // inline formatter only matched full-ISO and silently fell
+                    // through to "today" for date-only `due` strings — which
+                    // is most of them.
+                    let dueDate = task.dueDate ?? Date()
                     taskItems.append(PendingTask(
                         title: task.title,
                         dueDate: dueDate,
@@ -1941,21 +1940,9 @@ struct CreateGoalView: View {
                     }
                 }
 
-                var dueDate = Date()
-                if let dueDateStr = foundTask?.due {
-                    // Try full format first, then date-only
-                    let fullFormatter = DateFormatter()
-                    fullFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
-                    fullFormatter.locale = Locale(identifier: "en_US_POSIX")
-                    let shortFormatter = DateFormatter()
-                    shortFormatter.dateFormat = "yyyy-MM-dd"
-                    shortFormatter.locale = Locale(identifier: "en_US_POSIX")
-                    dueDate = fullFormatter.date(from: dueDateStr)
-                        ?? shortFormatter.date(from: String(dueDateStr.prefix(10)))
-                        ?? Date()
-                } else if let taskDueDate = foundTask?.dueDate {
-                    dueDate = taskDueDate
-                }
+                // `dueDate` on GoogleTask handles both date-only and full-ISO
+                // formats; fall back to today when the task has no `due`.
+                let dueDate = foundTask?.dueDate ?? Date()
 
                 taskItems.append(PendingTask(
                     title: foundTask?.title ?? linked.taskTitle ?? "Task",
