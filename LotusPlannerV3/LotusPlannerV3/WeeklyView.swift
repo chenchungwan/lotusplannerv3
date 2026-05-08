@@ -4,20 +4,6 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 
-enum WeeklyViewMode: String, CaseIterable, Hashable {
-    case week
-}
-
-// MARK: - Drag & Drop Task Data
-struct DraggableTaskInfo: Codable, Transferable {
-    let taskId: String
-    let listId: String
-    let accountKind: String // "personal" or "professional"
-
-    static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .json)
-    }
-}
 
 struct WeeklyView: View {
     @EnvironmentObject var appPrefs: AppPreferences
@@ -2962,14 +2948,6 @@ extension WeeklyView {
 }
 
 
-extension WeeklyViewMode {
-    var displayName: String {
-        switch self {
-        case .week: return "Week"
-        }
-    }
-}
-
 // MARK: - Custom Log Helpers
 extension WeeklyView {
     /// True when collection 0 has any enabled items. Legacy helper; new
@@ -2991,14 +2969,3 @@ extension WeeklyView {
     }
 }
 
-// MARK: - View Extension for Conditional Modifiers
-extension View {
-    @ViewBuilder
-    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
-        if condition {
-            transform(self)
-        } else {
-            self
-        }
-    }
-}
