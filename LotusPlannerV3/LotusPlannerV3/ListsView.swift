@@ -1538,6 +1538,16 @@ struct SimpleTaskRow: View {
                         .strikethrough(task.isCompleted)
                         .foregroundColor(task.isCompleted ? .secondary : .primary)
 
+                    // Repeating-task badge — small accent-colored sync
+                    // glyph next to the title when the task is part of
+                    // a recurrence series.
+                    if RecurrenceManager.shared.hasRule(for: task.id) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(accentColor)
+                            .accessibilityLabel("Repeating task")
+                    }
+
                     Spacer()
 
                     // Priority indicator

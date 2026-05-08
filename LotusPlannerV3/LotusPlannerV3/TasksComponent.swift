@@ -165,7 +165,7 @@ extension TasksComponent {
     @ViewBuilder
     private var horizontalCardsView: some View {
         if showEmptyState && noVisibleTasks {
-            Text("No tasks")
+            Text(emptyStateText)
                 .font(.body)
                 .foregroundColor(.secondary)
                 .italic()
@@ -194,7 +194,7 @@ extension TasksComponent {
                     card(for: list, enableScroll: false, maxHeight: nil)
                 }
                 if showEmptyState && noVisibleTasks {
-                    Text("No tasks")
+                    Text(emptyStateText)
                         .font(.body)
                         .foregroundColor(.secondary)
                         .italic()
@@ -211,7 +211,7 @@ extension TasksComponent {
                             card(for: list, enableScroll: false, maxHeight: nil)
                         }
                         if showEmptyState && noVisibleTasks {
-                            Text("No tasks")
+                            Text(emptyStateText)
                                 .font(.body)
                                 .foregroundColor(.secondary)
                                 .italic()
@@ -234,6 +234,18 @@ extension TasksComponent {
             let filteredTasks = filteredTasksForList(taskList)
             return filteredTasks.isEmpty
         }
+    }
+
+    /// Empty-state copy. Distinguishes "the user actually has tasks but
+    /// the `hideCompletedTasks` filter is hiding them all" from "there
+    /// are genuinely no tasks for this view." Reaches across all lists
+    /// in `tasksDict` to count raw (unfiltered) tasks.
+    private var emptyStateText: String {
+        let allRawTasks = localTaskLists.flatMap { tasksDict[$0.id] ?? [] }
+        if !allRawTasks.isEmpty && allRawTasks.allSatisfy({ $0.isCompleted }) {
+            return "All tasks completed 🎉"
+        }
+        return "No tasks"
     }
 }
 
