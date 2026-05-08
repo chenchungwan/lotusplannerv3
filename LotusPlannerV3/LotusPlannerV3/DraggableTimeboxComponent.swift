@@ -611,19 +611,19 @@ struct DraggableTimeboxComponent: View {
                     await calendarVM.moveEventToDateTime(event, to: state.snappedStart)
                 }
             }
-        case .task(let task, _, _):
-            // Save against the *real* Google Task id — `state.itemId` is
-            // our internal "task_<id>" prefix, which would never round-trip
-            // back through `getTimeWindow(for:)` and was the reason drops
-            // appeared to revert. For all-day → timed conversion this same
-            // call writes a fresh non-all-day window (the manager replaces
-            // any prior all-day window on save).
-            let newEnd = state.snappedStart.addingTimeInterval(state.duration)
-            timeWindowManager.saveTimeWindow(
-                taskId: task.id,
-                startTime: state.snappedStart,
-                endTime: newEnd,
-                isAllDay: false
+        case .task(let task, let listId, let isPersonal):
+            // In-day drag — same day, only the time window changes.
+            // TaskScheduler.scheduleTimed updates `task.due` (no-op when
+            // it already matches today's local yyyy-MM-dd) and saves a
+            // fresh non-all-day window. For an all-day → timed conversion
+            // the manager replaces the existing all-day window on save.
+            let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+            TaskScheduler.scheduleTimed(
+                task: task,
+                listId: listId,
+                kind: kind,
+                start: state.snappedStart,
+                duration: state.duration
             )
         }
     }
