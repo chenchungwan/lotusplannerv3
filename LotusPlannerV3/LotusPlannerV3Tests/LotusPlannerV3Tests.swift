@@ -294,8 +294,8 @@ final class LotusPlannerV3Tests: XCTestCase {
         prefs.updateDayViewLayout(.compact)
         XCTAssertEqual(prefs.dayViewLayout, .compact, "Day view layout should update")
 
-        prefs.updateDayViewLayout(.defaultNew)
-        XCTAssertEqual(prefs.dayViewLayout, .defaultNew, "Day view layout should update to expanded")
+        prefs.updateDayViewLayout(.timebox)
+        XCTAssertEqual(prefs.dayViewLayout, .timebox, "Day view layout should update to expanded")
     }
 
     @MainActor
@@ -374,16 +374,15 @@ final class LotusPlannerV3Tests: XCTestCase {
     // MARK: - Enum Tests
 
     func testDayViewLayoutOptions() {
-        XCTAssertEqual(DayViewLayoutOption.compact.displayName, "Classic")
-        XCTAssertEqual(DayViewLayoutOption.compactTwo.displayName, "Compact")
-        XCTAssertEqual(DayViewLayoutOption.defaultNew.displayName, "Expanded")
+        XCTAssertEqual(DayViewLayoutOption.compact.displayName, "Compact")
         XCTAssertEqual(DayViewLayoutOption.mobile.displayName, "Mobile")
-        XCTAssertEqual(DayViewLayoutOption.timebox.displayName, "Timebox")
-        XCTAssertEqual(DayViewLayoutOption.standard.displayName, "Standard")
+        XCTAssertEqual(DayViewLayoutOption.timebox.displayName, "Expanded")
+        XCTAssertEqual(DayViewLayoutOption.newClassic.displayName, "Classic")
+        XCTAssertEqual(DayViewLayoutOption.custom.displayName, "Custom")
 
         let allCases = DayViewLayoutOption.allCases
         XCTAssertTrue(allCases.contains(.compact), "Should include compact")
-        XCTAssertTrue(allCases.contains(.standard), "Should include standard")
+        XCTAssertTrue(allCases.contains(.newClassic), "Should include newClassic")
         XCTAssertTrue(allCases.contains(.timebox), "Should include timebox")
     }
 
@@ -833,13 +832,13 @@ final class RecentFeaturesRegressionTests: XCTestCase {
     func testDayViewLayoutOrder() {
         let allCases = DayViewLayoutOption.allCases
 
-        guard let standardIndex = allCases.firstIndex(of: .standard),
+        guard let compactIndex = allCases.firstIndex(of: .compact),
               let timeboxIndex = allCases.firstIndex(of: .timebox) else {
-            XCTFail("Standard and Timebox should exist in allCases")
+            XCTFail("Compact and Timebox should exist in allCases")
             return
         }
 
-        XCTAssertLessThan(standardIndex, timeboxIndex, "Standard should come before Timebox")
+        XCTAssertLessThan(compactIndex, timeboxIndex, "Compact should come before Timebox")
     }
 
     func testDayViewLayoutDisplayNames() {
