@@ -36,32 +36,11 @@ struct BulkUpdateDueDatePicker: View {
         _selectedDate = State(initialValue: Date())
         _tempSelectedDate = State(initialValue: Date())
 
-        // Initialize times to nearest half hour (consistent with individual task editing)
-        let calendar = Calendar.current
-        let now = Date()
-        let components = calendar.dateComponents([.hour, .minute], from: now)
-        let hour = components.hour ?? 9
-        let minute = components.minute ?? 0
-
-        // Calculate next half hour
-        var nextHour = hour
-        var nextMinute: Int
-
-        if minute < 30 {
-            // Next half hour is :30 of current hour
-            nextMinute = 30
-        } else {
-            // Next half hour is :00 of next hour
-            nextMinute = 0
-            nextHour = (hour + 1) % 24
-        }
-
-        // Set start time to next half hour
-        let roundedStart = calendar.date(bySettingHour: nextHour, minute: nextMinute, second: 0, of: now) ?? now
-        _startTime = State(initialValue: roundedStart)
-
-        // Set end time to 30 minutes after start time
-        _endTime = State(initialValue: calendar.date(byAdding: .minute, value: 30, to: roundedStart) ?? now)
+        // Initialize times to nearest half hour, matching the same default
+        // applied when toggling a single task from all-day to timed.
+        let window = TimeMath.defaultTimedWindow(on: Date())
+        _startTime = State(initialValue: window.start)
+        _endTime = State(initialValue: window.end)
     }
 
     var body: some View {

@@ -69,30 +69,11 @@ struct AddItemView: View {
         // If oldValue was false (already timed), don't change the times.
     }
 
-    /// Default time-of-day for an event when toggling all-day → timed:
-    /// start = next half-hour boundary strictly after now, end = start + 30
-    /// minutes. Mirrors `TaskDetailsView.defaultTimedWindow` so tasks and
-    /// events behave the same.
+    /// Thin alias for `TimeMath.defaultTimedWindow` so existing
+    /// `Self.defaultTimedWindow(on:)` callers in this file continue to
+    /// work without churning every call site.
     static func defaultTimedWindow(on date: Date) -> (start: Date, end: Date) {
-        let cal = Calendar.current
-        let now = Date()
-        let comps = cal.dateComponents([.hour, .minute], from: now)
-        let hour = comps.hour ?? 9
-        let minute = comps.minute ?? 0
-        let startHour: Int
-        let startMinute: Int
-        if minute < 30 {
-            startHour = hour
-            startMinute = 30
-        } else {
-            startHour = (hour + 1) % 24
-            startMinute = 0
-        }
-        let start = cal.date(bySettingHour: startHour, minute: startMinute, second: 0, of: date)
-            ?? cal.startOfDay(for: date)
-        let end = cal.date(byAdding: .minute, value: 30, to: start)
-            ?? start.addingTimeInterval(1800)
-        return (start, end)
+        TimeMath.defaultTimedWindow(on: date)
     }
     
     private var availableTaskLists: [GoogleTaskList] {

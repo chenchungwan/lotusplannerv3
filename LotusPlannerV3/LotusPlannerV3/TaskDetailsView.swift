@@ -79,34 +79,14 @@ struct TaskDetailsView: View {
         return formatter
     }()
 
-    /// Default time-of-day to use when toggling an all-day task to timed:
-    /// start = next half-hour boundary strictly after the current wall-clock
-    /// time, end = start + 30 minutes. The hour/minute is then rebound onto
-    /// `date`'s calendar day (since the user may be editing a task whose due
-    /// date is not today). Mirrored by `AddEventView.defaultTimedWindow` so
-    /// tasks and events behave the same.
+    /// Thin alias for `TimeMath.defaultTimedWindow` so existing
+    /// `Self.defaultTimedWindow(on:)` callers in this file continue to
+    /// work without churning every call site.
     static func defaultTimedWindow(on date: Date) -> (start: Date, end: Date) {
-        let cal = Calendar.current
-        let now = Date()
-        let comps = cal.dateComponents([.hour, .minute], from: now)
-        let hour = comps.hour ?? 9
-        let minute = comps.minute ?? 0
-        let startHour: Int
-        let startMinute: Int
-        if minute < 30 {
-            startHour = hour
-            startMinute = 30
-        } else {
-            startHour = (hour + 1) % 24
-            startMinute = 0
-        }
-        let start = cal.date(bySettingHour: startHour, minute: startMinute, second: 0, of: date)
-            ?? cal.startOfDay(for: date)
-        let end = cal.date(byAdding: .minute, value: 30, to: start)
-            ?? start.addingTimeInterval(1800)
-        return (start, end)
+        TimeMath.defaultTimedWindow(on: date)
     }
-    
+
+
     init(task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind, accentColor: Color, personalTaskLists: [GoogleTaskList], professionalTaskLists: [GoogleTaskList], appPrefs: AppPreferences, viewModel: TasksViewModel, onSave: @escaping (GoogleTask) -> Void, onDelete: @escaping () -> Void, onMove: @escaping (GoogleTask, String) -> Void, onCrossAccountMove: @escaping (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void, isNew: Bool = false) {
         self.task = task
         self.taskListId = taskListId
