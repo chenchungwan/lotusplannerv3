@@ -1055,6 +1055,15 @@ class AppPreferences: ObservableObject {
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
         self.useGoalCardView = UserDefaults.standard.object(forKey: "useGoalCardView") as? Bool ?? false
         self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
+        // One-time migration: force verbose logging off so users running
+        // a build that left it on previously see the new default. The
+        // sentinel key ensures this only happens once; subsequent toggles
+        // by the user are respected.
+        let resetSentinelKey = "verboseLoggingResetToOffOnce.v1"
+        if !UserDefaults.standard.bool(forKey: resetSentinelKey) {
+            UserDefaults.standard.set(false, forKey: DevLogger.verboseLoggingDefaultsKey)
+            UserDefaults.standard.set(true, forKey: resetSentinelKey)
+        }
         self.verboseLoggingEnabled = UserDefaults.standard.object(forKey: DevLogger.verboseLoggingDefaultsKey) as? Bool ?? false
         
         
