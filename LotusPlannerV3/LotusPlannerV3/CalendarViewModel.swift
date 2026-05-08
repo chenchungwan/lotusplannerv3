@@ -11,6 +11,12 @@ import SwiftUI
 // MARK: - Calendar View Model
 @MainActor
 class CalendarViewModel: ObservableObject {
+    /// Shared instance. Views across the app observe the same model so
+    /// a calendar event edit anywhere updates every surface. Was
+    /// previously owned by `DataManager`; promoted to a singleton so
+    /// views can reference it directly.
+    static let shared = CalendarViewModel()
+
     @Published var personalCalendars: [GoogleCalendar] = []
     @Published var professionalCalendars: [GoogleCalendar] = []
     @Published var personalEvents: [GoogleCalendarEvent] = [] {

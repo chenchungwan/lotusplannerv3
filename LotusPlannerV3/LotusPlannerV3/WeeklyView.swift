@@ -21,8 +21,8 @@ struct DraggableTaskInfo: Codable, Transferable {
 
 struct WeeklyView: View {
     @EnvironmentObject var appPrefs: AppPreferences
-    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarViewModel = CalendarViewModel.shared
+    @ObservedObject private var tasksViewModel = TasksViewModel.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var logsViewModel = LogsViewModel.shared
@@ -2722,29 +2722,20 @@ extension WeeklyView {
     }
 
     private func handleTaskDrop(_ info: DraggableTaskInfo, to targetDate: Date) {
-        let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .personal : .professional
-        let tasksDict = kind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
-
-        guard let task = tasksDict[info.listId]?.first(where: { $0.id == info.taskId }) else { return }
-
-        // Format the new due date
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'00:00:00.000Z"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        let newDueString = formatter.string(from: targetDate)
-
-        // Skip if same date
-        if task.due == newDueString { return }
-
-        var updatedTask = task
-        updatedTask.due = newDueString
-
-        Task {
-            await tasksViewModel.updateTask(updatedTask, in: info.listId, for: kind)
-        }
+        // Drop on a day cell — schedule as all-day on the target date.
+        // TaskScheduler centralizes formatting (local `yyyy-MM-dd`, NOT
+        // the previous UTC format which rolled the date forward by one
+        // day in negative-offset timezones) and time-window cleanup.
+        guard let resolved = TaskScheduler.resolveTask(info) else { return }
+        TaskScheduler.scheduleAllDay(
+            task: resolved.task,
+            listId: info.listId,
+            kind: resolved.kind,
+            on: targetDate
+        )
     }
-    
+
+
     private func handleEventDrop(providers: [NSItemProvider], targetDate: Date) -> Bool {
         guard let provider = providers.first else { return false }
 

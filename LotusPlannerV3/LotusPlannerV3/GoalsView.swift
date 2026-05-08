@@ -339,7 +339,7 @@ struct GoalCardGridView: View {
     let currentDate: Date
 
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
 
     // Empty-state copy-from-previous-period flow: confirmation + "no goals
@@ -1058,7 +1058,7 @@ struct GoalRow: View {
     let onDelete: () -> Void
     let showTags: Bool
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 
     private var adaptivePadding: CGFloat {
@@ -1260,7 +1260,7 @@ struct AddCategoryCard: View {
 struct CreateGoalView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 
@@ -2473,7 +2473,7 @@ struct GoalDetailSheet: View {
     let goal: GoalData
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
 
     private var category: GoalCategoryData? {
         goalsManager.getCategoryById(goal.categoryId)

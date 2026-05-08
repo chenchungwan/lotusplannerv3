@@ -5,8 +5,8 @@ struct CalendarWeekView: View {
     let currentDate: Date
     let onDateSelected: (Date) -> Void
     
-    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarViewModel = CalendarViewModel.shared
+    @ObservedObject private var tasksViewModel = TasksViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     
     @State private var selectedEvent: GoogleCalendarEvent? // PERFORMANCE ENHANCEMENT: Loading state

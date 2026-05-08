@@ -7,8 +7,8 @@ import Photos
 // MARK: - Calendar View
 
 struct CalendarView: View {
-    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarViewModel = CalendarViewModel.shared
+    @ObservedObject private var tasksViewModel = TasksViewModel.shared
     @ObservedObject private var dataManager = DataManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared

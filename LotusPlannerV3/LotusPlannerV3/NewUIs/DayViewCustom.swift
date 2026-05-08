@@ -7,8 +7,8 @@ struct DayViewCustom: View {
     @ObservedObject private var bulkEditManager: BulkEditManager
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @ObservedObject private var logsVM = LogsViewModel.shared
 

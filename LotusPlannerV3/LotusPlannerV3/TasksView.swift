@@ -5,8 +5,8 @@ import Foundation
 
 // MARK: - Tasks View
 struct TasksView: View {
-    @ObservedObject private var viewModel = DataManager.shared.tasksViewModel
-    @ObservedObject private var calendarViewModel = DataManager.shared.calendarViewModel
+    @ObservedObject private var viewModel = TasksViewModel.shared
+    @ObservedObject private var calendarViewModel = CalendarViewModel.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared

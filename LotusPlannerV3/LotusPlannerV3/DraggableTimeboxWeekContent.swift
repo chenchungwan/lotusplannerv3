@@ -34,8 +34,8 @@ struct DraggableTimeboxWeekContent: View {
     let onTaskSelectionToggle: (GoogleTask) -> Void
     let onCommit: () -> Void
 
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 
@@ -824,60 +824,31 @@ struct DraggableTimeboxWeekContent: View {
     }
 
     private func commitTask(task: GoogleTask, listId: String, state: WeekDragState, targetIsAllDay: Bool) {
+        // Determine which account this task belongs to from the in-memory
+        // task dictionaries — the drag state doesn't carry it.
         let isPersonal = tasksVM.personalTasks[listId]?.contains(where: { $0.id == task.id }) ?? false
         let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
 
-        var updated = task
-        let cal = Calendar.current
-
         if targetIsAllDay {
-            // All-day landing: store `due` as date-only and remove any
-            // existing timed window.
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd"
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = TimeZone.current
-            updated.due = f.string(from: state.snappedDate)
-            timeWindowManager.deleteTimeWindow(for: task.id)
+            TaskScheduler.scheduleAllDay(
+                task: task,
+                listId: listId,
+                kind: kind,
+                on: state.snappedDate
+            )
         } else {
-            // Timed landing: Google Tasks discards the time component of
-            // `due`, so we must store the local calendar date — not a UTC
-            // ISO timestamp, which rolls the date forward by one day for any
-            // drop after ~5 PM local in negative-offset timezones (PDT etc.).
-            // The actual time-of-day is persisted separately via
-            // TaskTimeWindowManager.saveTimeWindow below.
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd"
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = TimeZone.current
-            updated.due = f.string(from: state.snappedStart)
-
-            // Pick a duration: prior window if it exists, otherwise the
-            // default we passed into the drag setup.
-            let duration: TimeInterval
-            if let prior = timeWindowManager.getTimeWindow(for: task.id), !prior.isAllDay {
-                duration = prior.endTime.timeIntervalSince(prior.startTime)
-            } else {
-                duration = state.duration
-            }
-            // Re-anchor duration to the new start on the new date.
-            let newEnd = state.snappedStart.addingTimeInterval(duration)
-            // saveTimeWindow validates same-day; since we constructed both
-            // from `state.snappedDate`, this always succeeds.
-            timeWindowManager.saveTimeWindow(
-                taskId: task.id,
-                startTime: state.snappedStart,
-                endTime: cal.isDate(state.snappedStart, inSameDayAs: newEnd)
-                    ? newEnd
-                    : cal.date(bySettingHour: 23, minute: 59, second: 0, of: state.snappedStart) ?? state.snappedStart,
-                isAllDay: false
+            // Prefer prior window's duration so the visual size is
+            // preserved across days; fall back to the drag's duration.
+            let duration = TaskScheduler.resolvedDuration(forTaskId: task.id, fallback: state.duration)
+            TaskScheduler.scheduleTimed(
+                task: task,
+                listId: listId,
+                kind: kind,
+                start: state.snappedStart,
+                duration: duration
             )
         }
-
-        Task {
-            await tasksVM.updateTask(updated, in: listId, for: kind)
-            onCommit()
-        }
+        onCommit()
     }
 
     // MARK: - Item assembly

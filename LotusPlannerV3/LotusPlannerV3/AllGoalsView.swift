@@ -469,7 +469,7 @@ struct TimeframeColumnView: View {
 
     private func resolveTasksForGoal(_ goal: GoalData) -> [GoalCardTaskInfo] {
         goal.linkedTasks.compactMap { linked -> GoalCardTaskInfo? in
-            let tasksVM = DataManager.shared.tasksViewModel
+            let tasksVM = TasksViewModel.shared
             for (_, tasks) in tasksVM.personalTasks {
                 if let t = tasks.first(where: { $0.id == linked.taskId }) {
                     return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
@@ -515,7 +515,7 @@ struct EditGoalView: View {
     let goal: GoalData
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 
@@ -623,7 +623,7 @@ struct LinkedTasksSection: View {
     @Binding var linkedTasks: [LinkedTaskData]
     let goalId: UUID
 
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 
@@ -728,7 +728,7 @@ struct TaskPickerView: View {
     let goalId: UUID
 
     @Environment(\.dismiss) var dismiss
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 

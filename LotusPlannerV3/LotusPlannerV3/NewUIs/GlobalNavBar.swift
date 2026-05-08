@@ -276,8 +276,8 @@ enum PrintDayHelper {
 struct GlobalNavBar: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @ObservedObject private var logsVM = LogsViewModel.shared
     
@@ -1680,10 +1680,10 @@ struct GlobalNavBar: View {
         let currentDate = navigationManager.currentDate
 
         // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        DataManager.shared.goalsManager.refreshData()
+        GoalsManager.shared.refreshData()
 
         // Reload custom logs data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        DataManager.shared.customLogManager.refreshData()
+        CustomLogManager.shared.refreshData()
 
         // Wait for CloudKit to propagate
         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
@@ -1739,10 +1739,10 @@ struct GlobalNavBar: View {
         try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
 
         // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        DataManager.shared.goalsManager.refreshData()
+        GoalsManager.shared.refreshData()
 
         // Reload custom logs data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        DataManager.shared.customLogManager.refreshData()
+        CustomLogManager.shared.refreshData()
 
         // Wait for CloudKit to propagate
         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ListsView: View {
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @State private var isLoading = false
@@ -276,7 +276,7 @@ struct AllTaskListsColumn: View {
     let initialExpandedAccount: GoogleAuthManager.AccountKind?
 
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     
     // State for creating new list

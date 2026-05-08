@@ -802,7 +802,7 @@ struct SettingsView: View {
         GoogleAuthManager.shared.clearAllAuthState()
         
         // Clear calendar caches
-        DataManager.shared.calendarViewModel.clearAllData()
+        CalendarViewModel.shared.clearAllData()
         
         // Delete all Logs data (Core Data + CloudKit)
         CoreDataManager.shared.deleteAllLogs()
@@ -1146,23 +1146,23 @@ struct SettingsView: View {
         // Reload calendar events based on current interval
         switch NavigationManager.shared.currentInterval {
         case .day:
-            await DataManager.shared.calendarViewModel.loadCalendarData(for: currentDate)
+            await CalendarViewModel.shared.loadCalendarData(for: currentDate)
         case .week:
-            await DataManager.shared.calendarViewModel.loadCalendarDataForWeek(containing: currentDate)
+            await CalendarViewModel.shared.loadCalendarDataForWeek(containing: currentDate)
         case .month:
-            await DataManager.shared.calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
+            await CalendarViewModel.shared.loadCalendarDataForMonth(containing: currentDate)
         case .year:
-            await DataManager.shared.calendarViewModel.loadCalendarDataForMonth(containing: currentDate)
+            await CalendarViewModel.shared.loadCalendarDataForMonth(containing: currentDate)
         }
         
         // Reload tasks with forced cache clear
-        await DataManager.shared.tasksViewModel.loadTasks(forceClear: true)
+        await TasksViewModel.shared.loadTasks(forceClear: true)
 
         // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        DataManager.shared.goalsManager.refreshData()
+        GoalsManager.shared.refreshData()
 
         // Reload custom log data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        DataManager.shared.customLogManager.refreshData()
+        CustomLogManager.shared.refreshData()
 
         // Reload logs data
         LogsViewModel.shared.reloadData()

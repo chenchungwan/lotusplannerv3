@@ -4,6 +4,13 @@ import Foundation
 // MARK: - Tasks View Model
 @MainActor
 class TasksViewModel: ObservableObject {
+    /// Shared instance. App-wide views observe the same model so a task
+    /// edit anywhere updates every surface (tasks list, calendar, custom
+    /// day view). `DataManager` previously owned this object; promotion
+    /// to a singleton lets views reference it directly without going
+    /// through DataManager indirection.
+    static let shared = TasksViewModel()
+
     @Published var personalTaskLists: [GoogleTaskList] = []
     @Published var professionalTaskLists: [GoogleTaskList] = []
     @Published var personalTasks: [String: [GoogleTask]] = [:] { // taskListId: [tasks]

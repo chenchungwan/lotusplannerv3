@@ -14,7 +14,7 @@ struct GoalsTimeframeComponent: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     /// Observed so the row backgrounds re-fill when a linked task's
     /// completion status changes (drives the progressive green bar).
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
 
     /// Goals whose target timeframe matches and whose `dueDate` falls inside
     /// the period (week / month / year) containing `date`. Ordering follows

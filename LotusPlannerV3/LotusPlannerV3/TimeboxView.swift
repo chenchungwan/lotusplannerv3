@@ -28,8 +28,8 @@ struct TimeboxDropDelegate: DropDelegate {
 struct TimeboxView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @ObservedObject private var bulkEditManager: BulkEditManager
 

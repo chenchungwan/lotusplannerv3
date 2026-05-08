@@ -12,7 +12,7 @@ struct WeeklyGoalsBarComponent: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     /// Observed so the chip backgrounds re-fill when a linked task's
     /// completion status changes (drives the progressive green capsule).
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksVM = TasksViewModel.shared
 
     /// Weekly goals for the week containing `currentDate`, ordered to match
     /// the user's Goals view arrangement (a global `displayOrder` set by

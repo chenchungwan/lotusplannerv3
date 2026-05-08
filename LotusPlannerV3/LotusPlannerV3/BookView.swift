@@ -261,8 +261,8 @@ struct BookPageViewController: UIViewControllerRepresentable {
 struct BookView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @StateObject private var bulkEditManager = BulkEditManager()
 
@@ -604,7 +604,7 @@ struct BookMonthPage: View {
     let month: Int
     let year: Int
 
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
 
@@ -646,7 +646,7 @@ struct BookMonthPage: View {
                 event.ownerAccountKind
             AddItemView(
                 currentDate: event.startTime ?? Date(),
-                tasksViewModel: DataManager.shared.tasksViewModel,
+                tasksViewModel: TasksViewModel.shared,
                 calendarViewModel: calendarVM,
                 appPrefs: appPrefs,
                 existingEvent: event,
@@ -686,7 +686,7 @@ struct BookMonthPage: View {
 struct BookDayPage: View {
     @ObservedObject var bulkEditManager: BulkEditManager
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksViewModel = TasksViewModel.shared
     @State private var selectedEvent: GoogleCalendarEvent?
 
     var body: some View {
@@ -695,12 +695,12 @@ struct BookDayPage: View {
                 dayViewContent
             }
             .sheet(item: $selectedEvent) { event in
-                let calendarVM = DataManager.shared.calendarViewModel
+                let calendarVM = CalendarViewModel.shared
                 let accountKind: GoogleAuthManager.AccountKind =
                     event.ownerAccountKind
                 AddItemView(
                     currentDate: event.startTime ?? Date(),
-                    tasksViewModel: DataManager.shared.tasksViewModel,
+                    tasksViewModel: TasksViewModel.shared,
                     calendarViewModel: calendarVM,
                     appPrefs: appPrefs,
                     existingEvent: event,

@@ -2,15 +2,24 @@ import SwiftUI
 import Foundation
 
 // MARK: - Data Manager
+
+/// App-launch / lifecycle orchestrator. Sets up data preload, foreground
+/// refresh, and request debouncing across the singleton ViewModels and
+/// managers. Earlier versions exposed `tasksViewModel` / `calendarViewModel`
+/// here for convenience; those models are now their own singletons
+/// (`TasksViewModel.shared`, `CalendarViewModel.shared`) and views
+/// reference them directly. The four computed properties below are kept
+/// as alias accessors so DataManager's internal orchestration code reads
+/// cleanly.
 @MainActor
 class DataManager: ObservableObject {
     static let shared = DataManager()
-    
-    // Shared ViewModels
-    let calendarViewModel = CalendarViewModel()
-    let tasksViewModel = TasksViewModel()
-    let goalsManager = GoalsManager.shared
-    let customLogManager = CustomLogManager.shared
+
+    // Shared ViewModels — references the canonical singletons.
+    var calendarViewModel: CalendarViewModel { CalendarViewModel.shared }
+    var tasksViewModel: TasksViewModel { TasksViewModel.shared }
+    var goalsManager: GoalsManager { GoalsManager.shared }
+    var customLogManager: CustomLogManager { CustomLogManager.shared }
     
     // Global loading state
     @Published var isInitializing = true

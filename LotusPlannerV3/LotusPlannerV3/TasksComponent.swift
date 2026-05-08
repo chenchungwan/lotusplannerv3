@@ -19,7 +19,7 @@ struct TasksComponent: View {
     let selectedTaskIds: Set<String>
     let onTaskSelectionToggle: ((String) -> Void)?
     @ObservedObject private var appPrefs = AppPreferences.shared
-    @ObservedObject private var tasksViewModel = DataManager.shared.tasksViewModel
+    @ObservedObject private var tasksViewModel = TasksViewModel.shared
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
 

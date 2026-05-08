@@ -34,8 +34,8 @@ struct DraggableTimeboxComponent: View {
     let onTaskSelectionToggle: ((GoogleTask) -> Void)?
 
     @ObservedObject private var timeWindowManager = TaskTimeWindowManager.shared
-    @ObservedObject private var calendarVM = DataManager.shared.calendarViewModel
-    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
+    @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
 
     @State private var currentTime = Date()
@@ -569,50 +569,16 @@ struct DraggableTimeboxComponent: View {
         var didCommit = false
 
         for info in items {
-            let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .personal : .professional
-            let dict = kind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-            guard let task = dict[info.listId]?.first(where: { $0.id == info.taskId }) else {
-                continue
-            }
-
-            // Preserve prior duration where possible; default to 30 min.
-            let priorWindow = timeWindowManager.getTimeWindow(for: task.id)
-            let duration: TimeInterval
-            if let priorWindow, !priorWindow.isAllDay {
-                duration = max(60, priorWindow.endTime.timeIntervalSince(priorWindow.startTime))
-            } else {
-                duration = 30 * 60
-            }
-
-            // Snap drop Y to the timeline's grid; clamp so the entire item
-            // stays inside [startHour, endHour].
+            guard let resolved = TaskScheduler.resolveTask(info) else { continue }
+            let duration = TaskScheduler.resolvedDuration(forTaskId: resolved.task.id)
             let snappedStart = snappedTimeFromAbsoluteY(max(0, y), duration: duration)
-            let newEnd = snappedStart.addingTimeInterval(duration)
-
-            timeWindowManager.saveTimeWindow(
-                taskId: task.id,
-                startTime: snappedStart,
-                endTime: newEnd,
-                isAllDay: false
+            TaskScheduler.scheduleTimed(
+                task: resolved.task,
+                listId: info.listId,
+                kind: resolved.kind,
+                start: snappedStart,
+                duration: duration
             )
-
-            // Re-anchor `task.due` to this view's day so the task is
-            // associated with the day it was dropped on. Google Tasks
-            // discards the time portion, so the local `yyyy-MM-dd` format
-            // is correct (matches the rest of the codebase).
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd"
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = TimeZone.current
-            let newDueString = f.string(from: snappedStart)
-
-            if task.due != newDueString {
-                var updated = task
-                updated.due = newDueString
-                Task {
-                    await tasksVM.updateTask(updated, in: info.listId, for: kind)
-                }
-            }
             didCommit = true
         }
 

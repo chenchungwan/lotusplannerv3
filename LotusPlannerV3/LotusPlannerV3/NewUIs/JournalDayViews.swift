@@ -13,8 +13,8 @@ struct JournalDayViews: View {
     init() {
         self._navigationManager = ObservedObject(wrappedValue: NavigationManager.shared)
         self._appPrefs = ObservedObject(wrappedValue: AppPreferences.shared)
-        self.calendarVM = DataManager.shared.calendarViewModel
-        self._tasksVM = ObservedObject(wrappedValue: DataManager.shared.tasksViewModel)
+        self.calendarVM = CalendarViewModel.shared
+        self._tasksVM = ObservedObject(wrappedValue: TasksViewModel.shared)
         self._auth = ObservedObject(wrappedValue: GoogleAuthManager.shared)
     }
     
