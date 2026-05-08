@@ -10,6 +10,9 @@ struct WeeklyGoalsBarComponent: View {
     let currentDate: Date
 
     @ObservedObject private var goalsManager = GoalsManager.shared
+    /// Observed so the chip backgrounds re-fill when a linked task's
+    /// completion status changes (drives the progressive green capsule).
+    @ObservedObject private var tasksVM = DataManager.shared.tasksViewModel
 
     /// Weekly goals for the week containing `currentDate`, ordered to match
     /// the user's Goals view arrangement (a global `displayOrder` set by
@@ -51,6 +54,13 @@ struct WeeklyGoalsBarComponent: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
+                // contentShape applied inside the scroll's HStack so taps
+                // on empty horizontal area also register, not just on the
+                // chips themselves.
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openGoalsView(forTimeframe: .week)
+                }
             }
             .frame(maxWidth: .infinity)
 
@@ -59,7 +69,8 @@ struct WeeklyGoalsBarComponent: View {
     }
 
     private func goalChip(_ goal: GoalData) -> some View {
-        HStack(spacing: 4) {
+        let progress = goalCompletionProgress(goal: goal, tasksVM: tasksVM)
+        return HStack(spacing: 4) {
             Text(goal.isCompleted ? "🚀" : "🎯")
                 .font(.body)
 
@@ -73,11 +84,20 @@ struct WeeklyGoalsBarComponent: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(
-            Capsule().fill(
-                goal.isCompleted
-                    ? Color.green.opacity(0.25)
-                    : Color(.systemBackground)
-            )
+            // System-background fill below + a left-anchored green
+            // overlay clipped to the capsule shape so the fill grows
+            // proportionally with linked-task completion.
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(.systemBackground))
+                if progress > 0 {
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(Color.green.opacity(0.25))
+                            .frame(width: geo.size.width * CGFloat(progress))
+                    }
+                }
+            }
+            .clipShape(Capsule())
         )
         .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 0.5))
     }
