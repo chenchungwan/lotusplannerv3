@@ -5,26 +5,6 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 
-// MARK: - Drop Delegate for Timebox Columns
-struct TimeboxDropDelegate: DropDelegate {
-    let targetDate: Date
-    let allDayHeight: CGFloat
-    let onDrop: ([NSItemProvider], CGFloat) -> Bool
-
-    func performDrop(info: DropInfo) -> Bool {
-        let providers = info.itemProviders(for: [.plainText])
-        return onDrop(providers, info.location.y)
-    }
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.plainText])
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-}
-
 struct TimeboxView: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
@@ -38,18 +18,14 @@ struct TimeboxView: View {
     
     @State private var selectedEvent: GoogleCalendarEvent?
     @State private var taskSheetSelection: TimeboxTaskSelection?
-    @State private var weeklyEventsCache: [Date: [GoogleCalendarEvent]] = [:]
-    @State private var weeklyTasksCache: [Date: [String: [GoogleTask]]] = [:]
-    @State private var cachedMaxAllDayHeight: CGFloat = 20
-    @State private var cachedWeekStart: Date?
-    
+
     struct TimeboxTaskSelection: Identifiable {
         let id: String
         let task: GoogleTask
         let listId: String
         let accountKind: GoogleAuthManager.AccountKind
     }
-    
+
     // MARK: - Computed Properties
     private var weekDates: [Date] {
         let calendar = Calendar.mondayFirst
@@ -59,29 +35,31 @@ struct TimeboxView: View {
         let start = weekInterval.start
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
-    
-    private func refreshWeekCaches(force: Bool = false) {
-        guard !weekDates.isEmpty else { return }
-        guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
-            return
-        }
-        let normalizedWeekStart = weekInterval.start
-        if !force, let cachedStart = cachedWeekStart, Calendar.mondayFirst.isDate(cachedStart, inSameDayAs: normalizedWeekStart) {
-            return
-        }
-        cachedWeekStart = normalizedWeekStart
-        
-        var eventsCache: [Date: [GoogleCalendarEvent]] = [:]
-        var tasksCache: [Date: [String: [GoogleTask]]] = [:]
-        
+
+    /// Per-day events derived from CalendarViewModel's day-keyed cache.
+    /// Cheap to recompute: 7 × O(1) hash lookups on already-built caches.
+    /// Replaces the prior `@State weeklyEventsCache` + `refreshWeekCaches`
+    /// pattern, which fired on four separate `.onReceive` listeners and
+    /// rebuilt the dict four times per change wave.
+    private var weeklyEventsByDate: [Date: [GoogleCalendarEvent]] {
+        var map: [Date: [GoogleCalendarEvent]] = [:]
         for date in weekDates {
-            eventsCache[date] = getAllEventsForDate(date)
-            tasksCache[date] = getTasksForDate(date)
+            map[date] = calendarVM.events(for: date)
         }
-        
-        weeklyEventsCache = eventsCache
-        weeklyTasksCache = tasksCache
-        cachedMaxAllDayHeight = calculateMaxAllDayHeight(eventsCache: eventsCache, tasksCache: tasksCache)
+        return map
+    }
+
+    /// Per-day merged personal+professional tasks from TasksViewModel's
+    /// day-keyed cache (built once via didSet on the published task dicts).
+    /// Personal wins on a duplicate listId.
+    private var weeklyTasksByDate: [Date: [String: [GoogleTask]]] {
+        var map: [Date: [String: [GoogleTask]]] = [:]
+        for date in weekDates {
+            let p = tasksVM.tasksForDay(date, kind: .personal)
+            let pr = tasksVM.tasksForDay(date, kind: .professional)
+            map[date] = p.merging(pr) { lhs, _ in lhs }
+        }
+        return map
     }
     
     // MARK: - Adaptive Layout Properties
@@ -127,52 +105,15 @@ struct TimeboxView: View {
         return DraggableTimeboxWeekContent.timeColumnWidth + dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
     }
     
-    private func getAllEventsForDate(_ date: Date) -> [GoogleCalendarEvent] {
-        calendarVM.events(for: date)
-    }
-    
     private func visibleOpenTaskIdsForWeek() -> Set<String> {
         var ids: Set<String> = []
         for date in weekDates {
-            ids.formUnion(getTasksForDate(date).openTaskIds)
+            let dict = weeklyTasksByDate[date] ?? [:]
+            ids.formUnion(dict.openTaskIds)
         }
         return ids
     }
 
-    private func getTasksForDate(_ date: Date) -> [String: [GoogleTask]] {
-        let calendar = Calendar.mondayFirst
-        var filteredTasks: [String: [GoogleTask]] = [:]
-        
-        // Combine personal and professional tasks
-        let allTasks = tasksVM.personalTasks.merging(tasksVM.professionalTasks) { (personal, _) in personal }
-        
-        for (listId, tasks) in allTasks {
-            // Filter out completed tasks if hideCompletedTasks is enabled
-            var tasksToFilter = tasks
-            if appPrefs.hideCompletedTasks {
-                tasksToFilter = tasks.filter { !$0.isCompleted }
-            }
-            
-            let dateFilteredTasks = tasksToFilter.filter { task in
-                // For completed tasks, show on completion date
-                if task.isCompleted {
-                    guard let completionDate = task.completionDate else { return false }
-                    return calendar.isDate(completionDate, inSameDayAs: date)
-                }
-                
-                // For incomplete tasks, show on due date
-                guard let dueDate = task.dueDate else { return false }
-                return calendar.isDate(dueDate, inSameDayAs: date)
-            }
-            
-            if !dateFilteredTasks.isEmpty {
-                filteredTasks[listId] = dateFilteredTasks
-            }
-        }
-        
-        return filteredTasks
-    }
-    
     private func weekDayColumnHeader(date: Date, isToday: Bool) -> some View {
         VStack(alignment: .center, spacing: 2) {
             Text(dayOfWeekAbbrev(from: date))
@@ -200,16 +141,25 @@ struct TimeboxView: View {
         }
     }
     
+    /// Static formatters — DateFormatter() is expensive to instantiate
+    /// (~5-10ms) and was being created on every header render.
+    private static let dayAbbrevFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE"
+        return f
+    }()
+    private static let shortDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d"
+        return f
+    }()
+
     private func dayOfWeekAbbrev(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date).uppercased()
+        Self.dayAbbrevFormatter.string(from: date).uppercased()
     }
-    
+
     private func formatDateShort(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M/d"
-        return formatter.string(from: date)
+        Self.shortDateFormatter.string(from: date)
     }
 
     private let hideNavBar: Bool
@@ -273,22 +223,22 @@ struct TimeboxView: View {
                                 .background(Color(.systemBackground))
                                 
                                 // Unified scrollable timeline with drag-aware
-                                // 7-column rendering. The new component
-                                // owns SwiftUI gestures so users can drag
-                                // events/tasks across both axes (time and
-                                // day); the legacy `timeboxColumn` +
-                                // `TimeboxDropDelegate` path it replaces
-                                // is kept on disk for now in case we need
-                                // to fall back.
+                                // 7-column rendering. Owns SwiftUI gestures
+                                // so users can drag events/tasks across
+                                // both time and day axes.
+                                let eventsByDate = weeklyEventsByDate
+                                let tasksByDate = weeklyTasksByDate
+                                let allDayHeight = calculateMaxAllDayHeight(
+                                    eventsCache: eventsByDate,
+                                    tasksCache: tasksByDate
+                                )
                                 ScrollView(.vertical, showsIndicators: true) {
                                     DraggableTimeboxWeekContent(
                                         weekDates: weekDates,
                                         columnWidth: columnWidth,
-                                        allDayHeight: cachedMaxAllDayHeight > 0
-                                            ? cachedMaxAllDayHeight
-                                            : calculateMaxAllDayHeight(eventsCache: weeklyEventsCache, tasksCache: weeklyTasksCache),
-                                        eventsByDate: weeklyEventsCache,
-                                        tasksByDate: weeklyTasksCache,
+                                        allDayHeight: allDayHeight,
+                                        eventsByDate: eventsByDate,
+                                        tasksByDate: tasksByDate,
                                         personalColor: appPrefs.personalColor,
                                         professionalColor: appPrefs.professionalColor,
                                         isBulkEditMode: bulkEditManager.state.isActive,
@@ -314,7 +264,10 @@ struct TimeboxView: View {
                                                 bulkEditManager.state.selectedTaskIds.insert(task.id)
                                             }
                                         },
-                                        onCommit: { refreshWeekCaches(force: true) }
+                                        // SwiftUI re-renders this view automatically when
+                                        // the underlying VMs publish, so onCommit has no
+                                        // additional work to do.
+                                        onCommit: { }
                                     )
                                     .frame(width: contentWidth)
                                     .padding(.horizontal, 12)
@@ -358,32 +311,12 @@ struct TimeboxView: View {
         .task {
             // Load calendar data for the current week
             await calendarVM.loadCalendarDataForWeek(containing: navigationManager.currentDate)
-            refreshWeekCaches(force: true)
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
             Task {
                 // Load calendar data when the date changes
                 await calendarVM.loadCalendarDataForWeek(containing: newValue)
             }
-            refreshWeekCaches(force: true)
-        }
-        .onAppear {
-            refreshWeekCaches(force: true)
-        }
-        .onReceive(calendarVM.$personalEvents) { _ in
-            refreshWeekCaches(force: true)
-        }
-        .onReceive(calendarVM.$professionalEvents) { _ in
-            refreshWeekCaches(force: true)
-        }
-        .onReceive(tasksVM.$personalTasks) { _ in
-            refreshWeekCaches(force: true)
-        }
-        .onReceive(tasksVM.$professionalTasks) { _ in
-            refreshWeekCaches(force: true)
-        }
-        .onReceive(appPrefs.$hideCompletedTasks) { _ in
-            refreshWeekCaches(force: true)
         }
         .sheet(item: Binding<GoogleCalendarEvent?>(
             get: { selectedEvent },
@@ -471,9 +404,6 @@ struct TimeboxView: View {
                             }
                         }
                     }
-
-                    // Force refresh caches after bulk complete
-                    refreshWeekCaches(force: true)
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -496,9 +426,6 @@ struct TimeboxView: View {
                             }
                         }
                     }
-
-                    // Force refresh caches after bulk delete
-                    refreshWeekCaches(force: true)
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -529,9 +456,6 @@ struct TimeboxView: View {
                             }
                         }
                     }
-
-                    // Force refresh caches after bulk due date update to reflect time window changes
-                    refreshWeekCaches(force: true)
 
                     bulkEditManager.state.showingDueDatePicker = false
                 }
@@ -564,9 +488,6 @@ struct TimeboxView: View {
                             }
                         }
 
-                        // Force refresh caches after bulk move
-                        refreshWeekCaches(force: true)
-
                         bulkEditManager.state.showingMoveDestinationPicker = false
                     }
                 }
@@ -594,9 +515,6 @@ struct TimeboxView: View {
                             }
                         }
                     }
-
-                    // Force refresh caches after bulk priority update
-                    refreshWeekCaches(force: true)
 
                     bulkEditManager.state.showingPriorityPicker = false
                 }
@@ -664,42 +582,9 @@ struct TimeboxView: View {
         case .updatePriority:
             bulkEditManager.undoUpdatePriority(data: data, tasksVM: tasksVM)
         }
-
-        // Force refresh caches after undo to reflect time window changes
-        refreshWeekCaches(force: true)
     }
 
-    private func formatDateTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
-    }
-    
-    // MARK: - Helper Functions
-    private func splitTasksByAccount(_ tasksForDate: [String: [GoogleTask]]) -> (personal: [String: [GoogleTask]], professional: [String: [GoogleTask]]) {
-        var personalTasks: [String: [GoogleTask]] = [:]
-        var professionalTasks: [String: [GoogleTask]] = [:]
-        
-        for (listId, tasks) in tasksForDate {
-            // Determine if this list is personal or professional
-            if tasksVM.personalTasks[listId] != nil {
-                personalTasks[listId] = tasks
-            } else if tasksVM.professionalTasks[listId] != nil {
-                professionalTasks[listId] = tasks
-            }
-        }
-        
-        return (personalTasks, professionalTasks)
-    }
-    
+
     // Calculate max all-day height across all days in the week
     private func calculateMaxAllDayHeight(eventsCache: [Date: [GoogleCalendarEvent]], tasksCache: [Date: [String: [GoogleTask]]]) -> CGFloat {
         guard !weekDates.isEmpty else { return 20 }
@@ -733,390 +618,4 @@ struct TimeboxView: View {
         return maxHeight
     }
     
-    // MARK: - Helper Views
-    @ViewBuilder
-    private func timeboxColumn(for date: Date, index: Int, availableWidth: CGFloat, columnWidth: CGFloat) -> some View {
-        let eventsForDate = weeklyEventsCache[date] ?? getAllEventsForDate(date)
-        let tasksForDate = weeklyTasksCache[date] ?? getTasksForDate(date)
-        let (personalTasksForDate, professionalTasksForDate) = splitTasksByAccount(tasksForDate)
-        let maxAllDayHeight = cachedMaxAllDayHeight > 0 ? cachedMaxAllDayHeight : calculateMaxAllDayHeight(eventsCache: weeklyEventsCache, tasksCache: weeklyTasksCache)
-        
-        VStack(spacing: 0) {
-            // All-day section with fixed height
-            allDaySection(
-                date: date,
-                events: eventsForDate,
-                personalTasks: personalTasksForDate,
-                professionalTasks: professionalTasksForDate,
-                maxHeight: maxAllDayHeight
-            )
-            .frame(height: maxAllDayHeight)
-            
-            // Timeline section (without all-day section since we show it separately)
-            TimeboxComponent(
-                date: date,
-                events: eventsForDate,
-                personalEvents: calendarVM.personalEvents,
-                professionalEvents: calendarVM.professionalEvents,
-                personalTasks: personalTasksForDate,
-                professionalTasks: professionalTasksForDate,
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                onEventTap: { event in
-                    selectedEvent = event
-                },
-                onTaskTap: { task, listId in
-                    // Determine account kind
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    taskSheetSelection = TimeboxTaskSelection(
-                        id: task.id,
-                        task: task,
-                        listId: listId,
-                        accountKind: accountKind
-                    )
-                },
-                onTaskToggle: { task, listId in
-                    // Determine account kind
-                    let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
-                    Task {
-                        await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
-                    }
-                },
-                showAllDaySection: false,
-                isBulkEditMode: bulkEditManager.state.isActive,
-                selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                onTaskSelectionToggle: { task in
-                    if bulkEditManager.state.selectedTaskIds.contains(task.id) {
-                        bulkEditManager.state.selectedTaskIds.remove(task.id)
-                    } else {
-                        bulkEditManager.state.selectedTaskIds.insert(task.id)
-                    }
-                }
-            )
-            .frame(width: columnWidth)
-        }
-        .onDrop(of: [.plainText], delegate: TimeboxDropDelegate(
-            targetDate: date,
-            allDayHeight: maxAllDayHeight,
-            onDrop: { providers, dropY in
-                handleTimeboxItemDrop(providers: providers, targetDate: date, dropY: dropY, allDayHeight: maxAllDayHeight)
-            }
-        ))
-
-        // Divider between days (except for the last one)
-        if index < weekDates.count - 1 {
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(width: 1)
-        }
-    }
-    
-    @ViewBuilder
-    private func allDaySection(date: Date, events: [GoogleCalendarEvent], personalTasks: [String: [GoogleTask]], professionalTasks: [String: [GoogleTask]], maxHeight: CGFloat) -> some View {
-        let allDayEvents = events.filter { $0.isAllDay }
-        let allDayTasksRaw = (personalTasks.values.flatMap { $0 } + professionalTasks.values.flatMap { $0 }).filter { task in
-            if let timeWindow = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                return timeWindow.isAllDay
-            }
-            return true
-        }
-        
-        // Filter out completed tasks if hideCompletedTasks is enabled
-        let allDayTasks = appPrefs.hideCompletedTasks ? allDayTasksRaw.filter { !$0.isCompleted } : allDayTasksRaw
-        
-        VStack(alignment: .leading, spacing: 6) {
-            // All-day events row (one event per line)
-            if !allDayEvents.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(allDayEvents, id: \.id) { event in
-                        let isPersonal = calendarVM.accountKind(for: event) == .personal
-                        let color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
-                        
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(color)
-                                .frame(width: 8, height: 8)
-                            
-                            Text(event.summary)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(color.opacity(0.1))
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedEvent = event
-                        }
-                        .onDrag {
-                            let json: [String: String] = ["type": "event", "id": event.id, "accountKind": isPersonal ? "personal" : "professional", "calendarId": event.calendarId ?? "primary"]
-                            let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
-                            return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
-                        }
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-
-            // All-day tasks row (one task per line, vertical stacking)
-            if !allDayTasks.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(allDayTasks, id: \.id) { task in
-                        let isPersonal = personalTasks.values.flatMap { $0 }.contains { $0.id == task.id }
-                        let color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
-                        
-                        HStack(spacing: 8) {
-                            if bulkEditManager.state.isActive {
-                                // Bulk edit selection checkbox
-                                Button(action: {
-                                    if bulkEditManager.state.selectedTaskIds.contains(task.id) {
-                                        bulkEditManager.state.selectedTaskIds.remove(task.id)
-                                    } else {
-                                        bulkEditManager.state.selectedTaskIds.insert(task.id)
-                                    }
-                                }) {
-                                    Image(systemName: bulkEditManager.state.selectedTaskIds.contains(task.id) ? "checkmark.square.fill" : "square")
-                                        .font(.body)
-                                        .foregroundColor(bulkEditManager.state.selectedTaskIds.contains(task.id) ? .accentColor : .secondary)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            } else {
-                                // Normal completion checkbox
-                                Button(action: {
-                                    // Determine account kind
-                                    let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
-                                    let listId = findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks)
-                                    Task {
-                                        await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
-                                    }
-                                }) {
-                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .font(.body)
-                                        .foregroundColor(task.isCompleted ? color : .secondary)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-
-                            Text(task.title)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(task.isCompleted ? .secondary : .primary)
-                                .strikethrough(task.isCompleted)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(color.opacity(0.1))
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if bulkEditManager.state.isActive {
-                                if bulkEditManager.state.selectedTaskIds.contains(task.id) {
-                                    bulkEditManager.state.selectedTaskIds.remove(task.id)
-                                } else {
-                                    bulkEditManager.state.selectedTaskIds.insert(task.id)
-                                }
-                            } else {
-                                let accountKind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
-                                taskSheetSelection = TimeboxTaskSelection(
-                                    id: task.id,
-                                    task: task,
-                                    listId: findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks),
-                                    accountKind: accountKind
-                                )
-                            }
-                        }
-                        .onDrag {
-                            let listId = findTaskListId(for: task, in: personalTasks, professionalTasks: professionalTasks)
-                            let json: [String: String] = ["type": "task", "id": task.id, "listId": listId, "accountKind": isPersonal ? "personal" : "professional"]
-                            let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
-                            return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
-                        }
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-        .frame(maxHeight: maxHeight, alignment: .top)
-    }
-    
-    private func findTaskListId(for task: GoogleTask, in personalTasks: [String: [GoogleTask]], professionalTasks: [String: [GoogleTask]]) -> String {
-        // Find which list contains this task
-        for (listId, tasks) in personalTasks {
-            if tasks.contains(where: { $0.id == task.id }) {
-                return listId
-            }
-        }
-        for (listId, tasks) in professionalTasks {
-            if tasks.contains(where: { $0.id == task.id }) {
-                return listId
-            }
-        }
-        return "" // Fallback
-    }
-    
-    private func dueDateTag(for task: GoogleTask, accentColor: Color) -> (text: String, textColor: Color, backgroundColor: Color)? {
-        if task.isCompleted {
-            return nil
-        }
-        
-        guard let dueDate = task.dueDate else { return nil }
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let dueDay = calendar.startOfDay(for: dueDate)
-        
-        if calendar.isDate(dueDay, inSameDayAs: today) {
-            return ("Today", .white, accentColor)
-        } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
-                  calendar.isDate(dueDay, inSameDayAs: tomorrow) {
-            return ("Tomorrow", .white, .cyan)
-        } else if dueDay < today {
-            return ("Overdue", .white, .red)
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "M/d/yy"
-            return (formatter.string(from: dueDate), .primary, Color(.systemGray5))
-        }
-    }
-
-    // MARK: - Timebox Drag & Drop
-
-    private let timeboxHourHeight: CGFloat = 60
-
-    private func timeFromDropY(_ dropY: CGFloat, allDayHeight: CGFloat, on date: Date) -> Date? {
-        let adjustedY = dropY - allDayHeight
-        guard adjustedY > 0 else { return nil }
-        let totalMinutes = Int(adjustedY / timeboxHourHeight * 60)
-        let snapped = max(0, min((totalMinutes / 15) * 15, 24 * 60 - 15))
-        return Calendar.current.date(bySettingHour: snapped / 60, minute: snapped % 60, second: 0, of: date)
-    }
-
-    private func handleTimeboxItemDrop(providers: [NSItemProvider], targetDate: Date, dropY: CGFloat, allDayHeight: CGFloat) -> Bool {
-        guard let provider = providers.first else { return false }
-
-        provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
-            let json: String?
-            if let str = item as? String { json = str }
-            else if let data = item as? Data { json = String(data: data, encoding: .utf8) }
-            else { return }
-
-            guard let json,
-                  let jsonData = json.data(using: .utf8),
-                  let dict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: String],
-                  let itemType = dict["type"],
-                  let itemId = dict["id"],
-                  let accountKind = dict["accountKind"] else { return }
-
-            let cal = Calendar.current
-            let droppedOnTimeline = timeFromDropY(dropY, allDayHeight: allDayHeight, on: targetDate)
-
-            DispatchQueue.main.async {
-                if itemType == "task" {
-                    let listId = dict["listId"] ?? ""
-                    guard !listId.isEmpty else { return }
-                    let kind: GoogleAuthManager.AccountKind = accountKind == "personal" ? .personal : .professional
-                    let tasksDict = kind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-                    guard let task = tasksDict[listId]?.first(where: { $0.id == itemId }) else { return }
-
-                    var updatedTask = task
-
-                    if let targetDateTime = droppedOnTimeline, task.hasSpecificDueTime {
-                        // Timed task dropped on timeline: use drop Y for new time
-                        let isoFormatter = ISO8601DateFormatter()
-                        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                        isoFormatter.timeZone = TimeZone(identifier: "UTC")
-                        updatedTask.due = isoFormatter.string(from: targetDateTime)
-
-                        let duration: TimeInterval = {
-                            if let tw = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                                return tw.endTime.timeIntervalSince(tw.startTime)
-                            }
-                            return 3600
-                        }()
-                        TaskTimeWindowManager.shared.saveTimeWindow(taskId: task.id, startTime: targetDateTime, endTime: targetDateTime.addingTimeInterval(duration), isAllDay: false)
-                    } else if task.hasSpecificDueTime {
-                        // Timed task dropped in all-day area: preserve time, change date
-                        let originalTime = task.dueDate ?? Date()
-                        let h = cal.component(.hour, from: originalTime)
-                        let m = cal.component(.minute, from: originalTime)
-                        guard let newDateTime = cal.date(bySettingHour: h, minute: m, second: 0, of: targetDate) else { return }
-
-                        let isoFormatter = ISO8601DateFormatter()
-                        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                        isoFormatter.timeZone = TimeZone(identifier: "UTC")
-                        updatedTask.due = isoFormatter.string(from: newDateTime)
-
-                        if let tw = TaskTimeWindowManager.shared.getTimeWindow(for: task.id) {
-                            let duration = tw.endTime.timeIntervalSince(tw.startTime)
-                            let twH = cal.component(.hour, from: tw.startTime)
-                            let twM = cal.component(.minute, from: tw.startTime)
-                            if let newStart = cal.date(bySettingHour: twH, minute: twM, second: 0, of: targetDate) {
-                                TaskTimeWindowManager.shared.saveTimeWindow(taskId: task.id, startTime: newStart, endTime: newStart.addingTimeInterval(duration), isAllDay: false)
-                            }
-                        }
-                    } else {
-                        // All-day task: change date only
-                        let dateFormatter = DateFormatter()
-                        dateFormatter.dateFormat = "yyyy-MM-dd"
-                        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-                        updatedTask.due = dateFormatter.string(from: targetDate)
-                    }
-
-                    Task {
-                        await tasksVM.updateTask(updatedTask, in: listId, for: kind)
-                        refreshWeekCaches(force: true)
-                    }
-
-                } else if itemType == "event" {
-                    let isPersonal = accountKind == "personal"
-                    let events = isPersonal ? calendarVM.personalEvents : calendarVM.professionalEvents
-                    guard let event = events.first(where: { $0.id == itemId }) else { return }
-
-                    if let targetDateTime = droppedOnTimeline {
-                        if event.isAllDay {
-                            // All-day event dropped on the timeline →
-                            // convert to a timed event at the drop slot
-                            // with a default 1-hour duration. The
-                            // previous logic skipped this branch when
-                            // `event.isAllDay` was true and silently
-                            // moved it as a date-only change instead.
-                            Task {
-                                await calendarVM.scheduleEvent(event, startTime: targetDateTime, duration: 3600)
-                                refreshWeekCaches(force: true)
-                            }
-                        } else {
-                            // Already-timed event dropped on timeline:
-                            // shift to the new time, keep the duration.
-                            Task {
-                                await calendarVM.moveEventToDateTime(event, to: targetDateTime)
-                                refreshWeekCaches(force: true)
-                            }
-                        }
-                    } else {
-                        // Dropped in the all-day area: convert to
-                        // all-day on the target date. `forceAllDay`
-                        // also handles timed → all-day on the same
-                        // day (which was previously a no-op).
-                        Task {
-                            await calendarVM.moveEventToDate(event, to: targetDate, forceAllDay: true)
-                            refreshWeekCaches(force: true)
-                        }
-                    }
-                }
-            }
-        }
-        return true
-    }
 }

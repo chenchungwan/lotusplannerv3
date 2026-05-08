@@ -42,11 +42,22 @@ struct DraggableTimeboxWeekContent: View {
     @State private var dragState: WeekDragState?
     /// Optimistic overrides keyed by the same internal id we use for drag
     /// state. Each entry says: "render this item at this date+time until
-    /// the data flow catches up." Cleared 3s after commit so a failed
-    /// async update reverts the visual to the real state.
+    /// the data flow catches up." Cleared on the next data publish so a
+    /// failed async update reverts to the real state.
     @State private var pendingMoves: [String: PendingMove] = [:]
     @State private var currentTime = Date()
     @State private var currentTimeTimer: Timer?
+
+    /// Per-day laid-out timed items. Built by `recomputeRenderCaches()`
+    /// only when source data actually changes — NOT on every `dragState`
+    /// mutation. This is the core fix for drag-tick stutter: previously
+    /// the body's ForEach called `laidOut(timedItems(...))` for all 7
+    /// days on every drag frame, doing O(n²) lane packing per frame.
+    @State private var laneCache: [Date: [LaidOutTimedItem]] = [:]
+    /// Per-day pre-resolved all-day events + tasks. Avoids the per-render
+    /// linear `tasksVM.personalTasks[listId]?.contains(where:)` lookup
+    /// that ran inside `allDayBand` for every all-day task.
+    @State private var allDayCache: [Date: AllDayCacheEntry] = [:]
 
     private let hourHeight: CGFloat = 60
     private let startHour = 0
@@ -84,13 +95,27 @@ struct DraggableTimeboxWeekContent: View {
         }
     }
 
-    private struct PendingMove {
+    private struct PendingMove: Equatable {
         let date: Date
         let start: Date
         /// Pre-existing all-day status — used by render so we know whether
         /// the item should appear in the all-day section or the timeline
         /// while waiting for the data flow to catch up.
         let isAllDay: Bool
+    }
+
+    /// Pre-resolved per-day all-day section data. Built once per data
+    /// change so the render path is a simple ForEach with no filters or
+    /// lookups.
+    private struct AllDayCacheEntry {
+        let events: [GoogleCalendarEvent]
+        let tasks: [AllDayTaskRow]
+    }
+    private struct AllDayTaskRow: Identifiable {
+        let task: GoogleTask
+        let listId: String
+        let isPersonal: Bool
+        var id: String { task.id }
     }
 
     private struct WeekDragState {
@@ -162,17 +187,16 @@ struct DraggableTimeboxWeekContent: View {
 
             // 4. Per-day all-day bands, anchored at y = 0 in their
             //    columns. Each column's content sits at columnX...
-            //    columnX + columnWidth.
+            //    columnX + columnWidth. Reads from `allDayCache` so a
+            //    drag-tick body re-render doesn't re-run `tasksVM.contains`
+            //    or `timeWindowManager.getTimeWindow` for every task.
             ForEach(Array(weekDates.enumerated()), id: \.offset) { index, date in
                 let columnX = self.columnX(for: index)
-                allDayBand(
-                    date: date,
-                    events: eventsByDate[date] ?? [],
-                    tasksDict: tasksByDate[date] ?? [:]
-                )
-                .frame(width: columnWidth, height: allDayHeight, alignment: .top)
-                .clipped()
-                .offset(x: columnX, y: 0)
+                let entry = allDayCache[date] ?? AllDayCacheEntry(events: [], tasks: [])
+                allDayBand(date: date, entry: entry)
+                    .frame(width: columnWidth, height: allDayHeight, alignment: .top)
+                    .clipped()
+                    .offset(x: columnX, y: 0)
             }
 
             // 5. Vertical dividers between day columns.
@@ -194,12 +218,12 @@ struct DraggableTimeboxWeekContent: View {
             //    gridlines pixel-for-pixel. Overlapping items are laned
             //    side-by-side via `laidOut(_:)` so each one stays
             //    legible instead of stacking on top of the others.
+            //    `laneCache` is populated by `recomputeRenderCaches()`
+            //    and is NOT recomputed when `dragState` changes — the
+            //    fix for drag-tick stutter.
             ForEach(Array(weekDates.enumerated()), id: \.offset) { index, date in
                 let columnX = self.columnX(for: index)
-                let events = eventsByDate[date] ?? []
-                let tasksDict = tasksByDate[date] ?? [:]
-                let items = timedItems(date: date, events: events, tasksDict: tasksDict)
-                let laned = laidOut(items)
+                let laned = laneCache[date] ?? []
                 ForEach(laned, id: \.item.id) { entry in
                     timedItemPositioned(
                         item: entry.item,
@@ -224,8 +248,71 @@ struct DraggableTimeboxWeekContent: View {
         }
         .frame(height: totalH)
         .coordinateSpace(name: coordSpaceName)
-        .onAppear { startCurrentTimeTimer() }
+        .onAppear {
+            startCurrentTimeTimer()
+            recomputeRenderCaches()
+        }
         .onDisappear { stopCurrentTimeTimer() }
+        // Keep render caches in sync with the source data. Cache rebuilds
+        // are intentionally NOT tied to `dragState` — the whole point is
+        // that drag ticks read from the cache without recomputing.
+        .onChange(of: weekDates) { _, _ in recomputeRenderCaches() }
+        .onChange(of: pendingMoves) { _, _ in recomputeRenderCaches() }
+        .onReceive(calendarVM.$personalEvents) { _ in recomputeRenderCaches() }
+        .onReceive(calendarVM.$professionalEvents) { _ in recomputeRenderCaches() }
+        .onReceive(tasksVM.$personalTasks) { _ in recomputeRenderCaches() }
+        .onReceive(tasksVM.$professionalTasks) { _ in recomputeRenderCaches() }
+        .onReceive(timeWindowManager.$timeWindows) { _ in recomputeRenderCaches() }
+        .onReceive(appPrefs.$hideCompletedTasks) { _ in recomputeRenderCaches() }
+    }
+
+    // MARK: - Render cache build
+
+    /// Rebuilds `laneCache` and `allDayCache` for the current week. Single
+    /// pass over all 7 days; runs ~O(N log N) total per call (where N is
+    /// items in the visible week). Call sites: initial `onAppear`, every
+    /// publisher fire from upstream view models, and after a drag commit
+    /// updates `pendingMoves`.
+    private func recomputeRenderCaches() {
+        var freshLanes: [Date: [LaidOutTimedItem]] = [:]
+        var freshAllDay: [Date: AllDayCacheEntry] = [:]
+        for date in weekDates {
+            let events = eventsByDate[date] ?? []
+            let tasksDict = tasksByDate[date] ?? [:]
+            freshLanes[date] = laidOut(timedItems(date: date, events: events, tasksDict: tasksDict))
+            freshAllDay[date] = makeAllDayEntry(events: events, tasksDict: tasksDict)
+        }
+        laneCache = freshLanes
+        allDayCache = freshAllDay
+    }
+
+    /// Builds a single day's all-day entry. Replaces the per-render
+    /// `tasksVM.personalTasks[listId]?.contains(where:)` linear search
+    /// inside `allDayBand` — that lookup now happens once per data
+    /// change instead of every drag frame.
+    private func makeAllDayEntry(events: [GoogleCalendarEvent], tasksDict: [String: [GoogleTask]]) -> AllDayCacheEntry {
+        let allDayEvents = events.filter { $0.isAllDay }
+        // O(P) once instead of O(P) per task.
+        let personalListIds = Set(tasksVM.personalTasks.keys)
+
+        var allDayTasks: [AllDayTaskRow] = []
+        for (listId, tasks) in tasksDict {
+            let isPersonal = personalListIds.contains(listId)
+            for task in tasks {
+                let pending = pendingMoves["task_\(task.id)"]
+                let isAllDay: Bool = {
+                    if let p = pending { return p.isAllDay }
+                    if let win = timeWindowManager.getTimeWindow(for: task.id) {
+                        return win.isAllDay
+                    }
+                    return true
+                }()
+                guard isAllDay else { continue }
+                if appPrefs.hideCompletedTasks && task.isCompleted { continue }
+                allDayTasks.append(AllDayTaskRow(task: task, listId: listId, isPersonal: isPersonal))
+            }
+        }
+        return AllDayCacheEntry(events: allDayEvents, tasks: allDayTasks)
     }
 
     /// Cumulative x offset of day column `index`, accounting for the
@@ -394,33 +481,14 @@ struct DraggableTimeboxWeekContent: View {
 
     // MARK: All-day band
 
-    private func allDayBand(date: Date, events: [GoogleCalendarEvent], tasksDict: [String: [GoogleTask]]) -> some View {
-        let allDayEvents = events.filter { $0.isAllDay }
-        var allDayTasks: [(task: GoogleTask, listId: String, isPersonal: Bool)] = []
-        for (listId, tasks) in tasksDict {
-            for task in tasks {
-                let pending = pendingMoves["task_\(task.id)"]
-                let isAllDay: Bool = {
-                    if let p = pending { return p.isAllDay }
-                    if let win = timeWindowManager.getTimeWindow(for: task.id) {
-                        return win.isAllDay
-                    }
-                    return true
-                }()
-                guard isAllDay else { continue }
-                if appPrefs.hideCompletedTasks && task.isCompleted { continue }
-                let isPersonal = tasksVM.personalTasks[listId]?.contains(where: { $0.id == task.id }) ?? false
-                allDayTasks.append((task, listId, isPersonal))
-            }
-        }
-
-        return ScrollView(.vertical, showsIndicators: false) {
+    private func allDayBand(date: Date, entry: AllDayCacheEntry) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 3) {
-                ForEach(allDayEvents, id: \.id) { event in
+                ForEach(entry.events, id: \.id) { event in
                     let isPersonal = calendarVM.accountKind(for: event) == .personal
                     allDayEventCard(event: event, isPersonal: isPersonal, columnDate: date)
                 }
-                ForEach(allDayTasks, id: \.task.id) { row in
+                ForEach(entry.tasks) { row in
                     allDayTaskCard(task: row.task, listId: row.listId, isPersonal: row.isPersonal, columnDate: date)
                 }
             }
