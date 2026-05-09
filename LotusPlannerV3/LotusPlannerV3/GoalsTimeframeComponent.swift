@@ -12,9 +12,6 @@ struct GoalsTimeframeComponent: View {
     var showsHeader: Bool = true
 
     @ObservedObject private var goalsManager = GoalsManager.shared
-    /// Observed so the row backgrounds re-fill when a linked task's
-    /// completion status changes (drives the progressive green bar).
-    @ObservedObject private var tasksVM = TasksViewModel.shared
 
     /// Goals whose target timeframe matches and whose `dueDate` falls inside
     /// the period (week / month / year) containing `date`. Ordering follows
@@ -109,54 +106,11 @@ struct GoalsTimeframeComponent: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(GoalProgressBackground(goal: goal, tasksVM: tasksVM, cornerRadius: 6))
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(goal.isCompleted ? Color.green.opacity(0.25) : Color.clear)
+        )
     }
-}
-
-/// Renders a rounded-rectangle background that fills from left to right
-/// in green, proportional to the goal's linked-task completion. Goals
-/// with no linked tasks fall back to the legacy behavior (full green
-/// when `goal.isCompleted`, otherwise clear). Goals with linked tasks
-/// AND `goal.isCompleted == true` render fully green so the explicit
-/// "done" state always wins over partial-task progress.
-struct GoalProgressBackground: View {
-    let goal: GoalData
-    let tasksVM: TasksViewModel
-    let cornerRadius: CGFloat
-
-    var body: some View {
-        let progress = goalCompletionProgress(goal: goal, tasksVM: tasksVM)
-        return GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(Color.clear)
-                if progress > 0 {
-                    Rectangle()
-                        .fill(Color.green.opacity(0.25))
-                        .frame(width: geo.size.width * CGFloat(progress))
-                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                }
-            }
-        }
-    }
-}
-
-/// Fraction in `[0, 1]` representing how much of `goal` is "done":
-/// - If `goal.isCompleted` → 1 (explicit done overrides task counts).
-/// - Else if the goal has linked tasks → completed / total.
-/// - Else → 0 (no progress to show; row stays clear).
-@MainActor
-func goalCompletionProgress(goal: GoalData, tasksVM: TasksViewModel) -> Double {
-    if goal.isCompleted { return 1 }
-    let linked = goal.linkedTasks
-    guard !linked.isEmpty else { return 0 }
-
-    var completed = 0
-    for link in linked {
-        let isDone = isTaskCompleted(taskId: link.taskId, in: tasksVM)
-        if isDone { completed += 1 }
-    }
-    return Double(completed) / Double(linked.count)
 }
 
 /// Switches the app to Goals view, forcing the timeline interval to
@@ -174,24 +128,6 @@ func openGoalsView(forTimeframe timeframe: GoalTimeframe) {
     }
     nav.currentView = .goals
     nav.showTasksView = false
-}
-
-/// Looks up a task by id across personal + professional dictionaries.
-/// Returns `false` if the task is missing from local caches (treated as
-/// not-yet-completed; the goal will fill once the task syncs in).
-@MainActor
-private func isTaskCompleted(taskId: String, in tasksVM: TasksViewModel) -> Bool {
-    for (_, tasks) in tasksVM.personalTasks {
-        if let t = tasks.first(where: { $0.id == taskId }) {
-            return t.isCompleted
-        }
-    }
-    for (_, tasks) in tasksVM.professionalTasks {
-        if let t = tasks.first(where: { $0.id == taskId }) {
-            return t.isCompleted
-        }
-    }
-    return false
 }
 
 #Preview {
