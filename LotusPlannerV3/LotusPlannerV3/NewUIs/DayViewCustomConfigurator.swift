@@ -9,6 +9,8 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case eventsList
     case tasksPersonalGrouped
     case tasksProfessionalGrouped
+    case tasksPersonalTwoColumn
+    case tasksProfessionalTwoColumn
     case tasksPersonalCompact
     case tasksProfessionalCompact
     case logWeight
@@ -45,6 +47,8 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .eventsList:                return "Events List"
         case .tasksPersonalGrouped:      return "\(personal) Tasks (grouped)"
         case .tasksProfessionalGrouped:  return "\(professional) Tasks (grouped)"
+        case .tasksPersonalTwoColumn:    return "\(personal) Tasks (2 columns)"
+        case .tasksProfessionalTwoColumn: return "\(professional) Tasks (2 columns)"
         case .tasksPersonalCompact:      return "\(personal) Tasks (compact)"
         case .tasksProfessionalCompact:  return "\(professional) Tasks (compact)"
         case .logWeight:                 return "Weight"
@@ -79,8 +83,8 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         switch self {
         case .eventsTimeline:                                   return "clock"
         case .eventsList:                                       return "calendar"
-        case .tasksPersonalGrouped, .tasksPersonalCompact:      return "person.circle"
-        case .tasksProfessionalGrouped, .tasksProfessionalCompact: return "briefcase"
+        case .tasksPersonalGrouped, .tasksPersonalTwoColumn, .tasksPersonalCompact: return "person.circle"
+        case .tasksProfessionalGrouped, .tasksProfessionalTwoColumn, .tasksProfessionalCompact: return "briefcase"
         case .logWeight:                                        return "scalemass"
         case .logWorkout:                                       return "figure.run"
         case .logFood:                                          return "fork.knife"
@@ -999,6 +1003,8 @@ struct DayViewCustomConfigurator: View {
             .eventsList,
             .tasksPersonalGrouped,
             .tasksProfessionalGrouped,
+            .tasksPersonalTwoColumn,
+            .tasksProfessionalTwoColumn,
             .tasksPersonalCompact,
             .tasksProfessionalCompact,
         ]

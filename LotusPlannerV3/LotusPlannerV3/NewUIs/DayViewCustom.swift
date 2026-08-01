@@ -373,6 +373,10 @@ struct DayViewCustom: View {
             tasksGroupedView(for: .personal, date: date)
         case .tasksProfessionalGrouped:
             tasksGroupedView(for: .professional, date: date)
+        case .tasksPersonalTwoColumn:
+            tasksTwoColumnView(for: .personal, date: date)
+        case .tasksProfessionalTwoColumn:
+            tasksTwoColumnView(for: .professional, date: date)
         case .tasksPersonalCompact:
             tasksCompactView(for: .personal, date: date)
         case .tasksProfessionalCompact:
@@ -548,6 +552,51 @@ struct DayViewCustom: View {
                     hideDueDateTag: false,
                     showEmptyState: true,
                     horizontalCards: false,
+                    isSingleDayView: true,
+                    showTitle: true,
+                    showTaskStartTime: true,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
+                )
+            }
+        } else {
+            notLinkedPlaceholder(for: account)
+        }
+    }
+
+    @ViewBuilder
+    private func tasksTwoColumnView(for account: GoogleAuthManager.AccountKind, date: Date) -> some View {
+        if auth.isLinked(kind: account) {
+            let dict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+            let lists = account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+            ScrollView(.vertical, showsIndicators: true) {
+                TwoColumnTasksComponent(
+                    taskLists: lists,
+                    tasksDict: filteredTasksDictForDay(dict, on: date),
+                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    accountType: account,
+                    onTaskToggle: { task, listId in
+                        Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: account) }
+                    },
+                    onTaskDetails: { task, listId in
+                        selectedTask = task
+                        selectedTaskListId = listId
+                        selectedTaskAccount = account
+                        showingTaskDetails = true
+                    },
+                    onListRename: nil,
+                    onOrderChanged: { newOrder in
+                        Task { await tasksVM.updateTaskListOrder(newOrder, for: account) }
+                    },
+                    hideDueDateTag: false,
+                    showEmptyState: true,
                     isSingleDayView: true,
                     showTitle: true,
                     showTaskStartTime: true,

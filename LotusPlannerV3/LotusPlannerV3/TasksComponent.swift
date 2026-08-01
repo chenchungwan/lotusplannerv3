@@ -135,7 +135,12 @@ extension TasksComponent {
     }
 
     @ViewBuilder
-    private func card(for taskList: GoogleTaskList, enableScroll: Bool, maxHeight: CGFloat?) -> some View {
+    fileprivate func card(
+        for taskList: GoogleTaskList,
+        enableScroll: Bool,
+        maxHeight: CGFloat?,
+        onListDragStart: (() -> Void)? = nil
+    ) -> some View {
         let filtered = filteredTasksForList(taskList)
         if !filtered.isEmpty {
             TaskComponentListCard(
@@ -157,7 +162,8 @@ extension TasksComponent {
                 selectedTaskIds: selectedTaskIds,
                 onTaskSelectionToggle: { taskId in
                     onTaskSelectionToggle?(taskId)
-                }
+                },
+                onListDragStart: onListDragStart
             )
         }
     }
@@ -227,7 +233,7 @@ extension TasksComponent {
         }
     }
 
-    private var noVisibleTasks: Bool {
+    fileprivate var noVisibleTasks: Bool {
         // Check if all task lists have no visible tasks (after filtering)
         localTaskLists.allSatisfy { taskList in
             let _ = tasksDict[taskList.id] ?? []
@@ -240,9 +246,410 @@ extension TasksComponent {
     /// the `hideCompletedTasks` filter is hiding them all" from "there
     /// are genuinely no tasks for this view." Reaches across all lists
     /// in `tasksDict` to count raw (unfiltered) tasks.
-    private var emptyStateText: String {
+    fileprivate var emptyStateText: String {
         let allRawTasks = localTaskLists.flatMap { tasksDict[$0.id] ?? [] }
         return TasksEmptyState.text(forUnfiltered: allRawTasks)
+    }
+}
+
+struct TwoColumnTasksComponent: View {
+    let taskLists: [GoogleTaskList]
+    let tasksDict: [String: [GoogleTask]]
+    let accentColor: Color
+    let accountType: GoogleAuthManager.AccountKind
+    let onTaskToggle: (GoogleTask, String) -> Void
+    let onTaskDetails: (GoogleTask, String) -> Void
+    let onListRename: ((String, String) -> Void)?
+    let onOrderChanged: (([GoogleTaskList]) -> Void)?
+    let hideDueDateTag: Bool
+    let showEmptyState: Bool
+    let isSingleDayView: Bool
+    let showTitle: Bool
+    let showTaskStartTime: Bool
+    let isBulkEditMode: Bool
+    let selectedTaskIds: Set<String>
+    let onTaskSelectionToggle: ((String) -> Void)?
+
+    @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var authManager = GoogleAuthManager.shared
+    @State private var columnTaskLists: [[GoogleTaskList]]
+    @State private var draggedListId: String?
+    @State private var dragStartColumns: [[GoogleTaskList]]?
+    @State private var activeDropTarget: String?
+
+    init(
+        taskLists: [GoogleTaskList],
+        tasksDict: [String: [GoogleTask]],
+        accentColor: Color,
+        accountType: GoogleAuthManager.AccountKind,
+        onTaskToggle: @escaping (GoogleTask, String) -> Void,
+        onTaskDetails: @escaping (GoogleTask, String) -> Void,
+        onListRename: ((String, String) -> Void)?,
+        onOrderChanged: (([GoogleTaskList]) -> Void)? = nil,
+        hideDueDateTag: Bool = false,
+        showEmptyState: Bool = true,
+        isSingleDayView: Bool = false,
+        showTitle: Bool = true,
+        showTaskStartTime: Bool = false,
+        isBulkEditMode: Bool = false,
+        selectedTaskIds: Set<String> = [],
+        onTaskSelectionToggle: ((String) -> Void)? = nil
+    ) {
+        self.taskLists = taskLists
+        self.tasksDict = tasksDict
+        self.accentColor = accentColor
+        self.accountType = accountType
+        self.onTaskToggle = onTaskToggle
+        self.onTaskDetails = onTaskDetails
+        self.onListRename = onListRename
+        self.onOrderChanged = onOrderChanged
+        self.hideDueDateTag = hideDueDateTag
+        self.showEmptyState = showEmptyState
+        self.isSingleDayView = isSingleDayView
+        self.showTitle = showTitle
+        self.showTaskStartTime = showTaskStartTime
+        self.isBulkEditMode = isBulkEditMode
+        self.selectedTaskIds = selectedTaskIds
+        self.onTaskSelectionToggle = onTaskSelectionToggle
+        self._columnTaskLists = State(initialValue: TwoColumnTaskListLayoutStore.load(for: accountType, taskLists: taskLists))
+    }
+
+    private var accountTitle: String {
+        accountType == .personal ? "\(appPrefs.personalAccountName) Tasks" : "\(appPrefs.professionalAccountName) Tasks"
+    }
+
+    var body: some View {
+        if !authManager.isLinked(kind: accountType) {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                if showTitle {
+                    Text(accountTitle)
+                        .font(.headline)
+                        .foregroundColor(accentColor)
+                        .padding(.horizontal, 8)
+                }
+
+                if showEmptyState && noVisibleTasks {
+                    Text(emptyStateText)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .italic()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                } else {
+                    HStack(alignment: .top, spacing: 8) {
+                        taskListColumn(index: 0)
+                        taskListColumn(index: 1)
+                    }
+                    .padding(3)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onAppear {
+                syncColumns(with: taskLists)
+            }
+            .onChange(of: taskLists) { _, newValue in
+                syncColumns(with: newValue)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSUbiquitousKeyValueStore.didChangeExternallyNotification)) { notification in
+                let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+                let layoutKey = TwoColumnTaskListLayoutStore.key(for: accountType)
+                guard changedKeys.isEmpty || changedKeys.contains(layoutKey) else { return }
+                columnTaskLists = TwoColumnTaskListLayoutStore.load(for: accountType, taskLists: taskLists)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func taskListColumn(index: Int) -> some View {
+        LazyVStack(alignment: .leading, spacing: 8) {
+            ForEach(columnTaskLists[index], id: \.id) { list in
+                card(for: list)
+                    .opacity(draggedListId == list.id ? 0.6 : 1)
+                    .onDrop(
+                        of: [.plainText],
+                        delegate: TwoColumnTaskListDropDelegate(
+                            targetColumn: index,
+                            targetListId: list.id,
+                            columns: $columnTaskLists,
+                            draggedListId: $draggedListId,
+                            dragStartColumns: $dragStartColumns,
+                            activeDropTarget: $activeDropTarget,
+                            onCommit: commitColumnOrder
+                        )
+                    )
+            }
+
+            if columnTaskLists[index].isEmpty {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [6]))
+                    .foregroundColor(Color(.systemGray4))
+                    .frame(minHeight: 72)
+                    .overlay(
+                        Image(systemName: "tray")
+                            .foregroundColor(.secondary)
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(6)
+        .background(Color(.tertiarySystemBackground))
+        .cornerRadius(8)
+        .onDrop(
+            of: [.plainText],
+            delegate: TwoColumnTaskListDropDelegate(
+                targetColumn: index,
+                targetListId: nil,
+                columns: $columnTaskLists,
+                draggedListId: $draggedListId,
+                dragStartColumns: $dragStartColumns,
+                activeDropTarget: $activeDropTarget,
+                onCommit: commitColumnOrder
+            )
+        )
+    }
+
+    @ViewBuilder
+    private func card(for taskList: GoogleTaskList) -> some View {
+        let filtered = filteredTasksForList(taskList)
+        if !filtered.isEmpty {
+            TaskComponentListCard(
+                taskList: taskList,
+                tasks: filtered,
+                accentColor: accentColor,
+                accountType: accountType,
+                onTaskToggle: { task in onTaskToggle(task, taskList.id) },
+                onTaskDetails: { task, listId in onTaskDetails(task, listId) },
+                onListRename: { newName in onListRename?(taskList.id, newName) },
+                hideDueDateTag: hideDueDateTag,
+                enableScroll: false,
+                maxTasksAreaHeight: nil,
+                isSingleDayView: isSingleDayView,
+                showTaskStartTime: showTaskStartTime,
+                isBulkEditMode: isBulkEditMode,
+                selectedTaskIds: selectedTaskIds,
+                onTaskSelectionToggle: { taskId in onTaskSelectionToggle?(taskId) },
+                onListDragStart: {
+                    dragStartColumns = columnTaskLists
+                    activeDropTarget = nil
+                    draggedListId = taskList.id
+                }
+            )
+        }
+    }
+
+    private func filteredTasksForList(_ taskList: GoogleTaskList) -> [GoogleTask] {
+        let tasks = tasksDict[taskList.id] ?? []
+        let filtered = appPrefs.hideCompletedTasks ? tasks.filter { !$0.isCompleted } : tasks
+
+        return filtered.sorted { a, b in
+            if a.isCompleted != b.isCompleted {
+                return !a.isCompleted
+            }
+
+            switch (a.dueDate, b.dueDate) {
+            case let (dateA?, dateB?) where dateA != dateB:
+                return dateA < dateB
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                break
+            }
+
+            let aPriority = a.priority?.sortOrder ?? Int.max
+            let bPriority = b.priority?.sortOrder ?? Int.max
+            if aPriority != bPriority {
+                return aPriority < bPriority
+            }
+
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+        }
+    }
+
+    private var noVisibleTasks: Bool {
+        taskLists.allSatisfy { filteredTasksForList($0).isEmpty }
+    }
+
+    private var emptyStateText: String {
+        let allRawTasks = taskLists.flatMap { tasksDict[$0.id] ?? [] }
+        return TasksEmptyState.text(forUnfiltered: allRawTasks)
+    }
+
+    private func syncColumns(with newLists: [GoogleTaskList]) {
+        let savedColumns = TwoColumnTaskListLayoutStore.load(for: accountType, taskLists: newLists)
+        let existingIds = Set(columnTaskLists.flatMap { $0.map(\.id) })
+        let newIds = Set(newLists.map(\.id))
+
+        guard existingIds != newIds else {
+            let refreshedColumns = columnTaskLists.map { column in
+                column.compactMap { oldList in newLists.first(where: { $0.id == oldList.id }) }
+            }
+            columnTaskLists = refreshedColumns.flatMap { $0 }.isEmpty ? savedColumns : refreshedColumns
+            return
+        }
+
+        columnTaskLists = savedColumns
+    }
+
+    private func commitColumnOrder() {
+        TwoColumnTaskListLayoutStore.save(columnTaskLists, for: accountType)
+        onOrderChanged?(columnTaskLists.flatMap { $0 })
+    }
+}
+
+private struct TwoColumnTaskListDropDelegate: DropDelegate {
+    let targetColumn: Int
+    let targetListId: String?
+    @Binding var columns: [[GoogleTaskList]]
+    @Binding var draggedListId: String?
+    @Binding var dragStartColumns: [[GoogleTaskList]]?
+    @Binding var activeDropTarget: String?
+    let onCommit: () -> Void
+
+    private var targetId: String {
+        "\(targetColumn)-\(targetListId ?? "end")"
+    }
+
+    func dropEntered(info: DropInfo) {
+        activeDropTarget = targetId
+        moveDraggedList()
+    }
+
+    func dropExited(info: DropInfo) {
+        let exitedTarget = targetId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            guard activeDropTarget == exitedTarget,
+                  draggedListId != nil,
+                  let dragStartColumns else {
+                return
+            }
+
+            columns = dragStartColumns
+            activeDropTarget = nil
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard draggedListId != nil else { return false }
+        moveDraggedList()
+        draggedListId = nil
+        dragStartColumns = nil
+        activeDropTarget = nil
+        onCommit()
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    private func moveDraggedList() {
+        guard let draggedListId,
+              targetListId != draggedListId,
+              columns.indices.contains(targetColumn),
+              let source = findList(draggedListId) else {
+            return
+        }
+
+        var updated = columns
+        let moving = updated[source.column].remove(at: source.index)
+        let targetIndex = insertionIndex(in: updated[targetColumn])
+
+        if source.column == targetColumn && source.index == targetIndex {
+            columns = updated
+            return
+        }
+
+        updated[targetColumn].insert(moving, at: min(targetIndex, updated[targetColumn].count))
+        columns = updated
+    }
+
+    private func findList(_ id: String) -> (column: Int, index: Int)? {
+        for columnIndex in columns.indices {
+            if let itemIndex = columns[columnIndex].firstIndex(where: { $0.id == id }) {
+                return (columnIndex, itemIndex)
+            }
+        }
+        return nil
+    }
+
+    private func insertionIndex(in targetColumnLists: [GoogleTaskList]) -> Int {
+        guard let targetListId,
+              let index = targetColumnLists.firstIndex(where: { $0.id == targetListId }) else {
+            return targetColumnLists.count
+        }
+        return index
+    }
+}
+
+private enum TwoColumnTaskListLayoutStore {
+    private struct Layout: Codable {
+        let columns: [[String]]
+    }
+
+    static func key(for accountType: GoogleAuthManager.AccountKind) -> String {
+        "twoColumnTaskListLayout_\(accountType.rawValue)"
+    }
+
+    static func load(for accountType: GoogleAuthManager.AccountKind, taskLists: [GoogleTaskList]) -> [[GoogleTaskList]] {
+        NSUbiquitousKeyValueStore.default.synchronize()
+        let storageKey = key(for: accountType)
+        let data = NSUbiquitousKeyValueStore.default.data(forKey: storageKey) ?? UserDefaults.standard.data(forKey: storageKey)
+
+        if let data,
+           let layout = try? JSONDecoder().decode(Layout.self, from: data) {
+            return columns(from: layout.columns, taskLists: taskLists)
+        }
+
+        return makeDefaultColumns(from: taskLists)
+    }
+
+    static func save(_ columns: [[GoogleTaskList]], for accountType: GoogleAuthManager.AccountKind) {
+        let layout = Layout(columns: normalized(columns).map { $0.map(\.id) })
+        guard let data = try? JSONEncoder().encode(layout) else { return }
+
+        let storageKey = key(for: accountType)
+        UserDefaults.standard.set(data, forKey: storageKey)
+        NSUbiquitousKeyValueStore.default.set(data, forKey: storageKey)
+        NSUbiquitousKeyValueStore.default.synchronize()
+    }
+
+    private static func columns(from savedIds: [[String]], taskLists: [GoogleTaskList]) -> [[GoogleTaskList]] {
+        let listById = Dictionary(uniqueKeysWithValues: taskLists.map { ($0.id, $0) })
+        var usedIds = Set<String>()
+
+        var restored = normalized(savedIds.map { ids in
+            ids.compactMap { id -> GoogleTaskList? in
+                guard let list = listById[id], !usedIds.contains(id) else { return nil }
+                usedIds.insert(id)
+                return list
+            }
+        })
+
+        for list in taskLists where !usedIds.contains(list.id) {
+            let targetColumn = restored[0].count <= restored[1].count ? 0 : 1
+            restored[targetColumn].append(list)
+        }
+
+        return restored
+    }
+
+    private static func makeDefaultColumns(from lists: [GoogleTaskList]) -> [[GoogleTaskList]] {
+        var columns: [[GoogleTaskList]] = [[], []]
+        for (index, list) in lists.enumerated() {
+            columns[index % 2].append(list)
+        }
+        return columns
+    }
+
+    private static func normalized<T>(_ columns: [[T]]) -> [[T]] {
+        [
+            columns.indices.contains(0) ? columns[0] : [],
+            columns.indices.contains(1) ? columns[1] : []
+        ]
     }
 }
 
@@ -262,6 +669,7 @@ private struct TaskComponentListCard: View {
     let isBulkEditMode: Bool
     let selectedTaskIds: Set<String>
     let onTaskSelectionToggle: (String) -> Void
+    let onListDragStart: (() -> Void)?
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -298,7 +706,8 @@ private struct TaskComponentListCard: View {
         showTaskStartTime: Bool = false,
         isBulkEditMode: Bool = false,
         selectedTaskIds: Set<String> = [],
-        onTaskSelectionToggle: @escaping (String) -> Void = { _ in }
+        onTaskSelectionToggle: @escaping (String) -> Void = { _ in },
+        onListDragStart: (() -> Void)? = nil
     ) {
         self.taskList = taskList
         self.tasks = tasks
@@ -315,6 +724,7 @@ private struct TaskComponentListCard: View {
         self.isBulkEditMode = isBulkEditMode
         self.selectedTaskIds = selectedTaskIds
         self.onTaskSelectionToggle = onTaskSelectionToggle
+        self.onListDragStart = onListDragStart
     }
     
     var body: some View {
@@ -328,7 +738,8 @@ private struct TaskComponentListCard: View {
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         .onDrag {
-            NSItemProvider(object: taskList.id as NSString)
+            onListDragStart?()
+            return NSItemProvider(object: taskList.id as NSString)
         }
     }
     
