@@ -65,7 +65,6 @@ final class iCloudManager: ObservableObject {
                     case .available:
                         self.iCloudAvailable = true
                         self.updateSyncStatus(.available)
-                        devLog("✅ iCloud available and signed in", level: .info, category: .cloud)
                     case .noAccount:
                         self.iCloudAvailable = false
                         self.updateSyncStatus(.unavailable)
@@ -116,7 +115,6 @@ final class iCloudManager: ObservableObject {
                 try context.save()
                 lastSyncDate = Date()
                 updateSyncStatus(.available)
-                devLog("✅ Local changes synced to iCloud", level: .info, category: .cloud)
                 
                 // Post notification for UI updates
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
@@ -126,7 +124,6 @@ final class iCloudManager: ObservableObject {
             }
         } else {
             updateSyncStatus(.available)
-            devLog("ℹ️ No local changes to sync", level: .info, category: .cloud)
         }
     }
     
@@ -137,7 +134,6 @@ final class iCloudManager: ObservableObject {
         }
         
         updateSyncStatus(.syncing)
-        devLog("🔄 Force syncing to iCloud...", level: .info, category: .cloud)
         
         // Force CloudKit to sync by triggering a context refresh
         let context = persistenceController.container.viewContext
@@ -149,7 +145,6 @@ final class iCloudManager: ObservableObject {
                 try context.save()
                 lastSyncDate = Date()
                 updateSyncStatus(.available)
-                devLog("✅ Force sync completed", level: .info, category: .cloud)
                 
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
             } catch {
@@ -159,16 +154,12 @@ final class iCloudManager: ObservableObject {
         } else {
             lastSyncDate = Date()
             updateSyncStatus(.available)
-            devLog("✅ Force sync completed (no changes)", level: .info, category: .cloud)
         }
     }
     
     func forceCompleteSync() {
-        devLog("🔄 iCloudManager: forceCompleteSync() called")
-        
         // Immediate UI feedback
         updateSyncStatus(.syncing)
-        devLog("🔄 Starting complete sync...", level: .info, category: .cloud)
         
         Task {
             // Check iCloud status first
@@ -200,7 +191,6 @@ final class iCloudManager: ObservableObject {
                 // STEP 1: Save any pending local changes to trigger export
                 if context.hasChanges {
                     do {
-                        devLog("💾 iCloudManager: Saving \(context.insertedObjects.count) inserted, \(context.updatedObjects.count) updated, \(context.deletedObjects.count) deleted")
                         try context.save()
                     } catch {
                         updateSyncStatus(.error("Save failed: \(error.localizedDescription)"))
@@ -271,22 +261,13 @@ final class iCloudManager: ObservableObject {
 
                         await MainActor.run {
                             // STEP 7: Now reload all managers with the fresh data
-                            let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
-
                             TaskTimeWindowManager.shared.loadTimeWindows()
                             CustomLogManager.shared.refreshData()
                             LogsViewModel.shared.reloadData()
                             GoalsManager.shared.refreshData()
 
-                            let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-
-                            if afterCount != beforeCount {
-                                devLog("✅ iCloudManager: Data changed! \(beforeCount) → \(afterCount)")
-                            }
-
                             lastSyncDate = Date()
                             updateSyncStatus(.available)
-                            devLog("✅ iCloudManager: Complete sync finished")
 
                             NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
                         }
@@ -429,9 +410,6 @@ final class iCloudManager: ObservableObject {
             devLog("⚠️ Cannot migrate: iCloud not available", level: .warning, category: .cloud)
             return
         }
-        
-        devLog("🔄 Migrating local data to iCloud...", level: .info, category: .cloud)
-        
         // NSPersistentCloudKitContainer handles migration automatically
         // We just need to ensure all data is saved to trigger CloudKit sync
         let context = persistenceController.container.viewContext
@@ -440,14 +418,11 @@ final class iCloudManager: ObservableObject {
             do {
                 try context.save()
                 lastSyncDate = Date()
-                devLog("✅ Local data migration to iCloud completed", level: .info, category: .cloud)
                 
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
             } catch {
                 devLog("❌ Migration failed: \(error.localizedDescription)", level: .error, category: .cloud)
             }
-        } else {
-            devLog("ℹ️ No local data to migrate", level: .info, category: .cloud)
         }
     }
     
@@ -518,7 +493,6 @@ final class iCloudManager: ObservableObject {
                Date().timeIntervalSince(lastReload) < self.reloadDebounceInterval {
                 // Too soon, skip full reload but still post notification for listeners
                 DispatchQueue.main.async {
-                    devLog("⏭️ iCloudManager: Skipping debounced reload (too soon), but posting notification")
                     NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
                 }
                 return
@@ -532,18 +506,10 @@ final class iCloudManager: ObservableObject {
                 guard let self = self else { return }
 
                 DispatchQueue.main.async {
-                    let beforeCount = TaskTimeWindowManager.shared.timeWindows.count
-
                     TaskTimeWindowManager.shared.loadTimeWindows()
                     CustomLogManager.shared.refreshData()
                     LogsViewModel.shared.reloadData()
                     GoalsManager.shared.refreshData()
-
-                    let afterCount = TaskTimeWindowManager.shared.timeWindows.count
-
-                    if beforeCount != afterCount {
-                        devLog("✅ iCloudManager: Debounced reload completed (\(beforeCount) → \(afterCount))")
-                    }
 
                     self.lastSyncDate = Date()
                     self.lastReloadDate = Date()
@@ -619,17 +585,15 @@ final class iCloudManager: ObservableObject {
                         let goalRequest: NSFetchRequest<Goal> = Goal.fetchRequest()
                         let goalCategoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
 
-                        let weights = try backgroundContext.fetch(weightRequest)
-                        let workouts = try backgroundContext.fetch(workoutRequest)
-                        let foods = try backgroundContext.fetch(foodRequest)
-                        let waters = try backgroundContext.fetch(waterRequest)
-                        let taskTimes = try backgroundContext.fetch(taskTimeRequest)
-                        let customLogEntries = try backgroundContext.fetch(customLogEntryRequest)
-                        let customLogItems = try backgroundContext.fetch(customLogItemRequest)
-                        let goals = try backgroundContext.fetch(goalRequest)
-                        let goalCategories = try backgroundContext.fetch(goalCategoryRequest)
-
-                        devLog("📡 iCloudManager: Remote changes - \(weights.count) weights, \(workouts.count) workouts, \(foods.count) foods, \(waters.count) waters, \(taskTimes.count) task times, \(customLogEntries.count) custom log entries, \(customLogItems.count) custom log items, \(goals.count) goals, \(goalCategories.count) goal categories")
+                        _ = try backgroundContext.fetch(weightRequest)
+                        _ = try backgroundContext.fetch(workoutRequest)
+                        _ = try backgroundContext.fetch(foodRequest)
+                        _ = try backgroundContext.fetch(waterRequest)
+                        _ = try backgroundContext.fetch(taskTimeRequest)
+                        _ = try backgroundContext.fetch(customLogEntryRequest)
+                        _ = try backgroundContext.fetch(customLogItemRequest)
+                        _ = try backgroundContext.fetch(goalRequest)
+                        _ = try backgroundContext.fetch(goalCategoryRequest)
 
                         // Save background context to ensure changes are merged
                         if backgroundContext.hasChanges {
@@ -639,7 +603,6 @@ final class iCloudManager: ObservableObject {
 
                     await MainActor.run {
                         self.updateSyncStatus(.available)
-                        devLog("✅ iCloudManager: CloudKit changes merged successfully")
 
                         // Use debounced reload to prevent multiple rapid reloads
                         self.debouncedReloadAllData()
@@ -657,4 +620,4 @@ final class iCloudManager: ObservableObject {
 
 extension Notification.Name {
     static let iCloudDataChanged = Notification.Name("iCloudDataChanged")
-} 
+}

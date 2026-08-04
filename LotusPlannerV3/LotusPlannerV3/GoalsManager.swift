@@ -565,8 +565,6 @@ class GoalsManager: ObservableObject {
             // Save to trigger CloudKit export of deletions
             try context.save()
 
-            devLog("☁️ GoalsManager: CloudKit will automatically sync deletions via NSPersistentCloudKitContainer")
-
             // Note: Manual CloudKit deletion removed - NSPersistentCloudKitContainer handles this automatically
             // The manual CloudKit records (GoalsData) will be handled separately if needed
 
@@ -742,11 +740,8 @@ class GoalsManager: ObservableObject {
 
         // Check if migration has already been performed
         if UserDefaults.standard.bool(forKey: migrationKey) {
-            devLog("Goals userId migration already completed", level: .info, category: .general)
             return
         }
-
-        devLog("🔄 Starting Goals userId migration from 'default' to 'icloud-user'", level: .info, category: .general)
 
         // Migrate Goal Categories
         let categoryRequest: NSFetchRequest<GoalCategory> = GoalCategory.fetchRequest()
@@ -754,7 +749,6 @@ class GoalsManager: ObservableObject {
 
         do {
             let categories = try context.fetch(categoryRequest)
-            devLog("Found \(categories.count) goal categories to migrate", level: .info, category: .general)
 
             for category in categories {
                 category.userId = "icloud-user"
@@ -762,7 +756,6 @@ class GoalsManager: ObservableObject {
 
             if !categories.isEmpty {
                 try context.save()
-                devLog("✅ Migrated \(categories.count) goal categories to icloud-user", level: .info, category: .general)
             }
         } catch {
             devLog("❌ Error migrating goal categories: \(error)", level: .error, category: .general)
@@ -774,7 +767,6 @@ class GoalsManager: ObservableObject {
 
         do {
             let goals = try context.fetch(goalRequest)
-            devLog("Found \(goals.count) goals to migrate", level: .info, category: .general)
 
             for goal in goals {
                 goal.userId = "icloud-user"
@@ -782,7 +774,6 @@ class GoalsManager: ObservableObject {
 
             if !goals.isEmpty {
                 try context.save()
-                devLog("✅ Migrated \(goals.count) goals to icloud-user", level: .info, category: .general)
             }
         } catch {
             devLog("❌ Error migrating goals: \(error)", level: .error, category: .general)
@@ -795,10 +786,7 @@ class GoalsManager: ObservableObject {
                 try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
 
                 // Force a sync to push changes to CloudKit
-                devLog("🔄 Forcing CloudKit sync after migration...", level: .info, category: .general)
                 iCloudManager.shared.forceSyncToiCloud()
-
-                devLog("✅ CloudKit sync triggered after migration", level: .info, category: .general)
             } catch {
                 devLog("⚠️ Error during post-migration sync: \(error)", level: .warning, category: .general)
             }
@@ -806,7 +794,6 @@ class GoalsManager: ObservableObject {
 
         // Mark migration as complete
         UserDefaults.standard.set(true, forKey: migrationKey)
-        devLog("✅ Goals userId migration completed", level: .info, category: .general)
     }
 
     private func setupiCloudSync() {
@@ -819,13 +806,9 @@ class GoalsManager: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if Date().timeIntervalSince(self.lastSaveTime) < self.reloadSuppressDuration {
-                    devLog("🎯 GoalsManager: Skipping iCloud reload (recent local save)", level: .debug, category: .goals)
                     return
                 }
-                devLog("🎯 GoalsManager: Received .iCloudDataChanged notification - reloading data")
-                let beforeGoalsCount = self.goals.count
                 self.loadFromCoreData()
-                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(self.goals.count), Categories: \(self.categories.count)")
             }
         }
 
@@ -838,13 +821,9 @@ class GoalsManager: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if Date().timeIntervalSince(self.lastSaveTime) < self.reloadSuppressDuration {
-                    devLog("🎯 GoalsManager: Skipping remote change reload (recent local save)", level: .debug, category: .goals)
                     return
                 }
-                devLog("🎯 GoalsManager: Received .NSPersistentStoreRemoteChange - reloading data")
-                let beforeGoalsCount = self.goals.count
                 self.loadFromCoreData()
-                devLog("🎯 GoalsManager: Reload complete - Goals: \(beforeGoalsCount) → \(self.goals.count), Categories: \(self.categories.count)")
             }
         }
 

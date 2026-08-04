@@ -23,7 +23,6 @@ class JournalStorageNew {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            devLog("☁️ JOURNAL STORAGE - iCloud account changed, clearing cache")
             self?.clearAllCache()
         }
     }
@@ -150,9 +149,6 @@ class JournalStorageNew {
                          userInfo: [NSLocalizedDescriptionKey: "No storage location available"])
         }
 
-        // Check if file already exists (this is an update/overwrite)
-        let fileExists = FileManager.default.fileExists(atPath: url.path)
-
         // Use NSFileCoordinator for proper iCloud Documents sync
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinatorError: NSError?
@@ -178,13 +174,6 @@ class JournalStorageNew {
         if isInCloud {
             // Wait for iCloud upload to complete to ensure other devices see the update
             await ensureFileUploaded(url: url)
-        }
-        
-        devLog("   ☁️ Storage: \(isInCloud ? "iCloud" : "Local")")
-        if fileExists {
-            if isInCloud {
-                devLog("   ☁️ Waiting for iCloud upload to complete...")
-            }
         }
         
         // Cache it
@@ -256,9 +245,6 @@ class JournalStorageNew {
                     throw NSError(domain: "JournalStorage", code: -1,
                                 userInfo: [NSLocalizedDescriptionKey: "No data loaded"])
                 }
-
-                let storageType = isInCloud ? "iCloud" : "Local"
-                devLog("   ☁️ Storage: \(storageType)")
 
                 let drawing = try PKDrawing(data: loadedData)
 
@@ -332,9 +318,7 @@ class JournalStorageNew {
         try? await Task.sleep(nanoseconds: waitTime)
         
         // Check file attributes to verify it's been saved
-        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) {
-            devLog("   ✅ File saved locally, iCloud upload queued")
-        } else {
+        if (try? FileManager.default.attributesOfItem(atPath: url.path)) == nil {
             devLog("   ⚠️ Could not verify file save")
         }
     }
@@ -427,4 +411,3 @@ class JournalStorageNew {
         """
     }
 }
-

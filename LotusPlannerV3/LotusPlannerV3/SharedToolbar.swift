@@ -2,9 +2,13 @@ import SwiftUI
 
 struct SharedNavigationToolbar: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var tasksVM = TasksViewModel.shared
+    @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
     @State private var showingAbout = false
     @State private var showingDiagnostics = false
     @State private var showingReportIssues = false
+    @State private var showingAITaskEntry = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -58,6 +62,17 @@ struct SharedNavigationToolbar: View {
                     .frame(width: 20, height: 20)
                     .foregroundColor(navigationManager.currentView == .calendar || navigationManager.currentView == .tasks && !navigationManager.showTasksView ? .accentColor : .secondary)
             }
+
+            Button {
+                showingAITaskEntry = true
+            } label: {
+                Image(systemName: "sparkles")
+                    .font(.body)
+                    .frame(width: 20, height: 20)
+                    .foregroundColor(.accentColor)
+            }
+            .help("AI Task Entry")
+            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
             
         }
         .sheet(isPresented: $showingAbout) {
@@ -69,5 +84,15 @@ struct SharedNavigationToolbar: View {
         .sheet(isPresented: $showingReportIssues) {
             ReportIssuesView()
         }
+        .sheet(isPresented: $showingAITaskEntry) {
+            let personalLinked = auth.isLinked(kind: .personal)
+            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
+            AITaskEntryView(
+                tasksViewModel: tasksVM,
+                authManager: auth,
+                appPrefs: appPrefs,
+                defaultAccountKind: defaultAccount
+            )
+        }
     }
-} 
+}

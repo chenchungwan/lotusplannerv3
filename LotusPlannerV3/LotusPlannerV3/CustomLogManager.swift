@@ -79,7 +79,6 @@ class CustomLogManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            devLog("☁️ CustomLogManager: iCloud data changed notification received, reloading data...")
             self?.refreshData()
         }
 
@@ -89,7 +88,6 @@ class CustomLogManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            devLog("☁️ CustomLogManager: NSPersistentStoreRemoteChange notification received, reloading data...")
             // Refresh Core Data context to get latest changes from iCloud
             self?.context.refreshAllObjects()
             self?.refreshData()
@@ -336,8 +334,6 @@ class CustomLogManager: ObservableObject {
 
             // Save to trigger CloudKit export of deletions
             try context.save()
-
-            devLog("☁️ CustomLogManager: CloudKit will automatically sync deletions via NSPersistentCloudKitContainer")
 
             // Update visibility
             updateCustomLogVisibility()

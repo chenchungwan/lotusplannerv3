@@ -88,12 +88,10 @@ struct TasksView: View {
     
     // MARK: - Local Filtering (No API calls)
     private var filteredPersonalTasks: [String: [GoogleTask]] {
-        logDebug("📋 Personal tasks loaded: \(viewModel.personalTasks.count) lists")
         return getCachedFilteredTasks(for: viewModel.personalTasks, accountKind: .personal)
     }
     
     private var filteredProfessionalTasks: [String: [GoogleTask]] {
-        logDebug("📋 Professional tasks loaded: \(viewModel.professionalTasks.count) lists")
         return getCachedFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional)
     }
     
@@ -129,7 +127,6 @@ struct TasksView: View {
     // Direct filtering function that bypasses caching - like day views
     private func getDirectFilteredTasks(for tasksDict: [String: [GoogleTask]], accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
         let result = filterTasks(tasksDict)
-        logDebug("🔍 Direct filtering result: \(result.count) lists")
         return result
     }
     
@@ -146,9 +143,6 @@ struct TasksView: View {
         
         var filteredTasks = tasks
         
-        // Debug logging
-        logDebug("🔍 Filtering \(tasks.count) tasks with filter: \(selectedFilter.rawValue), subfilter: \(allSubfilter.rawValue), referenceDate: \(referenceDate)")
-        
         // Apply subfilter when in "All"
         if selectedFilter == .all {
             filteredTasks = applyAllSubfilter(filteredTasks, calendar: calendar, startOfToday: startOfToday)
@@ -156,9 +150,7 @@ struct TasksView: View {
             // Apply time-based filter
             filteredTasks = applyTimeBasedFilter(filteredTasks, calendar: calendar, now: now, startOfToday: startOfToday)
         }
-        
-        logDebug("🔍 Filtered to \(filteredTasks.count) tasks")
-        
+
         return filteredTasks
     }
     
@@ -607,7 +599,6 @@ struct TasksView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("SetAllTasksSubfilter"), object: nil, queue: .main) { notification in
                 if let subfilter = notification.object as? AllTaskSubfilter {
                     allSubfilter = subfilter
-                    logDebug("🔄 Subfilter set to: \(subfilter.rawValue)")
                 }
             }
             // Listen for request to filter tasks to current day (when coming from All Tasks filter)
@@ -619,7 +610,6 @@ struct TasksView: View {
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
                 lastFilterState = ""
-                logDebug("🔄 Filter changed to day for current day from All Tasks")
             }
             // Listen for request to filter tasks to current week (when coming from All Tasks filter)
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentWeek"), object: nil, queue: .main) { _ in
@@ -630,7 +620,6 @@ struct TasksView: View {
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
                 lastFilterState = ""
-                logDebug("🔄 Filter changed to week for current week from All Tasks")
             }
             // Listen for request to filter tasks to current month (when coming from All Tasks filter)
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentMonth"), object: nil, queue: .main) { _ in
@@ -641,7 +630,6 @@ struct TasksView: View {
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
                 lastFilterState = ""
-                logDebug("🔄 Filter changed to month for current month from All Tasks")
             }
             // Listen for request to filter tasks to current year (when coming from All Tasks filter)
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentYear"), object: nil, queue: .main) { _ in
@@ -652,39 +640,33 @@ struct TasksView: View {
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
                 lastFilterState = ""
-                logDebug("🔄 Filter changed to year for current year from All Tasks")
             }
         }
         .onChange(of: selectedFilter) { _, newValue in
-            logDebug("🔄 Filter changed to: \(newValue.rawValue)")
             // Clear cache when filter changes
             cachedFilteredPersonalTasks.removeAll()
             cachedFilteredProfessionalTasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: allSubfilter) { _, newValue in
-            logDebug("🔄 Subfilter changed to: \(newValue.rawValue)")
             // Clear cache when subfilter changes
             cachedFilteredPersonalTasks.removeAll()
             cachedFilteredProfessionalTasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: referenceDate) { _, newValue in
-            logDebug("🔄 Reference date changed to: \(newValue)")
             // Clear cache when reference date changes
             cachedFilteredPersonalTasks.removeAll()
             cachedFilteredProfessionalTasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: appPrefs.hideCompletedTasks) { _, newValue in
-            logDebug("🔄 Hide completed tasks changed to: \(newValue)")
             // Clear cache when hide completed tasks setting changes
             cachedFilteredPersonalTasks.removeAll()
             cachedFilteredProfessionalTasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: navigationManager.currentInterval) { _, newValue in
-            logDebug("🔄 Navigation interval changed to: \(newValue)")
             // Update selectedFilter based on navigation interval
             switch newValue {
             case .day:
@@ -704,7 +686,6 @@ struct TasksView: View {
             lastFilterState = ""
         }
         .onChange(of: navigationManager.currentDate) { _, newValue in
-            logDebug("🔄 Navigation date changed to: \(newValue)")
             referenceDate = newValue
             // Clear cache when date changes
             cachedFilteredPersonalTasks.removeAll()
@@ -1669,4 +1650,3 @@ struct TaskRow: View {
         return dueDate < today
     }
 }
-

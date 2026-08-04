@@ -361,7 +361,6 @@ struct JournalView: View {
                             // Reload drawing when file changes from iCloud
                             if let changedDate = notification.userInfo?["date"] as? Date,
                                Calendar.current.isDate(changedDate, inSameDayAs: currentDate) {
-                                devLog("📲 JournalView: Drawing file changed from iCloud for current date, reloading...")
                                 await loadFromiCloud(for: currentDate)
                             }
                         }
@@ -402,7 +401,6 @@ struct JournalView: View {
                                 // Reload drawing when file changes from iCloud
                                 if let changedDate = notification.userInfo?["date"] as? Date,
                                    Calendar.current.isDate(changedDate, inSameDayAs: currentDate) {
-                                    devLog("📲 JournalView: Drawing file changed from iCloud for current date, reloading...")
                                     await loadFromiCloud(for: currentDate)
                                 }
                             }
@@ -1024,7 +1022,6 @@ struct JournalView: View {
 
                 // If no photos found in iCloud, check local storage as fallback
                 if metas.isEmpty {
-                    devLog("🔍 No photos in iCloud, checking local storage...")
                     let localURL = JournalManager.shared.localPhotosURL.appendingPathComponent(url.lastPathComponent)
                     if FileManager.default.fileExists(atPath: localURL.path) {
                         do {
@@ -1035,7 +1032,6 @@ struct JournalView: View {
 
                             // Copy to iCloud for future use
                             try localData.write(to: url, options: .atomic)
-                            devLog("💾 Copied local photos to iCloud")
                             
                             // Load photos in parallel for better performance
                             let loadedPhotos = await loadPhotosInParallel(metas: localMetas)
@@ -1045,10 +1041,8 @@ struct JournalView: View {
                     }
                 } else {
                     // Load photos in parallel for better performance
-                    devLog("🔄 Loading \(metas.count) photos from iCloud...")
                     let loadedPhotos = await loadPhotosInParallel(metas: metas)
                     photos = loadedPhotos
-                    devLog("✅ Successfully loaded \(loadedPhotos.count) photos from iCloud")
                     return
                 }
                 
@@ -1142,8 +1136,6 @@ struct JournalView: View {
             let isInCloud = (isUbiquitous as? Bool) == true
             
             if isInCloud {
-                devLog("📱 iCloud download attempt \(attempt)/\(maxRetries) for: \(url.lastPathComponent)")
-                
                 // Start download without blocking
                 try? FileManager.default.startDownloadingUbiquitousItem(at: url)
                 
@@ -1157,10 +1149,7 @@ struct JournalView: View {
                     
                     if let status = downloadStatus as? URLUbiquitousItemDownloadingStatus {
                         if status == .current {
-                            devLog("✅ iCloud download completed for: \(url.lastPathComponent)")
                             return
-                        } else if status == .notDownloaded {
-                            devLog("⚠️ iCloud file not downloaded yet: \(url.lastPathComponent)")
                         }
                     }
                     
@@ -1178,7 +1167,6 @@ struct JournalView: View {
                 // Wait before retry
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay between retries
             } else {
-                devLog("📁 Local file (not in iCloud): \(url.lastPathComponent)")
                 return
             }
         }

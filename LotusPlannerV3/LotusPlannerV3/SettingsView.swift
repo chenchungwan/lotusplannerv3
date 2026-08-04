@@ -43,6 +43,9 @@ struct SettingsView: View {
     @State private var showingDeleteSuccessAlert = false
     @State private var showingDeleteGoalsAlert = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
+    @State private var anthropicAPIKeyInput = ""
+    @State private var anthropicAPIKeyPreview: String?
+    @State private var anthropicAPIKeyMessage: String?
     /// Non-nil when a custom-day-view version is being edited; drives the
     /// configurator sheet. `UUID` identifies the slot in
     /// `CustomDayViewLibrary` being edited (pre-existing or brand-new).
@@ -230,7 +233,32 @@ struct SettingsView: View {
         CustomDayViewLibrary.save(library)
     }
 
+    private func refreshAnthropicAPIKeyStatus() {
+        anthropicAPIKeyPreview = ClaudeAIService.shared.apiKeyPreview()
+        anthropicAPIKeyMessage = anthropicAPIKeyPreview == nil
+            ? "Used by AI Task Entry. Stored securely in Keychain."
+            : "Anthropic key saved securely in Keychain."
+    }
 
+    private func saveAnthropicAPIKey() {
+        do {
+            try ClaudeAIService.shared.saveAPIKey(anthropicAPIKeyInput)
+            anthropicAPIKeyInput = ""
+            refreshAnthropicAPIKeyStatus()
+        } catch {
+            anthropicAPIKeyMessage = error.localizedDescription
+        }
+    }
+
+    private func clearAnthropicAPIKey() {
+        do {
+            try ClaudeAIService.shared.saveAPIKey("")
+            anthropicAPIKeyInput = ""
+            refreshAnthropicAPIKeyStatus()
+        } catch {
+            anthropicAPIKeyMessage = error.localizedDescription
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -250,6 +278,42 @@ struct SettingsView: View {
                         accountColor: $appPrefs.professionalColor,
                         showingColorPicker: $showingProfessionalColorPicker
                     )
+                }
+
+                Section("AI") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SecureField(
+                            anthropicAPIKeyPreview == nil ? "Anthropic API key" : "Replace \(anthropicAPIKeyPreview!)",
+                            text: $anthropicAPIKeyInput
+                        )
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+
+                        if let anthropicAPIKeyMessage {
+                            Text(anthropicAPIKeyMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            saveAnthropicAPIKey()
+                        } label: {
+                            Label("Save Key", systemImage: "key.fill")
+                        }
+                        .disabled(anthropicAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            clearAnthropicAPIKey()
+                        } label: {
+                            Label("Clear", systemImage: "trash")
+                        }
+                        .disabled(anthropicAPIKeyPreview == nil)
+                    }
                 }
                 
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
@@ -645,6 +709,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                refreshAnthropicAPIKeyStatus()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
@@ -1218,7 +1285,3 @@ struct SettingsView: View {
         // Cleared tokens
     }
 }
-
-
-
-

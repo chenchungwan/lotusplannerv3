@@ -300,6 +300,7 @@ struct GlobalNavBar: View {
         case datePicker
         case addEvent
         case addTask
+        case aiTaskEntry
         case addList
 
         var id: String {
@@ -311,6 +312,7 @@ struct GlobalNavBar: View {
             case .datePicker: return "datePicker"
             case .addEvent: return "addEvent"
             case .addTask: return "addTask"
+            case .aiTaskEntry: return "aiTaskEntry"
             case .addList: return "addList"
             }
         }
@@ -1059,6 +1061,18 @@ struct GlobalNavBar: View {
                                 .buttonStyle(.plain)
                             }
 
+                            Button {
+                                activeSheet = .aiTaskEntry
+                            } label: {
+                                Image(systemName: "sparkles")
+                                    .font(adaptiveIconSize)
+                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                    .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                            .help("AI Task Entry")
+                            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
+
                             // + menu based on current view
                             if navigationManager.currentView == .journalDayViews {
                                 // In Journal Day Views: menu with Event and Task only
@@ -1435,6 +1449,18 @@ struct GlobalNavBar: View {
                                 .buttonStyle(.plain)
                             }
 
+                            Button {
+                                activeSheet = .aiTaskEntry
+                            } label: {
+                                Image(systemName: "sparkles")
+                                    .font(adaptiveIconSize)
+                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
+                                    .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                            .help("AI Task Entry")
+                            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
+
                             // + menu based on current view
                             if navigationManager.currentView == .journalDayViews {
                                 // In Journal Day Views: menu with Event and Task only
@@ -1626,6 +1652,16 @@ struct GlobalNavBar: View {
                         isNew: true
                     )
                 }
+
+            case .aiTaskEntry:
+                let personalLinked = auth.isLinked(kind: .personal)
+                let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
+                AITaskEntryView(
+                    tasksViewModel: tasksVM,
+                    authManager: auth,
+                    appPrefs: appPrefs,
+                    defaultAccountKind: defaultAccount
+                )
 
             case .addList:
                 NewListSheet(
