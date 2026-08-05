@@ -26,6 +26,9 @@ struct ContentView: View {
         .sheet(isPresented: $navigationManager.showingSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $navigationManager.showingIntegrations) {
+            IntegrationsView()
+        }
         // Log sheets attached at ContentView scope so they present regardless
         // of which subview (Day, Week, Tasks, Lists, Goals, Journal, etc.) is
         // currently active. CalendarView previously hosted these but is only
@@ -50,10 +53,8 @@ struct ContentView: View {
                 // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
                     WeeklyView(bulkEditManager: weeklyBulkEditManager)
-                        .id("WeeklyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 } else {
                     CalendarView()
-                        .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 }
             }
         case .tasks:
@@ -64,10 +65,8 @@ struct ContentView: View {
                 // Use WeeklyView for weekly task-focused view, CalendarView for daily events
                 if navigationManager.currentInterval == .week {
                     WeeklyView(bulkEditManager: weeklyBulkEditManager)
-                        .id("WeeklyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 } else {
                     CalendarView()
-                        .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
                 }
             }
         
@@ -79,7 +78,6 @@ struct ContentView: View {
                 GoalsView()
             } else {
                 CalendarView()
-                    .id("CalendarView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
             }
         
         case .journal:
@@ -92,13 +90,11 @@ struct ContentView: View {
                 CalendarView()
             case .yearlyCalendar:
                 CalendarYearlyView()
-                    .id("CalendarYearlyView-\(navigationManager.currentDate)-\(navigationManager.currentInterval)")
             case .timebox:
                 TimeboxView(bulkEditManager: timeboxBulkEditManager)
                     .id("TimeboxView-\(navigationManager.viewRefreshCounter)")
             case .bookView:
                 BookView()
-                    .id("BookView")
         }
     }
 }

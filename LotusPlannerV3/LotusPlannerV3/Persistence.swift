@@ -9,7 +9,7 @@ import CoreData
 import CloudKit
 
 struct PersistenceController {
-    static let shared = PersistenceController()
+    static let shared = PersistenceController(inMemory: AppEnvironment.isRunningTests)
 
     @MainActor
     static let preview: PersistenceController = {

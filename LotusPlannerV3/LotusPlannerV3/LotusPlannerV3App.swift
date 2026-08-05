@@ -18,12 +18,9 @@ struct LotusPlannerV3App: App {
     @StateObject private var appPrefs = AppPreferences.shared
 
     init() {
-        // Enable verbose logging for TestFlight/Production debugging
-        // TODO: Disable this after confirming iCloud sync works in production
+        // Keep noisy diagnostics available during development without forcing
+        // verbose operational logs on for TestFlight/App Store users.
         #if DEBUG
-        UserDefaults.standard.set(true, forKey: "verboseLoggingEnabled")
-        #else
-        // Enable for TestFlight testing - helps diagnose iCloud sync issues
         UserDefaults.standard.set(true, forKey: "verboseLoggingEnabled")
         #endif
 
@@ -33,6 +30,8 @@ struct LotusPlannerV3App: App {
 
         if !configManager.validateConfiguration() {
         }
+
+        guard !AppEnvironment.isRunningTests else { return }
 
         // Force iCloudManager to initialize (this will set up notification observers)
         _ = iCloudManager.shared

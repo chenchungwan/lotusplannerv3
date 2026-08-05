@@ -28,6 +28,9 @@ class CalendarViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showError = false
+    @Published var loadingStatusMessage = ""
+    @Published var lastSuccessfulFetch: [GoogleAuthManager.AccountKind: Date] = [:]
+    @Published var lastFetchError: [GoogleAuthManager.AccountKind: String] = [:]
     private var errorCheckTask: Task<Void, Never>?
     private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
@@ -40,7 +43,7 @@ class CalendarViewModel: ObservableObject {
 
         // Schedule a new error check after a delay
         errorCheckTask = Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 second delay - increased to avoid premature errors
+            try? await Task.sleep(nanoseconds: 500_000_000)
 
             // Only show error if we're not loading and there's an error message
             if !Task.isCancelled && !isLoading && errorMessage != nil {
@@ -49,6 +52,59 @@ class CalendarViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func retryCurrentLoad() async {
+        await refreshDataForCurrentView()
+    }
+
+    func qualitySummary(for kind: GoogleAuthManager.AccountKind) -> String {
+        if let error = lastFetchError[kind] {
+            return "\(kind.displayName) failed: \(error)"
+        }
+        if let lastFetch = lastSuccessfulFetch[kind] {
+            return "\(kind.displayName) loaded \(lastFetch.formatted(date: .omitted, time: .shortened))"
+        }
+        return GoogleAuthManager.shared.isLinked(kind: kind) ? "\(kind.displayName) not loaded yet" : "\(kind.displayName) not linked"
+    }
+
+    func updateCalendarFetchStatus(personalError: Error?, professionalError: Error?) {
+        let now = Date()
+
+        if GoogleAuthManager.shared.isLinked(kind: .personal) {
+            if let personalError {
+                lastFetchError[.personal] = personalError.localizedDescription
+            } else {
+                lastFetchError.removeValue(forKey: .personal)
+                lastSuccessfulFetch[.personal] = now
+            }
+        }
+
+        if GoogleAuthManager.shared.isLinked(kind: .professional) {
+            if let professionalError {
+                lastFetchError[.professional] = professionalError.localizedDescription
+            } else {
+                lastFetchError.removeValue(forKey: .professional)
+                lastSuccessfulFetch[.professional] = now
+            }
+        }
+
+        showError = errorMessage != nil
+    }
+
+    func newestCacheAgeDescription() -> String {
+        guard let newest = cacheTimestamps.values.max() else { return "No cached calendar data" }
+        return Self.relativeAgeDescription(since: newest)
+    }
+
+    static func relativeAgeDescription(since date: Date) -> String {
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 { return "\(seconds)s ago" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m ago" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)h ago" }
+        return "\(hours / 24)d ago"
     }
 
     func refreshDataForCurrentView() async {

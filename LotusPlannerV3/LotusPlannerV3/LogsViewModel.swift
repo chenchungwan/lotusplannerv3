@@ -167,7 +167,9 @@ class LogsViewModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             // Reload data when iCloud sync completes
-            self?.loadLocalData()
+            Task { @MainActor in
+                self?.loadLocalData()
+            }
         }
         
         // Listen for Core Data remote change notifications
@@ -177,7 +179,9 @@ class LogsViewModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             // Reload data when CloudKit changes are received
-            self?.loadLocalData()
+            Task { @MainActor in
+                self?.loadLocalData()
+            }
         }
     }
     

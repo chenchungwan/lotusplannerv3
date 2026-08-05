@@ -236,6 +236,10 @@ final class LotusPlannerV3Tests: XCTestCase {
     @MainActor
     func testNavigationManagerViewSwitching() {
         let navManager = NavigationManager.shared
+        let prefs = AppPreferences.shared
+        let originalHideGoals = prefs.hideGoals
+        prefs.hideGoals = false
+        defer { prefs.hideGoals = originalHideGoals }
 
         navManager.switchToCalendar()
         XCTAssertEqual(navManager.currentView, .calendar, "Should switch to calendar")
@@ -419,7 +423,11 @@ final class LotusPlannerV3Tests: XCTestCase {
         let testValue = "test_value_123"
 
         // Save
-        try keychainManager.saveString(testValue, for: testKey)
+        do {
+            try keychainManager.saveString(testValue, for: testKey)
+        } catch KeychainManager.KeychainError.unhandledError(let status) where status == errSecMissingEntitlement {
+            throw XCTSkip("Host test runner does not have Keychain entitlement.")
+        }
 
         // Retrieve
         let retrieved = try keychainManager.loadString(for: testKey)

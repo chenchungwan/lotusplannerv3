@@ -131,6 +131,7 @@ extension CalendarViewModel {
         isLoading = true
         errorMessage = nil
         showError = false
+        loadingStatusMessage = "Loading calendar..."
 
         var personalError: Error?
         var professionalError: Error?
@@ -163,20 +164,23 @@ extension CalendarViewModel {
             let professionalLinked = authManager.isLinked(kind: .professional)
 
             if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
                 if personalError != nil && professionalError != nil {
                     self.errorMessage = "Failed to load calendar data for both accounts"
+                } else if personalError != nil {
+                    self.errorMessage = "Personal failed, professional loaded"
+                } else if professionalError != nil {
+                    self.errorMessage = "Professional failed, personal loaded"
                 }
             } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
                 self.errorMessage = personalError!.localizedDescription
             } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
                 self.errorMessage = professionalError!.localizedDescription
             }
+            self.updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
         }
 
         isLoading = false
+        loadingStatusMessage = ""
 
         // Schedule error check after loading completes
         scheduleErrorCheck()
@@ -186,6 +190,7 @@ extension CalendarViewModel {
         isLoading = true
         errorMessage = nil
         showError = false
+        loadingStatusMessage = "Loading calendar week..."
 
         // Get the week range using Monday-first calendar, extended by 1 day on each side for all-day events
         let calendar = Calendar.mondayFirst
@@ -227,20 +232,23 @@ extension CalendarViewModel {
             let professionalLinked = authManager.isLinked(kind: .professional)
 
             if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
                 if personalError != nil && professionalError != nil {
                     self.errorMessage = "Failed to load calendar data for both accounts"
+                } else if personalError != nil {
+                    self.errorMessage = "Personal failed, professional loaded"
+                } else if professionalError != nil {
+                    self.errorMessage = "Professional failed, personal loaded"
                 }
             } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
                 self.errorMessage = personalError!.localizedDescription
             } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
                 self.errorMessage = professionalError!.localizedDescription
             }
+            self.updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
         }
 
         isLoading = false
+        loadingStatusMessage = ""
 
         // Schedule error check after loading completes
         scheduleErrorCheck()
@@ -287,6 +295,7 @@ extension CalendarViewModel {
         let needsProfessionalRefresh = authManager.isLinked(kind: .professional) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .professional)) == nil
 
         if !needsPersonalRefresh && !needsProfessionalRefresh {
+            loadingStatusMessage = ""
             return
         }
 
@@ -295,6 +304,7 @@ extension CalendarViewModel {
         isLoading = true
         errorMessage = nil
         showError = false
+        loadingStatusMessage = "Loading calendar month..."
 
         var personalError: Error?
         var professionalError: Error?
@@ -336,20 +346,23 @@ extension CalendarViewModel {
             let professionalLinked = authManager.isLinked(kind: .professional)
 
             if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
                 if personalError != nil && professionalError != nil {
                     self.errorMessage = "Failed to load calendar data for both accounts"
+                } else if personalError != nil {
+                    self.errorMessage = "Personal failed, professional loaded"
+                } else if professionalError != nil {
+                    self.errorMessage = "Professional failed, personal loaded"
                 }
             } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
                 self.errorMessage = personalError!.localizedDescription
             } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
                 self.errorMessage = professionalError!.localizedDescription
             }
+            self.updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
         }
 
         isLoading = false
+        loadingStatusMessage = ""
 
         // Schedule error check after loading completes
         scheduleErrorCheck()
@@ -362,6 +375,9 @@ extension CalendarViewModel {
     }
 
     private func loadCalendarDataForAccountThrowing(_ kind: GoogleAuthManager.AccountKind, date: Date) async throws {
+        await MainActor.run {
+            self.loadingStatusMessage = "Loading \(kind.displayName.lowercased()) calendar..."
+        }
         let calendars = try await fetchCalendars(for: kind)
         let events = try await fetchEventsForDate(date, calendars: calendars, for: kind)
 
@@ -478,6 +494,9 @@ extension CalendarViewModel {
     }
 
     private func loadCalendarDataForWeekRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
+        await MainActor.run {
+            self.loadingStatusMessage = "Loading \(kind.displayName.lowercased()) calendar..."
+        }
         let calendars = try await fetchCalendars(for: kind)
         let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
 
@@ -494,6 +513,9 @@ extension CalendarViewModel {
     }
 
     private func loadCalendarDataForMonthRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
+        await MainActor.run {
+            self.loadingStatusMessage = "Loading \(kind.displayName.lowercased()) calendar..."
+        }
         let calendars = try await fetchCalendars(for: kind)
 
         let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)

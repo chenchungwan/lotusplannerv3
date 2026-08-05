@@ -1,0 +1,53 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - hardening
+
+jobs:
+  build-test-lint:
+    runs-on: macos-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project LotusPlannerV3/LotusPlannerV3.xcodeproj \
+            -scheme LotusPlannerV3 \
+            -configuration Debug \
+            -derivedDataPath /tmp/LotusPlannerV3CI \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Test
+        run: |
+          xcodebuild test \
+            -project LotusPlannerV3/LotusPlannerV3.xcodeproj \
+            -scheme LotusPlannerV3 \
+            -configuration Debug \
+            -derivedDataPath /tmp/LotusPlannerV3CI \
+            -destination 'platform=macOS,variant=Mac Catalyst' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: SwiftLint
+        run: |
+          if command -v swiftlint >/dev/null 2>&1; then
+            swiftlint --config .swiftlint.yml
+          else
+            brew install swiftlint
+            swiftlint --config .swiftlint.yml
+          fi
+
+      - name: Warning Budget
+        env:
+          DERIVED_DATA: /tmp/LotusPlannerV3CI
+          MAX_WARNINGS: 80
+        run: bash scripts/warning_budget.sh

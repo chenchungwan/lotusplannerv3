@@ -32,20 +32,14 @@ struct SettingsView: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
 
-    // State for show/hide account toggles (placeholder for future implementation)
-    @State private var showPersonalAccount = true
-    @State private var showProfessionalAccount = true
-
-    // State for color picker modals
-    @State private var showingPersonalColorPicker = false
-    @State private var showingProfessionalColorPicker = false
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
     @State private var showingDeleteGoalsAlert = false
+    @State private var showPersonalAccount = true
+    @State private var showProfessionalAccount = true
+    @State private var showingPersonalColorPicker = false
+    @State private var showingProfessionalColorPicker = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
-    @State private var anthropicAPIKeyInput = ""
-    @State private var anthropicAPIKeyPreview: String?
-    @State private var anthropicAPIKeyMessage: String?
     /// Non-nil when a custom-day-view version is being edited; drives the
     /// configurator sheet. `UUID` identifies the slot in
     /// `CustomDayViewLibrary` being edited (pre-existing or brand-new).
@@ -379,33 +373,6 @@ struct SettingsView: View {
         CustomWeeklyViewLibrary.save(library)
     }
 
-    private func refreshAnthropicAPIKeyStatus() {
-        anthropicAPIKeyPreview = ClaudeAIService.shared.apiKeyPreview()
-        anthropicAPIKeyMessage = anthropicAPIKeyPreview == nil
-            ? "Used by AI Task Entry. Stored securely in Keychain."
-            : "Anthropic key saved securely in Keychain."
-    }
-
-    private func saveAnthropicAPIKey() {
-        do {
-            try ClaudeAIService.shared.saveAPIKey(anthropicAPIKeyInput)
-            anthropicAPIKeyInput = ""
-            refreshAnthropicAPIKeyStatus()
-        } catch {
-            anthropicAPIKeyMessage = error.localizedDescription
-        }
-    }
-
-    private func clearAnthropicAPIKey() {
-        do {
-            try ClaudeAIService.shared.saveAPIKey("")
-            anthropicAPIKeyInput = ""
-            refreshAnthropicAPIKeyStatus()
-        } catch {
-            anthropicAPIKeyMessage = error.localizedDescription
-        }
-    }
-
     var body: some View {
         NavigationStack {
             Form {
@@ -426,42 +393,6 @@ struct SettingsView: View {
                     )
                 }
 
-                Section("AI") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        SecureField(
-                            anthropicAPIKeyPreview == nil ? "Anthropic API key" : "Replace \(anthropicAPIKeyPreview!)",
-                            text: $anthropicAPIKeyInput
-                        )
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-
-                        if let anthropicAPIKeyMessage {
-                            Text(anthropicAPIKeyMessage)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    HStack {
-                        Button {
-                            saveAnthropicAPIKey()
-                        } label: {
-                            Label("Save Key", systemImage: "key.fill")
-                        }
-                        .disabled(anthropicAPIKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                        Spacer()
-
-                        Button(role: .destructive) {
-                            clearAnthropicAPIKey()
-                        } label: {
-                            Label("Clear", systemImage: "trash")
-                        }
-                        .disabled(anthropicAPIKeyPreview == nil)
-                    }
-                }
-                
                 // Task Management section removed (Hide Completed Tasks now controlled via eye icon)
 
                 if !AppPreferences.isRunningOniPhone {
@@ -624,6 +555,16 @@ struct SettingsView: View {
                                 Text("Custom")
                                     .font(.body)
                                     .fontWeight(appPrefs.useCustomWeeklyView ? .semibold : .regular)
+
+                                Text("Beta")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(Color.orange)
+                                    )
 
                                 if isCustomWeeklyViewConfigured {
                                     Text("Configured")
@@ -894,9 +835,6 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                refreshAnthropicAPIKeyStatus()
-            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
@@ -989,7 +927,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private func accountRow(
         kind: String,
@@ -1001,12 +939,10 @@ struct SettingsView: View {
         let isLinked = auth.linkedStates[kindEnum] ?? false
         VStack(spacing: 8) {
             HStack(spacing: 16) {
-                // Account icon
                 Image(systemName: "person.circle.fill")
                     .foregroundColor(.secondary)
                     .font(.title2)
 
-                // Color picker circle
                 Button {
                     showingColorPicker.wrappedValue = true
                 } label: {
@@ -1034,7 +970,6 @@ struct SettingsView: View {
                     )
                 }
 
-                // Account info
                 VStack(alignment: .leading, spacing: 2) {
                     TextField("Account name", text: kindEnum == .personal ? $appPrefs.personalAccountName : $appPrefs.professionalAccountName)
                         .font(.body)
@@ -1047,7 +982,6 @@ struct SettingsView: View {
 
                 Spacer()
 
-                // Link/Unlink button
                 Button(isLinked ? "Unlink" : "Link") {
                     if isLinked {
                         pendingUnlink = kindEnum
@@ -1068,7 +1002,6 @@ struct SettingsView: View {
                 do {
                     try await auth.link(kind: kind, presenting: nil)
                 } catch GoogleAuthManager.AuthError.missingClientID {
-                    // Show user-friendly error message
                 } catch GoogleAuthManager.AuthError.noRefreshToken {
                 } catch GoogleAuthManager.AuthError.tokenRefreshFailed {
                 } catch {

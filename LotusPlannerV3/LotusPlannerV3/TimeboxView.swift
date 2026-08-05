@@ -379,9 +379,11 @@ struct TimeboxView: View {
                 object: nil,
                 queue: .main
             ) { _ in
-                bulkEditManager.state.isActive.toggle()
-                if !bulkEditManager.state.isActive {
-                    bulkEditManager.state.selectedTaskIds.removeAll()
+                Task { @MainActor in
+                    bulkEditManager.state.isActive.toggle()
+                    if !bulkEditManager.state.isActive {
+                        bulkEditManager.state.selectedTaskIds.removeAll()
+                    }
                 }
             }
         }

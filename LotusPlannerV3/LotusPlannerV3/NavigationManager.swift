@@ -32,6 +32,7 @@ class NavigationManager: ObservableObject {
     @Published var currentDate: Date = Date()
     @Published var viewRefreshCounter: Int = 0
     @Published var showingSettings = false
+    @Published var showingIntegrations = false
     @Published var showingAllTasks = false
     @Published var isShowingTimebox = false
 
@@ -116,6 +117,10 @@ class NavigationManager: ObservableObject {
 
     func showSettings() {
         showingSettings = true
+    }
+
+    func showIntegrations() {
+        showingIntegrations = true
     }
 
     /// Update the current interval and date from calendar view.

@@ -1,0 +1,28 @@
+disabled_rules:
+  - file_length
+  - function_body_length
+  - type_body_length
+  - cyclomatic_complexity
+  - line_length
+
+opt_in_rules:
+  - empty_count
+  - force_unwrapping
+  - sorted_imports
+
+included:
+  - LotusPlannerV3/LotusPlannerV3
+  - LotusPlannerV3/LotusPlannerV3Tests
+
+excluded:
+  - LotusPlannerV3/LotusPlannerV3.xcodeproj
+  - LotusPlannerV3/LotusPlannerV3/Assets.xcassets
+  - LotusPlannerV3/LotusPlannerV3/LotusPlannerV3.xcdatamodeld
+
+force_cast: warning
+force_try: warning
+force_unwrapping: warning
+identifier_name:
+  min_length: 1
+trailing_whitespace:
+  ignores_empty_lines: true

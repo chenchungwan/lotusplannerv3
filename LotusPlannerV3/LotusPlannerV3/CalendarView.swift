@@ -1680,6 +1680,9 @@ struct CalendarView: View {
         .background(Color(.systemBackground))
         .overlay(loadingOverlay)
         .alert("Calendar Error", isPresented: $calendarViewModel.showError) {
+            Button("Retry") {
+                Task { await calendarViewModel.retryCurrentLoad() }
+            }
             Button("OK") {
                 calendarViewModel.showError = false
                 calendarViewModel.errorMessage = nil
@@ -1712,7 +1715,12 @@ struct CalendarView: View {
     @ViewBuilder
     private var loadingOverlay: some View {
         if calendarViewModel.isLoading {
-            ProgressView()
+            VStack(spacing: 8) {
+                ProgressView()
+                Text(calendarViewModel.loadingStatusMessage.isEmpty ? "Loading calendar..." : calendarViewModel.loadingStatusMessage)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
                 .padding()
                 .background(Color(.systemBackground).opacity(0.9))
                 .cornerRadius(8)

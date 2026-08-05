@@ -358,4 +358,13 @@ final class GoogleAuthManager: ObservableObject {
         }
         return base
     }
-} 
+}
+
+extension GoogleAuthManager.AccountKind {
+    var displayName: String {
+        switch self {
+        case .personal: return "Personal"
+        case .professional: return "Professional"
+        }
+    }
+}

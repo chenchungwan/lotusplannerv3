@@ -25,7 +25,9 @@ class ImageCache: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.clearCache()
+            Task { @MainActor in
+                self?.clearCache()
+            }
         }
         #endif
     }

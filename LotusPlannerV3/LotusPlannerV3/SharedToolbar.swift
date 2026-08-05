@@ -17,6 +17,9 @@ struct SharedNavigationToolbar: View {
                 Button("Settings") {
                     navigationManager.showSettings()
                 }
+                Button("Integrations") {
+                    navigationManager.showIntegrations()
+                }
                 Button("About") {
                     showingAbout = true
                 }

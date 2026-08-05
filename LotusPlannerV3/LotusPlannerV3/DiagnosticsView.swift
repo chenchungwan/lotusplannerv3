@@ -15,6 +15,9 @@ struct DiagnosticsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var iCloudManagerInstance = iCloudManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
+    @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var calendarVM = CalendarViewModel.shared
+    @ObservedObject private var tasksVM = TasksViewModel.shared
 
     // iCloud Sync section state (moved from SettingsView).
     @State private var cachedSyncStatus: iCloudManager.SyncStatus = .unknown
@@ -35,6 +38,10 @@ struct DiagnosticsView: View {
             Form {
                 Section("iCloud Sync") {
                     iCloudSyncBlock
+                }
+
+                Section("Quality") {
+                    qualityBlock
                 }
 
                 Section {
@@ -83,6 +90,55 @@ struct DiagnosticsView: View {
     }
 
     // MARK: - UI blocks
+
+    private var qualityBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            qualityRow("Sync Health", iCloudManagerInstance.syncStatus.description)
+            qualityRow("Last iCloud Save", iCloudManagerInstance.lastSyncDate?.formatted(date: .abbreviated, time: .shortened) ?? "Never")
+            qualityRow("Personal Account", linkedAccountSummary(.personal))
+            qualityRow("Professional Account", linkedAccountSummary(.professional))
+            qualityRow("Calendar Personal", calendarVM.qualitySummary(for: .personal))
+            qualityRow("Calendar Professional", calendarVM.qualitySummary(for: .professional))
+            qualityRow("Tasks Personal", tasksVM.qualitySummary(for: .personal))
+            qualityRow("Tasks Professional", tasksVM.qualitySummary(for: .professional))
+            qualityRow("Calendar Cache", calendarVM.newestCacheAgeDescription())
+            qualityRow("Task Cache", tasksVM.newestCacheAgeDescription())
+            qualityRow("App Version", "\(appVersion) (\(buildNumber))")
+
+            HStack {
+                Button {
+                    Task {
+                        await calendarVM.retryCurrentLoad()
+                        await tasksVM.loadTasks(policy: .forceRefresh)
+                    }
+                } label: {
+                    Label("Retry Google Fetch", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+            }
+            .padding(.top, 2)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func qualityRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(label)
+            Spacer(minLength: 16)
+            Text(value)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .font(.caption)
+    }
+
+    private func linkedAccountSummary(_ kind: GoogleAuthManager.AccountKind) -> String {
+        guard auth.isLinked(kind: kind) else { return "Not linked" }
+        let email = auth.getEmail(for: kind)
+        return email.isEmpty ? "Linked" : email
+    }
 
     private var iCloudSyncBlock: some View {
         VStack(spacing: 12) {

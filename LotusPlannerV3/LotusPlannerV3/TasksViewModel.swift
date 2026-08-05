@@ -4,6 +4,11 @@ import Foundation
 // MARK: - Tasks View Model
 @MainActor
 class TasksViewModel: ObservableObject {
+    enum CacheRefreshPolicy {
+        case freshEnough
+        case forceRefresh
+    }
+
     /// Shared instance. App-wide views observe the same model so a task
     /// edit anywhere updates every surface (tasks list, calendar, custom
     /// day view). `DataManager` previously owned this object; promotion
@@ -21,6 +26,9 @@ class TasksViewModel: ObservableObject {
     }
     @Published var isLoading = false
     @Published var errorMessage = ""
+    @Published var loadingStatusMessage = ""
+    @Published var lastSuccessfulFetch: [GoogleAuthManager.AccountKind: Date] = [:]
+    @Published var lastFetchError: [GoogleAuthManager.AccountKind: String] = [:]
     
     let authManager = GoogleAuthManager.shared
     
@@ -57,13 +65,20 @@ class TasksViewModel: ObservableObject {
     }
     
     func loadTasks(forceClear: Bool = false) async {
+        await loadTasks(policy: forceClear ? .forceRefresh : .freshEnough)
+    }
+
+    func loadTasks(policy: CacheRefreshPolicy) async {
         isLoading = true
         errorMessage = ""
+        loadingStatusMessage = "Loading tasks..."
         
-        // Clear all caches if forced
-        if forceClear {
+        // Force refresh is reserved for explicit user/account sync actions.
+        if policy == .forceRefresh {
             clearCacheForAccount(.personal)
             clearCacheForAccount(.professional)
+            clearTaskListCache(for: .personal)
+            clearTaskListCache(for: .professional)
         }
         
         // Load tasks for both account types in parallel
@@ -82,6 +97,7 @@ class TasksViewModel: ObservableObject {
         }
         
         await MainActor.run {
+            self.loadingStatusMessage = ""
             self.isLoading = false
         }
     }
@@ -120,6 +136,7 @@ class TasksViewModel: ObservableObject {
     }
     
     private func loadTaskListsForAccount(_ kind: GoogleAuthManager.AccountKind) async {
+        loadingStatusMessage = "Loading \(kind.displayName.lowercased()) task lists..."
         // Check cache first
         if let cachedLists = getCachedTaskLists(for: kind) {
             await MainActor.run {
@@ -147,58 +164,87 @@ class TasksViewModel: ObservableObject {
         } catch {
             await MainActor.run {
                 self.errorMessage = "Failed to load \(kind.rawValue) task lists: \(error.localizedDescription)"
+                self.lastFetchError[kind] = error.localizedDescription
             }
         }
     }
     
     private func loadTasksForAccount(_ kind: GoogleAuthManager.AccountKind) async {
+        loadingStatusMessage = "Loading \(kind.displayName.lowercased()) tasks..."
         do {
-            let taskLists = try await fetchTaskLists(for: kind)
-            
-            await MainActor.run {
-                switch kind {
-                case .personal: self.personalTaskLists = taskLists
-                case .professional: self.professionalTaskLists = taskLists
-                }
+            let taskLists: [GoogleTaskList]
+            if let cachedLists = getCachedTaskLists(for: kind) {
+                taskLists = cachedLists
+            } else {
+                taskLists = try await fetchTaskLists(for: kind)
+                cacheTaskLists(taskLists, for: kind)
             }
-            
-            // PARALLEL task loading for all lists
-            await withTaskGroup(of: Void.self) { group in
+
+            var loadedTasksByList: [String: [GoogleTask]] = [:]
+            var listLoadErrors: [String] = []
+
+            // Load all lists in parallel, then publish once to avoid repeatedly
+            // rebuilding day caches and invalidating every observing view.
+            await withTaskGroup(of: (listId: String, tasks: [GoogleTask]?, errorMessage: String?).self) { group in
                 for taskList in taskLists {
                     group.addTask {
                         do {
                             let tasks = try await self.fetchTasks(for: kind, taskListId: taskList.id)
-                            await MainActor.run {
-                                switch kind {
-                                case .personal: self.personalTasks[taskList.id] = tasks
-                                case .professional: self.professionalTasks[taskList.id] = tasks
-                                }
-                            }
+                            return (taskList.id, tasks, nil)
                         } catch {
-                            await MainActor.run {
-                                self.errorMessage = "Failed to load tasks for \(taskList.title): \(error.localizedDescription)"
-                            }
+                            return (taskList.id, nil, "Failed to load tasks for \(taskList.title): \(error.localizedDescription)")
                         }
                     }
                 }
-            }
 
-            // Clean up time windows for all-day tasks after loading
-            await MainActor.run {
-                let allTasks: [GoogleTask] = taskLists.flatMap { taskList in
-                    switch kind {
-                    case .personal: return self.personalTasks[taskList.id] ?? []
-                    case .professional: return self.professionalTasks[taskList.id] ?? []
+                for await result in group {
+                    if let tasks = result.tasks {
+                        loadedTasksByList[result.listId] = tasks
+                    }
+                    if let errorMessage = result.errorMessage {
+                        listLoadErrors.append(errorMessage)
                     }
                 }
-                TaskTimeWindowManager.shared.cleanupTimeWindowsForAllDayTasks(tasks: allTasks)
             }
 
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to load \(kind.rawValue) tasks: \(error.localizedDescription)"
+            switch kind {
+            case .personal:
+                personalTaskLists = taskLists
+                personalTasks = loadedTasksByList
+            case .professional:
+                professionalTaskLists = taskLists
+                professionalTasks = loadedTasksByList
             }
+
+            if let firstError = listLoadErrors.first {
+                errorMessage = firstError
+                lastFetchError[kind] = firstError
+            } else {
+                lastFetchError.removeValue(forKey: kind)
+                lastSuccessfulFetch[kind] = Date()
+            }
+
+            let allTasks = loadedTasksByList.values.flatMap { $0 }
+            TaskTimeWindowManager.shared.cleanupTimeWindowsForAllDayTasks(tasks: allTasks)
+        } catch {
+            errorMessage = "Failed to load \(kind.rawValue) tasks: \(error.localizedDescription)"
+            lastFetchError[kind] = error.localizedDescription
         }
+    }
+
+    func qualitySummary(for kind: GoogleAuthManager.AccountKind) -> String {
+        if let error = lastFetchError[kind] {
+            return "\(kind.displayName) failed: \(error)"
+        }
+        if let lastFetch = lastSuccessfulFetch[kind] {
+            return "\(kind.displayName) loaded \(lastFetch.formatted(date: .omitted, time: .shortened))"
+        }
+        return authManager.isLinked(kind: kind) ? "\(kind.displayName) not loaded yet" : "\(kind.displayName) not linked"
+    }
+
+    func newestCacheAgeDescription() -> String {
+        guard let newest = cacheTimestamps.values.max() else { return "No cached tasks" }
+        return CalendarViewModel.relativeAgeDescription(since: newest)
     }
 
     // MARK: - Task List Caching Methods
@@ -214,6 +260,11 @@ class TasksViewModel: ObservableObject {
     private func cacheTaskLists(_ taskLists: [GoogleTaskList], for kind: GoogleAuthManager.AccountKind) {
         cachedTaskLists[kind] = taskLists
         taskListCacheTimestamps[kind] = Date()
+    }
+
+    private func clearTaskListCache(for kind: GoogleAuthManager.AccountKind) {
+        cachedTaskLists.removeValue(forKey: kind)
+        taskListCacheTimestamps.removeValue(forKey: kind)
     }
     
     /// Clears tasks and lists for the specified account kind (or all if nil)
@@ -255,6 +306,79 @@ class TasksViewModel: ObservableObject {
         cachedTasks[key] = tasks
         cacheTimestamps[key] = Date()
     }
+
+    func upsertTaskInCache(_ task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) {
+        let key = taskCacheKey(for: kind, listId: listId)
+        guard var tasks = cachedTasks[key] else { return }
+
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index] = task
+        } else {
+            tasks.append(task)
+        }
+
+        cacheTasks(tasks, for: key)
+        clearFilteredCache(for: kind)
+    }
+
+    func replaceTaskInCache(tempId: String, with task: GoogleTask, in listId: String, for kind: GoogleAuthManager.AccountKind) {
+        let key = taskCacheKey(for: kind, listId: listId)
+        guard var tasks = cachedTasks[key] else { return }
+
+        if let index = tasks.firstIndex(where: { $0.id == tempId }) {
+            tasks[index] = task
+        } else if !tasks.contains(where: { $0.id == task.id }) {
+            tasks.append(task)
+        }
+
+        cacheTasks(tasks, for: key)
+        clearFilteredCache(for: kind)
+    }
+
+    func removeTaskFromCache(taskId: String, from listId: String, for kind: GoogleAuthManager.AccountKind) {
+        let key = taskCacheKey(for: kind, listId: listId)
+        guard var tasks = cachedTasks[key] else { return }
+
+        tasks.removeAll { $0.id == taskId }
+        cacheTasks(tasks, for: key)
+        clearFilteredCache(for: kind)
+    }
+
+    func moveTaskInCache(
+        originalTaskId: String,
+        replacementTask: GoogleTask,
+        from sourceListId: String,
+        to targetListId: String,
+        sourceKind: GoogleAuthManager.AccountKind,
+        targetKind: GoogleAuthManager.AccountKind
+    ) {
+        removeTaskFromCache(taskId: originalTaskId, from: sourceListId, for: sourceKind)
+        upsertTaskInCache(replacementTask, in: targetListId, for: targetKind)
+    }
+
+    func upsertTaskListInCache(_ taskList: GoogleTaskList, for kind: GoogleAuthManager.AccountKind) {
+        var lists = cachedTaskLists[kind] ?? []
+
+        if let index = lists.firstIndex(where: { $0.id == taskList.id }) {
+            lists[index] = taskList
+        } else {
+            lists.append(taskList)
+        }
+
+        cacheTaskLists(lists, for: kind)
+    }
+
+    func removeTaskListFromCache(listId: String, for kind: GoogleAuthManager.AccountKind) {
+        if var lists = cachedTaskLists[kind] {
+            lists.removeAll { $0.id == listId }
+            cacheTaskLists(lists, for: kind)
+        }
+
+        let key = taskCacheKey(for: kind, listId: listId)
+        cachedTasks.removeValue(forKey: key)
+        cacheTimestamps.removeValue(forKey: key)
+        clearFilteredCache(for: kind)
+    }
     
     func clearCacheForAccount(_ kind: GoogleAuthManager.AccountKind) {
         let keysToRemove = cachedTasks.keys.filter { $0.hasPrefix(kind.rawValue) }
@@ -263,15 +387,18 @@ class TasksViewModel: ObservableObject {
             cacheTimestamps.removeValue(forKey: key)
         }
         
-        // Also clear filtered task caches for this account
-        let filteredKeysToRemove = filteredTasksCache.keys.filter { $0.accountKind == kind.rawValue }
-        for key in filteredKeysToRemove {
-            filteredTasksCache.removeValue(forKey: key)
-        }
+        clearFilteredCache(for: kind)
     }
     
     func clearAllFilteredCaches() {
         filteredTasksCache.removeAll()
+    }
+
+    private func clearFilteredCache(for kind: GoogleAuthManager.AccountKind) {
+        let filteredKeysToRemove = filteredTasksCache.keys.filter { $0.accountKind == kind.rawValue }
+        for key in filteredKeysToRemove {
+            filteredTasksCache.removeValue(forKey: key)
+        }
     }
     
     private func rebuildTasksCache(for kind: GoogleAuthManager.AccountKind) {

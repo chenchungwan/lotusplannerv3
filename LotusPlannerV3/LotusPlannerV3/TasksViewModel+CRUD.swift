@@ -190,12 +190,9 @@ extension TasksViewModel {
                     throw TasksError.apiError(httpResponse.statusCode)
                 }
                 
-                // Clear cache for this account to ensure fresh data on next load
-                clearCacheForAccount(kind)
-                
-                // Reload tasks to get the latest state
-                await loadTasks()
-                
+                await MainActor.run {
+                    self.upsertTaskInCache(task, in: listId, for: kind)
+                }
             } catch {
                 // REVERT OPTIMISTIC UPDATE on error
                 if let original = originalTask {
@@ -257,10 +254,8 @@ extension TasksViewModel {
             do {
                 try await deleteTaskFromServer(task, from: listId, for: kind)
 
-                // Clear cache after successful deletion to prevent deleted tasks from reappearing
                 await MainActor.run {
-                    self.clearCacheForAccount(kind)
-                    self.clearAllFilteredCaches()
+                    self.removeTaskFromCache(taskId: task.id, from: listId, for: kind)
                 }
             } catch {
                 // REVERT OPTIMISTIC DELETE on error - restore the task
@@ -384,9 +379,14 @@ extension TasksViewModel {
                     let afterAddCount = self.professionalTasks[targetListId]?.count ?? 0
                 }
 
-                // Clear caches to ensure UI refreshes
-                self.clearCacheForAccount(kind)
-                self.clearAllFilteredCaches()
+                self.moveTaskInCache(
+                    originalTaskId: originalTaskId,
+                    replacementTask: taskToAdd,
+                    from: sourceListId,
+                    to: targetListId,
+                    sourceKind: kind,
+                    targetKind: kind
+                )
 
                 // Update goal links to point to the new task ID/list
                 GoalsManager.shared.updateLinkedTask(
@@ -490,10 +490,14 @@ extension TasksViewModel {
                     let afterAddCount = self.professionalTasks[target.1]?.count ?? 0
                 }
 
-                // Clear caches to ensure UI refreshes
-                self.clearCacheForAccount(source.0)
-                self.clearCacheForAccount(target.0)
-                self.clearAllFilteredCaches()
+                self.moveTaskInCache(
+                    originalTaskId: originalTaskId,
+                    replacementTask: taskToAdd,
+                    from: source.1,
+                    to: target.1,
+                    sourceKind: source.0,
+                    targetKind: target.0
+                )
 
                 // Update goal links to point to the new task ID/list/account
                 GoalsManager.shared.updateLinkedTask(
@@ -605,11 +609,13 @@ extension TasksViewModel {
                 case .personal:
                     self.personalTaskLists.append(taskList)
                     self.personalTasks[taskList.id] = []
+                    self.upsertTaskListInCache(taskList, for: .personal)
                     // Save updated order
                     saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
                 case .professional:
                     self.professionalTaskLists.append(taskList)
                     self.professionalTasks[taskList.id] = []
+                    self.upsertTaskListInCache(taskList, for: .professional)
                     // Save updated order
                     saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
                 }
@@ -656,11 +662,13 @@ extension TasksViewModel {
                     if let index = self.personalTaskLists.firstIndex(where: { $0.id == listId }) {
                         let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.personalTaskLists[index].updated)
                         self.personalTaskLists[index] = updatedList
+                        self.upsertTaskListInCache(updatedList, for: .personal)
                     }
                 case .professional:
                     if let index = self.professionalTaskLists.firstIndex(where: { $0.id == listId }) {
                         let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.professionalTaskLists[index].updated)
                         self.professionalTaskLists[index] = updatedList
+                        self.upsertTaskListInCache(updatedList, for: .professional)
                     }
                 }
             }
@@ -750,6 +758,7 @@ extension TasksViewModel {
                                 // Replace temporary task with server task that has real ID
                                 tasks[index] = createdTask
                                 personalTasks[listId] = tasks
+                                replaceTaskInCache(tempId: task.id, with: createdTask, in: listId, for: .personal)
                             }
                         }
                     case .professional:
@@ -758,6 +767,7 @@ extension TasksViewModel {
                                 // Replace temporary task with server task that has real ID
                                 tasks[index] = createdTask
                                 professionalTasks[listId] = tasks
+                                replaceTaskInCache(tempId: task.id, with: createdTask, in: listId, for: .professional)
                             }
                         }
                     }
@@ -769,8 +779,10 @@ extension TasksViewModel {
                     switch kind {
                     case .personal:
                         personalTasks[listId]?.removeAll { $0.id == task.id }
+                        removeTaskFromCache(taskId: task.id, from: listId, for: .personal)
                     case .professional:
                         professionalTasks[listId]?.removeAll { $0.id == task.id }
+                        removeTaskFromCache(taskId: task.id, from: listId, for: .professional)
                     }
                     self.errorMessage = "Failed to create task: \(error.localizedDescription)"
                 }
@@ -887,11 +899,13 @@ extension TasksViewModel {
                 case .personal:
                     self.personalTaskLists.removeAll { $0.id == listId }
                     self.personalTasks.removeValue(forKey: listId)
+                    self.removeTaskListFromCache(listId: listId, for: .personal)
                     // Save updated order
                     saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
                 case .professional:
                     self.professionalTaskLists.removeAll { $0.id == listId }
                     self.professionalTasks.removeValue(forKey: listId)
+                    self.removeTaskListFromCache(listId: listId, for: .professional)
                     // Save updated order
                     saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
                 }

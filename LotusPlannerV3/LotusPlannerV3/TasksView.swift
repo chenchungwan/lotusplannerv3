@@ -591,7 +591,9 @@ struct TasksView: View {
                 selectedFilter = .all
                 allSubfilter = .all
                 referenceDate = Date()
-                navigationManager.showingAllTasks = true
+                Task { @MainActor in
+                    navigationManager.showingAllTasks = true
+                }
                 // Clear the current interval since "All Tasks" doesn't correspond to a specific time interval
                 // This ensures other icons (D, W, M, Y) are properly unhighlighted
             }
@@ -605,7 +607,9 @@ struct TasksView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentDay"), object: nil, queue: .main) { _ in
                 selectedFilter = .day
                 referenceDate = Date()
-                navigationManager.showingAllTasks = false
+                Task { @MainActor in
+                    navigationManager.showingAllTasks = false
+                }
                 // Clear cache to ensure fresh filtering
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
@@ -615,7 +619,9 @@ struct TasksView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentWeek"), object: nil, queue: .main) { _ in
                 selectedFilter = .week
                 referenceDate = Date()
-                navigationManager.showingAllTasks = false
+                Task { @MainActor in
+                    navigationManager.showingAllTasks = false
+                }
                 // Clear cache to ensure fresh filtering
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
@@ -625,7 +631,9 @@ struct TasksView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentMonth"), object: nil, queue: .main) { _ in
                 selectedFilter = .month
                 referenceDate = Date()
-                navigationManager.showingAllTasks = false
+                Task { @MainActor in
+                    navigationManager.showingAllTasks = false
+                }
                 // Clear cache to ensure fresh filtering
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
@@ -635,7 +643,9 @@ struct TasksView: View {
             NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentYear"), object: nil, queue: .main) { _ in
                 selectedFilter = .year
                 referenceDate = Date()
-                navigationManager.showingAllTasks = false
+                Task { @MainActor in
+                    navigationManager.showingAllTasks = false
+                }
                 // Clear cache to ensure fresh filtering
                 cachedFilteredPersonalTasks.removeAll()
                 cachedFilteredProfessionalTasks.removeAll()
