@@ -45,6 +45,7 @@ struct WeeklyView: View {
     @State var scrollToCurrentDayTrigger = false
     @State var scrollToCurrentDayHorizontalTrigger = false
     @State var scrollToCurrentDayRowTrigger = false
+    @State var weeklyCustomConfigVersion = 0
     
     // MARK: - Adaptive Layout Properties
     var isCompact: Bool {
@@ -491,6 +492,9 @@ struct WeeklyView: View {
                 scrollToCurrentDay()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: CustomWeeklyViewLibrary.didChangeNotification)) { _ in
+            weeklyCustomConfigVersion &+= 1
+        }
     }
 
     var body: some View {
@@ -703,7 +707,9 @@ struct WeeklyView: View {
     // MARK: - Main Content
     @ViewBuilder
     var mainContent: some View {
-        if appPrefs.useRowBasedWeeklyView {
+        if appPrefs.useCustomWeeklyView {
+            customWeeklyView
+        } else if appPrefs.useRowBasedWeeklyView {
             // Row-based layout: each day is a row
             weekRowBasedViewWithStickyColumn
         } else {
@@ -761,5 +767,4 @@ struct WeeklyView: View {
         }
     }
     }
-
 

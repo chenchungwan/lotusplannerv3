@@ -12,6 +12,7 @@ struct TasksComponent: View {
     let hideDueDateTag: Bool
     let showEmptyState: Bool
     let horizontalCards: Bool
+    let combineLists: Bool
     let isSingleDayView: Bool
     let showTitle: Bool
     let showTaskStartTime: Bool
@@ -23,7 +24,7 @@ struct TasksComponent: View {
     @ObservedObject private var authManager = GoogleAuthManager.shared
     @State private var localTaskLists: [GoogleTaskList] = []
 
-    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true, showTaskStartTime: Bool = false, isBulkEditMode: Bool = false, selectedTaskIds: Set<String> = [], onTaskSelectionToggle: ((String) -> Void)? = nil) {
+    init(taskLists: [GoogleTaskList], tasksDict: [String: [GoogleTask]], accentColor: Color, accountType: GoogleAuthManager.AccountKind, onTaskToggle: @escaping (GoogleTask, String) -> Void, onTaskDetails: @escaping (GoogleTask, String) -> Void, onListRename: ((String, String) -> Void)?, onOrderChanged: (([GoogleTaskList]) -> Void)? = nil, hideDueDateTag: Bool = false, showEmptyState: Bool = true, horizontalCards: Bool = false, combineLists: Bool = false, isSingleDayView: Bool = false, showTitle: Bool = true, showTaskStartTime: Bool = false, isBulkEditMode: Bool = false, selectedTaskIds: Set<String> = [], onTaskSelectionToggle: ((String) -> Void)? = nil) {
         self.taskLists = taskLists
         self.tasksDict = tasksDict
         self.accentColor = accentColor
@@ -37,6 +38,7 @@ struct TasksComponent: View {
         self.hideDueDateTag = hideDueDateTag
         self.showEmptyState = showEmptyState
         self.horizontalCards = horizontalCards
+        self.combineLists = combineLists
         self.isSingleDayView = isSingleDayView
         self.showTitle = showTitle
         self.showTaskStartTime = showTaskStartTime
@@ -88,6 +90,8 @@ extension TasksComponent {
     private var contentView: some View {
         if horizontalCards {
             horizontalCardsView
+        } else if combineLists {
+            combinedListView
         } else {
             verticalCardsView
         }
@@ -148,7 +152,7 @@ extension TasksComponent {
                 tasks: filtered,
                 accentColor: accentColor,
                 accountType: accountType,
-                onTaskToggle: { task in onTaskToggle(task, taskList.id) },
+                onTaskToggle: { task, listId in onTaskToggle(task, listId) },
                 onTaskDetails: { task, listId in
                     onTaskDetails(task, listId)
                 },
@@ -165,6 +169,47 @@ extension TasksComponent {
                 },
                 onListDragStart: onListDragStart
             )
+        }
+    }
+
+    @ViewBuilder
+    private var combinedListView: some View {
+        let combinedTasks = filteredCombinedTasks
+
+        if showEmptyState && combinedTasks.isEmpty {
+            Text(emptyStateText)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .italic()
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 20)
+        } else if !combinedTasks.isEmpty {
+            TaskComponentListCard(
+                taskList: GoogleTaskList(id: "__combined_\(accountType.rawValue)", title: "Tasks", updated: nil),
+                tasks: combinedTasks,
+                accentColor: accentColor,
+                accountType: accountType,
+                onTaskToggle: { task, listId in onTaskToggle(task, listId) },
+                onTaskDetails: { task, listId in onTaskDetails(task, listId) },
+                onListRename: { _ in },
+                hideDueDateTag: hideDueDateTag,
+                enableScroll: !isSingleDayView,
+                maxTasksAreaHeight: nil,
+                isSingleDayView: isSingleDayView,
+                showTaskStartTime: showTaskStartTime,
+                isBulkEditMode: isBulkEditMode,
+                selectedTaskIds: selectedTaskIds,
+                onTaskSelectionToggle: { taskId in onTaskSelectionToggle?(taskId) },
+                onListDragStart: nil,
+                taskListIdForTask: { task in
+                    sourceListId(for: task) ?? ""
+                },
+                showListHeader: false,
+                allowListDrag: false
+            )
+            .padding(3)
+            .background(Color(.tertiarySystemBackground))
+            .cornerRadius(12)
         }
     }
 
@@ -240,6 +285,43 @@ extension TasksComponent {
             let filteredTasks = filteredTasksForList(taskList)
             return filteredTasks.isEmpty
         }
+    }
+
+    private var filteredCombinedTasks: [GoogleTask] {
+        localTaskLists
+            .flatMap { filteredTasksForList($0) }
+            .sorted(by: taskSortComparator)
+    }
+
+    private func sourceListId(for task: GoogleTask) -> String? {
+        localTaskLists.first { list in
+            (tasksDict[list.id] ?? []).contains(where: { $0.id == task.id })
+        }?.id
+    }
+
+    private func taskSortComparator(_ a: GoogleTask, _ b: GoogleTask) -> Bool {
+        if a.isCompleted != b.isCompleted {
+            return !a.isCompleted
+        }
+
+        switch (a.dueDate, b.dueDate) {
+        case let (dateA?, dateB?) where dateA != dateB:
+            return dateA < dateB
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        default:
+            break
+        }
+
+        let aPriority = a.priority?.sortOrder ?? Int.max
+        let bPriority = b.priority?.sortOrder ?? Int.max
+        if aPriority != bPriority {
+            return aPriority < bPriority
+        }
+
+        return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
     }
 
     /// Empty-state copy. Distinguishes "the user actually has tasks but
@@ -419,7 +501,7 @@ struct TwoColumnTasksComponent: View {
                 tasks: filtered,
                 accentColor: accentColor,
                 accountType: accountType,
-                onTaskToggle: { task in onTaskToggle(task, taskList.id) },
+                onTaskToggle: { task, listId in onTaskToggle(task, listId) },
                 onTaskDetails: { task, listId in onTaskDetails(task, listId) },
                 onListRename: { newName in onListRename?(taskList.id, newName) },
                 hideDueDateTag: hideDueDateTag,
@@ -658,7 +740,7 @@ private struct TaskComponentListCard: View {
     let tasks: [GoogleTask]
     let accentColor: Color
     let accountType: GoogleAuthManager.AccountKind
-    let onTaskToggle: (GoogleTask) -> Void
+    let onTaskToggle: (GoogleTask, String) -> Void
     let onTaskDetails: (GoogleTask, String) -> Void
     let onListRename: (String) -> Void
     let hideDueDateTag: Bool
@@ -670,6 +752,9 @@ private struct TaskComponentListCard: View {
     let selectedTaskIds: Set<String>
     let onTaskSelectionToggle: (String) -> Void
     let onListDragStart: (() -> Void)?
+    let taskListIdForTask: (GoogleTask) -> String
+    let showListHeader: Bool
+    let allowListDrag: Bool
     
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
@@ -696,7 +781,7 @@ private struct TaskComponentListCard: View {
         tasks: [GoogleTask],
         accentColor: Color,
         accountType: GoogleAuthManager.AccountKind,
-        onTaskToggle: @escaping (GoogleTask) -> Void,
+        onTaskToggle: @escaping (GoogleTask, String) -> Void,
         onTaskDetails: @escaping (GoogleTask, String) -> Void,
         onListRename: @escaping (String) -> Void,
         hideDueDateTag: Bool,
@@ -707,7 +792,10 @@ private struct TaskComponentListCard: View {
         isBulkEditMode: Bool = false,
         selectedTaskIds: Set<String> = [],
         onTaskSelectionToggle: @escaping (String) -> Void = { _ in },
-        onListDragStart: (() -> Void)? = nil
+        onListDragStart: (() -> Void)? = nil,
+        taskListIdForTask: ((GoogleTask) -> String)? = nil,
+        showListHeader: Bool = true,
+        allowListDrag: Bool = true
     ) {
         self.taskList = taskList
         self.tasks = tasks
@@ -725,11 +813,16 @@ private struct TaskComponentListCard: View {
         self.selectedTaskIds = selectedTaskIds
         self.onTaskSelectionToggle = onTaskSelectionToggle
         self.onListDragStart = onListDragStart
+        self.taskListIdForTask = taskListIdForTask ?? { _ in taskList.id }
+        self.showListHeader = showListHeader
+        self.allowListDrag = allowListDrag
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            headerView
+            if showListHeader {
+                headerView
+            }
             tasksView
         }
         .padding(12)
@@ -737,9 +830,11 @@ private struct TaskComponentListCard: View {
         .overlay(overlayView)
         .cornerRadius(8)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-        .onDrag {
-            onListDragStart?()
-            return NSItemProvider(object: taskList.id as NSString)
+        .if(allowListDrag) { view in
+            view.onDrag {
+                onListDragStart?()
+                return NSItemProvider(object: taskList.id as NSString)
+            }
         }
     }
     
@@ -816,12 +911,13 @@ private struct TaskComponentListCard: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 4) {
                 ForEach(tasks, id: \.id) { task in
+                    let listId = taskListIdForTask(task)
                     TaskComponentRow(
                         task: task,
-                        listId: taskList.id,
+                        listId: listId,
                         accountKind: accountType,
                         accentColor: accentColor,
-                        onToggle: { onTaskToggle(task) },
+                        onToggle: { onTaskToggle(task, listId) },
                         onDetails: { task, listId in
                             onTaskDetails(task, listId)
                         },
@@ -845,12 +941,13 @@ private struct TaskComponentListCard: View {
     private var staticTasksView: some View {
         VStack(spacing: 4) {
             ForEach(tasks, id: \.id) { task in
+                let listId = taskListIdForTask(task)
                 TaskComponentRow(
                     task: task,
-                    listId: taskList.id,
+                    listId: listId,
                     accountKind: accountType,
                     accentColor: accentColor,
-                    onToggle: { onTaskToggle(task) },
+                    onToggle: { onTaskToggle(task, listId) },
                     onDetails: { task, listId in
                         onTaskDetails(task, listId)
                     },
