@@ -59,7 +59,7 @@ struct IntegrationsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
-                        navigationManager.showingIntegrations = false
+                        navigationManager.dismissActiveSheet()
                         dismiss()
                     }
                 }

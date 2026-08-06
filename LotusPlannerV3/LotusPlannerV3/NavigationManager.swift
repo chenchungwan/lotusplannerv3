@@ -12,6 +12,40 @@ import SwiftUI
 class NavigationManager: ObservableObject {
     static let shared = NavigationManager()
 
+    enum AppRoute {
+        case calendar
+        case tasks
+        case lists
+        case goals
+        case journal
+        case journalDayViews
+        case weeklyView
+        case gWeekView
+        case yearlyCalendar
+        case timebox
+        case bookView
+    }
+
+    enum AppSheet: String, Identifiable {
+        case settings
+        case integrations
+        case about
+        case diagnostics
+        case reportIssues
+        case datePicker
+        case addEvent
+        case addTask
+        case aiTaskEntry
+        case addList
+
+        var id: String { rawValue }
+    }
+
+    enum TimeDirection: Int {
+        case previous = -1
+        case next = 1
+    }
+
     enum CurrentView {
         case calendar
         case tasks
@@ -33,6 +67,8 @@ class NavigationManager: ObservableObject {
     @Published var viewRefreshCounter: Int = 0
     @Published var showingSettings = false
     @Published var showingIntegrations = false
+    @Published var activeSheet: AppSheet?
+    @Published var datePickerSelection = Date()
     @Published var showingAllTasks = false
     @Published var isShowingTimebox = false
 
@@ -116,16 +152,51 @@ class NavigationManager: ObservableObject {
     }
 
     func showSettings() {
-        showingSettings = true
+        present(.settings)
     }
 
     func showIntegrations() {
-        showingIntegrations = true
+        present(.integrations)
+    }
+
+    func present(_ sheet: AppSheet) {
+        activeSheet = sheet
+        showingSettings = sheet == .settings
+        showingIntegrations = sheet == .integrations
+    }
+
+    func dismissActiveSheet() {
+        activeSheet = nil
+        showingSettings = false
+        showingIntegrations = false
     }
 
     /// Update the current interval and date from calendar view.
     func updateInterval(_ interval: TimelineInterval, date: Date = Date()) {
         currentInterval = interval
         currentDate = date
+    }
+
+    func date(byMoving direction: TimeDirection, from date: Date? = nil) -> Date? {
+        Calendar.mondayFirst.date(
+            byAdding: currentInterval.calendarComponent,
+            value: direction.rawValue,
+            to: date ?? currentDate
+        )
+    }
+
+    @discardableResult
+    func moveFocusedDate(_ direction: TimeDirection) -> Date? {
+        guard let newDate = date(byMoving: direction) else { return nil }
+        updateInterval(currentInterval, date: newDate)
+        return newDate
+    }
+
+    func jumpToCurrentPeriod() {
+        updateInterval(currentInterval, date: Date())
+    }
+
+    func setTimelineInterval(_ interval: TimelineInterval, date: Date = Date()) {
+        updateInterval(interval, date: date)
     }
 }

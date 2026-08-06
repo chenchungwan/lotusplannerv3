@@ -6,1560 +6,769 @@ struct GlobalNavBar: View {
     @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var calendarVM = CalendarViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
-    @ObservedObject private var logsVM = LogsViewModel.shared
-    
-    // MARK: - Device-Aware Layout
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    @Environment(\.verticalSizeClass) var verticalSizeClass
-    
-    // Sheet state — consolidated into a single enum-driven `activeSheet`.
-    // SwiftUI does not reliably support multiple sibling `.sheet` modifiers
-    // on a single view (especially under Mac Catalyst's Mac idiom, where
-    // stacking eight independent `.sheet(isPresented:)` modifiers caused
-    // the Settings sheet to become un-dismissable — `dismiss()` and
-    // tap-outside both stopped clearing the binding). One `.sheet(item:)`
-    // driven by `activeSheet` avoids that whole class of issue.
-    private enum NavSheet: Identifiable {
-        case settings
-        case integrations
-        case about
-        case diagnostics
-        case reportIssues
-        case datePicker
-        case addEvent
-        case addTask
-        case aiTaskEntry
-        case addList
 
-        var id: String {
-            switch self {
-            case .settings: return "settings"
-            case .integrations: return "integrations"
-            case .about: return "about"
-            case .diagnostics: return "diagnostics"
-            case .reportIssues: return "reportIssues"
-            case .datePicker: return "datePicker"
-            case .addEvent: return "addEvent"
-            case .addTask: return "addTask"
-            case .aiTaskEntry: return "aiTaskEntry"
-            case .addList: return "addList"
-            }
-        }
-    }
-    @State private var activeSheet: NavSheet?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    // Per-sheet input state still lives at the view level so the sheet
-    // bodies (in the .sheet(item:) switch below) can read/write it.
-    @State private var newListName = ""
-    @State private var newListAccountKind: GoogleAuthManager.AccountKind?
-
-    // Sync state
     @State private var isSyncing = false
 
-    // Date picker state
-    @State private var selectedDateForPicker = Date()
-    
-    // Device-specific computed properties
-    private var isCompact: Bool {
-        horizontalSizeClass == .compact
-    }
-    
-    private var isPortrait: Bool {
-        verticalSizeClass == .regular
-    }
-    
-    private var shouldShowTwoRows: Bool {
-        isCompact && isPortrait
-    }
-    
-    private var adaptivePadding: CGFloat {
+    private var isCompact: Bool { horizontalSizeClass == .compact }
+
+    private var buttonSize: CGFloat {
         #if targetEnvironment(macCatalyst)
-        return 6
+        30
         #else
-        return isCompact ? 8 : 12
+        isCompact ? 36 : 42
         #endif
     }
 
-    private var adaptiveButtonSpacing: CGFloat {
+    private var iconFont: Font {
         #if targetEnvironment(macCatalyst)
-        return 4
+        .body
         #else
-        return isCompact ? 8 : 10
+        isCompact ? .body : .title3
         #endif
     }
 
-    private var adaptiveIconSize: Font {
+    private var titleFont: Font {
         #if targetEnvironment(macCatalyst)
-        return .body
+        .headline
         #else
-        return isCompact ? .body : .title2
+        isCompact ? .headline : .title2
         #endif
     }
 
-    private var adaptiveButtonSize: CGFloat {
+    private var barHeight: CGFloat {
         #if targetEnvironment(macCatalyst)
-        return 28
+        74
         #else
-        return isCompact ? 36 : 44
+        96
         #endif
     }
 
-    /// Nav bar row height. On Mac the iOS 50pt bar is too tall for a toolbar;
-    /// 36pt matches native Mac toolbar conventions.
-    private var adaptiveBarHeight: CGFloat {
-        #if targetEnvironment(macCatalyst)
-        return shouldShowTwoRows ? 72 : 36
-        #else
-        return shouldShowTwoRows ? 100 : 50
-        #endif
-    }
-
-    /// Vertical padding inside each row. Smaller on Mac so the 28pt buttons
-    /// fit within the 36pt bar without overflowing.
-    private var adaptiveRowVPadding: CGFloat {
-        #if targetEnvironment(macCatalyst)
-        return 4
-        #else
-        return 8
-        #endif
-    }
-
-    /// Treat bookView the same as calendar for nav bar layout purposes
     private var isCalendarLikeView: Bool {
         navigationManager.currentView == .calendar || navigationManager.currentView == .bookView
     }
 
+    private var canNavigateDate: Bool {
+        navigationManager.currentView != .lists &&
+        !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day)
+    }
+
+    private var showsIntervals: Bool {
+        navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews
+    }
+
+    private var showsHideCompleted: Bool {
+        navigationManager.currentView == .tasks ||
+        navigationManager.currentView == .lists ||
+        isCalendarLikeView ||
+        navigationManager.currentView == .yearlyCalendar ||
+        navigationManager.currentView == .timebox ||
+        navigationManager.currentView == .journalDayViews
+    }
+
+    private var hideCompletedInactive: Bool {
+        navigationManager.currentView == .journalDayViews ||
+        ((isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) &&
+         (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year))
+    }
+
+    private var showsTaskFilter: Bool {
+        !isCalendarLikeView &&
+        navigationManager.currentView != .yearlyCalendar &&
+        navigationManager.currentView != .lists &&
+        navigationManager.currentView != .journalDayViews &&
+        navigationManager.currentView != .timebox
+    }
+
+    private var showsCalendarBulkEdit: Bool {
+        isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews
+    }
+
     private var dateLabel: String {
-        // Show "Task Lists" when in Lists view
-        if navigationManager.currentView == .lists {
-            return "Task Lists"
-        }
-        
-        // Show filtered goals title when in Goals view
+        if navigationManager.currentView == .lists { return "Task Lists" }
+
         if navigationManager.currentView == .goals {
             switch navigationManager.currentInterval {
             case .day:
                 return "All Goals"
             case .week:
-                guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
-                    return "Goals"
-                }
-                let start = weekInterval.start
-                let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
-                let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "M/d"
-                let startString = dateFormatter.string(from: start)
-                let endString = dateFormatter.string(from: end)
-                return "W\(weekNumber): \(startString) - \(endString)"
+                return weekLabel(prefix: "W")
             case .month:
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMMM yyyy"
-                return formatter.string(from: navigationManager.currentDate)
+                return monthLabel()
             case .year:
-                let year = Calendar.current.component(.year, from: navigationManager.currentDate)
-                return "\(year)"
+                return yearLabel()
             }
         }
-        
-        // Show "All Tasks" when in Tasks view and showing all tasks
+
         if navigationManager.showTasksView && navigationManager.showingAllTasks {
             return "All Tasks"
         }
-        
-        // Show year when in yearly calendar view
-        if navigationManager.currentView == .yearlyCalendar {
-            let year = Calendar.current.component(.year, from: navigationManager.currentDate)
-            return "\(year)"
+
+        if navigationManager.currentView == .yearlyCalendar || navigationManager.currentInterval == .year {
+            return yearLabel()
         }
-        
+
         switch navigationManager.currentInterval {
-        case .year:
-            let year = Calendar.current.component(.year, from: navigationManager.currentDate)
-            return "\(year)"
-        case .month:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM yyyy"
-            return formatter.string(from: navigationManager.currentDate)
-        case .week:
-            guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
-                return ""
-            }
-            let start = weekInterval.start
-            let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
-            
-            // Get week number
-            let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
-            
-            // Format dates as M/d
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "M/d"
-            let startString = dateFormatter.string(from: start)
-            let endString = dateFormatter.string(from: end)
-            
-            return "W\(weekNumber): \(startString) - \(endString)"
         case .day:
-            let date = navigationManager.currentDate
-            
-            // Get day of week abbreviation
             let dayFormatter = DateFormatter()
-            dayFormatter.dateFormat = "EEE"
-            let dayOfWeek = dayFormatter.string(from: date).uppercased()
-            
-            // Format as M/d/yy
+            dayFormatter.dateFormat = isCompact ? "EEE" : "EEEE"
             let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "M/d/yy"
-            let dateString = dateFormatter.string(from: date)
-            
-            return "\(dayOfWeek) \(dateString)"
+            dateFormatter.dateFormat = isCompact ? "M/d/yy" : "MMM d, yyyy"
+            return "\(dayFormatter.string(from: navigationManager.currentDate)) \(dateFormatter.string(from: navigationManager.currentDate))"
+        case .week:
+            return weekLabel(prefix: "Week")
+        case .month:
+            return monthLabel()
+        case .year:
+            return yearLabel()
         }
     }
-    
+
+    private var titleColor: Color {
+        guard canNavigateDate else { return .primary }
+        return isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                HStack(spacing: isCompact ? 4 : 8) {
+                    mainMenu
+                    Spacer(minLength: 0)
+                }
+
+                HStack(spacing: isCompact ? 6 : 8) {
+                    if canNavigateDate {
+                        iconButton("chevron.left") { step(-1) }
+                            .keyboardShortcut("[", modifiers: [])
+                    }
+                    titleButton
+                    if canNavigateDate {
+                        iconButton("chevron.right") { step(1) }
+                            .keyboardShortcut("]", modifiers: [])
+                    }
+                }
+                .frame(maxWidth: isCompact ? 300 : 460)
+
+                HStack(spacing: isCompact ? 4 : 8) {
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, isCompact ? 8 : 12)
+            .frame(height: barHeight / 2)
+
+            GeometryReader { geometry in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: isCompact ? 4 : 8) {
+                        Spacer(minLength: 0)
+                        intervalControls
+                        actionControls
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, isCompact ? 8 : 12)
+                    .frame(minWidth: geometry.size.width)
+                }
+            }
+            .frame(height: barHeight / 2)
+        }
+        .frame(height: barHeight)
+        .background(Color(.systemBackground))
+        .buttonStyle(.borderless)
+        .simultaneousGesture(timeSwipeGesture)
+    }
+
+    private var titleButton: some View {
+        Button {
+            guard canNavigateDate else { return }
+            navigationManager.datePickerSelection = navigationManager.currentDate
+            navigationManager.present(.datePicker)
+        } label: {
+            Text(dateLabel)
+                .font(titleFont.weight(.semibold))
+                .foregroundColor(titleColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+        }
+        .disabled(!canNavigateDate)
+    }
+
+    private var mainMenu: some View {
+        Menu {
+            Button { navigationManager.switchToCalendar() } label: {
+                Label("Calendar", systemImage: "calendar")
+            }
+            Button { navigationManager.switchToTasks() } label: {
+                Label("Tasks", systemImage: "checklist")
+            }
+            Button { navigationManager.switchToLists() } label: {
+                Label("Lists", systemImage: "list.bullet")
+            }
+            Button { navigationManager.switchToJournalDayViews() } label: {
+                Label("Journals", systemImage: "book")
+            }
+            if !appPrefs.hideBookView {
+                Button { navigationManager.switchToBookView() } label: {
+                    Label("Book View (Beta)", systemImage: "book.pages")
+                }
+            }
+            if !appPrefs.hideGoals {
+                Button { navigationManager.switchToGoals() } label: {
+                    Label("Goals (Beta)", systemImage: "target")
+                }
+            }
+
+            Divider()
+
+            Button { navigationManager.present(.settings) } label: {
+                Label("Settings", systemImage: "gearshape")
+            }
+            Button { navigationManager.present(.integrations) } label: {
+                Label("Integrations", systemImage: "puzzlepiece.extension")
+            }
+            Button { navigationManager.present(.about) } label: {
+                Label("About", systemImage: "info.circle")
+            }
+            Button { navigationManager.present(.diagnostics) } label: {
+                Label("Diagnostics", systemImage: "stethoscope")
+            }
+            Button { navigationManager.present(.reportIssues) } label: {
+                Label("Report Issue / Request Features", systemImage: "exclamationmark.bubble")
+            }
+            if let url = URL(string: "https://apps.apple.com/us/app/lotus-planner/id6749281062?action=write-review") {
+                Link(destination: url) {
+                    Label("Rate the App", systemImage: "star")
+                }
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal")
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(.secondary)
+        }
+        .help("Menu")
+    }
+
+    @ViewBuilder
+    private var intervalControls: some View {
+        if showsIntervals {
+            HStack(spacing: isCompact ? 2 : 4) {
+                currentPeriodButton
+                timelineSelector
+                if navigationManager.currentView != .goals {
+                    intervalButton(.day, symbol: "d.circle")
+                }
+                if navigationManager.currentView != .tasks {
+                    intervalButton(.week, symbol: isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals ? "w.circle" : "s.circle")
+                }
+                if navigationManager.currentView != .goals {
+                    timeboxOrWeekButton
+                }
+                intervalButton(.month, symbol: "m.circle")
+                intervalButton(.year, symbol: "y.circle")
+            }
+        }
+    }
+
+    private var currentPeriodButton: some View {
+        Button {
+            jumpToCurrentPeriod()
+        } label: {
+            Image(systemName: "scope")
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(isCurrentPeriod ? .accentColor : .secondary)
+        }
+        .keyboardShortcut("t", modifiers: [])
+        .help(currentPeriodHelp)
+    }
+
+    private var timelineSelector: some View {
+        Menu {
+            timelineSelectorButton(.day, title: "Day", shortcut: "D")
+            timelineSelectorButton(.week, title: "Week", shortcut: "W")
+            timelineSelectorButton(.month, title: "Month", shortcut: "M")
+            timelineSelectorButton(.year, title: "Year", shortcut: "Y")
+        } label: {
+            Image(systemName: "calendar.badge.clock")
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(.secondary)
+        }
+        .help("Change timeline")
+    }
+
+    @ViewBuilder
+    private var actionControls: some View {
+        HStack(spacing: isCompact ? 2 : 4) {
+            if showsTaskFilter {
+                taskFilterControl
+            }
+
+            syncButton
+
+            if showsHideCompleted {
+                iconButton(appPrefs.hideCompletedTasks ? "eye.slash" : "eye", color: hideCompletedInactive ? .secondary.opacity(0.4) : .accentColor) {
+                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
+                }
+                .disabled(hideCompletedInactive)
+                .help("Hide completed tasks")
+            }
+
+            bulkEditControl
+
+            iconButton("sparkles", color: .accentColor) {
+                navigationManager.present(.aiTaskEntry)
+            }
+            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
+            .help("AI Task Entry")
+
+            addMenu
+        }
+    }
+
+    private var timeboxOrWeekButton: some View {
+        Button {
+            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+            } else if navigationManager.currentView == .bookView {
+                navigationManager.updateInterval(.week, date: Date())
+                NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
+            } else if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
+                navigationManager.switchToTimebox()
+            } else {
+                handleTimeIntervalChange(.week)
+            }
+        } label: {
+            Image(systemName: isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ? "t.circle" : "w.circle")
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary)
+        }
+        .help("Timebox")
+    }
+
+    private var taskFilterControl: some View {
+        Group {
+            if navigationManager.currentView == .goals {
+                iconButton("ellipsis.circle", color: navigationManager.currentInterval == .day ? .accentColor : .secondary) {
+                    navigationManager.updateInterval(.day, date: Date())
+                }
+            } else {
+                Menu {
+                    Button("All") {
+                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                    }
+                    Divider()
+                    taskSubfilterButton("Has Due Date", .hasDueDate)
+                    taskSubfilterButton("No Due Date", .noDueDate)
+                    taskSubfilterButton("Overdue", .pastDue)
+                    Button("Complete") {
+                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                        appPrefs.updateHideCompletedTasks(false)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(iconFont)
+                        .frame(width: buttonSize, height: buttonSize)
+                        .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
+                }
+                .help("Task filters")
+            }
+        }
+    }
+
+    private var syncButton: some View {
+        Button {
+            Task { await reloadAllData() }
+        } label: {
+            if isSyncing {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .frame(width: buttonSize, height: buttonSize)
+            } else {
+                Image(systemName: "arrow.trianglehead.clockwise.icloud")
+                    .font(iconFont)
+                    .frame(width: buttonSize, height: buttonSize)
+            }
+        }
+        .disabled(isSyncing)
+        .help("Sync")
+    }
+
+    @ViewBuilder
+    private var bulkEditControl: some View {
+        if showsCalendarBulkEdit {
+            let inactive = navigationManager.currentView == .journalDayViews ||
+            navigationManager.currentInterval == .month ||
+            navigationManager.currentInterval == .year ||
+            navigationManager.currentView == .yearlyCalendar
+
+            iconButton("checkmark.rectangle.stack", color: inactive ? .secondary.opacity(0.4) : .accentColor) {
+                if navigationManager.currentView == .bookView {
+                    NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
+                } else if navigationManager.currentInterval == .day {
+                    NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                } else if navigationManager.currentInterval == .week {
+                    NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
+                }
+            }
+            .disabled(inactive)
+            .help("Bulk edit")
+        } else if navigationManager.currentView == .tasks {
+            iconButton("checkmark.rectangle.stack", color: .accentColor) {
+                NotificationCenter.default.post(name: Notification.Name("ToggleTasksBulkEdit"), object: nil)
+            }
+            .help("Bulk edit")
+        } else if navigationManager.currentView == .lists {
+            iconButton("checkmark.rectangle.stack", color: .accentColor) {
+                NotificationCenter.default.post(name: Notification.Name("ToggleListsBulkEdit"), object: nil)
+            }
+            .help("Bulk edit")
+        } else if navigationManager.currentView == .timebox {
+            iconButton("checkmark.rectangle.stack", color: .accentColor) {
+                NotificationCenter.default.post(name: Notification.Name("ToggleTimeboxBulkEdit"), object: nil)
+            }
+            .help("Bulk edit")
+        }
+    }
+
+    private var addMenu: some View {
+        Menu {
+            Button("Event") { navigationManager.present(.addEvent) }
+            Button("Task") { navigationManager.present(.addTask) }
+
+            if navigationManager.currentView == .lists {
+                Button("List") { navigationManager.present(.addList) }
+            }
+
+            if navigationManager.currentView == .goals {
+                Button("Goal") {
+                    NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                }
+            }
+
+            Button("Log") {
+                LogsViewModel.shared.showingAddLogSheet = true
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+        }
+        .help("Add")
+    }
+
+    private func iconButton(_ systemName: String, color: Color = .secondary, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(color)
+        }
+    }
+
+    private func intervalButton(_ interval: TimelineInterval, symbol: String) -> some View {
+        Button {
+            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
+                let notification: Notification.Name
+                switch interval {
+                case .day: notification = Notification.Name("FilterTasksToCurrentDay")
+                case .week: notification = Notification.Name("FilterTasksToCurrentWeek")
+                case .month: notification = Notification.Name("FilterTasksToCurrentMonth")
+                case .year: notification = Notification.Name("FilterTasksToCurrentYear")
+                }
+                NotificationCenter.default.post(name: notification, object: nil)
+            } else {
+                handleTimeIntervalChange(interval)
+            }
+        } label: {
+            Image(systemName: symbol)
+                .font(iconFont)
+                .frame(width: buttonSize, height: buttonSize)
+                .foregroundColor(intervalColor(interval))
+        }
+        .help(interval.rawValue.capitalized)
+    }
+
+    private func timelineSelectorButton(_ interval: TimelineInterval, title: String, shortcut: String) -> some View {
+        Button {
+            handleTimeIntervalChange(interval)
+        } label: {
+            if navigationManager.currentInterval == interval {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+        .keyboardShortcut(KeyEquivalent(Character(shortcut.lowercased())), modifiers: [])
+    }
+
+    private func taskSubfilterButton(_ title: String, _ filter: AllTaskSubfilter) -> some View {
+        Button(title) {
+            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: filter)
+        }
+    }
+
+    private func intervalColor(_ interval: TimelineInterval) -> Color {
+        if navigationManager.showingAllTasks || navigationManager.currentView == .yearlyCalendar && interval != .year {
+            return .secondary
+        }
+        return navigationManager.currentInterval == interval ? .accentColor : .secondary
+    }
+
+    private func monthLabel() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: navigationManager.currentDate)
+    }
+
+    private func yearLabel() -> String {
+        String(Calendar.current.component(.year, from: navigationManager.currentDate))
+    }
+
+    private func weekLabel(prefix: String) -> String {
+        guard let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
+            return "Week"
+        }
+        let start = weekInterval.start
+        let end = Calendar.mondayFirst.date(byAdding: .day, value: 6, to: start) ?? start
+        let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: start)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        return "\(prefix) \(weekNumber): \(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+
     private var isCurrentPeriod: Bool {
         let now = Date()
-        let currentDate = navigationManager.currentDate
-        
         switch navigationManager.currentInterval {
         case .year:
-            return Calendar.current.isDate(currentDate, equalTo: now, toGranularity: .year)
+            return Calendar.current.isDate(navigationManager.currentDate, equalTo: now, toGranularity: .year)
         case .month:
-            return Calendar.current.isDate(currentDate, equalTo: now, toGranularity: .month)
+            return Calendar.current.isDate(navigationManager.currentDate, equalTo: now, toGranularity: .month)
         case .week:
-            let mondayFirst = Calendar.mondayFirst
-            guard let weekInterval = mondayFirst.dateInterval(of: .weekOfYear, for: currentDate),
-                  let nowWeekInterval = mondayFirst.dateInterval(of: .weekOfYear, for: now) else {
+            guard let current = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate),
+                  let thisWeek = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: now) else {
                 return false
             }
-            return weekInterval.start == nowWeekInterval.start
+            return current.start == thisWeek.start
         case .day:
-            return Calendar.current.isDate(currentDate, inSameDayAs: now)
+            return Calendar.current.isDate(navigationManager.currentDate, inSameDayAs: now)
         }
     }
-    
+
+    private var currentPeriodHelp: String {
+        switch navigationManager.currentInterval {
+        case .day: return "Today"
+        case .week: return "This week"
+        case .month: return "This month"
+        case .year: return "This year"
+        }
+    }
+
+    private var timeSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 35)
+            .onEnded { value in
+                guard canNavigateDate else { return }
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+                guard abs(horizontal) > abs(vertical) * 1.4 else { return }
+
+                if horizontal < -45 {
+                    step(1)
+                } else if horizontal > 45 {
+                    step(-1)
+                }
+            }
+    }
+
     private func handleTimeIntervalChange(_ interval: TimelineInterval) {
         if navigationManager.currentView == .goals {
-            navigationManager.updateInterval(interval, date: Date())
+            navigationManager.setTimelineInterval(interval, date: Date())
         } else if navigationManager.currentView == .bookView {
-            // In Book View: always navigate to the current (today's) page
             let now = Date()
-            let calendar = Calendar.current
-            navigationManager.updateInterval(interval, date: now)
+            navigationManager.setTimelineInterval(interval, date: now)
             switch interval {
             case .day:
                 NotificationCenter.default.post(name: .bookViewNavigateToDay, object: now)
             case .week:
                 NotificationCenter.default.post(name: .bookViewNavigateToWeek, object: now)
             case .month:
-                let m = calendar.component(.month, from: now)
-                let y = calendar.component(.year, from: now)
-                NotificationCenter.default.post(name: .bookViewNavigateToMonth, object: [m, y])
+                let month = Calendar.current.component(.month, from: now)
+                let year = Calendar.current.component(.year, from: now)
+                NotificationCenter.default.post(name: .bookViewNavigateToMonth, object: [month, year])
             case .year:
-                let y = calendar.component(.year, from: now)
-                NotificationCenter.default.post(name: .bookViewNavigateToYear, object: y)
+                NotificationCenter.default.post(name: .bookViewNavigateToYear, object: Calendar.current.component(.year, from: now))
             }
         } else if navigationManager.showTasksView {
-            // In Tasks view: filter to the interval
             navigationManager.showingAllTasks = false
-            navigationManager.updateInterval(interval, date: Date())
+            navigationManager.setTimelineInterval(interval, date: Date())
         } else if navigationManager.currentView == .yearlyCalendar {
-            // In Yearly Calendar view: switch to the new interval
             navigationManager.showingAllTasks = false
-            if interval == .year {
-                navigationManager.updateInterval(interval, date: Date())
-                // Already in yearly view, just update interval
-            } else {
-                // Update interval first, then force view change
-                navigationManager.updateInterval(interval, date: Date())
-
-                // Use the existing switchToCalendar() function which should work properly
+            navigationManager.setTimelineInterval(interval, date: Date())
+            if interval != .year {
                 navigationManager.switchToCalendar()
             }
         } else {
-            // In Calendar view: go to the interval
             navigationManager.showingAllTasks = false
+            navigationManager.setTimelineInterval(interval, date: Date())
             if interval == .year {
-                navigationManager.updateInterval(interval, date: Date())
                 navigationManager.switchToYearlyCalendar()
             } else {
-                // Update interval BEFORE switching view so switchToCalendar() sees the new interval
-                navigationManager.updateInterval(interval, date: Date())
                 navigationManager.switchToCalendar()
             }
         }
     }
-    
+
     private func step(_ direction: Int) {
-        // Handle Book View navigation: step within the current interval's page type
         if navigationManager.currentView == .bookView {
-            let calendar = Calendar.current
-            let component = navigationManager.currentInterval.calendarComponent
-            guard let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) else { return }
-            navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
-            switch navigationManager.currentInterval {
-            case .day:
-                NotificationCenter.default.post(name: .bookViewNavigateToDay, object: newDate)
-            case .week:
-                NotificationCenter.default.post(name: .bookViewNavigateToWeek, object: newDate)
-            case .month:
-                let m = calendar.component(.month, from: newDate)
-                let y = calendar.component(.year, from: newDate)
-                NotificationCenter.default.post(name: .bookViewNavigateToMonth, object: [m, y])
-            case .year:
-                let y = calendar.component(.year, from: newDate)
-                NotificationCenter.default.post(name: .bookViewNavigateToYear, object: y)
-            }
+            stepBookView(direction)
             return
         }
 
-        // Handle year navigation when in yearly calendar view
         if navigationManager.currentView == .yearlyCalendar {
             if let newDate = Calendar.mondayFirst.date(byAdding: .year, value: direction, to: navigationManager.currentDate) {
-                navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
+                navigationManager.setTimelineInterval(navigationManager.currentInterval, date: newDate)
             }
             return
         }
-        
-        // Handle journal day views navigation
-        if navigationManager.currentView == .journalDayViews {
-            let component = navigationManager.currentInterval.calendarComponent
-            if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
-                // Update the navigation manager
-                navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
 
-                // Post notification for journal content refresh
+        if navigationManager.currentView == .journalDayViews {
+            if let newDate = Calendar.mondayFirst.date(byAdding: navigationManager.currentInterval.calendarComponent, value: direction, to: navigationManager.currentDate) {
+                navigationManager.setTimelineInterval(navigationManager.currentInterval, date: newDate)
                 NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
             }
             return
         }
-        
-        let component = navigationManager.currentInterval.calendarComponent
-        if let newDate = Calendar.mondayFirst.date(byAdding: component, value: direction, to: navigationManager.currentDate) {
-            // First update the navigation
-            navigationManager.updateInterval(navigationManager.currentInterval, date: newDate)
-            
-            // Then do a comprehensive data refresh
-            Task {
-                // Clear all caches first
-                calendarVM.clearAllData()
-                await tasksVM.loadTasks(forceClear: true)
-                
-                // Load fresh data based on interval
-                switch navigationManager.currentInterval {
-                case .day:
-                    await calendarVM.loadCalendarData(for: newDate)
-                case .week:
-                    await calendarVM.loadCalendarDataForWeek(containing: newDate)
-                case .month:
-                    await calendarVM.loadCalendarDataForMonth(containing: newDate)
-                case .year:
-                    await calendarVM.loadCalendarDataForMonth(containing: newDate)
-                }
-                
-                // Force UI refresh
-                await MainActor.run {
-                    // Reload logs data
-                    LogsViewModel.shared.reloadData()
-                    
-                    // Post notifications for UI updates
-                    NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
-                    NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-                    
-                    // Force calendar refresh
-                    calendarVM.objectWillChange.send()
-                    tasksVM.objectWillChange.send()
-                }
-            }
+
+        let timeDirection: NavigationManager.TimeDirection = direction < 0 ? .previous : .next
+        guard let newDate = navigationManager.moveFocusedDate(timeDirection) else {
+            return
         }
-    }
-    
-    var body: some View {
-        GeometryReader { geometry in
-            let safeAreaLeading = geometry.safeAreaInsets.leading
-            let safeAreaTrailing = geometry.safeAreaInsets.trailing
-            let horizontalSafeInset = max(safeAreaLeading, safeAreaTrailing, 0)
-            
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                // First row: Main navigation
-                HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
-                    Menu {
-                            Button(action: {
-                                navigationManager.switchToCalendar()
-                            }) {
-                                Label("Calendar", systemImage: "calendar")
-                            }
-                            
-                            Button(action: {
-                                navigationManager.switchToTasks()
-                            }) {
-                                Label("Tasks", systemImage: "checklist")
-                            }
-                            
-                            Button(action: {
-                                navigationManager.switchToLists()
-                            }) {
-                                Label("Lists", systemImage: "list.bullet")
-                            }
-                            
-                            Button(action: {
-                                navigationManager.switchToJournalDayViews()
-                            }) {
-                                Label("Journals", systemImage: "book")
-                            }
 
-                            if !appPrefs.hideBookView {
-                                Button(action: {
-                                    navigationManager.switchToBookView()
-                                }) {
-                                    Label("Book View (Beta)", systemImage: "book.pages")
-                                }
-                            }
-
-                            if !appPrefs.hideGoals {
-                                Button(action: {
-                                    navigationManager.switchToGoals()
-                                }) {
-                                    Label("Goals (Beta)", systemImage: "target")
-                                }
-                            }
-                            Divider()
-                            
-                            Button(action: {
-                                activeSheet = .settings
-                            }) {
-                                Label("Settings", systemImage: "gearshape")
-                            }
-                            Button(action: {
-                                activeSheet = .integrations
-                            }) {
-                                Label("Integrations", systemImage: "puzzlepiece.extension")
-                            }
-                            Button(action: {
-                                activeSheet = .about
-                            }) {
-                                Label("About", systemImage: "info.circle")
-                            }
-                            Button(action: {
-                                activeSheet = .diagnostics
-                            }) {
-                                Label("Diagnostic", systemImage: "stethoscope")
-                            }
-                            Button(action: {
-                                activeSheet = .reportIssues
-                            }) {
-                                Label("Report Issue / Request Features", systemImage: "exclamationmark.bubble")
-                            }
-
-                            if let url = URL(string: "https://apps.apple.com/us/app/lotus-planner/id6749281062?action=write-review") {
-                                Link(destination: url) {
-                                    Label("Rate the App", systemImage: "star")
-                                }
-                            }
-
-                        } label: {
-                            Image(systemName: "line.3.horizontal")
-                                .font(adaptiveIconSize)
-                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.borderless)
-                        
-                        // Hide navigation arrows in Lists view and in Goals All Goals view
-                        if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
-                            Button { step(-1) } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(adaptiveIconSize)
-                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                            }
-                        }
-                        
-                        Button {
-                            // Only open date picker if not in Lists view or Goals All Goals view
-                            if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
-                                selectedDateForPicker = navigationManager.currentDate
-                                activeSheet = .datePicker
-                            }
-                        } label: {
-                            Text(dateLabel)
-                                .font(isCompact ? .headline : .title2)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                                .foregroundColor(navigationManager.currentView == .lists || (navigationManager.showTasksView && navigationManager.showingAllTasks) || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day) ? .primary : (isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary))
-                        }
-                        .disabled(navigationManager.currentView == .lists || (navigationManager.currentView == .goals && navigationManager.currentInterval == .day))
-                        
-                        // Hide navigation arrows in Lists view and in Goals All Goals view
-                        if navigationManager.currentView != .lists && !(navigationManager.currentView == .goals && navigationManager.currentInterval == .day) {
-                            Button { step(1) } label: {
-                                Image(systemName: "chevron.right")
-                                    .font(adaptiveIconSize)
-                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        // Only show interval buttons in first row if NOT using two-row layout
-                        if !shouldShowTwoRows {
-                        // Show interval buttons in single row on all devices
-                        // Hide navigation buttons in Lists view and Journal Day Views
-                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Timebox View, show all buttons but highlight appropriate circle
-                                if navigationManager.currentView == .timebox {
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            handleTimeIntervalChange(.day)
-                                        } label: {
-                                            Image(systemName: "d.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    Button {
-                                        handleTimeIntervalChange(.week)
-                                    } label: {
-                                        Image(systemName: "w.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            navigationManager.switchToTimebox()
-                                        } label: {
-                                            Image(systemName: "t.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
-                                        }
-                                    }
-                                } else {
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
-                                            } else {
-                                                // In other cases: use standard interval change
-                                                handleTimeIntervalChange(.day)
-                                            }
-                                        } label: {
-                                            Image(systemName: "d.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
-                                        }
-                                    }
-                                    // Hide s.circle in Tasks view
-                                    if navigationManager.currentView != .tasks {
-                                        Button {
-                                            // In other views: handle week interval change
-                                            handleTimeIntervalChange(.week)
-                                        } label: {
-                                            Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && !navigationManager.isShowingTimebox ? .accentColor : .secondary)))
-                                        }
-                                    }
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
-                                            } else if navigationManager.currentView == .bookView {
-                                                // In Book View: navigate to current week's timebox page
-                                                navigationManager.updateInterval(.week, date: Date())
-                                                NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
-                                            } else if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
-                                                // In Calendar or Yearly Calendar view: switch to timebox view
-                                                navigationManager.switchToTimebox()
-                                            } else {
-                                                // In other cases: use standard interval change
-                                                handleTimeIntervalChange(.week)
-                                            }
-                                        } label: {
-                                            Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary)))
-                                        }
-                                    }
-                                }
-                                Button {
-                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentMonth"), object: nil)
-                                    } else {
-                                        handleTimeIntervalChange(.month)
-                                    }
-                                } label: {
-                                    Image(systemName: "m.circle")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
-                                }
-                                Button {
-                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentYear"), object: nil)
-                                    } else {
-                                        handleTimeIntervalChange(.year)
-                                    }
-                                } label: {
-                                    Image(systemName: "y.circle")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
-                                }
-                            }
-                            }
-                            
-                            // Only show action buttons in first row if NOT using two-row layout
-                            if !shouldShowTwoRows {
-                            
-                            // Hide ellipsis.circle in calendar views, lists view, journal day views, and timebox view
-                            if !isCalendarLikeView && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .timebox {
-                                if navigationManager.currentView == .goals {
-                                    Button {
-                                        navigationManager.updateInterval(.day, date: Date())
-                                    } label: {
-                                        Image(systemName: "ellipsis.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
-                                    }
-                                } else {
-                                    Menu {
-                                        Button("All") {
-                                            // Switch to "All" tasks view
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        }
-                                        Divider()
-                                        Button("Has Due Date") {
-                                            // Switch to All view with Has Due Date filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
-                                        }
-                                        Button("No Due Date") {
-                                            // Switch to All view with No Due Date filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
-                                        }
-                                        Button("Overdue") {
-                                            // Switch to All view with Past Due filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
-                                        }
-                                        Button("Complete") {
-                                            // Switch to All view with Complete filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
-                                            // Turn off hide completed setting to show completed tasks
-                                            appPrefs.updateHideCompletedTasks(false)
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
-                                    }
-                                }
-                            }
-                            
-                            // Hide vertical separator in Lists view and Journal Day Views
-                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                Text("|")
-                                    .font(adaptiveIconSize)
-                            }
-                            Button {
-                                // Comprehensive data reload
-                                Task {
-                                    await reloadAllData()
-                                }
-                            } label: {
-                                if isSyncing {
-                                    // Spinning wheel
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle())
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                } else {
-                                    // Static combined icon
-                                    Image(systemName: "arrow.trianglehead.clockwise.icloud")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            }
-                            .disabled(isSyncing)
-                            .id(isSyncing)
-                            
-                            // Hide completed tasks toggle — shown but disabled in month/year views and journal day views
-                            if navigationManager.currentView == .tasks || navigationManager.currentView == .lists ||
-                               isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ||
-                               navigationManager.currentView == .timebox || navigationManager.currentView == .journalDayViews {
-                                let eyeInactive = navigationManager.currentView == .journalDayViews || ((isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year))
-                                Button {
-                                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
-                                } label: {
-                                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(eyeInactive ? .secondary.opacity(0.4) : .accentColor)
-                                }
-                                .disabled(eyeInactive)
-                            }
-
-                            // Save snapshot to Photos (day and week calendar views, iPad/Mac only)
-                            if navigationManager.currentView == .calendar &&
-                                (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week) &&
-                                UIDevice.current.userInterfaceIdiom != .phone {
-                                Button {
-                                    let formatter = DateFormatter()
-                                    if navigationManager.currentInterval == .week,
-                                       let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) {
-                                        formatter.dateFormat = "M/d"
-                                        let start = formatter.string(from: weekInterval.start)
-                                        let end = formatter.string(from: Calendar.mondayFirst.date(byAdding: .day, value: 6, to: weekInterval.start) ?? weekInterval.start)
-                                        PrintDayHelper.saveExpandedWindowToPhotos(jobName: "Week \(start) – \(end)")
-                                    } else {
-                                        formatter.dateStyle = .medium
-                                        PrintDayHelper.saveCurrentWindowToPhotos(jobName: "Day — \(formatter.string(from: navigationManager.currentDate))")
-                                    }
-                                } label: {
-                                    Image(systemName: "square.and.arrow.down")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle — shown but disabled in month/year views and journal day views
-                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews {
-                                let bulkInactive = navigationManager.currentView == .journalDayViews || navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
-                                Button {
-                                    if navigationManager.currentView == .bookView {
-                                        NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
-                                    } else if navigationManager.currentInterval == .day {
-                                        NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
-                                    } else if navigationManager.currentInterval == .week {
-                                        NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
-                                    }
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(bulkInactive ? .secondary.opacity(0.4) : .accentColor)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(bulkInactive)
-                            }
-
-                            // Bulk edit toggle (in Tasks view)
-                            if navigationManager.currentView == .tasks {
-                                Button {
-                                    NotificationCenter.default.post(name: Notification.Name("ToggleTasksBulkEdit"), object: nil)
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle (in Lists view)
-                            if navigationManager.currentView == .lists {
-                                Button {
-                                    NotificationCenter.default.post(name: Notification.Name("ToggleListsBulkEdit"), object: nil)
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle (in Timebox view)
-                            if navigationManager.currentView == .timebox {
-                                Button {
-                                    NotificationCenter.default.post(name: Notification.Name("ToggleTimeboxBulkEdit"), object: nil)
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            Button {
-                                activeSheet = .aiTaskEntry
-                            } label: {
-                                Image(systemName: "sparkles")
-                                    .font(adaptiveIconSize)
-                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                    .foregroundColor(.accentColor)
-                            }
-                            .buttonStyle(.plain)
-                            .help("AI Task Entry")
-                            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
-
-                            // + menu based on current view
-                            if navigationManager.currentView == .journalDayViews {
-                                // In Journal Day Views: menu with Event and Task only
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            } else if navigationManager.currentView == .lists {
-                                // In Lists view: menu with Event, Task, and List
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("List") {
-                                        activeSheet = .addList
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            } else if navigationManager.currentView == .goals {
-                                // In Goals view: menu with Event, Task, and Goal
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("Goal") {
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            } else {
-                                // In other views: Event, Task, and Log.
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            }
-                            }
-                    }
-                    .padding(.horizontal, max(adaptivePadding + horizontalSafeInset, 4))
-                    .padding(.top, adaptiveRowVPadding)
-                    .padding(.bottom, shouldShowTwoRows ? 2 : adaptiveRowVPadding)
-
-                    // Second row on compact portrait devices: Interval and action buttons
-                    if shouldShowTwoRows {
-                        HStack(spacing: isCompact ? 4 : adaptiveButtonSpacing) {
-                            // Hide navigation buttons in Lists view and Journal Day Views
-                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                // In Timebox View, show all buttons but highlight appropriate circle
-                                if navigationManager.currentView == .timebox {
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                        handleTimeIntervalChange(.day)
-                                        } label: {
-                                            Image(systemName: "d.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    Button {
-                                        handleTimeIntervalChange(.week)
-                                    } label: {
-                                        Image(systemName: "w.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            navigationManager.switchToTimebox()
-                                        } label: {
-                                            Image(systemName: "t.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.currentView == .timebox ? .accentColor : .secondary)
-                                        }
-                                    }
-                                } else {
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentDay"), object: nil)
-                                            } else {
-                                                // In other cases: use standard interval change
-                                                handleTimeIntervalChange(.day)
-                                            }
-                                        } label: {
-                                            Image(systemName: "d.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .day ? .accentColor : .secondary)))
-                                        }
-                                    }
-                                    // Hide s.circle in Tasks view
-                                    if navigationManager.currentView != .tasks {
-                                        Button {
-                                            // In other views: handle week interval change
-                                            handleTimeIntervalChange(.week)
-                                        } label: {
-                                            Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals) ? "w.circle" : "s.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .week && !navigationManager.isShowingTimebox ? .accentColor : .secondary)))
-                                        }
-                                    }
-                                    if navigationManager.currentView != .goals {
-                                        Button {
-                                            if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                                // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
-                                            } else if navigationManager.currentView == .bookView {
-                                                // In Book View: navigate to current week's timebox page
-                                                navigationManager.updateInterval(.week, date: Date())
-                                                NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
-                                            } else if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
-                                                // In Calendar or Yearly Calendar view: switch to timebox view
-                                                navigationManager.switchToTimebox()
-                                            } else {
-                                                // In other cases: use standard interval change
-                                                handleTimeIntervalChange(.week)
-                                            }
-                                        } label: {
-                                            Image(systemName: (isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) ? "t.circle" : "w.circle")
-                                                .font(adaptiveIconSize)
-                                                .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                                .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary)))
-                                        }
-                                    }
-                                }
-                                Button {
-                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentMonth"), object: nil)
-                                    } else {
-                                        handleTimeIntervalChange(.month)
-                                    }
-                                } label: {
-                                    Image(systemName: "m.circle")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .secondary : (navigationManager.currentInterval == .month ? .accentColor : .secondary)))
-                                }
-                                Button {
-                                    if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                                        // In Tasks view with All Tasks filter: send notification to ensure proper update
-                                        NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentYear"), object: nil)
-                                    } else {
-                                        handleTimeIntervalChange(.year)
-                                    }
-                                } label: {
-                                    Image(systemName: "y.circle")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(navigationManager.showingAllTasks ? .secondary : (navigationManager.currentView == .yearlyCalendar ? .accentColor : (navigationManager.currentInterval == .year ? .accentColor : .secondary)))
-                                }
-                            }
-                             
-                            Spacer()
-                            
-                            // Hide ellipsis.circle in calendar views, lists view, journal day views, and timebox view
-                            if !isCalendarLikeView && navigationManager.currentView != .yearlyCalendar && navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews && navigationManager.currentView != .timebox {
-                                if navigationManager.currentView == .goals {
-                                    Button {
-                                        navigationManager.updateInterval(.day, date: Date())
-                                    } label: {
-                                        Image(systemName: "ellipsis.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.currentInterval == .day ? .accentColor : .secondary)
-                                    }
-                                } else {
-                                    Menu {
-                                        Button("All") {
-                                            // Switch to "All" tasks view
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                        }
-                                        Divider()
-                                        Button("Has Due Date") {
-                                            // Switch to All view with Has Due Date filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.hasDueDate)
-                                        }
-                                        Button("No Due Date") {
-                                            // Switch to All view with No Due Date filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.noDueDate)
-                                        }
-                                        Button("Overdue") {
-                                            // Switch to All view with Past Due filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.pastDue)
-                                        }
-                                        Button("Complete") {
-                                            // Switch to All view with Complete filter
-                                            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                                            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
-                                            // Turn off hide completed setting to show completed tasks
-                                            appPrefs.updateHideCompletedTasks(false)
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis.circle")
-                                            .font(adaptiveIconSize)
-                                            .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                            .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
-                                    }
-                                }
-                            }
-                            
-                            // Hide vertical separator in Lists view and Journal Day Views
-                            if navigationManager.currentView != .lists && navigationManager.currentView != .journalDayViews {
-                                Text("|")
-                                    .font(adaptiveIconSize)
-                            }
-                            Button {
-                                // Comprehensive data reload
-                                Task {
-                                    await reloadAllData()
-                                }
-                            } label: {
-                                if isSyncing {
-                                    // Spinning wheel
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle())
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                } else {
-                                    // Static combined icon
-                                    Image(systemName: "arrow.trianglehead.clockwise.icloud")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            }
-                            .disabled(isSyncing)
-                            .id(isSyncing)
-                            
-                            // Hide completed tasks toggle — shown but disabled in month/year views and journal day views
-                            if navigationManager.currentView == .tasks || navigationManager.currentView == .lists ||
-                               isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ||
-                               navigationManager.currentView == .timebox || navigationManager.currentView == .journalDayViews {
-                                let eyeInactive = navigationManager.currentView == .journalDayViews || ((isCalendarLikeView || navigationManager.currentView == .yearlyCalendar) && (navigationManager.currentInterval == .month || navigationManager.currentInterval == .year))
-                                Button {
-                                    appPrefs.updateHideCompletedTasks(!appPrefs.hideCompletedTasks)
-                                } label: {
-                                    Image(systemName: appPrefs.hideCompletedTasks ? "eye.slash" : "eye")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(eyeInactive ? .secondary.opacity(0.4) : .accentColor)
-                                }
-                                .disabled(eyeInactive)
-                            }
-
-                            // Save snapshot to Photos (day and week calendar views, iPad/Mac only)
-                            if navigationManager.currentView == .calendar &&
-                                (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week) &&
-                                UIDevice.current.userInterfaceIdiom != .phone {
-                                Button {
-                                    let formatter = DateFormatter()
-                                    if navigationManager.currentInterval == .week,
-                                       let weekInterval = Calendar.mondayFirst.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) {
-                                        formatter.dateFormat = "M/d"
-                                        let start = formatter.string(from: weekInterval.start)
-                                        let end = formatter.string(from: Calendar.mondayFirst.date(byAdding: .day, value: 6, to: weekInterval.start) ?? weekInterval.start)
-                                        PrintDayHelper.saveExpandedWindowToPhotos(jobName: "Week \(start) – \(end)")
-                                    } else {
-                                        formatter.dateStyle = .medium
-                                        PrintDayHelper.saveCurrentWindowToPhotos(jobName: "Day — \(formatter.string(from: navigationManager.currentDate))")
-                                    }
-                                } label: {
-                                    Image(systemName: "square.and.arrow.down")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle — shown but disabled in month/year views and journal day views
-                            if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews {
-                                let bulkInactive = navigationManager.currentView == .journalDayViews || navigationManager.currentInterval == .month || navigationManager.currentInterval == .year || navigationManager.currentView == .yearlyCalendar
-                                Button {
-                                    if navigationManager.currentView == .bookView {
-                                        NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
-                                    } else if navigationManager.currentInterval == .day {
-                                        NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
-                                    } else if navigationManager.currentInterval == .week {
-                                        NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
-                                    }
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(bulkInactive ? .secondary.opacity(0.4) : .accentColor)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(bulkInactive)
-                            }
-
-                            // Bulk edit toggle (in Tasks view)
-                            if navigationManager.currentView == .tasks {
-                                Button {
-                                    NotificationCenter.default.post(name: Notification.Name("ToggleTasksBulkEdit"), object: nil)
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle (in Lists view)
-                            if navigationManager.currentView == .lists {
-                                Button {
-                                    NotificationCenter.default.post(name: Notification.Name("ToggleListsBulkEdit"), object: nil)
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            // Bulk edit toggle (in Timebox view)
-                            if navigationManager.currentView == .timebox {
-                                Button {
-                                    NotificationCenter.default.post(name: Notification.Name("ToggleTimeboxBulkEdit"), object: nil)
-                                } label: {
-                                    Image(systemName: "checkmark.rectangle.stack")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                        .foregroundColor(.accentColor)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            Button {
-                                activeSheet = .aiTaskEntry
-                            } label: {
-                                Image(systemName: "sparkles")
-                                    .font(adaptiveIconSize)
-                                    .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                    .foregroundColor(.accentColor)
-                            }
-                            .buttonStyle(.plain)
-                            .help("AI Task Entry")
-                            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
-
-                            // + menu based on current view
-                            if navigationManager.currentView == .journalDayViews {
-                                // In Journal Day Views: menu with Event and Task only
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            } else if navigationManager.currentView == .lists {
-                                // In Lists view: menu with Event, Task, and List
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("List") {
-                                        activeSheet = .addList
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            } else if navigationManager.currentView == .goals {
-                                // In Goals view: menu with Event, Task, and Goal
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("Goal") {
-                                        NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            } else {
-                                // In other views: Event, Task, and Log.
-                                Menu {
-                                    Button("Event") {
-                                        activeSheet = .addEvent
-                                    }
-                                    Button("Task") {
-                                        activeSheet = .addTask
-                                    }
-                                    Button("Log") {
-                                        LogsViewModel.shared.showingAddLogSheet = true
-                                    }
-                                } label: {
-                                    Image(systemName: "plus")
-                                        .font(adaptiveIconSize)
-                                        .frame(minWidth: adaptiveButtonSize, minHeight: adaptiveButtonSize)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, max(adaptivePadding + horizontalSafeInset, 4))
-                        .padding(.top, 2)
-                        .padding(.bottom, adaptiveRowVPadding)
-                    }
-                }
-                .frame(height: adaptiveBarHeight)
-            }
-        }
-        .frame(height: adaptiveBarHeight)
-        // Strip the default Mac Catalyst .bordered button chrome (grey rounded
-        // backgrounds) from every icon Button in the nav bar. The hamburger
-        // menu already used .borderless explicitly; this propagates the same
-        // treatment to chevrons, interval circles, eye, cloud, etc.
-        .buttonStyle(.borderless)
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .settings:
-                SettingsView()
-
-            case .integrations:
-                IntegrationsView()
-
-            case .about:
-                AboutView()
-
-            case .diagnostics:
-                DiagnosticsView()
-
-            case .reportIssues:
-                ReportIssuesView()
-
-            case .datePicker:
-                NavigationStack {
-                    DatePicker(
-                        "Select Date",
-                        selection: $selectedDateForPicker,
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .environment(\.calendar, Calendar.mondayFirst)
-                    .navigationTitle("Select Date")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationBarItems(
-                        leading: Button("Cancel") { activeSheet = nil },
-                        trailing: Button("Done") {
-                            // Navigate based on current view context
-                            if navigationManager.showTasksView && navigationManager.showingAllTasks {
-                                // If in Tasks view filtered to ALL, go to yearly view
-                                navigationManager.updateInterval(.year, date: selectedDateForPicker)
-                            } else {
-                                // Otherwise, respect current interval but use selected date
-                                navigationManager.updateInterval(navigationManager.currentInterval, date: selectedDateForPicker)
-                            }
-                            activeSheet = nil
-                        }
-                    )
-                }
-                .presentationDetents([.large])
-
-            case .addEvent:
-                NavigationStack {
-                    AddItemView(
-                        currentDate: navigationManager.currentDate,
-                        tasksViewModel: tasksVM,
-                        calendarViewModel: calendarVM,
-                        appPrefs: appPrefs,
-                        showEventOnly: true
-                    )
-                }
-
-            case .addTask:
-                let personalLinked = auth.isLinked(kind: .personal)
-                let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
-                let defaultLists = defaultAccount == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
-                let defaultListId = defaultLists.first?.id ?? ""
-                let newTask = GoogleTask(
-                    id: UUID().uuidString,
-                    title: "",
-                    notes: nil,
-                    status: "needsAction",
-                    due: nil,
-                    completed: nil,
-                    updated: nil,
-                    position: "0"
-                )
-
-                NavigationStack {
-                    TaskDetailsView(
-                        task: newTask,
-                        taskListId: defaultListId,
-                        accountKind: defaultAccount,
-                        accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                        personalTaskLists: tasksVM.personalTaskLists,
-                        professionalTaskLists: tasksVM.professionalTaskLists,
-                        appPrefs: appPrefs,
-                        viewModel: tasksVM,
-                        onSave: { updatedTask in
-                            Task {
-                                await tasksVM.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
-                            }
-                        },
-                        onDelete: {
-                            // No-op for new task creation
-                        },
-                        onMove: { updatedTask, targetListId in
-                            Task {
-                                await tasksVM.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
-                            }
-                        },
-                        onCrossAccountMove: { updatedTask, targetAccount, targetListId in
-                            Task {
-                                await tasksVM.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
-                            }
-                        },
-                        isNew: true
-                    )
-                }
-
-            case .aiTaskEntry:
-                let personalLinked = auth.isLinked(kind: .personal)
-                let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
-                AITaskEntryView(
-                    tasksViewModel: tasksVM,
-                    authManager: auth,
-                    appPrefs: appPrefs,
-                    defaultAccountKind: defaultAccount
-                )
-
-            case .addList:
-                NewListSheet(
-                    appPrefs: appPrefs,
-                    accountKind: newListAccountKind,
-                    hasPersonal: auth.isLinked(kind: .personal),
-                    hasProfessional: auth.isLinked(kind: .professional),
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    listName: $newListName,
-                    selectedAccount: $newListAccountKind,
-                    onCreate: {
-                        createNewList()
-                    }
-                )
-                .onAppear {
-                    // Reset state when sheet appears
-                    newListName = ""
-                    newListAccountKind = nil
-                }
-            }
-        }
-    }
-    
-    // MARK: - Create New List Function
-    private func createNewList() {
-        guard let accountKind = newListAccountKind else { return }
-        
         Task {
-            let _ = await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            calendarVM.clearAllData()
+            await tasksVM.loadTasks(forceClear: true)
+
+            switch navigationManager.currentInterval {
+            case .day:
+                await calendarVM.loadCalendarData(for: newDate)
+            case .week:
+                await calendarVM.loadCalendarDataForWeek(containing: newDate)
+            case .month, .year:
+                await calendarVM.loadCalendarDataForMonth(containing: newDate)
+            }
+
             await MainActor.run {
-                activeSheet = nil
-                newListName = ""
-                newListAccountKind = nil
+                LogsViewModel.shared.reloadData()
+                NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
+                NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+                calendarVM.objectWillChange.send()
+                tasksVM.objectWillChange.send()
             }
         }
     }
-    
-    // MARK: - Data Reload Functions
-    private func reloadAllData() async {
-        // Start sync indicator
-        await MainActor.run {
-            isSyncing = true
+
+    private func stepBookView(_ direction: Int) {
+        guard let newDate = Calendar.mondayFirst.date(byAdding: navigationManager.currentInterval.calendarComponent, value: direction, to: navigationManager.currentDate) else {
+            return
         }
+        navigationManager.setTimelineInterval(navigationManager.currentInterval, date: newDate)
+        switch navigationManager.currentInterval {
+        case .day:
+            NotificationCenter.default.post(name: .bookViewNavigateToDay, object: newDate)
+        case .week:
+            NotificationCenter.default.post(name: .bookViewNavigateToWeek, object: newDate)
+        case .month:
+            let month = Calendar.current.component(.month, from: newDate)
+            let year = Calendar.current.component(.year, from: newDate)
+            NotificationCenter.default.post(name: .bookViewNavigateToMonth, object: [month, year])
+        case .year:
+            NotificationCenter.default.post(name: .bookViewNavigateToYear, object: Calendar.current.component(.year, from: newDate))
+        }
+    }
 
-        // FIRST: Force iCloud/CloudKit sync to push/pull changes
+    private func reloadAllData() async {
+        await MainActor.run { isSyncing = true }
+
         iCloudManager.shared.forceCompleteSync()
-
-        // Wait for CloudKit to sync
-        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
 
         let currentDate = navigationManager.currentDate
-
-        // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
         GoalsManager.shared.refreshData()
-
-        // Reload custom logs data (forceSync removed - NSPersistentCloudKitContainer handles sync)
         CustomLogManager.shared.refreshData()
 
-        // Wait for CloudKit to propagate
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
 
-        // NOW reload all data from Core Data
-        // Reload task time windows
         await MainActor.run {
             TaskTimeWindowManager.shared.loadTimeWindows()
         }
 
-        // Reload calendar events based on current interval
         switch navigationManager.currentInterval {
         case .day:
             await calendarVM.loadCalendarData(for: currentDate)
         case .week:
             await calendarVM.loadCalendarDataForWeek(containing: currentDate)
-        case .month:
-            await calendarVM.loadCalendarDataForMonth(containing: currentDate)
-        case .year:
-            // For year view, load month data for the specific month
+        case .month, .year:
             await calendarVM.loadCalendarDataForMonth(containing: currentDate)
         }
 
-        // Reload tasks with forced cache clear
         await tasksVM.loadTasks(forceClear: true)
-
-        // Reload logs data
         LogsViewModel.shared.reloadData()
 
-        // Refresh view context
         await MainActor.run {
-            let context = PersistenceController.shared.container.viewContext
-            context.refreshAllObjects()
+            PersistenceController.shared.container.viewContext.refreshAllObjects()
         }
 
-        // Post notification to refresh journal content
         NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-
-        // Update last sync time
         iCloudManager.shared.lastSyncDate = Date()
 
-        // Stop sync indicator
-        await MainActor.run {
-            isSyncing = false
-        }
+        await MainActor.run { isSyncing = false }
     }
 
-    private func reloadAllDataForDate(_ date: Date) async {
-        // FIRST: Force iCloud/CloudKit sync to push/pull changes
-        iCloudManager.shared.forceCompleteSync()
+    private func jumpToCurrentPeriod() {
+        let now = Date()
+        navigationManager.jumpToCurrentPeriod()
 
-        // Wait for CloudKit to sync
-        try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
-
-        // Reload goals data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        GoalsManager.shared.refreshData()
-
-        // Reload custom logs data (forceSync removed - NSPersistentCloudKitContainer handles sync)
-        CustomLogManager.shared.refreshData()
-
-        // Wait for CloudKit to propagate
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-
-        // NOW reload all data from Core Data
-        // Reload task time windows
-        await MainActor.run {
-            TaskTimeWindowManager.shared.loadTimeWindows()
+        if navigationManager.currentView == .bookView {
+            switch navigationManager.currentInterval {
+            case .day:
+                NotificationCenter.default.post(name: .bookViewNavigateToDay, object: now)
+            case .week:
+                NotificationCenter.default.post(name: .bookViewNavigateToWeek, object: now)
+            case .month:
+                NotificationCenter.default.post(
+                    name: .bookViewNavigateToMonth,
+                    object: [Calendar.current.component(.month, from: now), Calendar.current.component(.year, from: now)]
+                )
+            case .year:
+                NotificationCenter.default.post(name: .bookViewNavigateToYear, object: Calendar.current.component(.year, from: now))
+            }
+            return
         }
 
-        // Reload calendar events based on current interval
-        switch navigationManager.currentInterval {
-        case .day:
-            await calendarVM.loadCalendarData(for: date)
-        case .week:
-            await calendarVM.loadCalendarDataForWeek(containing: date)
-        case .month:
-            await calendarVM.loadCalendarDataForMonth(containing: date)
-        case .year:
-            // For year view, load month data for the specific month
-            await calendarVM.loadCalendarDataForMonth(containing: date)
+        Task {
+            switch navigationManager.currentInterval {
+            case .day:
+                await calendarVM.loadCalendarData(for: now)
+            case .week:
+                await calendarVM.loadCalendarDataForWeek(containing: now)
+            case .month, .year:
+                await calendarVM.loadCalendarDataForMonth(containing: now)
+            }
+            await tasksVM.loadTasks(policy: .freshEnough)
+            await MainActor.run {
+                LogsViewModel.shared.reloadData()
+                NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+            }
         }
-        
-        // Reload tasks with forced cache clear
-        await tasksVM.loadTasks(forceClear: true)
-        
-        // Reload logs data
-        LogsViewModel.shared.reloadData()
-        
-        // Refresh view context
-        await MainActor.run {
-            let context = PersistenceController.shared.container.viewContext
-            context.refreshAllObjects()
-        }
-        
-        // Post notification to refresh journal content
-        NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-        
-        // Update last sync time
-        iCloudManager.shared.lastSyncDate = Date()
     }
-    
 }
-
 
 #Preview {
     GlobalNavBar()

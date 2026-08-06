@@ -420,7 +420,6 @@ struct JournalView: View {
                         .toolbar {
                             ToolbarItemGroup(placement: .navigationBarLeading) {
                                 HStack(spacing: 8) {
-                                    SharedNavigationToolbar()
                                     Button(action: { step(-1) }) {
                                         Image(systemName: "chevron.left")
                                     }

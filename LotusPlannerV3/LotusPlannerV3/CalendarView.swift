@@ -706,8 +706,6 @@ struct CalendarView: View {
     
     private var principalToolbarContent: some View {
         HStack(spacing: 8) {
-            SharedNavigationToolbar()
-            
             Button(action: { step(-1) }) {
                 Image(systemName: "chevron.left")
             }

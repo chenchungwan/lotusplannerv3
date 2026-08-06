@@ -845,7 +845,7 @@ struct SettingsView: View {
                         // backgrounding the app. Setting `showingSettings = false`
                         // sidesteps that path. Also calling `dismiss()` as a
                         // belt-and-suspenders for non-Catalyst contexts.
-                        navigationManager.showingSettings = false
+                        navigationManager.dismissActiveSheet()
                         dismiss()
                     }
                 }
