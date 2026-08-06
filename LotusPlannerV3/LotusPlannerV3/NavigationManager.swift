@@ -83,7 +83,7 @@ class NavigationManager: ObservableObject {
         }
         showTasksView = false
         // Trigger data refresh when switching to calendar view
-        NotificationCenter.default.post(name: Notification.Name("RefreshCalendarData"), object: nil)
+        NotificationCenter.default.post(name: .refreshCalendarData, object: nil)
     }
 
     func switchToTasks() {

@@ -124,7 +124,7 @@ struct PersistenceController {
                     // Post custom notification for iCloudManager to handle data reload
                     DispatchQueue.main.async {
                         NotificationCenter.default.post(
-                            name: Notification.Name("cloudKitImportCompleted"),
+                            name: .cloudKitImportCompleted,
                             object: nil,
                             userInfo: ["timestamp": Date()]
                         )
@@ -133,9 +133,4 @@ struct PersistenceController {
             }
         }
     }
-}
-
-// Custom notification for CloudKit import completion
-extension Notification.Name {
-    static let cloudKitImportCompleted = Notification.Name("cloudKitImportCompleted")
 }

@@ -206,10 +206,10 @@ struct GoalsView: View {
         .sheet(isPresented: $showingCreateCategory) {
             CreateCategoryView()
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowAddGoal"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .showAddGoal)) { _ in
             showingCreateGoal = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowAddCategory"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .showAddCategory)) { _ in
             showingCreateCategory = true
         }
         .onAppear {

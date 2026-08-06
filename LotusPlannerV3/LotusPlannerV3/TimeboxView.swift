@@ -372,19 +372,10 @@ struct TimeboxView: View {
 
     var body: some View {
         baseViewWithLifecycle
-        .onAppear {
-            // Listen for bulk edit toggle notification
-            NotificationCenter.default.addObserver(
-                forName: Notification.Name("ToggleTimeboxBulkEdit"),
-                object: nil,
-                queue: .main
-            ) { _ in
-                Task { @MainActor in
-                    bulkEditManager.state.isActive.toggle()
-                    if !bulkEditManager.state.isActive {
-                        bulkEditManager.state.selectedTaskIds.removeAll()
-                    }
-                }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleTimeboxBulkEdit)) { _ in
+            bulkEditManager.state.isActive.toggle()
+            if !bulkEditManager.state.isActive {
+                bulkEditManager.state.selectedTaskIds.removeAll()
             }
         }
         // Bulk edit confirmation dialogs

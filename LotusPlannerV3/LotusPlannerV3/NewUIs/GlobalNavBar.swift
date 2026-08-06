@@ -303,7 +303,7 @@ struct GlobalNavBar: View {
     private var timeboxOrWeekButton: some View {
         Button {
             if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-                NotificationCenter.default.post(name: Notification.Name("FilterTasksToCurrentWeek"), object: nil)
+                NotificationCenter.default.post(name: .filterTasksToCurrentWeek, object: nil)
             } else if navigationManager.currentView == .bookView {
                 navigationManager.updateInterval(.week, date: Date())
                 NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
@@ -330,15 +330,15 @@ struct GlobalNavBar: View {
             } else {
                 Menu {
                     Button("All") {
-                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
+                        NotificationCenter.default.post(name: .showAllTasksRequested, object: nil)
                     }
                     Divider()
                     taskSubfilterButton("Has Due Date", .hasDueDate)
                     taskSubfilterButton("No Due Date", .noDueDate)
                     taskSubfilterButton("Overdue", .pastDue)
                     Button("Complete") {
-                        NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-                        NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: AllTaskSubfilter.completed)
+                        NotificationCenter.default.post(name: .showAllTasksRequested, object: nil)
+                        NotificationCenter.default.post(name: .setAllTasksSubfilter, object: AllTaskSubfilter.completed)
                         appPrefs.updateHideCompletedTasks(false)
                     }
                 } label: {
@@ -382,26 +382,26 @@ struct GlobalNavBar: View {
                 if navigationManager.currentView == .bookView {
                     NotificationCenter.default.post(name: .toggleBookViewBulkEdit, object: nil)
                 } else if navigationManager.currentInterval == .day {
-                    NotificationCenter.default.post(name: Notification.Name("ToggleCalendarBulkEdit"), object: nil)
+                    NotificationCenter.default.post(name: .toggleCalendarBulkEdit, object: nil)
                 } else if navigationManager.currentInterval == .week {
-                    NotificationCenter.default.post(name: Notification.Name("ToggleWeeklyCalendarBulkEdit"), object: nil)
+                    NotificationCenter.default.post(name: .toggleWeeklyCalendarBulkEdit, object: nil)
                 }
             }
             .disabled(inactive)
             .help("Bulk edit")
         } else if navigationManager.currentView == .tasks {
             iconButton("checkmark.rectangle.stack", color: .accentColor) {
-                NotificationCenter.default.post(name: Notification.Name("ToggleTasksBulkEdit"), object: nil)
+                NotificationCenter.default.post(name: .toggleTasksBulkEdit, object: nil)
             }
             .help("Bulk edit")
         } else if navigationManager.currentView == .lists {
             iconButton("checkmark.rectangle.stack", color: .accentColor) {
-                NotificationCenter.default.post(name: Notification.Name("ToggleListsBulkEdit"), object: nil)
+                NotificationCenter.default.post(name: .toggleListsBulkEdit, object: nil)
             }
             .help("Bulk edit")
         } else if navigationManager.currentView == .timebox {
             iconButton("checkmark.rectangle.stack", color: .accentColor) {
-                NotificationCenter.default.post(name: Notification.Name("ToggleTimeboxBulkEdit"), object: nil)
+                NotificationCenter.default.post(name: .toggleTimeboxBulkEdit, object: nil)
             }
             .help("Bulk edit")
         }
@@ -418,7 +418,7 @@ struct GlobalNavBar: View {
 
             if navigationManager.currentView == .goals {
                 Button("Goal") {
-                    NotificationCenter.default.post(name: Notification.Name("ShowAddGoal"), object: nil)
+                    NotificationCenter.default.post(name: .showAddGoal, object: nil)
                 }
             }
 
@@ -447,10 +447,10 @@ struct GlobalNavBar: View {
             if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
                 let notification: Notification.Name
                 switch interval {
-                case .day: notification = Notification.Name("FilterTasksToCurrentDay")
-                case .week: notification = Notification.Name("FilterTasksToCurrentWeek")
-                case .month: notification = Notification.Name("FilterTasksToCurrentMonth")
-                case .year: notification = Notification.Name("FilterTasksToCurrentYear")
+                case .day: notification = .filterTasksToCurrentDay
+                case .week: notification = .filterTasksToCurrentWeek
+                case .month: notification = .filterTasksToCurrentMonth
+                case .year: notification = .filterTasksToCurrentYear
                 }
                 NotificationCenter.default.post(name: notification, object: nil)
             } else {
@@ -467,8 +467,8 @@ struct GlobalNavBar: View {
 
     private func taskSubfilterButton(_ title: String, _ filter: AllTaskSubfilter) -> some View {
         Button(title) {
-            NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
-            NotificationCenter.default.post(name: Notification.Name("SetAllTasksSubfilter"), object: filter)
+            NotificationCenter.default.post(name: .showAllTasksRequested, object: nil)
+            NotificationCenter.default.post(name: .setAllTasksSubfilter, object: filter)
         }
     }
 
@@ -589,7 +589,7 @@ struct GlobalNavBar: View {
         if navigationManager.currentView == .journalDayViews {
             if let newDate = Calendar.mondayFirst.date(byAdding: navigationManager.currentInterval.calendarComponent, value: direction, to: navigationManager.currentDate) {
                 navigationManager.setTimelineInterval(navigationManager.currentInterval, date: newDate)
-                NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+                NotificationCenter.default.post(name: .refreshJournalContent, object: nil)
             }
             return
         }
@@ -615,7 +615,7 @@ struct GlobalNavBar: View {
             await MainActor.run {
                 LogsViewModel.shared.reloadData()
                 NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
-                NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+                NotificationCenter.default.post(name: .refreshJournalContent, object: nil)
                 calendarVM.objectWillChange.send()
                 tasksVM.objectWillChange.send()
             }
@@ -673,7 +673,7 @@ struct GlobalNavBar: View {
             PersistenceController.shared.container.viewContext.refreshAllObjects()
         }
 
-        NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
+        NotificationCenter.default.post(name: .refreshJournalContent, object: nil)
         iCloudManager.shared.lastSyncDate = Date()
 
         await MainActor.run { isSyncing = false }

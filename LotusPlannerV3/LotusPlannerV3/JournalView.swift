@@ -350,13 +350,13 @@ struct JournalView: View {
                 loadSelectedPhotos()
             }
         }
-                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshJournalContent"))) { _ in
+                    .onReceive(NotificationCenter.default.publisher(for: .refreshJournalContent)) { _ in
                         Task { @MainActor in
                             // Refresh journal content when notification is received
                             await switchToDate(currentDate)
                         }
                     }
-                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("JournalFileChangedFromiCloud"))) { notification in
+                    .onReceive(NotificationCenter.default.publisher(for: .journalFileChangedFromICloud)) { notification in
                         Task { @MainActor in
                             // Reload drawing when file changes from iCloud
                             if let changedDate = notification.userInfo?["date"] as? Date,
@@ -365,7 +365,7 @@ struct JournalView: View {
                             }
                         }
                     }
-                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerJournalAutoSave"))) { notification in
+                    .onReceive(NotificationCenter.default.publisher(for: .triggerJournalAutoSave)) { notification in
                         Task { @MainActor in
                             // Trigger auto-save when requested by day views
                             await saveToiCloud()
@@ -390,13 +390,13 @@ struct JournalView: View {
                                 await switchToDate(newValue)
                             }
                         }
-                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshJournalContent"))) { _ in
+                        .onReceive(NotificationCenter.default.publisher(for: .refreshJournalContent)) { _ in
                             Task { @MainActor in
                                 // Refresh journal content when notification is received
                                 await switchToDate(currentDate)
                             }
                         }
-                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("JournalFileChangedFromiCloud"))) { notification in
+                        .onReceive(NotificationCenter.default.publisher(for: .journalFileChangedFromICloud)) { notification in
                             Task { @MainActor in
                                 // Reload drawing when file changes from iCloud
                                 if let changedDate = notification.userInfo?["date"] as? Date,
@@ -405,7 +405,7 @@ struct JournalView: View {
                                 }
                             }
                         }
-                        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("TriggerJournalAutoSave"))) { notification in
+                        .onReceive(NotificationCenter.default.publisher(for: .triggerJournalAutoSave)) { notification in
                             Task { @MainActor in
                                 // Trigger auto-save when requested by day views
                                 await saveToiCloud()

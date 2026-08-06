@@ -689,7 +689,7 @@ struct TasksDetailColumn: View {
                 .padding(.bottom, 16)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleListsBulkEdit"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleListsBulkEdit)) { _ in
             bulkEditManager.state.isActive.toggle()
             if !bulkEditManager.state.isActive {
                 // Exit bulk edit mode - clear selections

@@ -18,7 +18,7 @@ class JournalAutoSaveManager: ObservableObject {
         
         // Post a notification to trigger auto-save in any active JournalView
         NotificationCenter.default.post(
-            name: Notification.Name("TriggerJournalAutoSave"),
+            name: .triggerJournalAutoSave,
             object: nil,
             userInfo: ["date": date]
         )

@@ -207,7 +207,7 @@ struct AllGoalsTableContent: View {
                 EditCategoryView(category: category)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RefreshAllGoalsView"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .refreshAllGoalsView)) { _ in
             // Force refresh by updating the refresh trigger
             refreshTrigger = UUID()
         }

@@ -1382,9 +1382,9 @@ struct SettingsView: View {
         LogsViewModel.shared.loadLogsForCurrentDate()
         
         // Post comprehensive refresh notifications
-        NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-        NotificationCenter.default.post(name: Notification.Name("RefreshAllData"), object: nil)
-        NotificationCenter.default.post(name: Notification.Name("iCloudDataChanged"), object: nil)
+        NotificationCenter.default.post(name: .refreshJournalContent, object: nil)
+        NotificationCenter.default.post(name: .refreshAllData, object: nil)
+        NotificationCenter.default.post(name: .iCloudDataChanged, object: nil)
         
         // Force NavigationManager refresh to update all UI components
         let current = NavigationManager.shared.currentDate

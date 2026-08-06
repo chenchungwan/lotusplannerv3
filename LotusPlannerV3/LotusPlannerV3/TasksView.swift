@@ -360,7 +360,7 @@ struct TasksView: View {
                 await viewModel.loadTasks()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleTasksBulkEdit"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleTasksBulkEdit)) { _ in
             bulkEditManager.state.isActive.toggle()
             if !bulkEditManager.state.isActive {
                 bulkEditManager.state.selectedTaskIds.removeAll()
@@ -581,76 +581,29 @@ struct TasksView: View {
                 }
             }
             referenceDate = navigationManager.currentDate
-            
-            // Listen for external requests to show Add Task so behavior matches Calendar
-            NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
-                showingNewTask = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showAddTask)) { _ in
+            showingNewTask = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showAllTasksRequested)) { _ in
+            showAllTasks()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .setAllTasksSubfilter)) { notification in
+            if let subfilter = notification.object as? AllTaskSubfilter {
+                allSubfilter = subfilter
             }
-            // Listen for request to switch to All
-            NotificationCenter.default.addObserver(forName: Notification.Name("ShowAllTasksRequested"), object: nil, queue: .main) { _ in
-                selectedFilter = .all
-                allSubfilter = .all
-                referenceDate = Date()
-                Task { @MainActor in
-                    navigationManager.showingAllTasks = true
-                }
-                // Clear the current interval since "All Tasks" doesn't correspond to a specific time interval
-                // This ensures other icons (D, W, M, Y) are properly unhighlighted
-            }
-            // Listen for request to set All tasks subfilter
-            NotificationCenter.default.addObserver(forName: Notification.Name("SetAllTasksSubfilter"), object: nil, queue: .main) { notification in
-                if let subfilter = notification.object as? AllTaskSubfilter {
-                    allSubfilter = subfilter
-                }
-            }
-            // Listen for request to filter tasks to current day (when coming from All Tasks filter)
-            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentDay"), object: nil, queue: .main) { _ in
-                selectedFilter = .day
-                referenceDate = Date()
-                Task { @MainActor in
-                    navigationManager.showingAllTasks = false
-                }
-                // Clear cache to ensure fresh filtering
-                cachedFilteredPersonalTasks.removeAll()
-                cachedFilteredProfessionalTasks.removeAll()
-                lastFilterState = ""
-            }
-            // Listen for request to filter tasks to current week (when coming from All Tasks filter)
-            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentWeek"), object: nil, queue: .main) { _ in
-                selectedFilter = .week
-                referenceDate = Date()
-                Task { @MainActor in
-                    navigationManager.showingAllTasks = false
-                }
-                // Clear cache to ensure fresh filtering
-                cachedFilteredPersonalTasks.removeAll()
-                cachedFilteredProfessionalTasks.removeAll()
-                lastFilterState = ""
-            }
-            // Listen for request to filter tasks to current month (when coming from All Tasks filter)
-            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentMonth"), object: nil, queue: .main) { _ in
-                selectedFilter = .month
-                referenceDate = Date()
-                Task { @MainActor in
-                    navigationManager.showingAllTasks = false
-                }
-                // Clear cache to ensure fresh filtering
-                cachedFilteredPersonalTasks.removeAll()
-                cachedFilteredProfessionalTasks.removeAll()
-                lastFilterState = ""
-            }
-            // Listen for request to filter tasks to current year (when coming from All Tasks filter)
-            NotificationCenter.default.addObserver(forName: Notification.Name("FilterTasksToCurrentYear"), object: nil, queue: .main) { _ in
-                selectedFilter = .year
-                referenceDate = Date()
-                Task { @MainActor in
-                    navigationManager.showingAllTasks = false
-                }
-                // Clear cache to ensure fresh filtering
-                cachedFilteredPersonalTasks.removeAll()
-                cachedFilteredProfessionalTasks.removeAll()
-                lastFilterState = ""
-            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .filterTasksToCurrentDay)) { _ in
+            applyTaskFilter(.day)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .filterTasksToCurrentWeek)) { _ in
+            applyTaskFilter(.week)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .filterTasksToCurrentMonth)) { _ in
+            applyTaskFilter(.month)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .filterTasksToCurrentYear)) { _ in
+            applyTaskFilter(.year)
         }
         .onChange(of: selectedFilter) { _, newValue in
             // Clear cache when filter changes
@@ -702,6 +655,15 @@ struct TasksView: View {
             cachedFilteredProfessionalTasks.removeAll()
             lastFilterState = ""
         }
+    }
+
+    private func applyTaskFilter(_ filter: TaskFilter) {
+        selectedFilter = filter
+        referenceDate = Date()
+        navigationManager.showingAllTasks = false
+        cachedFilteredPersonalTasks.removeAll()
+        cachedFilteredProfessionalTasks.removeAll()
+        lastFilterState = ""
     }
     
     private func mainContent(geometry: GeometryProxy) -> some View {
@@ -1034,6 +996,7 @@ struct TasksView: View {
         selectedFilter = .all
         allSubfilter = .all
         referenceDate = Date()
+        navigationManager.showingAllTasks = true
         navigationManager.updateInterval(.day, date: Date())
     }
 

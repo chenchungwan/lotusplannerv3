@@ -3,16 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-// MARK: - Notification Names for BookView Navigation
-extension Notification.Name {
-    static let bookViewNavigateToDay = Notification.Name("BookViewNavigateToDay")
-    static let bookViewNavigateToWeek = Notification.Name("BookViewNavigateToWeek")
-    static let bookViewNavigateToMonth = Notification.Name("BookViewNavigateToMonth")
-    static let bookViewNavigateToYear = Notification.Name("BookViewNavigateToYear")
-    static let bookViewNavigateToTimebox = Notification.Name("BookViewNavigateToTimebox")
-    static let toggleBookViewBulkEdit = Notification.Name("ToggleBookViewBulkEdit")
-}
-
 // MARK: - Book Page Content Enum
 enum BookPageContent: Hashable {
     case year(Int)

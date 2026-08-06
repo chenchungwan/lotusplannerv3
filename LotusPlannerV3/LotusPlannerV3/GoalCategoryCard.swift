@@ -365,7 +365,7 @@ struct GoalCategoryCard: View {
         }
         
         // Post notification to refresh All Goals view
-        NotificationCenter.default.post(name: Notification.Name("RefreshAllGoalsView"), object: nil)
+        NotificationCenter.default.post(name: .refreshAllGoalsView, object: nil)
     }
     
     private func convertToGoalTimeframe(_ interval: TimelineInterval) -> GoalTimeframe {

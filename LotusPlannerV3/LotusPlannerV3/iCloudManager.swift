@@ -540,7 +540,7 @@ final class iCloudManager: ObservableObject {
 
         // Listen for CloudKit import completion from Persistence layer
         NotificationCenter.default.addObserver(
-            forName: Notification.Name("cloudKitImportCompleted"),
+            forName: .cloudKitImportCompleted,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -616,8 +616,4 @@ final class iCloudManager: ObservableObject {
             }
         }
     }
-}
-
-extension Notification.Name {
-    static let iCloudDataChanged = Notification.Name("iCloudDataChanged")
 }

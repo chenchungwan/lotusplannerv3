@@ -508,7 +508,7 @@ struct CalendarView: View {
 
     private var finalContent: some View {
         toolbarAndSheetsContent
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleCalendarBulkEdit"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleCalendarBulkEdit)) { _ in
             bulkEditManager.state.isActive.toggle()
             if !bulkEditManager.state.isActive {
                 // Exit bulk edit mode - clear selections
@@ -1638,28 +1638,22 @@ struct CalendarView: View {
                 }
                 // Ensure tasks are cached when view appears
                 updateCachedTasks()
-                // Listen for external add requests
-                NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddTask"), object: nil, queue: .main) { _ in
-                    Task { @MainActor in
-                        navigationManager.switchToTasks()
-                    }
-                }
-                NotificationCenter.default.addObserver(forName: Notification.Name("LPV3_ShowAddEvent"), object: nil, queue: .main) { _ in
-                    showingAddItem = true
-                }
-                // Listen for calendar data refresh requests
-                NotificationCenter.default.addObserver(forName: Notification.Name("RefreshCalendarData"), object: nil, queue: .main) { _ in
-                    Task {
-                        // Update local currentDate to match navigation manager
-                        let navDate = await navigationManager.currentDate
-                        currentDate = navDate
-                        // Force load both accounts directly
-                        await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
-                        await MainActor.run {
-                            updateCachedTasks()
-                            calendarViewModel.objectWillChange.send()
-                            tasksViewModel.objectWillChange.send()
-                        }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showAddTask)) { _ in
+                navigationManager.switchToTasks()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showAddEvent)) { _ in
+                showingAddItem = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .refreshCalendarData)) { _ in
+                Task {
+                    let navDate = await navigationManager.currentDate
+                    currentDate = navDate
+                    await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
+                    await MainActor.run {
+                        updateCachedTasks()
+                        calendarViewModel.objectWillChange.send()
+                        tasksViewModel.objectWillChange.send()
                     }
                 }
             }

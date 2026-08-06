@@ -49,7 +49,7 @@ class JournalStorageNew {
             // Post notification that journal file changed
             DispatchQueue.main.async {
                 NotificationCenter.default.post(
-                    name: Notification.Name("JournalFileChangedFromiCloud"),
+                    name: .journalFileChangedFromICloud,
                     object: nil,
                     userInfo: ["date": date]
                 )

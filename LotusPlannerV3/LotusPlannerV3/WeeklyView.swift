@@ -363,7 +363,7 @@ struct WeeklyView: View {
 
     var baseViewWithSheets: some View {
         baseViewWithNavigation
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ToggleWeeklyCalendarBulkEdit"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleWeeklyCalendarBulkEdit)) { _ in
             bulkEditManager.state.isActive.toggle()
             if !bulkEditManager.state.isActive {
                 bulkEditManager.state.selectedTaskIds.removeAll()
