@@ -128,7 +128,7 @@ extension CalendarViewModel {
     }
 
     func loadCalendarData(for date: Date) async {
-        beginCalendarLoad(statusMessage: "Loading calendar...")
+        let loadID = beginCalendarLoad(statusMessage: "Loading calendar...")
 
         var personalError: Error?
         var professionalError: Error?
@@ -155,18 +155,18 @@ extension CalendarViewModel {
             }
         }
 
-        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
     }
 
     func loadCalendarDataForWeek(containing date: Date) async {
-        beginCalendarLoad(statusMessage: "Loading calendar week...")
+        let loadID = beginCalendarLoad(statusMessage: "Loading calendar week...")
 
         // Get the week range using Monday-first calendar, extended by 1 day on each side for all-day events
         let calendar = Calendar.mondayFirst
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date),
               let weekStart = calendar.date(byAdding: .day, value: -1, to: weekInterval.start),
               let weekEnd = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .day, value: 7, to: weekInterval.start) ?? weekInterval.end) else {
-            isLoading = false
+            finishCalendarLoad(loadID: loadID, personalError: nil, professionalError: nil)
             return
         }
 
@@ -195,7 +195,7 @@ extension CalendarViewModel {
             }
         }
 
-        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
     }
 
     func loadCalendarDataForMonth(containing date: Date) async {
@@ -245,7 +245,7 @@ extension CalendarViewModel {
 
         // Only set loading state if we actually need to load fresh data
         // This prevents the UI from flickering when we have cached data
-        beginCalendarLoad(statusMessage: "Loading calendar month...")
+        let loadID = beginCalendarLoad(statusMessage: "Loading calendar month...")
 
         var personalError: Error?
         var professionalError: Error?
@@ -281,7 +281,7 @@ extension CalendarViewModel {
             }
         }
 
-        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
 
         // PROGRESSIVE LOADING: Smart prefetch based on navigation direction
         prefetchTask?.cancel() // Cancel any ongoing prefetch

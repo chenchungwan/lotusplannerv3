@@ -33,21 +33,24 @@ class CalendarViewModel: ObservableObject {
     @Published var lastFetchError: [GoogleAuthManager.AccountKind: String] = [:]
     private var errorCheckTask: Task<Void, Never>?
     private var dismissedErrorMessage: String?
+    private var currentLoadID = 0
+    private var errorEligibleForAlert = false
     private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private let appPrefs = AppPreferences.shared
     let dayFetchPaddingDays = 7
 
-    func scheduleErrorCheck() {
+    func scheduleErrorCheck(for loadID: Int) {
         // Cancel any existing error check task
         errorCheckTask?.cancel()
 
-        // Schedule a new error check after a delay
+        // Schedule a new error check after a delay so transient overlapping refreshes
+        // do not immediately throw a modal alert over the calendar.
         errorCheckTask = Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
 
             // Only show error if we're not loading and there's an error message
-            if !Task.isCancelled && !isLoading && errorMessage != nil {
+            if !Task.isCancelled && !isLoading && errorMessage != nil && loadID == currentLoadID {
                 await MainActor.run {
                     presentErrorIfNeeded()
                 }
@@ -55,25 +58,37 @@ class CalendarViewModel: ObservableObject {
         }
     }
 
-    func beginCalendarLoad(statusMessage: String) {
+    @discardableResult
+    func beginCalendarLoad(statusMessage: String) -> Int {
         errorCheckTask?.cancel()
+        currentLoadID += 1
+        errorEligibleForAlert = false
         isLoading = true
         if !showError {
             errorMessage = nil
         }
         loadingStatusMessage = statusMessage
+        return currentLoadID
     }
 
-    func finishCalendarLoad(personalError: Error?, professionalError: Error?) {
+    func finishCalendarLoad(loadID: Int, personalError: Error?, professionalError: Error?) {
+        guard loadID == currentLoadID else {
+            return
+        }
+
         let personalLinked = authManager.isLinked(kind: .personal)
         let professionalLinked = authManager.isLinked(kind: .professional)
+        let personalFailed = personalLinked && personalError != nil
+        let professionalFailed = professionalLinked && professionalError != nil
+        let linkedAccountCount = [personalLinked, professionalLinked].filter { $0 }.count
+        let failedLinkedAccountCount = [personalFailed, professionalFailed].filter { $0 }.count
 
         if personalLinked && professionalLinked {
-            if personalError != nil && professionalError != nil {
+            if personalFailed && professionalFailed {
                 errorMessage = "Failed to load calendar data for both accounts"
-            } else if personalError != nil {
+            } else if personalFailed {
                 errorMessage = "Personal failed, professional loaded"
-            } else if professionalError != nil {
+            } else if professionalFailed {
                 errorMessage = "Professional failed, personal loaded"
             }
         } else if personalLinked, let personalError {
@@ -81,6 +96,8 @@ class CalendarViewModel: ObservableObject {
         } else if professionalLinked, let professionalError {
             errorMessage = professionalError.localizedDescription
         }
+
+        errorEligibleForAlert = linkedAccountCount > 0 && failedLinkedAccountCount == linkedAccountCount
 
         updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
 
@@ -92,7 +109,7 @@ class CalendarViewModel: ObservableObject {
             showError = false
         }
 
-        scheduleErrorCheck()
+        scheduleErrorCheck(for: loadID)
     }
 
     func dismissError() {
@@ -102,7 +119,7 @@ class CalendarViewModel: ObservableObject {
     }
 
     private func presentErrorIfNeeded() {
-        guard let errorMessage, errorMessage != dismissedErrorMessage else {
+        guard errorEligibleForAlert, let errorMessage, errorMessage != dismissedErrorMessage else {
             return
         }
         showError = true
@@ -341,7 +358,7 @@ class CalendarViewModel: ObservableObject {
             return
         }
 
-        beginCalendarLoad(statusMessage: "Loading calendar month...")
+        let loadID = beginCalendarLoad(statusMessage: "Loading calendar month...")
 
         // Debug: Check account linking status
         let personalLinked = authManager.isLinked(kind: .personal)
@@ -381,7 +398,7 @@ class CalendarViewModel: ObservableObject {
             }
         }
 
-        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
     }
 
     let authManager = GoogleAuthManager.shared
