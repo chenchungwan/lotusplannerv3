@@ -128,10 +128,7 @@ extension CalendarViewModel {
     }
 
     func loadCalendarData(for date: Date) async {
-        isLoading = true
-        errorMessage = nil
-        showError = false
-        loadingStatusMessage = "Loading calendar..."
+        beginCalendarLoad(statusMessage: "Loading calendar...")
 
         var personalError: Error?
         var professionalError: Error?
@@ -158,39 +155,11 @@ extension CalendarViewModel {
             }
         }
 
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-            if personalLinked && professionalLinked {
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                } else if personalError != nil {
-                    self.errorMessage = "Personal failed, professional loaded"
-                } else if professionalError != nil {
-                    self.errorMessage = "Professional failed, personal loaded"
-                }
-            } else if personalLinked && personalError != nil {
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                self.errorMessage = professionalError!.localizedDescription
-            }
-            self.updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
-        }
-
-        isLoading = false
-        loadingStatusMessage = ""
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
+        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
     }
 
     func loadCalendarDataForWeek(containing date: Date) async {
-        isLoading = true
-        errorMessage = nil
-        showError = false
-        loadingStatusMessage = "Loading calendar week..."
+        beginCalendarLoad(statusMessage: "Loading calendar week...")
 
         // Get the week range using Monday-first calendar, extended by 1 day on each side for all-day events
         let calendar = Calendar.mondayFirst
@@ -226,32 +195,7 @@ extension CalendarViewModel {
             }
         }
 
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-            if personalLinked && professionalLinked {
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                } else if personalError != nil {
-                    self.errorMessage = "Personal failed, professional loaded"
-                } else if professionalError != nil {
-                    self.errorMessage = "Professional failed, personal loaded"
-                }
-            } else if personalLinked && personalError != nil {
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                self.errorMessage = professionalError!.localizedDescription
-            }
-            self.updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
-        }
-
-        isLoading = false
-        loadingStatusMessage = ""
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
+        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
     }
 
     func loadCalendarDataForMonth(containing date: Date) async {
@@ -301,10 +245,7 @@ extension CalendarViewModel {
 
         // Only set loading state if we actually need to load fresh data
         // This prevents the UI from flickering when we have cached data
-        isLoading = true
-        errorMessage = nil
-        showError = false
-        loadingStatusMessage = "Loading calendar month..."
+        beginCalendarLoad(statusMessage: "Loading calendar month...")
 
         var personalError: Error?
         var professionalError: Error?
@@ -340,32 +281,7 @@ extension CalendarViewModel {
             }
         }
 
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-            if personalLinked && professionalLinked {
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                } else if personalError != nil {
-                    self.errorMessage = "Personal failed, professional loaded"
-                } else if professionalError != nil {
-                    self.errorMessage = "Professional failed, personal loaded"
-                }
-            } else if personalLinked && personalError != nil {
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                self.errorMessage = professionalError!.localizedDescription
-            }
-            self.updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
-        }
-
-        isLoading = false
-        loadingStatusMessage = ""
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
+        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
 
         // PROGRESSIVE LOADING: Smart prefetch based on navigation direction
         prefetchTask?.cancel() // Cancel any ongoing prefetch

@@ -256,8 +256,6 @@ struct GlobalNavBar: View {
     private var intervalControls: some View {
         if showsIntervals {
             HStack(spacing: isCompact ? 2 : 4) {
-                currentPeriodButton
-                timelineSelector
                 if navigationManager.currentView != .goals {
                     intervalButton(.day, symbol: "d.circle")
                 }
@@ -271,34 +269,6 @@ struct GlobalNavBar: View {
                 intervalButton(.year, symbol: "y.circle")
             }
         }
-    }
-
-    private var currentPeriodButton: some View {
-        Button {
-            jumpToCurrentPeriod()
-        } label: {
-            Image(systemName: "scope")
-                .font(iconFont)
-                .frame(width: buttonSize, height: buttonSize)
-                .foregroundColor(isCurrentPeriod ? .accentColor : .secondary)
-        }
-        .keyboardShortcut("t", modifiers: [])
-        .help(currentPeriodHelp)
-    }
-
-    private var timelineSelector: some View {
-        Menu {
-            timelineSelectorButton(.day, title: "Day", shortcut: "D")
-            timelineSelectorButton(.week, title: "Week", shortcut: "W")
-            timelineSelectorButton(.month, title: "Month", shortcut: "M")
-            timelineSelectorButton(.year, title: "Year", shortcut: "Y")
-        } label: {
-            Image(systemName: "calendar.badge.clock")
-                .font(iconFont)
-                .frame(width: buttonSize, height: buttonSize)
-                .foregroundColor(.secondary)
-        }
-        .help("Change timeline")
     }
 
     @ViewBuilder
@@ -495,19 +465,6 @@ struct GlobalNavBar: View {
         .help(interval.rawValue.capitalized)
     }
 
-    private func timelineSelectorButton(_ interval: TimelineInterval, title: String, shortcut: String) -> some View {
-        Button {
-            handleTimeIntervalChange(interval)
-        } label: {
-            if navigationManager.currentInterval == interval {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-        .keyboardShortcut(KeyEquivalent(Character(shortcut.lowercased())), modifiers: [])
-    }
-
     private func taskSubfilterButton(_ title: String, _ filter: AllTaskSubfilter) -> some View {
         Button(title) {
             NotificationCenter.default.post(name: Notification.Name("ShowAllTasksRequested"), object: nil)
@@ -559,15 +516,6 @@ struct GlobalNavBar: View {
             return current.start == thisWeek.start
         case .day:
             return Calendar.current.isDate(navigationManager.currentDate, inSameDayAs: now)
-        }
-    }
-
-    private var currentPeriodHelp: String {
-        switch navigationManager.currentInterval {
-        case .day: return "Today"
-        case .week: return "This week"
-        case .month: return "This month"
-        case .year: return "This year"
         }
     }
 
@@ -731,43 +679,6 @@ struct GlobalNavBar: View {
         await MainActor.run { isSyncing = false }
     }
 
-    private func jumpToCurrentPeriod() {
-        let now = Date()
-        navigationManager.jumpToCurrentPeriod()
-
-        if navigationManager.currentView == .bookView {
-            switch navigationManager.currentInterval {
-            case .day:
-                NotificationCenter.default.post(name: .bookViewNavigateToDay, object: now)
-            case .week:
-                NotificationCenter.default.post(name: .bookViewNavigateToWeek, object: now)
-            case .month:
-                NotificationCenter.default.post(
-                    name: .bookViewNavigateToMonth,
-                    object: [Calendar.current.component(.month, from: now), Calendar.current.component(.year, from: now)]
-                )
-            case .year:
-                NotificationCenter.default.post(name: .bookViewNavigateToYear, object: Calendar.current.component(.year, from: now))
-            }
-            return
-        }
-
-        Task {
-            switch navigationManager.currentInterval {
-            case .day:
-                await calendarVM.loadCalendarData(for: now)
-            case .week:
-                await calendarVM.loadCalendarDataForWeek(containing: now)
-            case .month, .year:
-                await calendarVM.loadCalendarDataForMonth(containing: now)
-            }
-            await tasksVM.loadTasks(policy: .freshEnough)
-            await MainActor.run {
-                LogsViewModel.shared.reloadData()
-                NotificationCenter.default.post(name: Notification.Name("RefreshJournalContent"), object: nil)
-            }
-        }
-    }
 }
 
 #Preview {

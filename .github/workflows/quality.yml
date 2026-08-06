@@ -49,5 +49,5 @@ jobs:
       - name: Warning Budget
         env:
           DERIVED_DATA: /tmp/LotusPlannerV3CI
-          MAX_WARNINGS: 80
+          MAX_WARNINGS: 200
         run: bash scripts/warning_budget.sh

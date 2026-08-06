@@ -32,6 +32,7 @@ class CalendarViewModel: ObservableObject {
     @Published var lastSuccessfulFetch: [GoogleAuthManager.AccountKind: Date] = [:]
     @Published var lastFetchError: [GoogleAuthManager.AccountKind: String] = [:]
     private var errorCheckTask: Task<Void, Never>?
+    private var dismissedErrorMessage: String?
     private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private let appPrefs = AppPreferences.shared
@@ -48,13 +49,68 @@ class CalendarViewModel: ObservableObject {
             // Only show error if we're not loading and there's an error message
             if !Task.isCancelled && !isLoading && errorMessage != nil {
                 await MainActor.run {
-                    showError = true
+                    presentErrorIfNeeded()
                 }
             }
         }
     }
 
+    func beginCalendarLoad(statusMessage: String) {
+        errorCheckTask?.cancel()
+        isLoading = true
+        if !showError {
+            errorMessage = nil
+        }
+        loadingStatusMessage = statusMessage
+    }
+
+    func finishCalendarLoad(personalError: Error?, professionalError: Error?) {
+        let personalLinked = authManager.isLinked(kind: .personal)
+        let professionalLinked = authManager.isLinked(kind: .professional)
+
+        if personalLinked && professionalLinked {
+            if personalError != nil && professionalError != nil {
+                errorMessage = "Failed to load calendar data for both accounts"
+            } else if personalError != nil {
+                errorMessage = "Personal failed, professional loaded"
+            } else if professionalError != nil {
+                errorMessage = "Professional failed, personal loaded"
+            }
+        } else if personalLinked, let personalError {
+            errorMessage = personalError.localizedDescription
+        } else if professionalLinked, let professionalError {
+            errorMessage = professionalError.localizedDescription
+        }
+
+        updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
+
+        isLoading = false
+        loadingStatusMessage = ""
+
+        if errorMessage == nil {
+            dismissedErrorMessage = nil
+            showError = false
+        }
+
+        scheduleErrorCheck()
+    }
+
+    func dismissError() {
+        dismissedErrorMessage = errorMessage
+        showError = false
+        errorMessage = nil
+    }
+
+    private func presentErrorIfNeeded() {
+        guard let errorMessage, errorMessage != dismissedErrorMessage else {
+            return
+        }
+        showError = true
+    }
+
     func retryCurrentLoad() async {
+        dismissedErrorMessage = nil
+        showError = false
         await refreshDataForCurrentView()
     }
 
@@ -89,7 +145,9 @@ class CalendarViewModel: ObservableObject {
             }
         }
 
-        showError = errorMessage != nil
+        if errorMessage == nil {
+            dismissedErrorMessage = nil
+        }
     }
 
     func newestCacheAgeDescription() -> String {
@@ -283,9 +341,7 @@ class CalendarViewModel: ObservableObject {
             return
         }
 
-        isLoading = true
-        errorMessage = nil
-        showError = false
+        beginCalendarLoad(statusMessage: "Loading calendar month...")
 
         // Debug: Check account linking status
         let personalLinked = authManager.isLinked(kind: .personal)
@@ -325,30 +381,7 @@ class CalendarViewModel: ObservableObject {
             }
         }
 
-        // Only show error if both accounts failed (if both are linked) or if the only linked account failed
-        await MainActor.run {
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-
-
-            if personalLinked && professionalLinked {
-                // Both accounts linked - only show error if both failed
-                if personalError != nil && professionalError != nil {
-                    self.errorMessage = "Failed to load calendar data for both accounts"
-                }
-            } else if personalLinked && personalError != nil {
-                // Only personal linked and it failed
-                self.errorMessage = personalError!.localizedDescription
-            } else if professionalLinked && professionalError != nil {
-                // Only professional linked and it failed
-                self.errorMessage = professionalError!.localizedDescription
-            }
-        }
-
-        isLoading = false
-
-        // Schedule error check after loading completes
-        scheduleErrorCheck()
+        finishCalendarLoad(personalError: personalError, professionalError: professionalError)
     }
 
     let authManager = GoogleAuthManager.shared

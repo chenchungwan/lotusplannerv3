@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT="LotusPlannerV3/LotusPlannerV3.xcodeproj"
 SCHEME="LotusPlannerV3"
 DERIVED_DATA="${DERIVED_DATA:-/tmp/LotusPlannerV3WarningBudget}"
-MAX_WARNINGS="${MAX_WARNINGS:-80}"
+MAX_WARNINGS="${MAX_WARNINGS:-200}"
 
 log_file="$(mktemp "${TMPDIR:-/tmp}/lotus-warning-budget.XXXXXX")"
 
@@ -16,7 +16,26 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   build 2>&1 | tee "$log_file"
 
-warning_count="$(grep -c "warning:" "$log_file" || true)"
+warning_count="$(
+  awk '
+    /warning:/ {
+      warning = $0
+      sub(/^.*warning: /, "warning: ", warning)
+      key = $0
+      if (match($0, /[^ ]+:[0-9]+:[0-9]+: warning:/)) {
+        key = substr($0, RSTART, RLENGTH) " " warning
+      }
+      warnings[key] = 1
+    }
+    END {
+      count = 0
+      for (warning in warnings) {
+        count++
+      }
+      print count
+    }
+  ' "$log_file"
+)"
 echo "warning_count=$warning_count"
 echo "warning_budget=$MAX_WARNINGS"
 

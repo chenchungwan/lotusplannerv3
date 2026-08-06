@@ -1682,8 +1682,7 @@ struct CalendarView: View {
                 Task { await calendarViewModel.retryCurrentLoad() }
             }
             Button("OK") {
-                calendarViewModel.showError = false
-                calendarViewModel.errorMessage = nil
+                calendarViewModel.dismissError()
             }
         } message: {
             if let errorMessage = calendarViewModel.errorMessage {
