@@ -374,12 +374,8 @@ struct TimelineComponent: View {
                 }
                 
                 let startComponents = calendar.dateComponents([.hour, .minute], from: dayStartTime)
-                let endComponents = calendar.dateComponents([.hour, .minute], from: dayEndTime)
-                
                 let startHour = startComponents.hour ?? 0
                 let startMinute = startComponents.minute ?? 0
-                let endHour = endComponents.hour ?? 23
-                let endMinute = endComponents.minute ?? 59
                 
                 let startOffset = CGFloat(startHour - self.startHour) * hourHeight + 
                                  CGFloat(startMinute) * (hourHeight / 60.0)
@@ -421,4 +417,4 @@ struct TimelineComponent_Previews: PreviewProvider {
         )
         .previewLayout(.sizeThatFits)
     }
-} 
+}

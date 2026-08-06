@@ -392,7 +392,7 @@ struct TimeboxView: View {
             Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksVM) { undoData in
+                    bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksVM) { undoData in
                         bulkEditManager.state.undoAction = .complete
                         bulkEditManager.state.undoData = undoData
                         bulkEditManager.state.showingUndoToast = true
@@ -414,7 +414,7 @@ struct TimeboxView: View {
             Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksVM) { undoData in
+                    bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksVM) { undoData in
                         bulkEditManager.state.undoAction = .delete
                         bulkEditManager.state.undoData = undoData
                         bulkEditManager.state.showingUndoToast = true
@@ -437,7 +437,7 @@ struct TimeboxView: View {
             BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkUpdateDueDate(
+                    bulkEditManager.bulkUpdateDueDate(
                         tasks: allTasks,
                         dueDate: date,
                         isAllDay: isAllDay,
@@ -470,7 +470,7 @@ struct TimeboxView: View {
                 onSelect: { accountKind, listId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
-                        await bulkEditManager.bulkMove(
+                        bulkEditManager.bulkMove(
                             tasks: allTasks,
                             to: listId,
                             destinationAccountKind: accountKind,
@@ -499,7 +499,7 @@ struct TimeboxView: View {
             BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkUpdatePriority(
+                    bulkEditManager.bulkUpdatePriority(
                         tasks: allTasks,
                         priority: priority,
                         tasksVM: tasksVM

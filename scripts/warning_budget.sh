@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT="LotusPlannerV3/LotusPlannerV3.xcodeproj"
 SCHEME="LotusPlannerV3"
 DERIVED_DATA="${DERIVED_DATA:-/tmp/LotusPlannerV3WarningBudget}"
-MAX_WARNINGS="${MAX_WARNINGS:-200}"
+MAX_WARNINGS="${MAX_WARNINGS:-120}"
 
 log_file="$(mktemp "${TMPDIR:-/tmp}/lotus-warning-budget.XXXXXX")"
 

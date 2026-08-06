@@ -29,6 +29,9 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
+*.xcarchive/
+*.xcresult/
+AppStoreExport/
 
 ## Playgrounds
 timeline.xctimeline
@@ -104,3 +107,7 @@ Secrets.plist
 
 # macOS
 .DS_Store
+
+# Local/generated clutter
+*.backup
+/git

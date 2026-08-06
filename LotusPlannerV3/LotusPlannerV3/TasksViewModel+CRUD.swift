@@ -293,15 +293,13 @@ extension TasksViewModel {
         request.httpMethod = "DELETE"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw TasksError.invalidResponse
         }
 
         if httpResponse.statusCode != 204 {
-            if let errorData = String(data: data, encoding: .utf8) {
-            }
             throw TasksError.apiError(httpResponse.statusCode)
         }
     }
@@ -324,9 +322,6 @@ extension TasksViewModel {
             }
             return nil
         }
-
-        // Check if this is a local UUID (not synced to server yet)
-        let isLocalUUID = taskToDelete.id.count > 20 && taskToDelete.id.contains("-")
 
         var newTask: GoogleTask?
         do {
@@ -351,32 +346,24 @@ extension TasksViewModel {
                 let originalTaskId = taskToDelete.id
                 switch kind {
                 case .personal:
-                    let beforeRemoveCount = self.personalTasks[sourceListId]?.count ?? 0
                     self.personalTasks[sourceListId]?.removeAll { $0.id == originalTaskId }
-                    let afterRemoveCount = self.personalTasks[sourceListId]?.count ?? 0
 
                     // Add to target list using new task (with server ID)
-                    let beforeAddCount = self.personalTasks[targetListId]?.count ?? 0
                     if self.personalTasks[targetListId] != nil {
                         self.personalTasks[targetListId]?.append(taskToAdd)
                     } else {
                         self.personalTasks[targetListId] = [taskToAdd]
                     }
-                    let afterAddCount = self.personalTasks[targetListId]?.count ?? 0
 
                 case .professional:
-                    let beforeRemoveCount = self.professionalTasks[sourceListId]?.count ?? 0
                     self.professionalTasks[sourceListId]?.removeAll { $0.id == originalTaskId }
-                    let afterRemoveCount = self.professionalTasks[sourceListId]?.count ?? 0
 
                     // Add to target list using new task (with server ID)
-                    let beforeAddCount = self.professionalTasks[targetListId]?.count ?? 0
                     if self.professionalTasks[targetListId] != nil {
                         self.professionalTasks[targetListId]?.append(taskToAdd)
                     } else {
                         self.professionalTasks[targetListId] = [taskToAdd]
                     }
-                    let afterAddCount = self.professionalTasks[targetListId]?.count ?? 0
                 }
 
                 self.moveTaskInCache(
@@ -435,9 +422,6 @@ extension TasksViewModel {
             return nil
         }
 
-        // Check if this is a local UUID (not synced to server yet)
-        let isLocalUUID = taskToDelete.id.count > 20 && taskToDelete.id.contains("-")
-
         var newTask: GoogleTask?
         do {
             // First create the task in the target account (returns new task with server-assigned ID)
@@ -461,33 +445,25 @@ extension TasksViewModel {
                 let originalTaskId = taskToDelete.id
                 switch source.0 {
                 case .personal:
-                    let beforeRemoveCount = self.personalTasks[source.1]?.count ?? 0
                     self.personalTasks[source.1]?.removeAll { $0.id == originalTaskId }
-                    let afterRemoveCount = self.personalTasks[source.1]?.count ?? 0
                 case .professional:
-                    let beforeRemoveCount = self.professionalTasks[source.1]?.count ?? 0
                     self.professionalTasks[source.1]?.removeAll { $0.id == originalTaskId }
-                    let afterRemoveCount = self.professionalTasks[source.1]?.count ?? 0
                 }
 
                 // Add to target account using new task (with server ID)
                 switch target.0 {
                 case .personal:
-                    let beforeAddCount = self.personalTasks[target.1]?.count ?? 0
                     if self.personalTasks[target.1] != nil {
                         self.personalTasks[target.1]?.append(taskToAdd)
                     } else {
                         self.personalTasks[target.1] = [taskToAdd]
                     }
-                    let afterAddCount = self.personalTasks[target.1]?.count ?? 0
                 case .professional:
-                    let beforeAddCount = self.professionalTasks[target.1]?.count ?? 0
                     if self.professionalTasks[target.1] != nil {
                         self.professionalTasks[target.1]?.append(taskToAdd)
                     } else {
                         self.professionalTasks[target.1] = [taskToAdd]
                     }
-                    let afterAddCount = self.professionalTasks[target.1]?.count ?? 0
                 }
 
                 self.moveTaskInCache(
@@ -566,8 +542,6 @@ extension TasksViewModel {
         }
 
         if httpResponse.statusCode != 200 {
-            if let errorData = String(data: data, encoding: .utf8) {
-            }
             throw TasksError.apiError(httpResponse.statusCode)
         }
 
@@ -740,7 +714,7 @@ extension TasksViewModel {
                 let createdTask = try await createTaskOnServer(task, in: listId, for: kind)
                 
                 // Save time window if due date and times are provided
-                if let dueDate = dueDate, let startTime = startTime, let endTime = endTime {
+                if dueDate != nil, let startTime = startTime, let endTime = endTime {
                     TaskTimeWindowManager.shared.saveTimeWindow(
                         taskId: createdTask.id,
                         startTime: startTime,

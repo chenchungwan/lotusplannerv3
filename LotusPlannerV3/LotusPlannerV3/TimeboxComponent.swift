@@ -674,12 +674,8 @@ struct TimeboxComponent: View {
             
             for (index, item) in group.enumerated() {
                 let startComponents = calendar.dateComponents([.hour, .minute], from: item.startTime)
-                let endComponents = calendar.dateComponents([.hour, .minute], from: item.endTime)
-                
                 let startHour = startComponents.hour ?? 0
                 let startMinute = startComponents.minute ?? 0
-                let endHour = endComponents.hour ?? 23
-                let endMinute = endComponents.minute ?? 59
                 
                 let startOffset = CGFloat(startHour - self.startHour) * hourHeight +
                                  CGFloat(startMinute) * (hourHeight / 60.0)
@@ -706,4 +702,3 @@ struct TimeboxComponent: View {
         return layouts
     }
 }
-

@@ -705,7 +705,7 @@ struct TaskDetailsView: View {
                             // Update start and end times to match new due date
                             if let newDueDate = editedDueDate {
                                 let calendar = Calendar.current
-                                if let oldDueDate = oldDueDate {
+                                if oldDueDate != nil {
                                     // Transfer time components from old date to new date
                                     let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
                                     let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
@@ -887,10 +887,8 @@ struct TaskDetailsView: View {
                         let endComponents = calendar.dateComponents([.hour, .minute, .second], from: endTime)
                         let startHour = startComponents.hour ?? 0
                         let startMinute = startComponents.minute ?? 0
-                        let startSecond = startComponents.second ?? 0
                         let endHour = endComponents.hour ?? 23
                         let endMinute = endComponents.minute ?? 59
-                        let endSecond = endComponents.second ?? 59
                         
                         // Check if times are at default all-day values (12:00am and 11:59pm)
                         // Also check if start time is at start of day (00:00:00) and end time is close to end of day
@@ -1317,4 +1315,3 @@ struct TaskDetailsView: View {
 #Preview {
     TasksView()
 } 
-
