@@ -33,12 +33,29 @@ class NavigationManager: ObservableObject {
         case diagnostics
         case reportIssues
         case datePicker
+        case aiTaskEntry
+        // Every `add*` case opens the same `CreateItemSheet`; the case only
+        // decides which tab is selected when it appears.
         case addEvent
         case addTask
-        case aiTaskEntry
         case addList
+        case addGoal
+        case addLog
 
         var id: String { rawValue }
+
+        /// The create-sheet tab this sheet opens on, or nil when the case
+        /// isn't a create flow.
+        var createItemKind: CreateItemKind? {
+            switch self {
+            case .addEvent: return .event
+            case .addTask: return .task
+            case .addList: return .list
+            case .addGoal: return .goal
+            case .addLog: return .log
+            default: return nil
+            }
+        }
     }
 
     enum TimeDirection: Int {

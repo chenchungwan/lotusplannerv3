@@ -5,23 +5,26 @@ struct NewListSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var appPrefs: AppPreferences
     let accountKind: GoogleAuthManager.AccountKind?
-    let hasPersonal: Bool
-    let hasProfessional: Bool
-    let personalColor: Color
-    let professionalColor: Color
+    let hasAccount1: Bool
+    let hasAccount2: Bool
+    let account1Color: Color
+    let account2Color: Color
     @Binding var listName: String
     @Binding var selectedAccount: GoogleAuthManager.AccountKind?
     let onCreate: () -> Void
+    /// True when hosted inside `CreateItemSheet`, which owns the
+    /// NavigationStack so the tab strip can sit above the form.
+    var isEmbedded: Bool = false
     @FocusState private var isTextFieldFocused: Bool
     
     private var showAccountPicker: Bool {
         // Always show picker if both accounts are available
-        return hasPersonal && hasProfessional
+        return hasAccount1 && hasAccount2
     }
     
     private var accentColor: Color {
         if let account = selectedAccount ?? accountKind {
-            return account == .personal ? personalColor : professionalColor
+            return account == .account1 ? account1Color : account2Color
         }
         return .accentColor
     }
@@ -32,7 +35,20 @@ struct NewListSheet: View {
     }
     
     var body: some View {
-        NavigationStack {
+        if isEmbedded {
+            formContent
+        } else {
+            NavigationStack {
+                formContent
+            }
+        }
+    }
+
+    /// The form plus its navigation chrome (title, Cancel/Create). Split out
+    /// of `body` so `CreateItemSheet` can host it inside its own
+    /// NavigationStack — the toolbar items surface in that stack's bar.
+    @ViewBuilder
+    private var formContent: some View {
             Form {
                 // Basic Information Section (moved to top)
                 Section("Basic Information") {
@@ -52,47 +68,47 @@ struct NewListSheet: View {
                 if showAccountPicker {
                     Section("Account") {
                         HStack(spacing: 12) {
-                            if hasPersonal {
+                            if hasAccount1 {
                                 Button(action: {
-                                    selectedAccount = .personal
+                                    selectedAccount = .account1
                                 }) {
                                     HStack {
                                         Image(systemName: "person.circle.fill")
-                                        Text(appPrefs.personalAccountName)
+                                        Text(appPrefs.account1Name)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(selectedAccount == .personal ? personalColor.opacity(0.2) : Color(.systemGray6))
+                                            .fill(selectedAccount == .account1 ? account1Color.opacity(0.2) : Color(.systemGray6))
                                     )
-                                    .foregroundColor(selectedAccount == .personal ? personalColor : .primary)
+                                    .foregroundColor(selectedAccount == .account1 ? account1Color : .primary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedAccount == .personal ? personalColor : Color.clear, lineWidth: 2)
+                                            .stroke(selectedAccount == .account1 ? account1Color : Color.clear, lineWidth: 2)
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
                             
-                            if hasProfessional {
+                            if hasAccount2 {
                                 Button(action: {
-                                    selectedAccount = .professional
+                                    selectedAccount = .account2
                                 }) {
                                     HStack {
                                         Image(systemName: "briefcase.circle.fill")
-                                        Text(appPrefs.professionalAccountName)
+                                        Text(appPrefs.account2Name)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(selectedAccount == .professional ? professionalColor.opacity(0.2) : Color(.systemGray6))
+                                            .fill(selectedAccount == .account2 ? account2Color.opacity(0.2) : Color(.systemGray6))
                                     )
-                                    .foregroundColor(selectedAccount == .professional ? professionalColor : .primary)
+                                    .foregroundColor(selectedAccount == .account2 ? account2Color : .primary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedAccount == .professional ? professionalColor : Color.clear, lineWidth: 2)
+                                            .stroke(selectedAccount == .account2 ? account2Color : Color.clear, lineWidth: 2)
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -120,13 +136,12 @@ struct NewListSheet: View {
                 }
             }
             .onAppear {
-                // Always set default account to Personal if not already set
+                // Always set default account to Account 1 if not already set
                 if selectedAccount == nil {
-                    selectedAccount = .personal
+                    selectedAccount = .account1
                 }
                 isTextFieldFocused = true
             }
-        }
     }
 }
 
@@ -137,8 +152,8 @@ struct RenameListSheet: View {
     let listName: String
     let accountKind: GoogleAuthManager.AccountKind
     let accentColor: Color
-    let hasPersonal: Bool
-    let hasProfessional: Bool
+    let hasAccount1: Bool
+    let hasAccount2: Bool
     @Binding var newName: String
     @Binding var newAccount: GoogleAuthManager.AccountKind
     /// Called with the (possibly trimmed) new name and selected account.
@@ -160,7 +175,7 @@ struct RenameListSheet: View {
     }
 
     private var canBothAccounts: Bool {
-        hasPersonal && hasProfessional
+        hasAccount1 && hasAccount2
     }
 
     private var nameChanged: Bool {
@@ -176,7 +191,7 @@ struct RenameListSheet: View {
     }
 
     private var newAccentColor: Color {
-        newAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor
+        newAccount == .account1 ? appPrefs.account1Color : appPrefs.account2Color
     }
 
     private func attemptSave() {
@@ -194,9 +209,9 @@ struct RenameListSheet: View {
                 Section("Account") {
                     if canBothAccounts {
                         Picker("Account", selection: $newAccount) {
-                            ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
+                            ForEach([GoogleAuthManager.AccountKind.account1, .account2], id: \.self) { kind in
                                 HStack {
-                                    Image(systemName: kind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
+                                    Image(systemName: kind == .account1 ? "person.circle.fill" : "briefcase.circle.fill")
                                     Text(appPrefs.accountName(for: kind))
                                 }
                                 .tag(kind)
@@ -205,7 +220,7 @@ struct RenameListSheet: View {
                         .pickerStyle(.menu)
                     } else {
                         HStack {
-                            Image(systemName: accountKind == .personal ? "person.circle.fill" : "briefcase.circle.fill")
+                            Image(systemName: accountKind == .account1 ? "person.circle.fill" : "briefcase.circle.fill")
                                 .foregroundColor(accentColor)
                             Text(appPrefs.accountName(for: accountKind))
                                 .foregroundColor(accentColor)
@@ -281,28 +296,28 @@ struct MoveTasksDestinationPicker: View {
     let sourceListId: String
     let sourceAccountKind: GoogleAuthManager.AccountKind
     let selectedTaskIds: Set<String>
-    let personalColor: Color
-    let professionalColor: Color
-    let hasPersonal: Bool
-    let hasProfessional: Bool
+    let account1Color: Color
+    let account2Color: Color
+    let hasAccount1: Bool
+    let hasAccount2: Bool
     let onMove: (String, GoogleAuthManager.AccountKind) -> Void
 
     var body: some View {
         NavigationStack {
             List {
-                // Personal Account Lists
-                if hasPersonal && !tasksVM.personalTaskLists.isEmpty {
+                // Account 1 Lists
+                if hasAccount1 && !tasksVM.account1TaskLists.isEmpty {
                     Section {
-                        ForEach(tasksVM.personalTaskLists) { list in
+                        ForEach(tasksVM.account1TaskLists) { list in
                             // Don't show the source list
-                            if !(list.id == sourceListId && sourceAccountKind == .personal) {
+                            if !(list.id == sourceListId && sourceAccountKind == .account1) {
                                 Button {
-                                    onMove(list.id, .personal)
+                                    onMove(list.id, .account1)
                                     dismiss()
                                 } label: {
                                     HStack {
                                         Image(systemName: "person.circle.fill")
-                                            .foregroundColor(personalColor)
+                                            .foregroundColor(account1Color)
                                         Text(list.title)
                                             .foregroundColor(.primary)
                                         Spacer()
@@ -316,25 +331,25 @@ struct MoveTasksDestinationPicker: View {
                     } header: {
                         HStack {
                             Image(systemName: "person.circle.fill")
-                                .foregroundColor(personalColor)
-                            Text(appPrefs.personalAccountName)
+                                .foregroundColor(account1Color)
+                            Text(appPrefs.account1Name)
                         }
                     }
                 }
 
-                // Professional Account Lists
-                if hasProfessional && !tasksVM.professionalTaskLists.isEmpty {
+                // Account 2 Lists
+                if hasAccount2 && !tasksVM.account2TaskLists.isEmpty {
                     Section {
-                        ForEach(tasksVM.professionalTaskLists) { list in
+                        ForEach(tasksVM.account2TaskLists) { list in
                             // Don't show the source list
-                            if !(list.id == sourceListId && sourceAccountKind == .professional) {
+                            if !(list.id == sourceListId && sourceAccountKind == .account2) {
                                 Button {
-                                    onMove(list.id, .professional)
+                                    onMove(list.id, .account2)
                                     dismiss()
                                 } label: {
                                     HStack {
                                         Image(systemName: "briefcase.circle.fill")
-                                            .foregroundColor(professionalColor)
+                                            .foregroundColor(account2Color)
                                         Text(list.title)
                                             .foregroundColor(.primary)
                                         Spacer()
@@ -348,8 +363,8 @@ struct MoveTasksDestinationPicker: View {
                     } header: {
                         HStack {
                             Image(systemName: "briefcase.circle.fill")
-                                .foregroundColor(professionalColor)
-                            Text(appPrefs.professionalAccountName)
+                                .foregroundColor(account2Color)
+                            Text(appPrefs.account2Name)
                         }
                     }
                 }

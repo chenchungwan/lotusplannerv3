@@ -57,32 +57,32 @@ extension WeeklyView {
         }
     }
     
-    func weekTaskColumnPersonal(date: Date) -> some View {
+    func weekTaskColumnAccount1(date: Date) -> some View {
         return VStack(alignment: .leading, spacing: 4) {
-            // Personal Tasks using day view component
-            let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
-            if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+            // Account 1 Tasks using day view component
+            let account1TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
+            if !account1TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                 TasksComponent(
-                    taskLists: tasksViewModel.personalTaskLists,
-                    tasksDict: personalTasksForDate,
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
+                    taskLists: tasksViewModel.account1TaskLists,
+                    tasksDict: account1TasksForDate,
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account1)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                         }
                     },
                     hideDueDateTag: true,
@@ -107,32 +107,32 @@ extension WeeklyView {
         .padding(.vertical, 4)
     }
 
-    func weekTaskColumnProfessional(date: Date) -> some View {
+    func weekTaskColumnAccount2(date: Date) -> some View {
         return VStack(alignment: .leading, spacing: 4) {
-            // Professional Tasks using day view component
-            let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
-            if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+            // Account 2 Tasks using day view component
+            let account2TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
+            if !account2TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                 TasksComponent(
-                    taskLists: tasksViewModel.professionalTaskLists,
-                    tasksDict: professionalTasksForDate,
-                    accentColor: appPrefs.professionalColor,
-                    accountType: .professional,
+                    taskLists: tasksViewModel.account2TaskLists,
+                    tasksDict: account2TasksForDate,
+                    accentColor: appPrefs.account2Color,
+                    accountType: .account2,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
+                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account2)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                         }
                     },
                     hideDueDateTag: true,
@@ -194,8 +194,8 @@ extension WeeklyView {
                   let accountKind = dict["accountKind"] else { return }
 
             DispatchQueue.main.async {
-                let isPersonal = accountKind == "personal"
-                let events = isPersonal ? calendarViewModel.personalEvents : calendarViewModel.professionalEvents
+                let isAccount1 = accountKind == "personal"
+                let events = isAccount1 ? calendarViewModel.account1Events : calendarViewModel.account2Events
                 guard let event = events.first(where: { $0.id == eventId }) else { return }
 
                 Task {
@@ -207,7 +207,7 @@ extension WeeklyView {
     }
 
     func findTaskListId(for task: GoogleTask, in accountKind: GoogleAuthManager.AccountKind) -> String? {
-        let tasksDict = accountKind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
+        let tasksDict = accountKind == .account1 ? tasksViewModel.account1Tasks : tasksViewModel.account2Tasks
         
         for (listId, tasks) in tasksDict {
             if tasks.contains(where: { $0.id == task.id }) {

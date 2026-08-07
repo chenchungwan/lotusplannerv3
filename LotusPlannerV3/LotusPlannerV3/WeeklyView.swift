@@ -30,8 +30,8 @@ struct WeeklyView: View {
     
     // MARK: - Expand/Collapse State (for vertical/column view only)
     @State var eventsExpanded = true
-    @State var personalTasksExpanded = true
-    @State var professionalTasksExpanded = true
+    @State var account1TasksExpanded = true
+    @State var account2TasksExpanded = true
     @State var logsExpanded = true
     struct WeeklyTaskSelection: Identifiable {
         let id = UUID()
@@ -312,7 +312,7 @@ struct WeeklyView: View {
         fallback.formatOptions = [.withInternetDateTime]
 
         var count = 0
-        let buckets = [tasksViewModel.personalTasks, tasksViewModel.professionalTasks]
+        let buckets = [tasksViewModel.account1Tasks, tasksViewModel.account2Tasks]
         for dict in buckets {
             for (_, tasks) in dict {
                 for task in tasks where task.isCompleted {
@@ -398,9 +398,9 @@ struct WeeklyView: View {
                 task: sel.task,
                 taskListId: sel.listId,
                 accountKind: sel.accountKind,
-                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                accentColor: sel.accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
                 onSave: { updatedTask in
@@ -427,10 +427,10 @@ struct WeeklyView: View {
         }
         .sheet(isPresented: $showingNewTask) {
             // Create-task UI matching TasksView create flow
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let professionalLinked = authManager.isLinked(kind: .professional)
-            let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (personalLinked ? .personal : .professional)
-            let defaultLists = defaultAccount == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let account1Linked = authManager.isLinked(kind: .account1)
+            let account2Linked = authManager.isLinked(kind: .account2)
+            let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (account1Linked ? .account1 : .account2)
+            let defaultLists = defaultAccount == .account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
             let defaultListId = defaultLists.first?.id ?? ""
             let newTask = GoogleTask(
                 id: UUID().uuidString,
@@ -445,9 +445,9 @@ struct WeeklyView: View {
                 task: newTask,
                 taskListId: defaultListId,
                 accountKind: defaultAccount,
-                accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                accentColor: defaultAccount == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
                 onSave: { _ in },
@@ -576,8 +576,8 @@ struct WeeklyView: View {
         }
         .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
             BulkMoveDestinationPicker(
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 onSelect: { accountKind, listId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
@@ -639,7 +639,7 @@ struct WeeklyView: View {
                 UndoToast(
                     action: action,
                     count: undoData.count,
-                    accentColor: appPrefs.personalColor,
+                    accentColor: appPrefs.account1Color,
                     onUndo: {
                         performUndo(action: action, data: undoData)
                         bulkEditManager.state.showingUndoToast = false
@@ -663,8 +663,8 @@ struct WeeklyView: View {
     private func visibleOpenTaskIdsForWeek() -> Set<String> {
         var ids: Set<String> = []
         for date in weekDates {
-            ids.formUnion(getFilteredTasksForSpecificDate(date: date, accountKind: .personal).openTaskIds)
-            ids.formUnion(getFilteredTasksForSpecificDate(date: date, accountKind: .professional).openTaskIds)
+            ids.formUnion(getFilteredTasksForSpecificDate(date: date, accountKind: .account1).openTaskIds)
+            ids.formUnion(getFilteredTasksForSpecificDate(date: date, accountKind: .account2).openTaskIds)
         }
         return ids
     }
@@ -672,17 +672,17 @@ struct WeeklyView: View {
     private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Add personal tasks
-        for (listId, tasks) in tasksViewModel.personalTasks {
+        // Add account 1 tasks
+        for (listId, tasks) in tasksViewModel.account1Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Add professional tasks
-        for (listId, tasks) in tasksViewModel.professionalTasks {
+        // Add account 2 tasks
+        for (listId, tasks) in tasksViewModel.account2Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 

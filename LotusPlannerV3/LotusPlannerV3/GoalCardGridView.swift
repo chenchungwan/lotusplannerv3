@@ -94,12 +94,12 @@ struct GoalCardGridView: View {
                     ForEach(orderedGoals, id: \.goal.id) { item in
                         // Resolve tasks at THIS level where @ObservedObject tasksVM triggers re-render
                         let tasks = item.goal.linkedTasks.compactMap { linked -> GoalCardTaskInfo? in
-                            for (_, tasks) in tasksVM.personalTasks {
+                            for (_, tasks) in tasksVM.account1Tasks {
                                 if let t = tasks.first(where: { $0.id == linked.taskId }) {
                                     return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
                                 }
                             }
-                            for (_, tasks) in tasksVM.professionalTasks {
+                            for (_, tasks) in tasksVM.account2Tasks {
                                 if let t = tasks.first(where: { $0.id == linked.taskId }) {
                                     return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
                                 }

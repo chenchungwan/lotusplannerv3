@@ -7,12 +7,14 @@ import UniformTypeIdentifiers
 enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case eventsTimeline
     case eventsList
-    case tasksPersonalGrouped
-    case tasksProfessionalGrouped
-    case tasksPersonalTwoColumn
-    case tasksProfessionalTwoColumn
-    case tasksPersonalCompact
-    case tasksProfessionalCompact
+    // Raw values are pinned to the historical spelling because they are
+    // persisted in the synced "customDayViewLibrary.v1" JSON layout library.
+    case tasksAccount1Grouped = "tasksPersonalGrouped"
+    case tasksAccount2Grouped = "tasksProfessionalGrouped"
+    case tasksAccount1TwoColumn = "tasksPersonalTwoColumn"
+    case tasksAccount2TwoColumn = "tasksProfessionalTwoColumn"
+    case tasksAccount1Compact = "tasksPersonalCompact"
+    case tasksAccount2Compact = "tasksProfessionalCompact"
     case logWeight
     case logWorkout
     case logFood
@@ -41,16 +43,16 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
 
     var id: String { rawValue }
 
-    func displayName(personal: String, professional: String) -> String {
+    func displayName(account1: String, account2: String) -> String {
         switch self {
         case .eventsTimeline:            return "Events on Timeline"
         case .eventsList:                return "Events List"
-        case .tasksPersonalGrouped:      return "\(personal) Tasks (grouped)"
-        case .tasksProfessionalGrouped:  return "\(professional) Tasks (grouped)"
-        case .tasksPersonalTwoColumn:    return "\(personal) Tasks (2 columns)"
-        case .tasksProfessionalTwoColumn: return "\(professional) Tasks (2 columns)"
-        case .tasksPersonalCompact:      return "\(personal) Tasks (compact)"
-        case .tasksProfessionalCompact:  return "\(professional) Tasks (compact)"
+        case .tasksAccount1Grouped:      return "\(account1) Tasks (grouped)"
+        case .tasksAccount2Grouped:  return "\(account2) Tasks (grouped)"
+        case .tasksAccount1TwoColumn:    return "\(account1) Tasks (2 columns)"
+        case .tasksAccount2TwoColumn: return "\(account2) Tasks (2 columns)"
+        case .tasksAccount1Compact:      return "\(account1) Tasks (compact)"
+        case .tasksAccount2Compact:  return "\(account2) Tasks (compact)"
         case .logWeight:                 return "Weight"
         case .logWorkout:                return "Workout"
         case .logFood:                   return "Food"
@@ -83,8 +85,8 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         switch self {
         case .eventsTimeline:                                   return "clock"
         case .eventsList:                                       return "calendar"
-        case .tasksPersonalGrouped, .tasksPersonalTwoColumn, .tasksPersonalCompact: return "person.circle"
-        case .tasksProfessionalGrouped, .tasksProfessionalTwoColumn, .tasksProfessionalCompact: return "briefcase"
+        case .tasksAccount1Grouped, .tasksAccount1TwoColumn, .tasksAccount1Compact: return "person.circle"
+        case .tasksAccount2Grouped, .tasksAccount2TwoColumn, .tasksAccount2Compact: return "briefcase"
         case .logWeight:                                        return "scalemass"
         case .logWorkout:                                       return "figure.run"
         case .logFood:                                          return "fork.knife"
@@ -984,8 +986,8 @@ struct DayViewCustomConfigurator: View {
                             Image(systemName: component.systemImage)
                                 .foregroundColor(.accentColor)
                             Text(component.displayName(
-                                personal: appPrefs.personalAccountName,
-                                professional: appPrefs.professionalAccountName
+                                account1: appPrefs.account1Name,
+                                account2: appPrefs.account2Name
                             ))
                             .font(.caption2)
                             .multilineTextAlignment(.center)
@@ -1010,12 +1012,12 @@ struct DayViewCustomConfigurator: View {
         var items: [CustomComponent] = [
             .eventsTimeline,
             .eventsList,
-            .tasksPersonalGrouped,
-            .tasksProfessionalGrouped,
-            .tasksPersonalTwoColumn,
-            .tasksProfessionalTwoColumn,
-            .tasksPersonalCompact,
-            .tasksProfessionalCompact,
+            .tasksAccount1Grouped,
+            .tasksAccount2Grouped,
+            .tasksAccount1TwoColumn,
+            .tasksAccount2TwoColumn,
+            .tasksAccount1Compact,
+            .tasksAccount2Compact,
         ]
         if appPrefs.showWeightLogs  {
             items.append(.logWeight)
@@ -1106,8 +1108,8 @@ struct DayViewCustomConfigurator: View {
                 .foregroundColor(.accentColor)
                 .frame(width: 24)
 
-            Text(component.displayName(personal: appPrefs.personalAccountName,
-                                       professional: appPrefs.professionalAccountName))
+            Text(component.displayName(account1: appPrefs.account1Name,
+                                       account2: appPrefs.account2Name))
                 .font(.body)
                 .foregroundColor(.primary)
 

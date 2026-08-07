@@ -28,7 +28,7 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .compact: "Events and Tasks on left with collapsible logs, Journal on right"
-        case .mobile: "Single column: Events, Personal Tasks, Professional Tasks, then Logs"
+        case .mobile: "Single column: Events, then tasks for each linked account, then Logs"
         case .timebox: "Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page)"
         case .newClassic: "Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)"
         case .custom: "A blank day view you can configure yourself."

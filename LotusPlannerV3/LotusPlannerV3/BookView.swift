@@ -615,10 +615,10 @@ struct BookMonthPage: View {
             MonthTimelineComponent(
                 currentDate: monthDate,
                 monthEvents: getMonthEventsGroupedByDate(),
-                personalEvents: calendarVM.personalEvents,
-                professionalEvents: calendarVM.professionalEvents,
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
+                account1Events: calendarVM.account1Events,
+                account2Events: calendarVM.account2Events,
+                account1Color: appPrefs.account1Color,
+                account2Color: appPrefs.account2Color,
                 onEventTap: { event in
                     selectedEvent = event
                 },
@@ -654,11 +654,11 @@ struct BookMonthPage: View {
 
     private func getMonthEventsGroupedByDate() -> [Date: [GoogleCalendarEvent]] {
         var allEvents: [GoogleCalendarEvent] = []
-        if authManager.isLinked(kind: .personal) {
-            allEvents += calendarVM.personalEvents
+        if authManager.isLinked(kind: .account1) {
+            allEvents += calendarVM.account1Events
         }
-        if authManager.isLinked(kind: .professional) {
-            allEvents += calendarVM.professionalEvents
+        if authManager.isLinked(kind: .account2) {
+            allEvents += calendarVM.account2Events
         }
 
         let calendar = Calendar.current
@@ -767,8 +767,8 @@ struct BookDayPage: View {
             }
             .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
                 BulkMoveDestinationPicker(
-                    personalTaskLists: tasksViewModel.personalTaskLists,
-                    professionalTaskLists: tasksViewModel.professionalTaskLists,
+                    account1TaskLists: tasksViewModel.account1TaskLists,
+                    account2TaskLists: tasksViewModel.account2TaskLists,
                     onSelect: { accountKind, listId in
                         Task {
                             let allTasks = getAllTasksForBulkEdit()
@@ -883,14 +883,14 @@ struct BookDayPage: View {
 
     private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
-        for (listId, tasks) in tasksViewModel.personalTasks {
+        for (listId, tasks) in tasksViewModel.account1Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
-        for (listId, tasks) in tasksViewModel.professionalTasks {
+        for (listId, tasks) in tasksViewModel.account2Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
         return allTasks

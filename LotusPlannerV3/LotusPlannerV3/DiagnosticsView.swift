@@ -95,12 +95,11 @@ struct DiagnosticsView: View {
         VStack(alignment: .leading, spacing: 10) {
             qualityRow("Sync Health", iCloudManagerInstance.syncStatus.description)
             qualityRow("Last iCloud Save", iCloudManagerInstance.lastSyncDate?.formatted(date: .abbreviated, time: .shortened) ?? "Never")
-            qualityRow("Personal Account", linkedAccountSummary(.personal))
-            qualityRow("Professional Account", linkedAccountSummary(.professional))
-            qualityRow("Calendar Personal", calendarVM.qualitySummary(for: .personal))
-            qualityRow("Calendar Professional", calendarVM.qualitySummary(for: .professional))
-            qualityRow("Tasks Personal", tasksVM.qualitySummary(for: .personal))
-            qualityRow("Tasks Professional", tasksVM.qualitySummary(for: .professional))
+            ForEach([GoogleAuthManager.AccountKind.account1, .account2], id: \.self) { kind in
+                qualityRow(kind.displayName, linkedAccountSummary(kind))
+                qualityRow("Calendar (\(kind.displayName))", calendarVM.qualitySummary(for: kind))
+                qualityRow("Tasks (\(kind.displayName))", tasksVM.qualitySummary(for: kind))
+            }
             qualityRow("Calendar Cache", calendarVM.newestCacheAgeDescription())
             qualityRow("Task Cache", tasksVM.newestCacheAgeDescription())
             qualityRow("App Version", "\(appVersion) (\(buildNumber))")

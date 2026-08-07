@@ -2,6 +2,9 @@ import SwiftUI
 
 struct AddLogEntryView: View {
     @ObservedObject var viewModel: LogsViewModel
+    /// True when hosted inside `CreateItemSheet`, which owns the
+    /// NavigationStack so the tab strip can sit above the form.
+    var isEmbedded: Bool = false
     @ObservedObject private var appPrefs = AppPreferences.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -54,7 +57,34 @@ struct AddLogEntryView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
+            if isEmbedded {
+                formContent
+            } else {
+                NavigationStack {
+                    formContent
+                }
+            }
+        }
+        .onAppear {
+            // Always refresh the date and time to current when adding a new log entry
+            let currentDateTime = Date()
+            viewModel.weightDate = currentDateTime
+            viewModel.workoutDate = currentDateTime
+            viewModel.foodDate = currentDateTime
+            viewModel.waterDate = currentDateTime
+            // Set water cups to current count for today (if exists), otherwise 0
+            let todayWaterLogs = viewModel.waterLogs(on: currentDateTime)
+            viewModel.waterCupsConsumed = todayWaterLogs.first?.cupsConsumed ?? 0
+            viewModel.sleepDate = currentDateTime
+        }
+    }
+
+    /// The form plus its navigation chrome (title, Cancel/Create). Split out
+    /// of `body` so `CreateItemSheet` can host it inside its own
+    /// NavigationStack — the toolbar items surface in that stack's bar.
+    @ViewBuilder
+    private var formContent: some View {
             Form {
                 // Show every enabled log type at once. The user can fill in
                 // any subset; Create submits all valid sections in one tap.
@@ -84,19 +114,6 @@ struct AddLogEntryView: View {
                     .opacity(hasAnyValidEntry ? 1.0 : 0.5)
                 }
             }
-        }
-        .onAppear {
-            // Always refresh the date and time to current when adding a new log entry
-            let currentDateTime = Date()
-            viewModel.weightDate = currentDateTime
-            viewModel.workoutDate = currentDateTime
-            viewModel.foodDate = currentDateTime
-            viewModel.waterDate = currentDateTime
-            // Set water cups to current count for today (if exists), otherwise 0
-            let todayWaterLogs = viewModel.waterLogs(on: currentDateTime)
-            viewModel.waterCupsConsumed = todayWaterLogs.first?.cupsConsumed ?? 0
-            viewModel.sleepDate = currentDateTime
-        }
     }
     
     private var weightForm: some View {

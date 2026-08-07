@@ -12,6 +12,11 @@ struct CreateGoalView: View {
     let onDismiss: () -> Void
     let defaultTimeframe: TimelineInterval?
     let defaultDate: Date?
+    /// True when hosted inside `CreateItemSheet`, which owns the
+    /// NavigationStack so the tab strip can sit above the form.
+    let isEmbedded: Bool
+    /// Reports title/notes edits so the host can carry them to another tab.
+    let onDraftChange: ((String, String) -> Void)?
 
     @State private var title = ""
     @State private var selectedCategoryId: UUID?
@@ -20,7 +25,7 @@ struct CreateGoalView: View {
     @State private var notes = ""
 
     @State private var taskItems: [PendingTask] = []
-    @State private var selectedGoalAccountKind: GoogleAuthManager.AccountKind = .personal
+    @State private var selectedGoalAccountKind: GoogleAuthManager.AccountKind = .account1
     @State private var selectedGoalListId: String = ""
 
     // Editing
@@ -41,16 +46,27 @@ struct CreateGoalView: View {
         let id = UUID()
         var title: String
         var dueDate: Date
-        var accountKind: GoogleAuthManager.AccountKind = .personal
+        var accountKind: GoogleAuthManager.AccountKind = .account1
         var listId: String = ""
         var existingTaskId: String? = nil // Non-nil if this is an already-created task
     }
 
-    init(editingGoal: GoalData? = nil, defaultTimeframe: TimelineInterval? = nil, defaultDate: Date? = nil, onDismiss: @escaping () -> Void = {}) {
+    init(editingGoal: GoalData? = nil,
+         defaultTimeframe: TimelineInterval? = nil,
+         defaultDate: Date? = nil,
+         isEmbedded: Bool = false,
+         initialTitle: String = "",
+         initialNotes: String = "",
+         onDraftChange: ((String, String) -> Void)? = nil,
+         onDismiss: @escaping () -> Void = {}) {
         self.editingGoal = editingGoal
         self.onDismiss = onDismiss
         self.defaultTimeframe = defaultTimeframe
         self.defaultDate = defaultDate
+        self.isEmbedded = isEmbedded
+        self.onDraftChange = onDraftChange
+        _title = State(initialValue: initialTitle)
+        _notes = State(initialValue: initialNotes)
     }
 
     private var canSave: Bool {
@@ -59,22 +75,22 @@ struct CreateGoalView: View {
 
     private var availableTaskLists: [(list: GoogleTaskList, kind: GoogleAuthManager.AccountKind)] {
         var result: [(GoogleTaskList, GoogleAuthManager.AccountKind)] = []
-        for list in tasksVM.personalTaskLists {
-            result.append((list, .personal))
+        for list in tasksVM.account1TaskLists {
+            result.append((list, .account1))
         }
-        for list in tasksVM.professionalTaskLists {
-            result.append((list, .professional))
+        for list in tasksVM.account2TaskLists {
+            result.append((list, .account2))
         }
         return result
     }
 
     private var defaultListId: String {
-        tasksVM.personalTaskLists.first?.id ?? tasksVM.professionalTaskLists.first?.id ?? ""
+        tasksVM.account1TaskLists.first?.id ?? tasksVM.account2TaskLists.first?.id ?? ""
     }
 
     private var defaultAccountKind: GoogleAuthManager.AccountKind {
-        if !tasksVM.personalTaskLists.isEmpty { return .personal }
-        return .professional
+        if !tasksVM.account1TaskLists.isEmpty { return .account1 }
+        return .account2
     }
 
     @ViewBuilder
@@ -110,7 +126,23 @@ struct CreateGoalView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
+            if isEmbedded {
+                goalFormBody
+            } else {
+                NavigationStack {
+                    goalFormBody
+                }
+            }
+        }
+        .onAppear { populateForm() }
+    }
+
+    /// The form plus its navigation chrome (title, Cancel/Create). Split out
+    /// of `body` so `CreateItemSheet` can host it inside its own
+    /// NavigationStack — the toolbar items surface in that stack's bar.
+    @ViewBuilder
+    private var goalFormBody: some View {
             Group {
                 #if targetEnvironment(macCatalyst)
                 // Form is bridged to NSStackView under Mac Catalyst's Mac idiom
@@ -202,8 +234,12 @@ struct CreateGoalView: View {
             } message: {
                 Text("Do you want to also delete this task from Google Tasks, or just remove it from this goal?")
             }
-        }
-        .onAppear { populateForm() }
+            .onChange(of: title) { _, newValue in
+                onDraftChange?(newValue, notes)
+            }
+            .onChange(of: notes) { _, newValue in
+                onDraftChange?(title, newValue)
+            }
     }
 
     // MARK: - Goal Details Section
@@ -305,9 +341,9 @@ struct CreateGoalView: View {
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 12) {
-                    ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
+                    ForEach([GoogleAuthManager.AccountKind.account1, .account2], id: \.self) { kind in
                         if authManager.isLinked(kind: kind) {
-                            let lists = kind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+                            let lists = kind == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
                             if !lists.isEmpty {
                                 Menu {
                                     ForEach(lists) { list in
@@ -328,7 +364,7 @@ struct CreateGoalView: View {
                                     HStack(spacing: 4) {
                                         Image(systemName: selectedGoalAccountKind == kind ? "largecircle.fill.circle" : "circle")
                                             .font(.caption)
-                                            .foregroundColor(selectedGoalAccountKind == kind ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .secondary)
+                                            .foregroundColor(selectedGoalAccountKind == kind ? (kind == .account1 ? appPrefs.account1Color : appPrefs.account2Color) : .secondary)
                                         Text(appPrefs.accountName(for: kind))
                                             .font(.subheadline)
                                         if let currentList, selectedGoalAccountKind == kind {
@@ -419,9 +455,9 @@ struct CreateGoalView: View {
                 task: sel.task,
                 taskListId: sel.listId,
                 accountKind: sel.accountKind,
-                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksVM.personalTaskLists,
-                professionalTaskLists: tasksVM.professionalTaskLists,
+                accentColor: sel.accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksVM.account1TaskLists,
+                account2TaskLists: tasksVM.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksVM,
                 onSave: { updatedTask in
@@ -541,11 +577,11 @@ struct CreateGoalView: View {
 
                 if availableTaskLists.count > 1 {
                     Picker("List", selection: Binding(
-                        get: { "\(item.wrappedValue.accountKind == .personal ? "p" : "w"):\(item.wrappedValue.listId)" },
+                        get: { "\(item.wrappedValue.accountKind == .account1 ? "p" : "w"):\(item.wrappedValue.listId)" },
                         set: { newValue in
                             let parts = newValue.split(separator: ":")
                             if parts.count == 2 {
-                                item.wrappedValue.accountKind = parts[0] == "p" ? .personal : .professional
+                                item.wrappedValue.accountKind = parts[0] == "p" ? .account1 : .account2
                                 item.wrappedValue.listId = String(parts[1])
                             }
                         }
@@ -553,7 +589,7 @@ struct CreateGoalView: View {
                         ForEach(availableTaskLists, id: \.list.id) { entry in
                             let prefix = appPrefs.accountName(for: entry.kind)
                             Text("\(prefix): \(entry.list.title)")
-                                .tag("\(entry.kind == .personal ? "p" : "w"):\(entry.list.id)")
+                                .tag("\(entry.kind == .account1 ? "p" : "w"):\(entry.list.id)")
                         }
                     }
                     .pickerStyle(.menu)
@@ -569,16 +605,16 @@ struct CreateGoalView: View {
     private func lookupTask(_ item: PendingTask) -> (task: GoogleTask, listId: String, kind: GoogleAuthManager.AccountKind)? {
         guard let taskId = item.existingTaskId else { return nil }
         // First try stored list
-        let tasksDict = item.accountKind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        let tasksDict = item.accountKind == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
         if let task = tasksDict[item.listId]?.first(where: { $0.id == taskId }) {
             return (task, item.listId, item.accountKind)
         }
         // Search all lists in case the task was moved
-        for (listId, tasks) in tasksVM.personalTasks {
-            if let task = tasks.first(where: { $0.id == taskId }) { return (task, listId, .personal) }
+        for (listId, tasks) in tasksVM.account1Tasks {
+            if let task = tasks.first(where: { $0.id == taskId }) { return (task, listId, .account1) }
         }
-        for (listId, tasks) in tasksVM.professionalTasks {
-            if let task = tasks.first(where: { $0.id == taskId }) { return (task, listId, .professional) }
+        for (listId, tasks) in tasksVM.account2Tasks {
+            if let task = tasks.first(where: { $0.id == taskId }) { return (task, listId, .account2) }
         }
         return nil
     }
@@ -586,10 +622,10 @@ struct CreateGoalView: View {
     private func listNameForTask(_ item: PendingTask) -> String {
         // Use actual list from lookup, not stored list ID
         if let result = lookupTask(item) {
-            let lists = result.kind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+            let lists = result.kind == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
             return lists.first(where: { $0.id == result.listId })?.title ?? ""
         }
-        let lists = item.accountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        let lists = item.accountKind == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
         return lists.first(where: { $0.id == item.listId })?.title ?? ""
     }
 
@@ -648,9 +684,9 @@ struct CreateGoalView: View {
             if let savedListId = goal.extendedData?.defaultListId, !savedListId.isEmpty {
                 selectedGoalListId = savedListId
                 if goal.extendedData?.defaultAccountKind == "professional" {
-                    selectedGoalAccountKind = .professional
+                    selectedGoalAccountKind = .account2
                 } else {
-                    selectedGoalAccountKind = .personal
+                    selectedGoalAccountKind = .account1
                 }
             } else if let firstLinked = goal.linkedTasks.first {
                 selectedGoalAccountKind = firstLinked.accountKindEnum
@@ -665,20 +701,20 @@ struct CreateGoalView: View {
                 var foundKind = linked.accountKindEnum
 
                 // Try stored list first
-                let tasksDict = linked.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                let tasksDict = linked.accountKindEnum == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
                 if let task = tasksDict[linked.listId]?.first(where: { $0.id == linked.taskId }) {
                     foundTask = task
                 } else {
                     // Search all lists
-                    for (listId, tasks) in tasksVM.personalTasks {
+                    for (listId, tasks) in tasksVM.account1Tasks {
                         if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                            foundTask = task; foundListId = listId; foundKind = .personal; break
+                            foundTask = task; foundListId = listId; foundKind = .account1; break
                         }
                     }
                     if foundTask == nil {
-                        for (listId, tasks) in tasksVM.professionalTasks {
+                        for (listId, tasks) in tasksVM.account2Tasks {
                             if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                                foundTask = task; foundListId = listId; foundKind = .professional; break
+                                foundTask = task; foundListId = listId; foundKind = .account2; break
                             }
                         }
                     }
@@ -736,15 +772,15 @@ struct CreateGoalView: View {
             var foundKind = linked.accountKindEnum
 
             // Search all lists to find the task
-            for (listId, tasks) in tasksVM.personalTasks {
+            for (listId, tasks) in tasksVM.account1Tasks {
                 if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                    foundTask = task; foundListId = listId; foundKind = .personal; break
+                    foundTask = task; foundListId = listId; foundKind = .account1; break
                 }
             }
             if foundTask == nil {
-                for (listId, tasks) in tasksVM.professionalTasks {
+                for (listId, tasks) in tasksVM.account2Tasks {
                     if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                        foundTask = task; foundListId = listId; foundKind = .professional; break
+                        foundTask = task; foundListId = listId; foundKind = .account2; break
                     }
                 }
             }
@@ -771,7 +807,7 @@ struct CreateGoalView: View {
         let extData = GoalExtendedData(
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
             defaultListId: selectedGoalListId.isEmpty ? nil : selectedGoalListId,
-            defaultAccountKind: selectedGoalAccountKind == .personal ? "personal" : "professional"
+            defaultAccountKind: selectedGoalAccountKind.rawValue
         )
 
         let dueDate = calculateDueDate()
@@ -816,22 +852,22 @@ struct CreateGoalView: View {
                     // Add to local state properly
                     await MainActor.run {
                         switch kind {
-                        case .personal:
-                            if tasksVM.personalTasks[listId] != nil {
+                        case .account1:
+                            if tasksVM.account1Tasks[listId] != nil {
                                 // Avoid duplicate — check if already present
-                                if !tasksVM.personalTasks[listId]!.contains(where: { $0.id == createdTask.id }) {
-                                    tasksVM.personalTasks[listId]?.append(createdTask)
+                                if !tasksVM.account1Tasks[listId]!.contains(where: { $0.id == createdTask.id }) {
+                                    tasksVM.account1Tasks[listId]?.append(createdTask)
                                 }
                             } else {
-                                tasksVM.personalTasks[listId] = [createdTask]
+                                tasksVM.account1Tasks[listId] = [createdTask]
                             }
-                        case .professional:
-                            if tasksVM.professionalTasks[listId] != nil {
-                                if !tasksVM.professionalTasks[listId]!.contains(where: { $0.id == createdTask.id }) {
-                                    tasksVM.professionalTasks[listId]?.append(createdTask)
+                        case .account2:
+                            if tasksVM.account2Tasks[listId] != nil {
+                                if !tasksVM.account2Tasks[listId]!.contains(where: { $0.id == createdTask.id }) {
+                                    tasksVM.account2Tasks[listId]?.append(createdTask)
                                 }
                             } else {
-                                tasksVM.professionalTasks[listId] = [createdTask]
+                                tasksVM.account2Tasks[listId] = [createdTask]
                             }
                         }
                     }
@@ -882,16 +918,16 @@ struct CreateGoalView: View {
             for linked in goal.linkedTasks {
                 // Search all lists to find the task
                 var found = false
-                for (listId, tasks) in tasksVM.personalTasks {
+                for (listId, tasks) in tasksVM.account1Tasks {
                     if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                        Task { await tasksVM.deleteTask(task, from: listId, for: .personal) }
+                        Task { await tasksVM.deleteTask(task, from: listId, for: .account1) }
                         found = true; break
                     }
                 }
                 if !found {
-                    for (listId, tasks) in tasksVM.professionalTasks {
+                    for (listId, tasks) in tasksVM.account2Tasks {
                         if let task = tasks.first(where: { $0.id == linked.taskId }) {
-                            Task { await tasksVM.deleteTask(task, from: listId, for: .professional) }
+                            Task { await tasksVM.deleteTask(task, from: listId, for: .account2) }
                             break
                         }
                     }

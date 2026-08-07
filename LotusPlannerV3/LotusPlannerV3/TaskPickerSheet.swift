@@ -13,19 +13,19 @@ struct TaskPickerSheet: View {
 
     private var availableAccounts: [GoogleAuthManager.AccountKind] {
         var accounts: [GoogleAuthManager.AccountKind] = []
-        if !tasksVM.personalTaskLists.isEmpty { accounts.append(.personal) }
-        if !tasksVM.professionalTaskLists.isEmpty { accounts.append(.professional) }
+        if !tasksVM.account1TaskLists.isEmpty { accounts.append(.account1) }
+        if !tasksVM.account2TaskLists.isEmpty { accounts.append(.account2) }
         return accounts
     }
 
     private var listsForAccount: [GoogleTaskList] {
         guard let account = selectedAccount else { return [] }
-        return account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        return account == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
     }
 
     private var tasksForList: [GoogleTask] {
         guard let account = selectedAccount, let listId = selectedListId else { return [] }
-        let dict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        let dict = account == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
         return (dict[listId] ?? []).filter { !alreadyLinkedIds.contains($0.id) }
     }
 
@@ -49,7 +49,7 @@ struct TaskPickerSheet: View {
                                     selectedListId = nil
                                 } label: {
                                     HStack {
-                                        Image(systemName: account == .personal ? "person.fill" : "briefcase.fill")
+                                        Image(systemName: account == .account1 ? "person.fill" : "briefcase.fill")
                                             .font(.caption)
                                         Text(appPrefs.accountName(for: account))
                                             .font(.callout)

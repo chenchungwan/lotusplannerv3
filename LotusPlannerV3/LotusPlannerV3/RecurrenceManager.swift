@@ -73,7 +73,7 @@ struct RecurrenceRule: Codable, Equatable {
     var updatedAt: Date
 
     var accountKindEnum: GoogleAuthManager.AccountKind {
-        accountKind == "professional" ? .professional : .personal
+        accountKind == "professional" ? .account2 : .account1
     }
 }
 
@@ -269,8 +269,8 @@ final class RecurrenceManager: ObservableObject {
     func catchUpMissedInstances(tasksVM: TasksViewModel) async {
         let snapshot = library.rules
         let allTasks: [(GoogleTask, String, GoogleAuthManager.AccountKind)] =
-            tasksVM.personalTasks.flatMap { listId, tasks in tasks.map { ($0, listId, GoogleAuthManager.AccountKind.personal) } }
-            + tasksVM.professionalTasks.flatMap { listId, tasks in tasks.map { ($0, listId, GoogleAuthManager.AccountKind.professional) } }
+            tasksVM.account1Tasks.flatMap { listId, tasks in tasks.map { ($0, listId, GoogleAuthManager.AccountKind.account1) } }
+            + tasksVM.account2Tasks.flatMap { listId, tasks in tasks.map { ($0, listId, GoogleAuthManager.AccountKind.account2) } }
 
         for (taskId, _) in snapshot {
             guard let entry = allTasks.first(where: { $0.0.id == taskId }) else { continue }

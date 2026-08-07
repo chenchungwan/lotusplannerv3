@@ -79,46 +79,46 @@ extension CalendarViewModel {
         }
 
         // PERFORMANCE OPTIMIZATION: Check cache first to avoid unnecessary API calls
-        let personalKey = monthCacheKey(for: date, accountKind: .personal)
-        let professionalKey = monthCacheKey(for: date, accountKind: .professional)
+        let account1Key = monthCacheKey(for: date, accountKind: .account1)
+        let account2Key = monthCacheKey(for: date, accountKind: .account2)
 
-        let needsPersonalPreload = authManager.isLinked(kind: .personal) && !isCacheValid(for: personalKey)
-        let needsProfessionalPreload = authManager.isLinked(kind: .professional) && !isCacheValid(for: professionalKey)
+        let needsAccount1Preload = authManager.isLinked(kind: .account1) && !isCacheValid(for: account1Key)
+        let needsAccount2Preload = authManager.isLinked(kind: .account2) && !isCacheValid(for: account2Key)
 
-        guard needsPersonalPreload || needsProfessionalPreload else {
+        guard needsAccount1Preload || needsAccount2Preload else {
             return
         }
 
         await withTaskGroup(of: Void.self) { group in
-            if needsPersonalPreload {
+            if needsAccount1Preload {
                 group.addTask {
                     do {
                         // Fetch calendars and events in parallel
-                        async let calendars = CalendarManager.shared.fetchCalendars(for: .personal)
-                        async let events = CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
+                        async let calendars = CalendarManager.shared.fetchCalendars(for: .account1)
+                        async let events = CalendarManager.shared.fetchEvents(for: .account1, startDate: monthStart, endDate: monthEnd)
 
                         let (fetchedCalendars, fetchedEvents) = try await (calendars, events)
 
                         await MainActor.run {
-                            self.cacheCalendars(fetchedCalendars, for: personalKey)
-                            self.cacheEvents(fetchedEvents, for: personalKey)
+                            self.cacheCalendars(fetchedCalendars, for: account1Key)
+                            self.cacheEvents(fetchedEvents, for: account1Key)
                         }
                     } catch {
                     }
                 }
             }
-            if needsProfessionalPreload {
+            if needsAccount2Preload {
                 group.addTask {
                     do {
                         // Fetch calendars and events in parallel
-                        async let calendars = CalendarManager.shared.fetchCalendars(for: .professional)
-                        async let events = CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
+                        async let calendars = CalendarManager.shared.fetchCalendars(for: .account2)
+                        async let events = CalendarManager.shared.fetchEvents(for: .account2, startDate: monthStart, endDate: monthEnd)
 
                         let (fetchedCalendars, fetchedEvents) = try await (calendars, events)
 
                         await MainActor.run {
-                            self.cacheCalendars(fetchedCalendars, for: professionalKey)
-                            self.cacheEvents(fetchedEvents, for: professionalKey)
+                            self.cacheCalendars(fetchedCalendars, for: account2Key)
+                            self.cacheEvents(fetchedEvents, for: account2Key)
                         }
                     } catch {
                     }
@@ -130,32 +130,32 @@ extension CalendarViewModel {
     func loadCalendarData(for date: Date) async {
         let loadID = beginCalendarLoad(statusMessage: "Loading calendar...")
 
-        var personalError: Error?
-        var professionalError: Error?
+        var account1Error: Error?
+        var account2Error: Error?
 
         await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
+            if authManager.isLinked(kind: .account1) {
                 group.addTask {
                     do {
-                        try await self.loadCalendarDataForAccountThrowing(.personal, date: date)
+                        try await self.loadCalendarDataForAccountThrowing(.account1, date: date)
                     } catch {
-                        personalError = error
+                        account1Error = error
                     }
                 }
             }
 
-            if authManager.isLinked(kind: .professional) {
+            if authManager.isLinked(kind: .account2) {
                 group.addTask {
                     do {
-                        try await self.loadCalendarDataForAccountThrowing(.professional, date: date)
+                        try await self.loadCalendarDataForAccountThrowing(.account2, date: date)
                     } catch {
-                        professionalError = error
+                        account2Error = error
                     }
                 }
             }
         }
 
-        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, account1Error: account1Error, account2Error: account2Error)
     }
 
     func loadCalendarDataForWeek(containing date: Date) async {
@@ -166,36 +166,36 @@ extension CalendarViewModel {
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: date),
               let weekStart = calendar.date(byAdding: .day, value: -1, to: weekInterval.start),
               let weekEnd = calendar.date(byAdding: .day, value: 1, to: calendar.date(byAdding: .day, value: 7, to: weekInterval.start) ?? weekInterval.end) else {
-            finishCalendarLoad(loadID: loadID, personalError: nil, professionalError: nil)
+            finishCalendarLoad(loadID: loadID, account1Error: nil, account2Error: nil)
             return
         }
 
-        var personalError: Error?
-        var professionalError: Error?
+        var account1Error: Error?
+        var account2Error: Error?
 
         await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
+            if authManager.isLinked(kind: .account1) {
                 group.addTask {
                     do {
-                        try await self.loadCalendarDataForWeekRangeThrowing(.personal, startDate: weekStart, endDate: weekEnd)
+                        try await self.loadCalendarDataForWeekRangeThrowing(.account1, startDate: weekStart, endDate: weekEnd)
                     } catch {
-                        personalError = error
+                        account1Error = error
                     }
                 }
             }
 
-            if authManager.isLinked(kind: .professional) {
+            if authManager.isLinked(kind: .account2) {
                 group.addTask {
                     do {
-                        try await self.loadCalendarDataForWeekRangeThrowing(.professional, startDate: weekStart, endDate: weekEnd)
+                        try await self.loadCalendarDataForWeekRangeThrowing(.account2, startDate: weekStart, endDate: weekEnd)
                     } catch {
-                        professionalError = error
+                        account2Error = error
                     }
                 }
             }
         }
 
-        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, account1Error: account1Error, account2Error: account2Error)
     }
 
     func loadCalendarDataForMonth(containing date: Date) async {
@@ -216,29 +216,29 @@ extension CalendarViewModel {
         lastNavigatedDate = monthStart
 
         // Check cache first - if we have valid cached data, use it immediately
-        if authManager.isLinked(kind: .personal) {
-            let personalKey = monthCacheKey(for: date, accountKind: .personal)
-            if let cachedEvents = getCachedEvents(for: personalKey),
-               let cachedCalendars = getCachedCalendars(for: personalKey) {
-                personalEvents = eventsOwned(by: .personal, from: cachedEvents)
-                personalCalendars = cachedCalendars
+        if authManager.isLinked(kind: .account1) {
+            let account1Key = monthCacheKey(for: date, accountKind: .account1)
+            if let cachedEvents = getCachedEvents(for: account1Key),
+               let cachedCalendars = getCachedCalendars(for: account1Key) {
+                account1Events = eventsOwned(by: .account1, from: cachedEvents)
+                account1Calendars = cachedCalendars
             }
         }
 
-        if authManager.isLinked(kind: .professional) {
-            let professionalKey = monthCacheKey(for: date, accountKind: .professional)
-            if let cachedEvents = getCachedEvents(for: professionalKey),
-               let cachedCalendars = getCachedCalendars(for: professionalKey) {
-                professionalEvents = eventsOwned(by: .professional, from: cachedEvents)
-                professionalCalendars = cachedCalendars
+        if authManager.isLinked(kind: .account2) {
+            let account2Key = monthCacheKey(for: date, accountKind: .account2)
+            if let cachedEvents = getCachedEvents(for: account2Key),
+               let cachedCalendars = getCachedCalendars(for: account2Key) {
+                account2Events = eventsOwned(by: .account2, from: cachedEvents)
+                account2Calendars = cachedCalendars
             }
         }
 
         // If we have valid cache for all linked accounts, return early
-        let needsPersonalRefresh = authManager.isLinked(kind: .personal) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .personal)) == nil
-        let needsProfessionalRefresh = authManager.isLinked(kind: .professional) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .professional)) == nil
+        let needsAccount1Refresh = authManager.isLinked(kind: .account1) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .account1)) == nil
+        let needsAccount2Refresh = authManager.isLinked(kind: .account2) && getCachedEvents(for: monthCacheKey(for: date, accountKind: .account2)) == nil
 
-        if !needsPersonalRefresh && !needsProfessionalRefresh {
+        if !needsAccount1Refresh && !needsAccount2Refresh {
             loadingStatusMessage = ""
             return
         }
@@ -247,41 +247,41 @@ extension CalendarViewModel {
         // This prevents the UI from flickering when we have cached data
         let loadID = beginCalendarLoad(statusMessage: "Loading calendar month...")
 
-        var personalError: Error?
-        var professionalError: Error?
+        var account1Error: Error?
+        var account2Error: Error?
 
         await withTaskGroup(of: Void.self) { group in
-            if needsPersonalRefresh {
+            if needsAccount1Refresh {
                 group.addTask {
                     do {
-                        let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
+                        let events = try await CalendarManager.shared.fetchEvents(for: .account1, startDate: monthStart, endDate: monthEnd)
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .account1)
                         await MainActor.run {
-                            self.personalEvents = self.eventsOwned(by: .personal, from: events)
-                            self.personalCalendars = calendars
+                            self.account1Events = self.eventsOwned(by: .account1, from: events)
+                            self.account1Calendars = calendars
                         }
                     } catch {
-                        personalError = error
+                        account1Error = error
                     }
                 }
             }
-            if needsProfessionalRefresh {
+            if needsAccount2Refresh {
                 group.addTask {
                     do {
-                        let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
+                        let events = try await CalendarManager.shared.fetchEvents(for: .account2, startDate: monthStart, endDate: monthEnd)
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .account2)
                         await MainActor.run {
-                            self.professionalEvents = self.eventsOwned(by: .professional, from: events)
-                            self.professionalCalendars = calendars
+                            self.account2Events = self.eventsOwned(by: .account2, from: events)
+                            self.account2Calendars = calendars
                         }
                     } catch {
-                        professionalError = error
+                        account2Error = error
                     }
                 }
             }
         }
 
-        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, account1Error: account1Error, account2Error: account2Error)
 
         // PROGRESSIVE LOADING: Smart prefetch based on navigation direction
         prefetchTask?.cancel() // Cancel any ongoing prefetch
@@ -292,19 +292,19 @@ extension CalendarViewModel {
 
     private func loadCalendarDataForAccountThrowing(_ kind: GoogleAuthManager.AccountKind, date: Date) async throws {
         await MainActor.run {
-            self.loadingStatusMessage = "Loading \(kind.displayName.lowercased()) calendar..."
+            self.loadingStatusMessage = "Loading calendar for \(kind.displayName)..."
         }
         let calendars = try await fetchCalendars(for: kind)
         let events = try await fetchEventsForDate(date, calendars: calendars, for: kind)
 
         await MainActor.run {
             switch kind {
-            case .personal:
-                self.personalCalendars = calendars
-                self.personalEvents = self.eventsOwned(by: .personal, from: events)
-            case .professional:
-                self.professionalCalendars = calendars
-                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
+            case .account1:
+                self.account1Calendars = calendars
+                self.account1Events = self.eventsOwned(by: .account1, from: events)
+            case .account2:
+                self.account2Calendars = calendars
+                self.account2Events = self.eventsOwned(by: .account2, from: events)
             }
         }
     }
@@ -411,26 +411,26 @@ extension CalendarViewModel {
 
     private func loadCalendarDataForWeekRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
         await MainActor.run {
-            self.loadingStatusMessage = "Loading \(kind.displayName.lowercased()) calendar..."
+            self.loadingStatusMessage = "Loading calendar for \(kind.displayName)..."
         }
         let calendars = try await fetchCalendars(for: kind)
         let events = try await fetchEventsForDateRange(startDate: startDate, endDate: endDate, calendars: calendars, for: kind)
 
         await MainActor.run {
             switch kind {
-            case .personal:
-                self.personalCalendars = calendars
-                self.personalEvents = self.eventsOwned(by: .personal, from: events)
-            case .professional:
-                self.professionalCalendars = calendars
-                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
+            case .account1:
+                self.account1Calendars = calendars
+                self.account1Events = self.eventsOwned(by: .account1, from: events)
+            case .account2:
+                self.account2Calendars = calendars
+                self.account2Events = self.eventsOwned(by: .account2, from: events)
             }
         }
     }
 
     private func loadCalendarDataForMonthRangeThrowing(_ kind: GoogleAuthManager.AccountKind, startDate: Date, endDate: Date) async throws {
         await MainActor.run {
-            self.loadingStatusMessage = "Loading \(kind.displayName.lowercased()) calendar..."
+            self.loadingStatusMessage = "Loading calendar for \(kind.displayName)..."
         }
         let calendars = try await fetchCalendars(for: kind)
 
@@ -443,12 +443,12 @@ extension CalendarViewModel {
 
         await MainActor.run {
             switch kind {
-            case .personal:
-                self.personalCalendars = calendars
-                self.personalEvents = self.eventsOwned(by: .personal, from: events)
-            case .professional:
-                self.professionalCalendars = calendars
-                self.professionalEvents = self.eventsOwned(by: .professional, from: events)
+            case .account1:
+                self.account1Calendars = calendars
+                self.account1Events = self.eventsOwned(by: .account1, from: events)
+            case .account2:
+                self.account2Calendars = calendars
+                self.account2Events = self.eventsOwned(by: .account2, from: events)
             }
         }
     }

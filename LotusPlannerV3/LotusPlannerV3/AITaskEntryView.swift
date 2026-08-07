@@ -28,11 +28,11 @@ struct AITaskEntryView: View {
     }
 
     private var availableAccounts: [GoogleAuthManager.AccountKind] {
-        [.personal, .professional].filter { authManager.isLinked(kind: $0) }
+        [.account1, .account2].filter { authManager.isLinked(kind: $0) }
     }
 
     private var availableLists: [GoogleTaskList] {
-        selectedAccountKind == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+        selectedAccountKind == .account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
     }
 
     private var selectedProposals: [AITaskActionProposal] {
@@ -283,8 +283,8 @@ struct AITaskEntryView: View {
     private func allLocatedTasks() -> [AILocatedTask] {
         var items: [AILocatedTask] = []
         for account in availableAccounts {
-            let lists = account == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
-            let tasksByList = account == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
+            let lists = account == .account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
+            let tasksByList = account == .account1 ? tasksViewModel.account1Tasks : tasksViewModel.account2Tasks
             for list in lists {
                 for task in tasksByList[list.id] ?? [] {
                     items.append(AILocatedTask(task: task, listId: list.id, listTitle: list.title, accountKind: account))
@@ -296,7 +296,7 @@ struct AITaskEntryView: View {
 
     private func allLists() -> [AIListTarget] {
         availableAccounts.flatMap { account in
-            let lists = account == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let lists = account == .account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
             return lists.map { AIListTarget(listId: $0.id, listTitle: $0.title, accountKind: account) }
         }
     }
@@ -338,7 +338,7 @@ struct AITaskEntryView: View {
     }
 
     private func listTitle(_ listId: String, _ accountKind: GoogleAuthManager.AccountKind) -> String {
-        let lists = accountKind == .personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+        let lists = accountKind == .account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
         return lists.first(where: { $0.id == listId })?.title ?? "Selected List"
     }
 

@@ -3,8 +3,8 @@ import Foundation
 /// CRUD operations on `TasksViewModel`. Split out from the main file to
 /// keep the loading + caching half (~450 lines) separately readable from
 /// this ~900-line block of task/task-list mutations. All methods here
-/// drive Google Tasks API calls + update the in-memory `personalTasks` /
-/// `professionalTasks` dicts; the loading half (in `TasksViewModel.swift`)
+/// drive Google Tasks API calls + update the in-memory `account1Tasks` /
+/// `account2Tasks` dicts; the loading half (in `TasksViewModel.swift`)
 /// is responsible for fetch and cache invalidation.
 extension TasksViewModel {
 
@@ -88,17 +88,17 @@ extension TasksViewModel {
 
         await MainActor.run {
             switch kind {
-            case .personal:
-                if personalTasks[listId] != nil {
-                    personalTasks[listId]?.append(createdTask)
+            case .account1:
+                if account1Tasks[listId] != nil {
+                    account1Tasks[listId]?.append(createdTask)
                 } else {
-                    personalTasks[listId] = [createdTask]
+                    account1Tasks[listId] = [createdTask]
                 }
-            case .professional:
-                if professionalTasks[listId] != nil {
-                    professionalTasks[listId]?.append(createdTask)
+            case .account2:
+                if account2Tasks[listId] != nil {
+                    account2Tasks[listId]?.append(createdTask)
                 } else {
-                    professionalTasks[listId] = [createdTask]
+                    account2Tasks[listId] = [createdTask]
                 }
             }
         }
@@ -112,18 +112,18 @@ extension TasksViewModel {
 
         await MainActor.run {
             switch kind {
-            case .personal:
-                if var tasks = self.personalTasks[listId] {
+            case .account1:
+                if var tasks = self.account1Tasks[listId] {
                     if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                         tasks[index] = task
-                        self.personalTasks[listId] = tasks
+                        self.account1Tasks[listId] = tasks
                     }
                 }
-            case .professional:
-                if var tasks = self.professionalTasks[listId] {
+            case .account2:
+                if var tasks = self.account2Tasks[listId] {
                     if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                         tasks[index] = task
-                        self.professionalTasks[listId] = tasks
+                        self.account2Tasks[listId] = tasks
                     }
                 }
             }
@@ -198,18 +198,18 @@ extension TasksViewModel {
                 if let original = originalTask {
                     await MainActor.run {
                         switch kind {
-                        case .personal:
-                            if var tasks = self.personalTasks[listId] {
+                        case .account1:
+                            if var tasks = self.account1Tasks[listId] {
                                 if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                                     tasks[index] = original
-                                    self.personalTasks[listId] = tasks
+                                    self.account1Tasks[listId] = tasks
                                 }
                             }
-                        case .professional:
-                            if var tasks = self.professionalTasks[listId] {
+                        case .account2:
+                            if var tasks = self.account2Tasks[listId] {
                                 if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                                     tasks[index] = original
-                                    self.professionalTasks[listId] = tasks
+                                    self.account2Tasks[listId] = tasks
                                 }
                             }
                         }
@@ -226,10 +226,10 @@ extension TasksViewModel {
     private func getOriginalTask(_ taskId: String, from listId: String, for kind: GoogleAuthManager.AccountKind) async -> GoogleTask? {
         return await MainActor.run {
             switch kind {
-            case .personal:
-                return personalTasks[listId]?.first { $0.id == taskId }
-            case .professional:
-                return professionalTasks[listId]?.first { $0.id == taskId }
+            case .account1:
+                return account1Tasks[listId]?.first { $0.id == taskId }
+            case .account2:
+                return account2Tasks[listId]?.first { $0.id == taskId }
             }
         }
     }
@@ -238,10 +238,10 @@ extension TasksViewModel {
         // OPTIMISTIC DELETE: Remove from UI immediately
         await MainActor.run {
             switch kind {
-            case .personal:
-                self.personalTasks[listId]?.removeAll { $0.id == task.id }
-            case .professional:
-                self.professionalTasks[listId]?.removeAll { $0.id == task.id }
+            case .account1:
+                self.account1Tasks[listId]?.removeAll { $0.id == task.id }
+            case .account2:
+                self.account2Tasks[listId]?.removeAll { $0.id == task.id }
             }
             // Also delete the time window for this task
             TaskTimeWindowManager.shared.deleteTimeWindow(for: task.id)
@@ -261,17 +261,17 @@ extension TasksViewModel {
                 // REVERT OPTIMISTIC DELETE on error - restore the task
                 await MainActor.run {
                     switch kind {
-                    case .personal:
-                        if self.personalTasks[listId] != nil {
-                            self.personalTasks[listId]?.append(task)
+                    case .account1:
+                        if self.account1Tasks[listId] != nil {
+                            self.account1Tasks[listId]?.append(task)
                         } else {
-                            self.personalTasks[listId] = [task]
+                            self.account1Tasks[listId] = [task]
                         }
-                    case .professional:
-                        if self.professionalTasks[listId] != nil {
-                            self.professionalTasks[listId]?.append(task)
+                    case .account2:
+                        if self.account2Tasks[listId] != nil {
+                            self.account2Tasks[listId]?.append(task)
                         } else {
-                            self.professionalTasks[listId] = [task]
+                            self.account2Tasks[listId] = [task]
                         }
                     }
                     self.errorMessage = "Failed to delete task: \(error.localizedDescription)"
@@ -308,10 +308,10 @@ extension TasksViewModel {
         // First, get the original task from local state to ensure we have the correct server ID
         let originalTask = await MainActor.run {
             switch kind {
-            case .personal:
-                return personalTasks[sourceListId]?.first { $0.id == updatedTask.id }
-            case .professional:
-                return professionalTasks[sourceListId]?.first { $0.id == updatedTask.id }
+            case .account1:
+                return account1Tasks[sourceListId]?.first { $0.id == updatedTask.id }
+            case .account2:
+                return account2Tasks[sourceListId]?.first { $0.id == updatedTask.id }
             }
         }
 
@@ -345,24 +345,24 @@ extension TasksViewModel {
                 // Remove from source list using original task ID (the one we deleted from server)
                 let originalTaskId = taskToDelete.id
                 switch kind {
-                case .personal:
-                    self.personalTasks[sourceListId]?.removeAll { $0.id == originalTaskId }
+                case .account1:
+                    self.account1Tasks[sourceListId]?.removeAll { $0.id == originalTaskId }
 
                     // Add to target list using new task (with server ID)
-                    if self.personalTasks[targetListId] != nil {
-                        self.personalTasks[targetListId]?.append(taskToAdd)
+                    if self.account1Tasks[targetListId] != nil {
+                        self.account1Tasks[targetListId]?.append(taskToAdd)
                     } else {
-                        self.personalTasks[targetListId] = [taskToAdd]
+                        self.account1Tasks[targetListId] = [taskToAdd]
                     }
 
-                case .professional:
-                    self.professionalTasks[sourceListId]?.removeAll { $0.id == originalTaskId }
+                case .account2:
+                    self.account2Tasks[sourceListId]?.removeAll { $0.id == originalTaskId }
 
                     // Add to target list using new task (with server ID)
-                    if self.professionalTasks[targetListId] != nil {
-                        self.professionalTasks[targetListId]?.append(taskToAdd)
+                    if self.account2Tasks[targetListId] != nil {
+                        self.account2Tasks[targetListId]?.append(taskToAdd)
                     } else {
-                        self.professionalTasks[targetListId] = [taskToAdd]
+                        self.account2Tasks[targetListId] = [taskToAdd]
                     }
                 }
 
@@ -407,10 +407,10 @@ extension TasksViewModel {
         // First, get the original task from local state to ensure we have the correct server ID
         let originalTask = await MainActor.run {
             switch source.0 {
-            case .personal:
-                return personalTasks[source.1]?.first { $0.id == updatedTask.id }
-            case .professional:
-                return professionalTasks[source.1]?.first { $0.id == updatedTask.id }
+            case .account1:
+                return account1Tasks[source.1]?.first { $0.id == updatedTask.id }
+            case .account2:
+                return account2Tasks[source.1]?.first { $0.id == updatedTask.id }
             }
         }
 
@@ -444,25 +444,25 @@ extension TasksViewModel {
                 // Remove from source account using original task ID (the one we deleted from server)
                 let originalTaskId = taskToDelete.id
                 switch source.0 {
-                case .personal:
-                    self.personalTasks[source.1]?.removeAll { $0.id == originalTaskId }
-                case .professional:
-                    self.professionalTasks[source.1]?.removeAll { $0.id == originalTaskId }
+                case .account1:
+                    self.account1Tasks[source.1]?.removeAll { $0.id == originalTaskId }
+                case .account2:
+                    self.account2Tasks[source.1]?.removeAll { $0.id == originalTaskId }
                 }
 
                 // Add to target account using new task (with server ID)
                 switch target.0 {
-                case .personal:
-                    if self.personalTasks[target.1] != nil {
-                        self.personalTasks[target.1]?.append(taskToAdd)
+                case .account1:
+                    if self.account1Tasks[target.1] != nil {
+                        self.account1Tasks[target.1]?.append(taskToAdd)
                     } else {
-                        self.personalTasks[target.1] = [taskToAdd]
+                        self.account1Tasks[target.1] = [taskToAdd]
                     }
-                case .professional:
-                    if self.professionalTasks[target.1] != nil {
-                        self.professionalTasks[target.1]?.append(taskToAdd)
+                case .account2:
+                    if self.account2Tasks[target.1] != nil {
+                        self.account2Tasks[target.1]?.append(taskToAdd)
                     } else {
-                        self.professionalTasks[target.1] = [taskToAdd]
+                        self.account2Tasks[target.1] = [taskToAdd]
                     }
                 }
 
@@ -580,18 +580,18 @@ extension TasksViewModel {
             // Update local state
             await MainActor.run {
                 switch kind {
-                case .personal:
-                    self.personalTaskLists.append(taskList)
-                    self.personalTasks[taskList.id] = []
-                    self.upsertTaskListInCache(taskList, for: .personal)
+                case .account1:
+                    self.account1TaskLists.append(taskList)
+                    self.account1Tasks[taskList.id] = []
+                    self.upsertTaskListInCache(taskList, for: .account1)
                     // Save updated order
-                    saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
-                case .professional:
-                    self.professionalTaskLists.append(taskList)
-                    self.professionalTasks[taskList.id] = []
-                    self.upsertTaskListInCache(taskList, for: .professional)
+                    saveTaskListOrder(account1TaskLists.map { $0.id }, for: .account1)
+                case .account2:
+                    self.account2TaskLists.append(taskList)
+                    self.account2Tasks[taskList.id] = []
+                    self.upsertTaskListInCache(taskList, for: .account2)
                     // Save updated order
-                    saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
+                    saveTaskListOrder(account2TaskLists.map { $0.id }, for: .account2)
                 }
             }
             
@@ -632,17 +632,17 @@ extension TasksViewModel {
             // Update local state
             await MainActor.run {
                 switch kind {
-                case .personal:
-                    if let index = self.personalTaskLists.firstIndex(where: { $0.id == listId }) {
-                        let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.personalTaskLists[index].updated)
-                        self.personalTaskLists[index] = updatedList
-                        self.upsertTaskListInCache(updatedList, for: .personal)
+                case .account1:
+                    if let index = self.account1TaskLists.firstIndex(where: { $0.id == listId }) {
+                        let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.account1TaskLists[index].updated)
+                        self.account1TaskLists[index] = updatedList
+                        self.upsertTaskListInCache(updatedList, for: .account1)
                     }
-                case .professional:
-                    if let index = self.professionalTaskLists.firstIndex(where: { $0.id == listId }) {
-                        let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.professionalTaskLists[index].updated)
-                        self.professionalTaskLists[index] = updatedList
-                        self.upsertTaskListInCache(updatedList, for: .professional)
+                case .account2:
+                    if let index = self.account2TaskLists.firstIndex(where: { $0.id == listId }) {
+                        let updatedList = GoogleTaskList(id: listId, title: newTitle, updated: self.account2TaskLists[index].updated)
+                        self.account2TaskLists[index] = updatedList
+                        self.upsertTaskListInCache(updatedList, for: .account2)
                     }
                 }
             }
@@ -692,17 +692,17 @@ extension TasksViewModel {
         // OPTIMISTIC CREATE: Add to UI immediately for instant feedback
         await MainActor.run {
             switch kind {
-            case .personal:
-                if personalTasks[listId] != nil {
-                    personalTasks[listId]?.append(task)
+            case .account1:
+                if account1Tasks[listId] != nil {
+                    account1Tasks[listId]?.append(task)
                 } else {
-                    personalTasks[listId] = [task]
+                    account1Tasks[listId] = [task]
                 }
-            case .professional:
-                if professionalTasks[listId] != nil {
-                    professionalTasks[listId]?.append(task)
+            case .account2:
+                if account2Tasks[listId] != nil {
+                    account2Tasks[listId]?.append(task)
                 } else {
-                    professionalTasks[listId] = [task]
+                    account2Tasks[listId] = [task]
                 }
             }
         }
@@ -726,22 +726,22 @@ extension TasksViewModel {
                 // Replace temporary task with server task (has correct ID)
                 await MainActor.run {
                     switch kind {
-                    case .personal:
-                        if var tasks = personalTasks[listId] {
+                    case .account1:
+                        if var tasks = account1Tasks[listId] {
                             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                                 // Replace temporary task with server task that has real ID
                                 tasks[index] = createdTask
-                                personalTasks[listId] = tasks
-                                replaceTaskInCache(tempId: task.id, with: createdTask, in: listId, for: .personal)
+                                account1Tasks[listId] = tasks
+                                replaceTaskInCache(tempId: task.id, with: createdTask, in: listId, for: .account1)
                             }
                         }
-                    case .professional:
-                        if var tasks = professionalTasks[listId] {
+                    case .account2:
+                        if var tasks = account2Tasks[listId] {
                             if let index = tasks.firstIndex(where: { $0.id == task.id }) {
                                 // Replace temporary task with server task that has real ID
                                 tasks[index] = createdTask
-                                professionalTasks[listId] = tasks
-                                replaceTaskInCache(tempId: task.id, with: createdTask, in: listId, for: .professional)
+                                account2Tasks[listId] = tasks
+                                replaceTaskInCache(tempId: task.id, with: createdTask, in: listId, for: .account2)
                             }
                         }
                     }
@@ -751,12 +751,12 @@ extension TasksViewModel {
                 // REVERT OPTIMISTIC CREATE on error - remove the temporary task
                 await MainActor.run {
                     switch kind {
-                    case .personal:
-                        personalTasks[listId]?.removeAll { $0.id == task.id }
-                        removeTaskFromCache(taskId: task.id, from: listId, for: .personal)
-                    case .professional:
-                        professionalTasks[listId]?.removeAll { $0.id == task.id }
-                        removeTaskFromCache(taskId: task.id, from: listId, for: .professional)
+                    case .account1:
+                        account1Tasks[listId]?.removeAll { $0.id == task.id }
+                        removeTaskFromCache(taskId: task.id, from: listId, for: .account1)
+                    case .account2:
+                        account2Tasks[listId]?.removeAll { $0.id == task.id }
+                        removeTaskFromCache(taskId: task.id, from: listId, for: .account2)
                     }
                     self.errorMessage = "Failed to create task: \(error.localizedDescription)"
                 }
@@ -768,10 +768,10 @@ extension TasksViewModel {
         
         await MainActor.run {
             switch kind {
-            case .personal:
-                self.personalTaskLists = newOrder
-            case .professional:
-                self.professionalTaskLists = newOrder
+            case .account1:
+                self.account1TaskLists = newOrder
+            case .account2:
+                self.account2TaskLists = newOrder
             }
         }
         
@@ -796,22 +796,22 @@ extension TasksViewModel {
     
     func deleteAllCompletedTasks() async {
         do {
-            // Delete from personal account if linked
-            if authManager.isLinked(kind: .personal) {
-                for (listId, tasks) in personalTasks {
+            // Delete from account 1 if linked
+            if authManager.isLinked(kind: .account1) {
+                for (listId, tasks) in account1Tasks {
                     let completedTasks = tasks.filter { $0.isCompleted }
                     for task in completedTasks {
-                        try await deleteTaskFromServer(task, from: listId, for: .personal)
+                        try await deleteTaskFromServer(task, from: listId, for: .account1)
                     }
                 }
             }
             
-            // Delete from professional account if linked
-            if authManager.isLinked(kind: .professional) {
-                for (listId, tasks) in professionalTasks {
+            // Delete from account 2 if linked
+            if authManager.isLinked(kind: .account2) {
+                for (listId, tasks) in account2Tasks {
                     let completedTasks = tasks.filter { $0.isCompleted }
                     for task in completedTasks {
-                        try await deleteTaskFromServer(task, from: listId, for: .professional)
+                        try await deleteTaskFromServer(task, from: listId, for: .account2)
                     }
                 }
             }
@@ -825,22 +825,22 @@ extension TasksViewModel {
     
     func moveTaskList(_ listId: String, toAccount targetAccount: GoogleAuthManager.AccountKind) async {
         await MainActor.run {
-            if let listIndex = personalTaskLists.firstIndex(where: { $0.id == listId }) {
-                let taskList = personalTaskLists.remove(at: listIndex)
-                professionalTaskLists.append(taskList)
+            if let listIndex = account1TaskLists.firstIndex(where: { $0.id == listId }) {
+                let taskList = account1TaskLists.remove(at: listIndex)
+                account2TaskLists.append(taskList)
                 
 
                 // Update orders for both accounts
-                saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
-                saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
-            } else if let listIndex = professionalTaskLists.firstIndex(where: { $0.id == listId }) {
-                let taskList = professionalTaskLists.remove(at: listIndex)
-                personalTaskLists.append(taskList)
+                saveTaskListOrder(account1TaskLists.map { $0.id }, for: .account1)
+                saveTaskListOrder(account2TaskLists.map { $0.id }, for: .account2)
+            } else if let listIndex = account2TaskLists.firstIndex(where: { $0.id == listId }) {
+                let taskList = account2TaskLists.remove(at: listIndex)
+                account1TaskLists.append(taskList)
                 
 
                 // Update orders for both accounts
-                saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
-                saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
+                saveTaskListOrder(account1TaskLists.map { $0.id }, for: .account1)
+                saveTaskListOrder(account2TaskLists.map { $0.id }, for: .account2)
             }
         }
         // Here you would typically update the backend to reflect the account change
@@ -870,18 +870,18 @@ extension TasksViewModel {
             // Update local state
             await MainActor.run {
                 switch kind {
-                case .personal:
-                    self.personalTaskLists.removeAll { $0.id == listId }
-                    self.personalTasks.removeValue(forKey: listId)
-                    self.removeTaskListFromCache(listId: listId, for: .personal)
+                case .account1:
+                    self.account1TaskLists.removeAll { $0.id == listId }
+                    self.account1Tasks.removeValue(forKey: listId)
+                    self.removeTaskListFromCache(listId: listId, for: .account1)
                     // Save updated order
-                    saveTaskListOrder(personalTaskLists.map { $0.id }, for: .personal)
-                case .professional:
-                    self.professionalTaskLists.removeAll { $0.id == listId }
-                    self.professionalTasks.removeValue(forKey: listId)
-                    self.removeTaskListFromCache(listId: listId, for: .professional)
+                    saveTaskListOrder(account1TaskLists.map { $0.id }, for: .account1)
+                case .account2:
+                    self.account2TaskLists.removeAll { $0.id == listId }
+                    self.account2Tasks.removeValue(forKey: listId)
+                    self.removeTaskListFromCache(listId: listId, for: .account2)
                     // Save updated order
-                    saveTaskListOrder(professionalTaskLists.map { $0.id }, for: .professional)
+                    saveTaskListOrder(account2TaskLists.map { $0.id }, for: .account2)
                 }
             }
         } catch {

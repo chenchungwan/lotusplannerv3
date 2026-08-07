@@ -49,14 +49,14 @@ struct TimeboxView: View {
         return map
     }
 
-    /// Per-day merged personal+professional tasks from TasksViewModel's
+    /// Per-day merged account 1+account 2 tasks from TasksViewModel's
     /// day-keyed cache (built once via didSet on the published task dicts).
-    /// Personal wins on a duplicate listId.
+    /// Account 1 wins on a duplicate listId.
     private var weeklyTasksByDate: [Date: [String: [GoogleTask]]] {
         var map: [Date: [String: [GoogleTask]]] = [:]
         for date in weekDates {
-            let p = tasksVM.tasksForDay(date, kind: .personal)
-            let pr = tasksVM.tasksForDay(date, kind: .professional)
+            let p = tasksVM.tasksForDay(date, kind: .account1)
+            let pr = tasksVM.tasksForDay(date, kind: .account2)
             map[date] = p.merging(pr) { lhs, _ in lhs }
         }
         return map
@@ -239,13 +239,13 @@ struct TimeboxView: View {
                                         allDayHeight: allDayHeight,
                                         eventsByDate: eventsByDate,
                                         tasksByDate: tasksByDate,
-                                        personalColor: appPrefs.personalColor,
-                                        professionalColor: appPrefs.professionalColor,
+                                        account1Color: appPrefs.account1Color,
+                                        account2Color: appPrefs.account2Color,
                                         isBulkEditMode: bulkEditManager.state.isActive,
                                         selectedTaskIds: bulkEditManager.state.selectedTaskIds,
                                         onEventTap: { event in selectedEvent = event },
                                         onTaskTap: { task, listId in
-                                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                                             taskSheetSelection = TimeboxTaskSelection(
                                                 id: task.id,
                                                 task: task,
@@ -254,7 +254,7 @@ struct TimeboxView: View {
                                             )
                                         },
                                         onTaskToggle: { task, listId in
-                                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                                             Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind) }
                                         },
                                         onTaskSelectionToggle: { task in
@@ -338,9 +338,9 @@ struct TimeboxView: View {
                 task: sel.task,
                 taskListId: sel.listId,
                 accountKind: sel.accountKind,
-                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksVM.personalTaskLists,
-                professionalTaskLists: tasksVM.professionalTaskLists,
+                accentColor: sel.accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksVM.account1TaskLists,
+                account2TaskLists: tasksVM.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksVM,
                 onSave: { updatedTask in
@@ -456,8 +456,8 @@ struct TimeboxView: View {
         }
         .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
             BulkMoveDestinationPicker(
-                personalTaskLists: tasksVM.personalTaskLists,
-                professionalTaskLists: tasksVM.professionalTaskLists,
+                account1TaskLists: tasksVM.account1TaskLists,
+                account2TaskLists: tasksVM.account2TaskLists,
                 onSelect: { accountKind, listId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
@@ -521,7 +521,7 @@ struct TimeboxView: View {
                 UndoToast(
                     action: action,
                     count: undoData.count,
-                    accentColor: appPrefs.personalColor,
+                    accentColor: appPrefs.account1Color,
                     onUndo: {
                         performUndo(action: action, data: undoData)
                         bulkEditManager.state.showingUndoToast = false
@@ -545,17 +545,17 @@ struct TimeboxView: View {
     private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Add personal tasks
-        for (listId, tasks) in tasksVM.personalTasks {
+        // Add account 1 tasks
+        for (listId, tasks) in tasksVM.account1Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Add professional tasks
-        for (listId, tasks) in tasksVM.professionalTasks {
+        // Add account 2 tasks
+        for (listId, tasks) in tasksVM.account2Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 

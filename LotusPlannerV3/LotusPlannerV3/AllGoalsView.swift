@@ -470,12 +470,12 @@ struct TimeframeColumnView: View {
     private func resolveTasksForGoal(_ goal: GoalData) -> [GoalCardTaskInfo] {
         goal.linkedTasks.compactMap { linked -> GoalCardTaskInfo? in
             let tasksVM = TasksViewModel.shared
-            for (_, tasks) in tasksVM.personalTasks {
+            for (_, tasks) in tasksVM.account1Tasks {
                 if let t = tasks.first(where: { $0.id == linked.taskId }) {
                     return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
                 }
             }
-            for (_, tasks) in tasksVM.professionalTasks {
+            for (_, tasks) in tasksVM.account2Tasks {
                 if let t = tasks.first(where: { $0.id == linked.taskId }) {
                     return GoalCardTaskInfo(id: t.id, title: t.title, isCompleted: t.isCompleted, dueDate: t.dueDate)
                 }
@@ -672,7 +672,7 @@ struct LinkedTasksSection: View {
 
     private func findTask(_ linkedTask: LinkedTaskData) -> GoogleTask? {
         let accountKind = linkedTask.accountKindEnum
-        let tasksDict = accountKind == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        let tasksDict = accountKind == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
         return tasksDict[linkedTask.listId]?.first(where: { $0.id == linkedTask.taskId })
     }
 }
@@ -700,7 +700,7 @@ struct LinkedTaskRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: linkedTask.accountKind == "personal" ? "person.fill" : "briefcase.fill")
                         .font(.caption2)
-                        .foregroundColor(linkedTask.accountKind == "personal" ? appPrefs.personalColor : appPrefs.professionalColor)
+                        .foregroundColor(linkedTask.accountKind == "personal" ? appPrefs.account1Color : appPrefs.account2Color)
 
                     if let dueDate = task.dueDate {
                         Text(dueDate, style: .date)
@@ -747,47 +747,47 @@ struct TaskPickerView: View {
                         .background(Color(.systemGray6))
 
                     List {
-                        if auth.isLinked(kind: .personal) {
+                        if auth.isLinked(kind: .account1) {
                             Button(action: {
-                                selectedAccount = .personal
+                                selectedAccount = .account1
                                 selectedListId = nil
                             }) {
                                 HStack {
                                     Image(systemName: "person.fill")
-                                        .foregroundColor(appPrefs.personalColor)
-                                    Text(appPrefs.personalAccountName)
+                                        .foregroundColor(appPrefs.account1Color)
+                                    Text(appPrefs.account1Name)
                                         .foregroundColor(.primary)
                                     Spacer()
-                                    if selectedAccount == .personal {
+                                    if selectedAccount == .account1 {
                                         Image(systemName: "checkmark")
                                             .foregroundColor(.blue)
                                     }
                                 }
                             }
-                            .listRowBackground(selectedAccount == .personal ? Color.blue.opacity(0.1) : Color.clear)
+                            .listRowBackground(selectedAccount == .account1 ? Color.blue.opacity(0.1) : Color.clear)
                         }
 
-                        if auth.isLinked(kind: .professional) {
+                        if auth.isLinked(kind: .account2) {
                             Button(action: {
-                                selectedAccount = .professional
+                                selectedAccount = .account2
                                 selectedListId = nil
                             }) {
                                 HStack {
                                     Image(systemName: "briefcase.fill")
-                                        .foregroundColor(appPrefs.professionalColor)
-                                    Text(appPrefs.professionalAccountName)
+                                        .foregroundColor(appPrefs.account2Color)
+                                    Text(appPrefs.account2Name)
                                         .foregroundColor(.primary)
                                     Spacer()
-                                    if selectedAccount == .professional {
+                                    if selectedAccount == .account2 {
                                         Image(systemName: "checkmark")
                                             .foregroundColor(.blue)
                                     }
                                 }
                             }
-                            .listRowBackground(selectedAccount == .professional ? Color.blue.opacity(0.1) : Color.clear)
+                            .listRowBackground(selectedAccount == .account2 ? Color.blue.opacity(0.1) : Color.clear)
                         }
 
-                        if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
+                        if !auth.isLinked(kind: .account1) && !auth.isLinked(kind: .account2) {
                             Text("No accounts linked")
                                 .foregroundColor(.secondary)
                                 .font(.subheadline)
@@ -808,7 +808,7 @@ struct TaskPickerView: View {
                         .background(Color(.systemGray6))
 
                     if let account = selectedAccount {
-                        let taskLists = account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+                        let taskLists = account == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
 
                         List {
                             ForEach(taskLists) { list in
@@ -852,7 +852,7 @@ struct TaskPickerView: View {
                         .background(Color(.systemGray6))
 
                     if let account = selectedAccount, let listId = selectedListId {
-                        let tasksDict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+                        let tasksDict = account == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
                         let tasks = tasksDict[listId] ?? []
 
                         ScrollView {

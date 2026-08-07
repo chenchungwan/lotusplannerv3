@@ -17,13 +17,13 @@ class CalendarViewModel: ObservableObject {
     /// views can reference it directly.
     static let shared = CalendarViewModel()
 
-    @Published var personalCalendars: [GoogleCalendar] = []
-    @Published var professionalCalendars: [GoogleCalendar] = []
-    @Published var personalEvents: [GoogleCalendarEvent] = [] {
-        didSet { personalEventsByDay = buildEventsByDay(from: personalEvents) }
+    @Published var account1Calendars: [GoogleCalendar] = []
+    @Published var account2Calendars: [GoogleCalendar] = []
+    @Published var account1Events: [GoogleCalendarEvent] = [] {
+        didSet { account1EventsByDay = buildEventsByDay(from: account1Events) }
     }
-    @Published var professionalEvents: [GoogleCalendarEvent] = [] {
-        didSet { professionalEventsByDay = buildEventsByDay(from: professionalEvents) }
+    @Published var account2Events: [GoogleCalendarEvent] = [] {
+        didSet { account2EventsByDay = buildEventsByDay(from: account2Events) }
     }
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -35,8 +35,8 @@ class CalendarViewModel: ObservableObject {
     private var dismissedErrorMessage: String?
     private var currentLoadID = 0
     private var errorEligibleForAlert = false
-    private var personalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
-    private var professionalEventsByDay: [Date: [GoogleCalendarEvent]] = [:]
+    private var account1EventsByDay: [Date: [GoogleCalendarEvent]] = [:]
+    private var account2EventsByDay: [Date: [GoogleCalendarEvent]] = [:]
     private let appPrefs = AppPreferences.shared
     let dayFetchPaddingDays = 7
 
@@ -71,35 +71,37 @@ class CalendarViewModel: ObservableObject {
         return currentLoadID
     }
 
-    func finishCalendarLoad(loadID: Int, personalError: Error?, professionalError: Error?) {
+    func finishCalendarLoad(loadID: Int, account1Error: Error?, account2Error: Error?) {
         guard loadID == currentLoadID else {
             return
         }
 
-        let personalLinked = authManager.isLinked(kind: .personal)
-        let professionalLinked = authManager.isLinked(kind: .professional)
-        let personalFailed = personalLinked && personalError != nil
-        let professionalFailed = professionalLinked && professionalError != nil
-        let linkedAccountCount = [personalLinked, professionalLinked].filter { $0 }.count
-        let failedLinkedAccountCount = [personalFailed, professionalFailed].filter { $0 }.count
+        let account1Linked = authManager.isLinked(kind: .account1)
+        let account2Linked = authManager.isLinked(kind: .account2)
+        let account1Failed = account1Linked && account1Error != nil
+        let account2Failed = account2Linked && account2Error != nil
+        let linkedAccountCount = [account1Linked, account2Linked].filter { $0 }.count
+        let failedLinkedAccountCount = [account1Failed, account2Failed].filter { $0 }.count
 
-        if personalLinked && professionalLinked {
-            if personalFailed && professionalFailed {
+        if account1Linked && account2Linked {
+            let firstName = GoogleAuthManager.AccountKind.account1.displayName
+            let secondName = GoogleAuthManager.AccountKind.account2.displayName
+            if account1Failed && account2Failed {
                 errorMessage = "Failed to load calendar data for both accounts"
-            } else if personalFailed {
-                errorMessage = "Personal failed, professional loaded"
-            } else if professionalFailed {
-                errorMessage = "Professional failed, personal loaded"
+            } else if account1Failed {
+                errorMessage = "\(firstName) failed, \(secondName) loaded"
+            } else if account2Failed {
+                errorMessage = "\(secondName) failed, \(firstName) loaded"
             }
-        } else if personalLinked, let personalError {
-            errorMessage = personalError.localizedDescription
-        } else if professionalLinked, let professionalError {
-            errorMessage = professionalError.localizedDescription
+        } else if account1Linked, let account1Error {
+            errorMessage = account1Error.localizedDescription
+        } else if account2Linked, let account2Error {
+            errorMessage = account2Error.localizedDescription
         }
 
         errorEligibleForAlert = linkedAccountCount > 0 && failedLinkedAccountCount == linkedAccountCount
 
-        updateCalendarFetchStatus(personalError: personalError, professionalError: professionalError)
+        updateCalendarFetchStatus(account1Error: account1Error, account2Error: account2Error)
 
         isLoading = false
         loadingStatusMessage = ""
@@ -131,34 +133,36 @@ class CalendarViewModel: ObservableObject {
         await refreshDataForCurrentView()
     }
 
+    /// Status text for the Diagnostics screen. The caller labels the row with
+    /// the account's user-chosen name, so this omits it.
     func qualitySummary(for kind: GoogleAuthManager.AccountKind) -> String {
         if let error = lastFetchError[kind] {
-            return "\(kind.displayName) failed: \(error)"
+            return "Failed: \(error)"
         }
         if let lastFetch = lastSuccessfulFetch[kind] {
-            return "\(kind.displayName) loaded \(lastFetch.formatted(date: .omitted, time: .shortened))"
+            return "Loaded \(lastFetch.formatted(date: .omitted, time: .shortened))"
         }
-        return GoogleAuthManager.shared.isLinked(kind: kind) ? "\(kind.displayName) not loaded yet" : "\(kind.displayName) not linked"
+        return GoogleAuthManager.shared.isLinked(kind: kind) ? "Not loaded yet" : "Not linked"
     }
 
-    func updateCalendarFetchStatus(personalError: Error?, professionalError: Error?) {
+    func updateCalendarFetchStatus(account1Error: Error?, account2Error: Error?) {
         let now = Date()
 
-        if GoogleAuthManager.shared.isLinked(kind: .personal) {
-            if let personalError {
-                lastFetchError[.personal] = personalError.localizedDescription
+        if GoogleAuthManager.shared.isLinked(kind: .account1) {
+            if let account1Error {
+                lastFetchError[.account1] = account1Error.localizedDescription
             } else {
-                lastFetchError.removeValue(forKey: .personal)
-                lastSuccessfulFetch[.personal] = now
+                lastFetchError.removeValue(forKey: .account1)
+                lastSuccessfulFetch[.account1] = now
             }
         }
 
-        if GoogleAuthManager.shared.isLinked(kind: .professional) {
-            if let professionalError {
-                lastFetchError[.professional] = professionalError.localizedDescription
+        if GoogleAuthManager.shared.isLinked(kind: .account2) {
+            if let account2Error {
+                lastFetchError[.account2] = account2Error.localizedDescription
             } else {
-                lastFetchError.removeValue(forKey: .professional)
-                lastSuccessfulFetch[.professional] = now
+                lastFetchError.removeValue(forKey: .account2)
+                lastSuccessfulFetch[.account2] = now
             }
         }
 
@@ -207,17 +211,17 @@ class CalendarViewModel: ObservableObject {
     /// to whichever array we check first and DELETE/PATCH calls fail
     /// with 404 because the URL is built against the wrong calendar.
     /// Strip events that belong to the *other* account from a fetch
-    /// result. Called whenever we assign `personalEvents` /
-    /// `professionalEvents` so that an event whose `calendarId` matches
+    /// result. Called whenever we assign `account1Events` /
+    /// `account2Events` so that an event whose `calendarId` matches
     /// the opposite account's saved email never sneaks into the wrong
     /// array via cross-account calendar subscription. Without this, an
-    /// event the user created on professional ends up duplicated in
-    /// personalEvents and the personal-only views show it as a personal
-    /// event — including events created directly in Google Calendar's
-    /// web UI.
+    /// event the user created on account 2 ends up duplicated in
+    /// account1Events and the account-1-only views show it as an
+    /// account 1 event — including events created directly in Google
+    /// Calendar's web UI.
     func eventsOwned(by kind: GoogleAuthManager.AccountKind, from events: [GoogleCalendarEvent]) -> [GoogleCalendarEvent] {
         let auth = GoogleAuthManager.shared
-        let otherKind: GoogleAuthManager.AccountKind = (kind == .personal) ? .professional : .personal
+        let otherKind: GoogleAuthManager.AccountKind = (kind == .account1) ? .account2 : .account1
         let otherEmail = auth.getEmail(for: otherKind).lowercased()
         guard !otherEmail.isEmpty else { return events }
         return events.filter { event in
@@ -229,23 +233,23 @@ class CalendarViewModel: ObservableObject {
     func accountKind(for event: GoogleCalendarEvent) -> GoogleAuthManager.AccountKind {
         let auth = GoogleAuthManager.shared
         let owner = (event.calendarId ?? "").lowercased()
-        let professionalEmail = auth.getEmail(for: .professional).lowercased()
-        let personalEmail = auth.getEmail(for: .personal).lowercased()
+        let account2Email = auth.getEmail(for: .account2).lowercased()
+        let account1Email = auth.getEmail(for: .account1).lowercased()
 
-        if !professionalEmail.isEmpty, owner == professionalEmail {
-            return .professional
+        if !account2Email.isEmpty, owner == account2Email {
+            return .account2
         }
-        if !personalEmail.isEmpty, owner == personalEmail {
-            return .personal
+        if !account1Email.isEmpty, owner == account1Email {
+            return .account1
         }
 
         // Fallback when calendarId is a non-primary calendar (e.g. a
         // shared "Family" calendar or a holiday calendar). Trust the
         // array that uniquely owns the event id.
-        let inPersonal = personalEvents.contains { $0.id == event.id }
-        let inProfessional = professionalEvents.contains { $0.id == event.id }
-        if inProfessional && !inPersonal { return .professional }
-        if inPersonal && !inProfessional { return .personal }
+        let inAccount1 = account1Events.contains { $0.id == event.id }
+        let inAccount2 = account2Events.contains { $0.id == event.id }
+        if inAccount2 && !inAccount1 { return .account2 }
+        if inAccount1 && !inAccount2 { return .account1 }
         return event.ownerAccountKind
     }
 
@@ -253,30 +257,30 @@ class CalendarViewModel: ObservableObject {
         let key = normalizedDay(date)
         let result: [GoogleCalendarEvent]
         switch account {
-        case .some(.personal):
-            result = personalEventsByDay[key] ?? []
-        case .some(.professional):
-            result = professionalEventsByDay[key] ?? []
+        case .some(.account1):
+            result = account1EventsByDay[key] ?? []
+        case .some(.account2):
+            result = account2EventsByDay[key] ?? []
         case .none:
-            let personal = personalEventsByDay[key] ?? []
-            let professional = professionalEventsByDay[key] ?? []
-            if personal.isEmpty {
-                result = professional
-            } else if professional.isEmpty {
-                result = personal
+            let account1 = account1EventsByDay[key] ?? []
+            let account2 = account2EventsByDay[key] ?? []
+            if account1.isEmpty {
+                result = account2
+            } else if account2.isEmpty {
+                result = account1
             } else {
                 // Dedupe by event id so a single Google event that
                 // appears in both accounts' fetches (via Workspace
                 // calendar sharing or one account subscribing to the
-                // other's calendar) doesn't render twice. Personal
-                // wins on collision so the card stays personal-colored.
+                // other's calendar) doesn't render twice. Account 1
+                // wins on collision so the card keeps its color.
                 var seen = Set<String>()
                 var merged: [GoogleCalendarEvent] = []
-                merged.reserveCapacity(personal.count + professional.count)
-                for event in personal where seen.insert(event.id).inserted {
+                merged.reserveCapacity(account1.count + account2.count)
+                for event in account1 where seen.insert(event.id).inserted {
                     merged.append(event)
                 }
-                for event in professional where seen.insert(event.id).inserted {
+                for event in account2 where seen.insert(event.id).inserted {
                     merged.append(event)
                 }
                 result = merged.sorted(by: eventSortComparator)
@@ -361,44 +365,44 @@ class CalendarViewModel: ObservableObject {
         let loadID = beginCalendarLoad(statusMessage: "Loading calendar month...")
 
         // Debug: Check account linking status
-        let personalLinked = authManager.isLinked(kind: .personal)
-        let professionalLinked = authManager.isLinked(kind: .professional)
+        let account1Linked = authManager.isLinked(kind: .account1)
+        let account2Linked = authManager.isLinked(kind: .account2)
 
-        var personalError: Error?
-        var professionalError: Error?
+        var account1Error: Error?
+        var account2Error: Error?
 
         await withTaskGroup(of: Void.self) { group in
-            if personalLinked {
+            if account1Linked {
                 group.addTask {
                     do {
-                        let events = try await CalendarManager.shared.fetchEvents(for: .personal, startDate: monthStart, endDate: monthEnd)
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .personal)
+                        let events = try await CalendarManager.shared.fetchEvents(for: .account1, startDate: monthStart, endDate: monthEnd)
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .account1)
                         await MainActor.run {
-                            self.personalEvents = self.eventsOwned(by: .personal, from: events)
-                            self.personalCalendars = calendars
+                            self.account1Events = self.eventsOwned(by: .account1, from: events)
+                            self.account1Calendars = calendars
                         }
                     } catch {
-                        personalError = error
+                        account1Error = error
                     }
                 }
             }
-            if professionalLinked {
+            if account2Linked {
                 group.addTask {
                     do {
-                        let events = try await CalendarManager.shared.fetchEvents(for: .professional, startDate: monthStart, endDate: monthEnd)
-                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .professional)
+                        let events = try await CalendarManager.shared.fetchEvents(for: .account2, startDate: monthStart, endDate: monthEnd)
+                        let calendars = try await CalendarManager.shared.fetchCalendars(for: .account2)
                         await MainActor.run {
-                            self.professionalEvents = self.eventsOwned(by: .professional, from: events)
-                            self.professionalCalendars = calendars
+                            self.account2Events = self.eventsOwned(by: .account2, from: events)
+                            self.account2Calendars = calendars
                         }
                     } catch {
-                        professionalError = error
+                        account2Error = error
                     }
                 }
             }
         }
 
-        finishCalendarLoad(loadID: loadID, personalError: personalError, professionalError: professionalError)
+        finishCalendarLoad(loadID: loadID, account1Error: account1Error, account2Error: account2Error)
     }
 
     let authManager = GoogleAuthManager.shared
@@ -439,10 +443,10 @@ class CalendarViewModel: ObservableObject {
         cachedCalendars.removeAll()
         cacheTimestamps.removeAll()
         cacheAccessOrder.removeAll()
-        personalEvents = []
-        professionalEvents = []
-        personalCalendars = []
-        professionalCalendars = []
+        account1Events = []
+        account2Events = []
+        account1Calendars = []
+        account2Calendars = []
         // Clear disk cache keys as well
         let defaults = UserDefaults.standard
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(diskCacheKeyPrefix) || key.hasPrefix(diskCacheTimestampPrefix) {
@@ -452,17 +456,17 @@ class CalendarViewModel: ObservableObject {
 
     // Clear cache for a specific month
     func clearCacheForMonth(containing date: Date) {
-        let personalKey = monthCacheKey(for: date, accountKind: .personal)
-        let professionalKey = monthCacheKey(for: date, accountKind: .professional)
+        let account1Key = monthCacheKey(for: date, accountKind: .account1)
+        let account2Key = monthCacheKey(for: date, accountKind: .account2)
 
-        cachedEvents.removeValue(forKey: personalKey)
-        cachedEvents.removeValue(forKey: professionalKey)
-        cachedCalendars.removeValue(forKey: personalKey)
-        cachedCalendars.removeValue(forKey: professionalKey)
-        cacheTimestamps.removeValue(forKey: personalKey)
-        cacheTimestamps.removeValue(forKey: professionalKey)
-        cacheAccessOrder.removeValue(forKey: personalKey)
-        cacheAccessOrder.removeValue(forKey: professionalKey)
+        cachedEvents.removeValue(forKey: account1Key)
+        cachedEvents.removeValue(forKey: account2Key)
+        cachedCalendars.removeValue(forKey: account1Key)
+        cachedCalendars.removeValue(forKey: account2Key)
+        cacheTimestamps.removeValue(forKey: account1Key)
+        cacheTimestamps.removeValue(forKey: account2Key)
+        cacheAccessOrder.removeValue(forKey: account1Key)
+        cacheAccessOrder.removeValue(forKey: account2Key)
     }
 
     func monthCacheKey(for date: Date, accountKind: GoogleAuthManager.AccountKind) -> String {

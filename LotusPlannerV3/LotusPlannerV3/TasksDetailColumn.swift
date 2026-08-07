@@ -16,7 +16,7 @@ struct TasksDetailColumn: View {
     /// User-selected account in the Edit List sheet. When this differs from
     /// the list's current account on Save, the list (and all its tasks) is
     /// moved across accounts.
-    @State private var renameAccount: GoogleAuthManager.AccountKind = .personal
+    @State private var renameAccount: GoogleAuthManager.AccountKind = .account1
 
     // State for deleting list
     @State private var showingDeleteConfirmation = false
@@ -55,10 +55,10 @@ struct TasksDetailColumn: View {
         }
         
         switch accountKind {
-        case .personal:
-            return tasksVM.personalTasks[listId] ?? []
-        case .professional:
-            return tasksVM.professionalTasks[listId] ?? []
+        case .account1:
+            return tasksVM.account1Tasks[listId] ?? []
+        case .account2:
+            return tasksVM.account2Tasks[listId] ?? []
         }
     }
     
@@ -114,10 +114,10 @@ struct TasksDetailColumn: View {
         
         let lists: [GoogleTaskList]
         switch accountKind {
-        case .personal:
-            lists = tasksVM.personalTaskLists
-        case .professional:
-            lists = tasksVM.professionalTaskLists
+        case .account1:
+            lists = tasksVM.account1TaskLists
+        case .account2:
+            lists = tasksVM.account2TaskLists
         }
         
         return lists.first { $0.id == listId }?.title
@@ -127,16 +127,16 @@ struct TasksDetailColumn: View {
         guard let accountKind = selectedAccountKind else {
             return .gray
         }
-        return accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
+        return accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color
     }
 
     func getListName(for listId: String, accountKind: GoogleAuthManager.AccountKind) -> String? {
         let lists: [GoogleTaskList]
         switch accountKind {
-        case .personal:
-            lists = tasksVM.personalTaskLists
-        case .professional:
-            lists = tasksVM.professionalTaskLists
+        case .account1:
+            lists = tasksVM.account1TaskLists
+        case .account2:
+            lists = tasksVM.account2TaskLists
         }
         return lists.first { $0.id == listId }?.title
     }
@@ -148,7 +148,7 @@ struct TasksDetailColumn: View {
                 HStack {
                     Button {
                         renameText = listTitle
-                        renameAccount = selectedAccountKind ?? .personal
+                        renameAccount = selectedAccountKind ?? .account1
                         showingRenameSheet = true
                     } label: {
                         Text(listTitle)
@@ -444,8 +444,8 @@ struct TasksDetailColumn: View {
                     taskListId: listId,
                     accountKind: accountKind,
                     accentColor: accentColor,
-                    personalTaskLists: tasksVM.personalTaskLists,
-                    professionalTaskLists: tasksVM.professionalTaskLists,
+                    account1TaskLists: tasksVM.account1TaskLists,
+                    account2TaskLists: tasksVM.account2TaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
                     onSave: { updatedTask in
@@ -481,8 +481,8 @@ struct TasksDetailColumn: View {
                     listName: listTitle,
                     accountKind: accountKind,
                     accentColor: accentColor,
-                    hasPersonal: auth.isLinked(kind: .personal),
-                    hasProfessional: auth.isLinked(kind: .professional),
+                    hasAccount1: auth.isLinked(kind: .account1),
+                    hasAccount2: auth.isLinked(kind: .account2),
                     newName: $renameText,
                     newAccount: $renameAccount,
                     onSave: {
@@ -517,10 +517,10 @@ struct TasksDetailColumn: View {
                     sourceListId: sourceListId,
                     sourceAccountKind: sourceAccountKind,
                     selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
-                    hasPersonal: auth.isLinked(kind: .personal),
-                    hasProfessional: auth.isLinked(kind: .professional),
+                    account1Color: appPrefs.account1Color,
+                    account2Color: appPrefs.account2Color,
+                    hasAccount1: auth.isLinked(kind: .account1),
+                    hasAccount2: auth.isLinked(kind: .account2),
                     onMove: { destinationListId, destinationAccountKind in
                         // Store the pending destination and show confirmation
                         bulkEditManager.state.pendingMoveDestination = (destinationListId, destinationAccountKind)
@@ -731,10 +731,10 @@ struct TasksDetailColumn: View {
                 // Snapshot tasks before mutating anything.
                 let sourceTasks: [GoogleTask]
                 switch fromAccount {
-                case .personal:
-                    sourceTasks = tasksVM.personalTasks[listId] ?? []
-                case .professional:
-                    sourceTasks = tasksVM.professionalTasks[listId] ?? []
+                case .account1:
+                    sourceTasks = tasksVM.account1Tasks[listId] ?? []
+                case .account2:
+                    sourceTasks = tasksVM.account2Tasks[listId] ?? []
                 }
 
                 guard let newListId = await tasksVM.createTaskList(title: newName, for: toAccount) else {

@@ -30,13 +30,13 @@ struct TasksView: View {
     }
     @State private var taskSheetSelection: TasksViewTaskSelection?
     @State private var showingAddItem = false
-    // Personal/Professional task divider
-    @State private var tasksPersonalWidth: CGFloat
+    // Account 1/Account 2 task divider
+    @State private var tasksAccount1Width: CGFloat
     @State private var isTasksDividerDragging = false
     
     init() {
         // Initialize divider position from AppPreferences
-        self._tasksPersonalWidth = State(initialValue: AppPreferences.shared.tasksViewPersonalWidth)
+        self._tasksAccount1Width = State(initialValue: AppPreferences.shared.tasksViewAccount1Width)
     }
     @State private var showingTaskDetails = false
     @State private var showingNewTask = false
@@ -44,8 +44,8 @@ struct TasksView: View {
     @State private var allSubfilter: AllTaskSubfilter = .all
     
     // MARK: - Filtered Tasks Caching
-    @State private var cachedFilteredPersonalTasks: [String: [GoogleTask]] = [:]
-    @State private var cachedFilteredProfessionalTasks: [String: [GoogleTask]] = [:]
+    @State private var cachedFilteredAccount1Tasks: [String: [GoogleTask]] = [:]
+    @State private var cachedFilteredAccount2Tasks: [String: [GoogleTask]] = [:]
     @State private var lastFilterState: String = "" // Tracks filter+date+prefs state
     
     // Navigation date picker state
@@ -87,12 +87,12 @@ struct TasksView: View {
     }
     
     // MARK: - Local Filtering (No API calls)
-    private var filteredPersonalTasks: [String: [GoogleTask]] {
-        return getCachedFilteredTasks(for: viewModel.personalTasks, accountKind: .personal)
+    private var filteredAccount1Tasks: [String: [GoogleTask]] {
+        return getCachedFilteredTasks(for: viewModel.account1Tasks, accountKind: .account1)
     }
     
-    private var filteredProfessionalTasks: [String: [GoogleTask]] {
-        return getCachedFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional)
+    private var filteredAccount2Tasks: [String: [GoogleTask]] {
+        return getCachedFilteredTasks(for: viewModel.account2Tasks, accountKind: .account2)
     }
     
     private func getCachedFilteredTasks(for tasksDict: [String: [GoogleTask]], accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
@@ -101,7 +101,7 @@ struct TasksView: View {
         
         // Check if we can use cached results
         let cacheIsValid = lastFilterState == currentFilterState
-        let cachedResults = accountKind == .personal ? cachedFilteredPersonalTasks : cachedFilteredProfessionalTasks
+        let cachedResults = accountKind == .account1 ? cachedFilteredAccount1Tasks : cachedFilteredAccount2Tasks
         
         // Return cached results if valid and non-empty, or if input is empty
         if cacheIsValid && !cachedResults.isEmpty {
@@ -114,10 +114,10 @@ struct TasksView: View {
         // Update cache
         DispatchQueue.main.async {
             self.lastFilterState = currentFilterState
-            if accountKind == .personal {
-                self.cachedFilteredPersonalTasks = filtered
+            if accountKind == .account1 {
+                self.cachedFilteredAccount1Tasks = filtered
             } else {
-                self.cachedFilteredProfessionalTasks = filtered
+                self.cachedFilteredAccount2Tasks = filtered
             }
         }
         
@@ -236,36 +236,36 @@ struct TasksView: View {
     private func stackedTasksView(geometry: GeometryProxy) -> some View {
         ScrollView {
             VStack(spacing: adaptiveSpacing) {
-                // Personal Tasks Section
-                if authManager.isLinked(kind: .personal) {
+                // Account 1 Tasks Section
+                if authManager.isLinked(kind: .account1) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("\(appPrefs.personalAccountName) Tasks")
+                        Text("\(appPrefs.account1Name) Tasks")
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundColor(appPrefs.personalColor)
+                            .foregroundColor(appPrefs.account1Color)
                             .padding(.horizontal, adaptivePadding)
 
                         TasksComponent(
-                            taskLists: viewModel.personalTaskLists,
-                            tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
+                            taskLists: viewModel.account1TaskLists,
+                            tasksDict: getDirectFilteredTasks(for: viewModel.account1Tasks, accountKind: .account1),
+                            accentColor: appPrefs.account1Color,
+                            accountType: .account1,
                             onTaskToggle: { task, listId in
                                 Task {
-                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                                 }
                             },
                             onTaskDetails: { task, listId in
-                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .account1)
                             },
                             onListRename: { listId, newName in
                                 Task {
-                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                                 }
                             },
                             onOrderChanged: { newOrder in
                                 Task {
-                                    await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                                    await viewModel.updateTaskListOrder(newOrder, for: .account1)
                                 }
                             },
                             horizontalCards: false,
@@ -284,36 +284,36 @@ struct TasksView: View {
                     }
                 }
                 
-                // Professional Tasks Section
-                if authManager.isLinked(kind: .professional) {
+                // Account 2 Tasks Section
+                if authManager.isLinked(kind: .account2) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("\(appPrefs.professionalAccountName) Tasks")
+                        Text("\(appPrefs.account2Name) Tasks")
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundColor(appPrefs.professionalColor)
+                            .foregroundColor(appPrefs.account2Color)
                             .padding(.horizontal, adaptivePadding)
 
                         TasksComponent(
-                            taskLists: viewModel.professionalTaskLists,
-                            tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
+                            taskLists: viewModel.account2TaskLists,
+                            tasksDict: getDirectFilteredTasks(for: viewModel.account2Tasks, accountKind: .account2),
+                            accentColor: appPrefs.account2Color,
+                            accountType: .account2,
                             onTaskToggle: { task, listId in
                                 Task {
-                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                    await viewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                                 }
                             },
                             onTaskDetails: { task, listId in
-                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .account2)
                             },
                             onListRename: { listId, newName in
                                 Task {
-                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                    await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                                 }
                             },
                             onOrderChanged: { newOrder in
                                 Task {
-                                    await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                                    await viewModel.updateTaskListOrder(newOrder, for: .account2)
                                 }
                             },
                             horizontalCards: false,
@@ -340,7 +340,7 @@ struct TasksView: View {
     var body: some View {
         GeometryReader { geometry in
             Group {
-                if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+                if authManager.isLinked(kind: .account1) || authManager.isLinked(kind: .account2) {
                     mainContent(geometry: geometry)
                 } else {
                     noAccountsView
@@ -348,8 +348,8 @@ struct TasksView: View {
             }
             .onAppear {
                 // Initialize screen-dependent values
-                if tasksPersonalWidth == 0 {
-                    tasksPersonalWidth = appPrefs.tasksViewPersonalWidth
+                if tasksAccount1Width == 0 {
+                    tasksAccount1Width = appPrefs.tasksViewAccount1Width
                 }
             }
         }
@@ -371,9 +371,9 @@ struct TasksView: View {
                 task: selection.task,
                 taskListId: selection.listId,
                 accountKind: selection.accountKind,
-                accentColor: selection.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: viewModel.personalTaskLists,
-                professionalTaskLists: viewModel.professionalTaskLists,
+                accentColor: selection.accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: viewModel.account1TaskLists,
+                account2TaskLists: viewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: viewModel,
                 onSave: { updatedTask in
@@ -392,10 +392,10 @@ struct TasksView: View {
         }
         .sheet(isPresented: $showingNewTask) {
             // Use the same UI as Task Details for creating a task
-            let personalLinked = authManager.isLinked(kind: .personal)
-            let _ = authManager.isLinked(kind: .professional)
-            let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (personalLinked ? .personal : .professional)
-            let defaultLists = defaultAccount == .personal ? viewModel.personalTaskLists : viewModel.professionalTaskLists
+            let account1Linked = authManager.isLinked(kind: .account1)
+            let _ = authManager.isLinked(kind: .account2)
+            let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (account1Linked ? .account1 : .account2)
+            let defaultLists = defaultAccount == .account1 ? viewModel.account1TaskLists : viewModel.account2TaskLists
             let defaultListId = defaultLists.first?.id ?? ""
             let newTask = GoogleTask(
                 id: UUID().uuidString,
@@ -410,9 +410,9 @@ struct TasksView: View {
                 task: newTask,
                 taskListId: defaultListId,
                 accountKind: defaultAccount,
-                accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: viewModel.personalTaskLists,
-                professionalTaskLists: viewModel.professionalTaskLists,
+                accentColor: defaultAccount == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: viewModel.account1TaskLists,
+                account2TaskLists: viewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: viewModel,
                 onSave: { _ in },
@@ -462,8 +462,8 @@ struct TasksView: View {
                 if bulkEditManager.state.isActive {
                     BulkEditToolbarView(
                         bulkEditManager: bulkEditManager,
-                        visibleOpenTaskIds: filteredPersonalTasks.openTaskIds
-                            .union(filteredProfessionalTasks.openTaskIds)
+                        visibleOpenTaskIds: filteredAccount1Tasks.openTaskIds
+                            .union(filteredAccount2Tasks.openTaskIds)
                     )
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
@@ -516,8 +516,8 @@ struct TasksView: View {
         }
         .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
             BulkMoveDestinationPicker(
-                personalTaskLists: viewModel.personalTaskLists,
-                professionalTaskLists: viewModel.professionalTaskLists,
+                account1TaskLists: viewModel.account1TaskLists,
+                account2TaskLists: viewModel.account2TaskLists,
                 onSelect: { accountKind, listId in
                     bulkEditManager.state.pendingMoveDestination = (listId: listId, accountKind: accountKind)
                     performBulkMove()
@@ -541,7 +541,7 @@ struct TasksView: View {
                 UndoToast(
                     action: action,
                     count: undoData.count,
-                    accentColor: appPrefs.personalColor,
+                    accentColor: appPrefs.account1Color,
                     onUndo: {
                         performUndo(action: action, data: undoData)
                         bulkEditManager.state.showingUndoToast = false
@@ -607,26 +607,26 @@ struct TasksView: View {
         }
         .onChange(of: selectedFilter) { _, newValue in
             // Clear cache when filter changes
-            cachedFilteredPersonalTasks.removeAll()
-            cachedFilteredProfessionalTasks.removeAll()
+            cachedFilteredAccount1Tasks.removeAll()
+            cachedFilteredAccount2Tasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: allSubfilter) { _, newValue in
             // Clear cache when subfilter changes
-            cachedFilteredPersonalTasks.removeAll()
-            cachedFilteredProfessionalTasks.removeAll()
+            cachedFilteredAccount1Tasks.removeAll()
+            cachedFilteredAccount2Tasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: referenceDate) { _, newValue in
             // Clear cache when reference date changes
-            cachedFilteredPersonalTasks.removeAll()
-            cachedFilteredProfessionalTasks.removeAll()
+            cachedFilteredAccount1Tasks.removeAll()
+            cachedFilteredAccount2Tasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: appPrefs.hideCompletedTasks) { _, newValue in
             // Clear cache when hide completed tasks setting changes
-            cachedFilteredPersonalTasks.removeAll()
-            cachedFilteredProfessionalTasks.removeAll()
+            cachedFilteredAccount1Tasks.removeAll()
+            cachedFilteredAccount2Tasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: navigationManager.currentInterval) { _, newValue in
@@ -644,15 +644,15 @@ struct TasksView: View {
             // Update reference date to current date when interval changes
             referenceDate = Date()
             // Clear cache when interval changes
-            cachedFilteredPersonalTasks.removeAll()
-            cachedFilteredProfessionalTasks.removeAll()
+            cachedFilteredAccount1Tasks.removeAll()
+            cachedFilteredAccount2Tasks.removeAll()
             lastFilterState = ""
         }
         .onChange(of: navigationManager.currentDate) { _, newValue in
             referenceDate = newValue
             // Clear cache when date changes
-            cachedFilteredPersonalTasks.removeAll()
-            cachedFilteredProfessionalTasks.removeAll()
+            cachedFilteredAccount1Tasks.removeAll()
+            cachedFilteredAccount2Tasks.removeAll()
             lastFilterState = ""
         }
     }
@@ -673,8 +673,8 @@ struct TasksView: View {
         case .all:
             break
         }
-        cachedFilteredPersonalTasks.removeAll()
-        cachedFilteredProfessionalTasks.removeAll()
+        cachedFilteredAccount1Tasks.removeAll()
+        cachedFilteredAccount2Tasks.removeAll()
         lastFilterState = ""
     }
     
@@ -695,29 +695,29 @@ struct TasksView: View {
     
     private var horizontalTasksView: some View {
         VStack(spacing: 0) {
-            // Personal Tasks
-            if authManager.isLinked(kind: .personal) {
+            // Account 1 Tasks
+            if authManager.isLinked(kind: .account1) {
                 TasksComponent(
-                    taskLists: viewModel.personalTaskLists,
-                    tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
+                    taskLists: viewModel.account1TaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.account1Tasks, accountKind: .account1),
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
                     onTaskToggle: { task, listId in
                         Task {
-                            await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .account1)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                            await viewModel.updateTaskListOrder(newOrder, for: .account1)
                         }
                     },
                     horizontalCards: true,
@@ -734,29 +734,29 @@ struct TasksView: View {
                 )
             }
 
-            // Professional Tasks
-            if authManager.isLinked(kind: .professional) {
+            // Account 2 Tasks
+            if authManager.isLinked(kind: .account2) {
                 TasksComponent(
-                    taskLists: viewModel.professionalTaskLists,
-                    tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
-                    accentColor: appPrefs.professionalColor,
-                    accountType: .professional,
+                    taskLists: viewModel.account2TaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.account2Tasks, accountKind: .account2),
+                    accentColor: appPrefs.account2Color,
+                    accountType: .account2,
                     onTaskToggle: { task, listId in
                         Task {
-                            await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .account2)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                            await viewModel.updateTaskListOrder(newOrder, for: .account2)
                         }
                     },
                     horizontalCards: true,
@@ -779,29 +779,29 @@ struct TasksView: View {
     
     private func verticalTasksView(geometry: GeometryProxy) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            // Personal Tasks Column
-            if authManager.isLinked(kind: .personal) {
+            // Account 1 Tasks Column
+            if authManager.isLinked(kind: .account1) {
                 TasksComponent(
-                    taskLists: viewModel.personalTaskLists,
-                    tasksDict: getDirectFilteredTasks(for: viewModel.personalTasks, accountKind: .personal),
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
+                    taskLists: viewModel.account1TaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.account1Tasks, accountKind: .account1),
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
                     onTaskToggle: { task, listId in
                         Task {
-                            await viewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .account1)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await viewModel.updateTaskListOrder(newOrder, for: .personal)
+                            await viewModel.updateTaskListOrder(newOrder, for: .account1)
                         }
                     },
                     horizontalCards: false,
@@ -816,37 +816,37 @@ struct TasksView: View {
                         }
                     }
                 )
-                .frame(width: authManager.isLinked(kind: .professional) ? tasksPersonalWidth : geometry.size.width, alignment: .topLeading)
+                .frame(width: authManager.isLinked(kind: .account2) ? tasksAccount1Width : geometry.size.width, alignment: .topLeading)
             }
             
             // Vertical divider (only show if both accounts are linked and not on mobile)
-            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && !shouldUseStackedLayout {
+            if authManager.isLinked(kind: .account1) && authManager.isLinked(kind: .account2) && !shouldUseStackedLayout {
                 tasksViewDivider(geometry: geometry)
             }
             
-            // Professional Tasks Column
-            if authManager.isLinked(kind: .professional) {
+            // Account 2 Tasks Column
+            if authManager.isLinked(kind: .account2) {
                 TasksComponent(
-                    taskLists: viewModel.professionalTaskLists,
-                    tasksDict: getDirectFilteredTasks(for: viewModel.professionalTasks, accountKind: .professional),
-                    accentColor: appPrefs.professionalColor,
-                    accountType: .professional,
+                    taskLists: viewModel.account2TaskLists,
+                    tasksDict: getDirectFilteredTasks(for: viewModel.account2Tasks, accountKind: .account2),
+                    accentColor: appPrefs.account2Color,
+                    accountType: .account2,
                     onTaskToggle: { task, listId in
                         Task {
-                            await viewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            await viewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .professional)
+                        taskSheetSelection = TasksViewTaskSelection(task: task, listId: listId, accountKind: .account2)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            await viewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await viewModel.updateTaskListOrder(newOrder, for: .professional)
+                            await viewModel.updateTaskListOrder(newOrder, for: .account2)
                         }
                     },
                     horizontalCards: false,
@@ -861,7 +861,7 @@ struct TasksView: View {
                         }
                     }
                 )
-                .frame(width: authManager.isLinked(kind: .personal) ? (geometry.size.width - tasksPersonalWidth - 8) : geometry.size.width, alignment: .topLeading)
+                .frame(width: authManager.isLinked(kind: .account1) ? (geometry.size.width - tasksAccount1Width - 8) : geometry.size.width, alignment: .topLeading)
             }
         }
         .padding(.horizontal, 0)
@@ -903,28 +903,28 @@ struct TasksView: View {
                 DragGesture()
                     .onChanged { value in
                         isTasksDividerDragging = true
-                        let newWidth = tasksPersonalWidth + value.translation.width
-                        tasksPersonalWidth = max(200, min(geometry.size.width - 200, newWidth))
+                        let newWidth = tasksAccount1Width + value.translation.width
+                        tasksAccount1Width = max(200, min(geometry.size.width - 200, newWidth))
                     }
                     .onEnded { _ in
                         isTasksDividerDragging = false
-                        appPrefs.updateTasksViewPersonalWidth(tasksPersonalWidth)
+                        appPrefs.updateTasksViewAccount1Width(tasksAccount1Width)
                     }
             )
     }
     
     // Helper computed properties
     private var shouldShowDebugInfo: Bool {
-        let hasLinkedAccounts = authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional)
+        let hasLinkedAccounts = authManager.isLinked(kind: .account1) || authManager.isLinked(kind: .account2)
         let hasNoTasks = totalTaskCount == 0
         let isNotLoading = !viewModel.isLoading
         return hasLinkedAccounts && hasNoTasks && isNotLoading
     }
     
     private var totalTaskCount: Int {
-        let personalCount = viewModel.personalTasks.values.flatMap { $0 }.count
-        let professionalCount = viewModel.professionalTasks.values.flatMap { $0 }.count
-        return personalCount + professionalCount
+        let account1Count = viewModel.account1Tasks.values.flatMap { $0 }.count
+        let account2Count = viewModel.account2Tasks.values.flatMap { $0 }.count
+        return account1Count + account2Count
     }
     
     // MARK: - Helper Methods
@@ -1015,21 +1015,21 @@ struct TasksView: View {
     // MARK: - Bulk Edit Operations
 
     private func performBulkComplete() {
-        // Get all selected tasks from both personal and professional accounts
+        // Get all selected tasks from both accounts
         let selectedIds = bulkEditManager.state.selectedTaskIds
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Collect from personal tasks
-        for (listId, tasks) in viewModel.personalTasks {
+        // Collect from account 1 tasks
+        for (listId, tasks) in viewModel.account1Tasks {
             for task in tasks where selectedIds.contains(task.id) && !task.isCompleted {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Collect from professional tasks
-        for (listId, tasks) in viewModel.professionalTasks {
+        // Collect from account 2 tasks
+        for (listId, tasks) in viewModel.account2Tasks {
             for task in tasks where selectedIds.contains(task.id) && !task.isCompleted {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 
@@ -1056,21 +1056,21 @@ struct TasksView: View {
     }
 
     private func performBulkDelete() {
-        // Get all selected tasks from both personal and professional accounts
+        // Get all selected tasks from both accounts
         let selectedIds = bulkEditManager.state.selectedTaskIds
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Collect from personal tasks
-        for (listId, tasks) in viewModel.personalTasks {
+        // Collect from account 1 tasks
+        for (listId, tasks) in viewModel.account1Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Collect from professional tasks
-        for (listId, tasks) in viewModel.professionalTasks {
+        // Collect from account 2 tasks
+        for (listId, tasks) in viewModel.account2Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 
@@ -1098,21 +1098,21 @@ struct TasksView: View {
     private func performBulkMove() {
         guard let destination = bulkEditManager.state.pendingMoveDestination else { return }
 
-        // Get all selected tasks from both personal and professional accounts
+        // Get all selected tasks from both accounts
         let selectedIds = bulkEditManager.state.selectedTaskIds
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Collect from personal tasks
-        for (listId, tasks) in viewModel.personalTasks {
+        // Collect from account 1 tasks
+        for (listId, tasks) in viewModel.account1Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Collect from professional tasks
-        for (listId, tasks) in viewModel.professionalTasks {
+        // Collect from account 2 tasks
+        for (listId, tasks) in viewModel.account2Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 
@@ -1140,21 +1140,21 @@ struct TasksView: View {
     }
 
     private func performBulkUpdateDueDate() {
-        // Get all selected tasks from both personal and professional accounts
+        // Get all selected tasks from both accounts
         let selectedIds = bulkEditManager.state.selectedTaskIds
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Collect from personal tasks
-        for (listId, tasks) in viewModel.personalTasks {
+        // Collect from account 1 tasks
+        for (listId, tasks) in viewModel.account1Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Collect from professional tasks
-        for (listId, tasks) in viewModel.professionalTasks {
+        // Collect from account 2 tasks
+        for (listId, tasks) in viewModel.account2Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 
@@ -1184,21 +1184,21 @@ struct TasksView: View {
     }
 
     private func performBulkUpdatePriority() {
-        // Get all selected tasks from both personal and professional accounts
+        // Get all selected tasks from both accounts
         let selectedIds = bulkEditManager.state.selectedTaskIds
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Collect from personal tasks
-        for (listId, tasks) in viewModel.personalTasks {
+        // Collect from account 1 tasks
+        for (listId, tasks) in viewModel.account1Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Collect from professional tasks
-        for (listId, tasks) in viewModel.professionalTasks {
+        // Collect from account 2 tasks
+        for (listId, tasks) in viewModel.account2Tasks {
             for task in tasks where selectedIds.contains(task.id) {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 

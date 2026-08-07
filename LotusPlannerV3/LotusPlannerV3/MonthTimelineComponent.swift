@@ -3,10 +3,10 @@ import SwiftUI
 struct MonthTimelineComponent: View {
     let currentDate: Date
     let monthEvents: [Date: [GoogleCalendarEvent]]
-    let personalEvents: [GoogleCalendarEvent]
-    let professionalEvents: [GoogleCalendarEvent]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Events: [GoogleCalendarEvent]
+    let account2Events: [GoogleCalendarEvent]
+    let account1Color: Color
+    let account2Color: Color
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onDayTap: ((Date) -> Void)?
     
@@ -14,13 +14,13 @@ struct MonthTimelineComponent: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
-    init(currentDate: Date, monthEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
+    init(currentDate: Date, monthEvents: [Date: [GoogleCalendarEvent]], account1Events: [GoogleCalendarEvent], account2Events: [GoogleCalendarEvent], account1Color: Color, account2Color: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil) {
         self.currentDate = currentDate
         self.monthEvents = monthEvents
-        self.personalEvents = personalEvents
-        self.professionalEvents = professionalEvents
-        self.personalColor = personalColor
-        self.professionalColor = professionalColor
+        self.account1Events = account1Events
+        self.account2Events = account2Events
+        self.account1Color = account1Color
+        self.account2Color = account2Color
         self.onEventTap = onEventTap
         self.onDayTap = onDayTap
     }
@@ -228,8 +228,8 @@ struct MonthTimelineComponent: View {
     
     // MARK: - Priority 5: Compact Event Display (No Dot, No Time)
     private func eventBlock(event: GoogleCalendarEvent, columnWidth: CGFloat, config: (fontSize: Font, showTime: Bool, maxVisibleEvents: Int)) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let eventColor = isPersonal ? personalColor : professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let eventColor = isAccount1 ? account1Color : account2Color
         let padding = adaptivePadding(columnWidth: columnWidth)
         
         // Very small screens: just colored bar

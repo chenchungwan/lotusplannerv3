@@ -76,9 +76,9 @@ struct DayViewNewCompact: View {
                     task: t,
                     taskListId: listId,
                     accountKind: account,
-                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: tasksVM.personalTaskLists,
-                    professionalTaskLists: tasksVM.professionalTaskLists,
+                    accentColor: account == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                    account1TaskLists: tasksVM.account1TaskLists,
+                    account2TaskLists: tasksVM.account2TaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
                     onSave: { updatedTask in
@@ -268,10 +268,10 @@ struct DayViewNewCompact: View {
                                     guard let t1 = e1.startTime, let t2 = e2.startTime else { return false }
                                     return t1 < t2
                                 },
-                                personalEvents: calendarVM.personalEvents,
-                                professionalEvents: calendarVM.professionalEvents,
-                                personalColor: appPrefs.personalColor,
-                                professionalColor: appPrefs.professionalColor,
+                                account1Events: calendarVM.account1Events,
+                                account2Events: calendarVM.account2Events,
+                                account1Color: appPrefs.account1Color,
+                                account2Color: appPrefs.account2Color,
                                 onEventTap: { ev in
                                     if let onEventTap = onEventTap {
                                         onEventTap(ev)
@@ -288,12 +288,12 @@ struct DayViewNewCompact: View {
                     DraggableTimeboxComponent(
                         date: navigationManager.currentDate,
                         events: filteredEventsForDay(navigationManager.currentDate),
-                        personalEvents: calendarVM.personalEvents,
-                        professionalEvents: calendarVM.professionalEvents,
-                        personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate),
-                        professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate),
-                        personalColor: appPrefs.personalColor,
-                        professionalColor: appPrefs.professionalColor,
+                        account1Events: calendarVM.account1Events,
+                        account2Events: calendarVM.account2Events,
+                        account1Tasks: filteredTasksDictForDay(tasksVM.account1Tasks, on: navigationManager.currentDate),
+                        account2Tasks: filteredTasksDictForDay(tasksVM.account2Tasks, on: navigationManager.currentDate),
+                        account1Color: appPrefs.account1Color,
+                        account2Color: appPrefs.account2Color,
                         onEventTap: { ev in
                             if let onEventTap = onEventTap {
                                 onEventTap(ev)
@@ -303,7 +303,7 @@ struct DayViewNewCompact: View {
                         },
                         onTaskTap: { task, listId in
                             // Determine account kind
-                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                             selectedTask = task
                             selectedTaskListId = listId
                             selectedTaskAccount = accountKind
@@ -311,7 +311,7 @@ struct DayViewNewCompact: View {
                         },
                         onTaskToggle: { task, listId in
                             // Determine account kind
-                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                            let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                             Task {
                                 await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
                             }
@@ -358,35 +358,35 @@ struct DayViewNewCompact: View {
             if bulkEditManager.state.isActive {
                 BulkEditToolbarView(
                     bulkEditManager: bulkEditManager,
-                    visibleOpenTaskIds: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate).openTaskIds
-                        .union(filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate).openTaskIds)
+                    visibleOpenTaskIds: filteredTasksDictForDay(tasksVM.account1Tasks, on: navigationManager.currentDate).openTaskIds
+                        .union(filteredTasksDictForDay(tasksVM.account2Tasks, on: navigationManager.currentDate).openTaskIds)
                 )
             }
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Personal Tasks
-                    let personalTasks = filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate)
-                    if auth.isLinked(kind: .personal) {
+                    // Account 1 Tasks
+                    let account1Tasks = filteredTasksDictForDay(tasksVM.account1Tasks, on: navigationManager.currentDate)
+                    if auth.isLinked(kind: .account1) {
                         TasksComponent(
-                            taskLists: tasksVM.personalTaskLists,
-                            tasksDict: personalTasks,
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
+                            taskLists: tasksVM.account1TaskLists,
+                            tasksDict: account1Tasks,
+                            accentColor: appPrefs.account1Color,
+                            accountType: .account1,
                             onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal) }
+                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .account1) }
                             },
                             onTaskDetails: { task, listId in
                                 selectedTask = task
                                 selectedTaskListId = listId
-                                selectedTaskAccount = .personal
+                                selectedTaskAccount = .account1
                                 showingTaskDetails = true
                             },
                             onListRename: { listId, newName in
-                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal) }
+                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .account1) }
                             },
                             onOrderChanged: { newOrder in
-                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .personal) }
+                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .account1) }
                             },
                             hideDueDateTag: false,
                             showEmptyState: true,
@@ -405,28 +405,28 @@ struct DayViewNewCompact: View {
                         )
                     }
 
-                    // Professional Tasks
-                    let professionalTasks = filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate)
-                    if auth.isLinked(kind: .professional) {
+                    // Account 2 Tasks
+                    let account2Tasks = filteredTasksDictForDay(tasksVM.account2Tasks, on: navigationManager.currentDate)
+                    if auth.isLinked(kind: .account2) {
                         TasksComponent(
-                            taskLists: tasksVM.professionalTaskLists,
-                            tasksDict: professionalTasks,
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
+                            taskLists: tasksVM.account2TaskLists,
+                            tasksDict: account2Tasks,
+                            accentColor: appPrefs.account2Color,
+                            accountType: .account2,
                             onTaskToggle: { task, listId in
-                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional) }
+                                Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: .account2) }
                             },
                             onTaskDetails: { task, listId in
                                 selectedTask = task
                                 selectedTaskListId = listId
-                                selectedTaskAccount = .professional
+                                selectedTaskAccount = .account2
                                 showingTaskDetails = true
                             },
                             onListRename: { listId, newName in
-                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional) }
+                                Task { await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .account2) }
                             },
                             onOrderChanged: { newOrder in
-                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .professional) }
+                                Task { await tasksVM.updateTaskListOrder(newOrder, for: .account2) }
                             },
                             hideDueDateTag: false,
                             showEmptyState: true,
@@ -446,7 +446,7 @@ struct DayViewNewCompact: View {
                     }
 
                     // Empty state if no accounts linked
-                    if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
+                    if !auth.isLinked(kind: .account1) && !auth.isLinked(kind: .account2) {
                         Button(action: { NavigationManager.shared.showSettings() }) {
                             VStack(spacing: 8) {
                                 Image(systemName: "person.crop.circle.badge.plus")
@@ -476,24 +476,24 @@ struct DayViewNewCompact: View {
 
     private func filteredEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        let allEvents = calendarVM.personalEvents + calendarVM.professionalEvents
+        let allEvents = calendarVM.account1Events + calendarVM.account2Events
         return allEvents.filter { event in
             guard let eventStart = event.startTime else { return false }
             return calendar.isDate(eventStart, inSameDayAs: date)
         }
     }
 
-    private func filteredPersonalEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
+    private func filteredAccount1EventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        return calendarVM.personalEvents.filter { event in
+        return calendarVM.account1Events.filter { event in
             guard let eventStart = event.startTime else { return false }
             return calendar.isDate(eventStart, inSameDayAs: date)
         }
     }
 
-    private func filteredProfessionalEventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
+    private func filteredAccount2EventsForDay(_ date: Date) -> [GoogleCalendarEvent] {
         let calendar = Calendar.current
-        return calendarVM.professionalEvents.filter { event in
+        return calendarVM.account2Events.filter { event in
             guard let eventStart = event.startTime else { return false }
             return calendar.isDate(eventStart, inSameDayAs: date)
         }

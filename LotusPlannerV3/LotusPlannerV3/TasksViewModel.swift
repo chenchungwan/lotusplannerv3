@@ -16,13 +16,13 @@ class TasksViewModel: ObservableObject {
     /// through DataManager indirection.
     static let shared = TasksViewModel()
 
-    @Published var personalTaskLists: [GoogleTaskList] = []
-    @Published var professionalTaskLists: [GoogleTaskList] = []
-    @Published var personalTasks: [String: [GoogleTask]] = [:] { // taskListId: [tasks]
-        didSet { rebuildTasksCache(for: .personal) }
+    @Published var account1TaskLists: [GoogleTaskList] = []
+    @Published var account2TaskLists: [GoogleTaskList] = []
+    @Published var account1Tasks: [String: [GoogleTask]] = [:] { // taskListId: [tasks]
+        didSet { rebuildTasksCache(for: .account1) }
     }
-    @Published var professionalTasks: [String: [GoogleTask]] = [:] {
-        didSet { rebuildTasksCache(for: .professional) }
+    @Published var account2Tasks: [String: [GoogleTask]] = [:] {
+        didSet { rebuildTasksCache(for: .account2) }
     }
     @Published var isLoading = false
     @Published var errorMessage = ""
@@ -51,16 +51,16 @@ class TasksViewModel: ObservableObject {
         let hideCompleted: Bool   // hideCompletedTasks preference
     }
     private var filteredTasksCache: [FilterCacheKey: [String: [GoogleTask]]] = [:]
-    private var personalTasksByDay: [Date: [String: [GoogleTask]]] = [:]
-    private var professionalTasksByDay: [Date: [String: [GoogleTask]]] = [:]
+    private var account1TasksByDay: [Date: [String: [GoogleTask]]] = [:]
+    private var account2TasksByDay: [Date: [String: [GoogleTask]]] = [:]
     
     func tasksForDay(_ date: Date, kind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
         let key = normalizedDay(date)
         switch kind {
-        case .personal:
-            return personalTasksByDay[key] ?? [:]
-        case .professional:
-            return professionalTasksByDay[key] ?? [:]
+        case .account1:
+            return account1TasksByDay[key] ?? [:]
+        case .account2:
+            return account2TasksByDay[key] ?? [:]
         }
     }
     
@@ -75,23 +75,23 @@ class TasksViewModel: ObservableObject {
         
         // Force refresh is reserved for explicit user/account sync actions.
         if policy == .forceRefresh {
-            clearCacheForAccount(.personal)
-            clearCacheForAccount(.professional)
-            clearTaskListCache(for: .personal)
-            clearTaskListCache(for: .professional)
+            clearCacheForAccount(.account1)
+            clearCacheForAccount(.account2)
+            clearTaskListCache(for: .account1)
+            clearTaskListCache(for: .account2)
         }
         
         // Load tasks for both account types in parallel
         await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
+            if authManager.isLinked(kind: .account1) {
                 group.addTask {
-                    await self.loadTasksForAccount(.personal)
+                    await self.loadTasksForAccount(.account1)
                 }
             }
             
-            if authManager.isLinked(kind: .professional) {
+            if authManager.isLinked(kind: .account2) {
                 group.addTask {
-                    await self.loadTasksForAccount(.professional)
+                    await self.loadTasksForAccount(.account2)
                 }
             }
         }
@@ -105,15 +105,15 @@ class TasksViewModel: ObservableObject {
     /// Fast method to load only task lists (for popup initialization)
     func loadTaskListsOnly() async {
         await withTaskGroup(of: Void.self) { group in
-            if authManager.isLinked(kind: .personal) {
+            if authManager.isLinked(kind: .account1) {
                 group.addTask {
-                    await self.loadTaskListsForAccount(.personal)
+                    await self.loadTaskListsForAccount(.account1)
                 }
             }
             
-            if authManager.isLinked(kind: .professional) {
+            if authManager.isLinked(kind: .account2) {
                 group.addTask {
-                    await self.loadTaskListsForAccount(.professional)
+                    await self.loadTaskListsForAccount(.account2)
                 }
             }
         }
@@ -122,27 +122,27 @@ class TasksViewModel: ObservableObject {
     /// Load tasks on-demand when popup is opened (performance optimization)
     func loadTasksOnDemand() async {
         // Only load if we don't already have tasks loaded
-        let hasPersonalTasks = !personalTasks.isEmpty
-        let hasProfessionalTasks = !professionalTasks.isEmpty
+        let hasAccount1Tasks = !account1Tasks.isEmpty
+        let hasAccount2Tasks = !account2Tasks.isEmpty
         
-        if !hasPersonalTasks || !hasProfessionalTasks {
+        if !hasAccount1Tasks || !hasAccount2Tasks {
             await loadTasks()
         }
     }
     
     /// Check if tasks are already loaded to avoid unnecessary API calls
     var hasTasksLoaded: Bool {
-        return !personalTasks.isEmpty || !professionalTasks.isEmpty
+        return !account1Tasks.isEmpty || !account2Tasks.isEmpty
     }
     
     private func loadTaskListsForAccount(_ kind: GoogleAuthManager.AccountKind) async {
-        loadingStatusMessage = "Loading \(kind.displayName.lowercased()) task lists..."
+        loadingStatusMessage = "Loading task lists for \(kind.displayName)..."
         // Check cache first
         if let cachedLists = getCachedTaskLists(for: kind) {
             await MainActor.run {
                 switch kind {
-                case .personal: self.personalTaskLists = cachedLists
-                case .professional: self.professionalTaskLists = cachedLists
+                case .account1: self.account1TaskLists = cachedLists
+                case .account2: self.account2TaskLists = cachedLists
                 }
             }
             return
@@ -153,8 +153,8 @@ class TasksViewModel: ObservableObject {
             
             await MainActor.run {
                 switch kind {
-                case .personal: self.personalTaskLists = taskLists
-                case .professional: self.professionalTaskLists = taskLists
+                case .account1: self.account1TaskLists = taskLists
+                case .account2: self.account2TaskLists = taskLists
                 }
             }
             
@@ -163,14 +163,14 @@ class TasksViewModel: ObservableObject {
             
         } catch {
             await MainActor.run {
-                self.errorMessage = "Failed to load \(kind.rawValue) task lists: \(error.localizedDescription)"
+                self.errorMessage = "Failed to load task lists for \(kind.displayName): \(error.localizedDescription)"
                 self.lastFetchError[kind] = error.localizedDescription
             }
         }
     }
     
     private func loadTasksForAccount(_ kind: GoogleAuthManager.AccountKind) async {
-        loadingStatusMessage = "Loading \(kind.displayName.lowercased()) tasks..."
+        loadingStatusMessage = "Loading tasks for \(kind.displayName)..."
         do {
             let taskLists: [GoogleTaskList]
             if let cachedLists = getCachedTaskLists(for: kind) {
@@ -208,12 +208,12 @@ class TasksViewModel: ObservableObject {
             }
 
             switch kind {
-            case .personal:
-                personalTaskLists = taskLists
-                personalTasks = loadedTasksByList
-            case .professional:
-                professionalTaskLists = taskLists
-                professionalTasks = loadedTasksByList
+            case .account1:
+                account1TaskLists = taskLists
+                account1Tasks = loadedTasksByList
+            case .account2:
+                account2TaskLists = taskLists
+                account2Tasks = loadedTasksByList
             }
 
             if let firstError = listLoadErrors.first {
@@ -227,19 +227,21 @@ class TasksViewModel: ObservableObject {
             let allTasks = loadedTasksByList.values.flatMap { $0 }
             TaskTimeWindowManager.shared.cleanupTimeWindowsForAllDayTasks(tasks: allTasks)
         } catch {
-            errorMessage = "Failed to load \(kind.rawValue) tasks: \(error.localizedDescription)"
+            errorMessage = "Failed to load tasks for \(kind.displayName): \(error.localizedDescription)"
             lastFetchError[kind] = error.localizedDescription
         }
     }
 
+    /// Status text for the Diagnostics screen. The caller labels the row with
+    /// the account's user-chosen name, so this omits it.
     func qualitySummary(for kind: GoogleAuthManager.AccountKind) -> String {
         if let error = lastFetchError[kind] {
-            return "\(kind.displayName) failed: \(error)"
+            return "Failed: \(error)"
         }
         if let lastFetch = lastSuccessfulFetch[kind] {
-            return "\(kind.displayName) loaded \(lastFetch.formatted(date: .omitted, time: .shortened))"
+            return "Loaded \(lastFetch.formatted(date: .omitted, time: .shortened))"
         }
-        return authManager.isLinked(kind: kind) ? "\(kind.displayName) not loaded yet" : "\(kind.displayName) not linked"
+        return authManager.isLinked(kind: kind) ? "Not loaded yet" : "Not linked"
     }
 
     func newestCacheAgeDescription() -> String {
@@ -270,19 +272,19 @@ class TasksViewModel: ObservableObject {
     /// Clears tasks and lists for the specified account kind (or all if nil)
     func clearTasks(for kind: GoogleAuthManager.AccountKind? = nil) {
         switch kind {
-        case .some(.personal):
-            personalTaskLists = []
-            personalTasks = [:]
-            clearCacheForAccount(.personal)
-        case .some(.professional):
-            professionalTaskLists = []
-            professionalTasks = [:]
-            clearCacheForAccount(.professional)
+        case .some(.account1):
+            account1TaskLists = []
+            account1Tasks = [:]
+            clearCacheForAccount(.account1)
+        case .some(.account2):
+            account2TaskLists = []
+            account2Tasks = [:]
+            clearCacheForAccount(.account2)
         case .none:
-            personalTaskLists = []
-            professionalTaskLists = []
-            personalTasks = [:]
-            professionalTasks = [:]
+            account1TaskLists = []
+            account2TaskLists = []
+            account1Tasks = [:]
+            account2Tasks = [:]
             cachedTasks.removeAll()
             cacheTimestamps.removeAll()
         }
@@ -403,10 +405,10 @@ class TasksViewModel: ObservableObject {
     
     private func rebuildTasksCache(for kind: GoogleAuthManager.AccountKind) {
         switch kind {
-        case .personal:
-            personalTasksByDay = buildDayCache(from: personalTasks)
-        case .professional:
-            professionalTasksByDay = buildDayCache(from: professionalTasks)
+        case .account1:
+            account1TasksByDay = buildDayCache(from: account1Tasks)
+        case .account2:
+            account2TasksByDay = buildDayCache(from: account2Tasks)
         }
     }
     

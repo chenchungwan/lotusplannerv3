@@ -295,7 +295,7 @@ struct GlobalNavBar: View {
             iconButton("sparkles", color: .accentColor) {
                 navigationManager.present(.aiTaskEntry)
             }
-            .disabled(!(auth.isLinked(kind: .personal) || auth.isLinked(kind: .professional)))
+            .disabled(!(auth.isLinked(kind: .account1) || auth.isLinked(kind: .account2)))
             .help("AI Task Entry")
 
             addMenu
@@ -418,24 +418,17 @@ struct GlobalNavBar: View {
         }
     }
 
+    /// Every item here opens the same create window; the choice only picks
+    /// which tab it lands on, and the user can switch tabs from there. All
+    /// types are always offered — the window supports them regardless of
+    /// which screen the user is on.
     private var addMenu: some View {
         Menu {
             Button("Event") { navigationManager.present(.addEvent) }
             Button("Task") { navigationManager.present(.addTask) }
-
-            if navigationManager.currentView == .lists {
-                Button("List") { navigationManager.present(.addList) }
-            }
-
-            if navigationManager.currentView == .goals {
-                Button("Goal") {
-                    NotificationCenter.default.post(name: .showAddGoal, object: nil)
-                }
-            }
-
-            Button("Log") {
-                LogsViewModel.shared.showingAddLogSheet = true
-            }
+            Button("List") { navigationManager.present(.addList) }
+            Button("Goal") { navigationManager.present(.addGoal) }
+            Button("Log") { navigationManager.present(.addLog) }
         } label: {
             Image(systemName: "plus")
                 .font(iconFont)

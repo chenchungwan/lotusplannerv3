@@ -4,7 +4,6 @@ struct GoalsView: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
-    @State private var showingCreateGoal = false
     @State private var showingCreateCategory = false
     @State private var goalToEdit: GoalData?
     @State private var selectedGoal: GoalData?
@@ -194,20 +193,10 @@ struct GoalsView: View {
                 goalToEdit = nil
             }
         }
-        .sheet(isPresented: $showingCreateGoal) {
-            CreateGoalView(
-                editingGoal: nil,
-                defaultTimeframe: navigationManager.currentInterval,
-                defaultDate: navigationManager.currentDate
-            ) {
-                showingCreateGoal = false
-            }
-        }
+        // Goal creation lives in the shared `CreateItemSheet`, presented at
+        // ContentView scope via `NavigationManager.activeSheet`.
         .sheet(isPresented: $showingCreateCategory) {
             CreateCategoryView()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .showAddGoal)) { _ in
-            showingCreateGoal = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .showAddCategory)) { _ in
             showingCreateCategory = true

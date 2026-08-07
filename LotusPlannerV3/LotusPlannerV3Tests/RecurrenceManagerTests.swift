@@ -56,18 +56,18 @@ final class RecurrenceManagerTests: XCTestCase {
     }
 
     func testRule_AccountKindEnum_DerivedFromString() {
-        let personal = makeRule(currentTaskId: "x", accountKind: "personal")
-        let professional = makeRule(currentTaskId: "x", accountKind: "professional")
-        XCTAssertEqual(personal.accountKindEnum, .personal)
-        XCTAssertEqual(professional.accountKindEnum, .professional)
+        let account1 = makeRule(currentTaskId: "x", accountKind: "personal")
+        let account2 = makeRule(currentTaskId: "x", accountKind: "professional")
+        XCTAssertEqual(account1.accountKindEnum, .account1)
+        XCTAssertEqual(account2.accountKindEnum, .account2)
     }
 
-    /// Anything not literally "professional" maps to personal — matches
+    /// Anything not literally "professional" maps to account 1 — matches
     /// the production fall-through logic. Verifies a corrupted-JSON
     /// edge case doesn't crash the manager.
-    func testRule_AccountKindEnum_UnknownStringMapsToPersonal() {
+    func testRule_AccountKindEnum_UnknownStringMapsToAccount1() {
         let unknown = makeRule(currentTaskId: "x", accountKind: "garbage")
-        XCTAssertEqual(unknown.accountKindEnum, .personal)
+        XCTAssertEqual(unknown.accountKindEnum, .account1)
     }
 
     // MARK: - RecurrenceLibrary

@@ -493,9 +493,9 @@ private struct ClaudeTaskAgentItem: Decodable {
 
         switch raw {
         case "personal":
-            return .personal
+            return .account1
         case "professional", "work", "business":
-            return .professional
+            return .account2
         default:
             return nil
         }

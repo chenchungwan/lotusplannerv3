@@ -4,14 +4,14 @@ struct WeekTimelineComponent: View {
     // MARK: - Properties
     let currentDate: Date
     let weekEvents: [Date: [GoogleCalendarEvent]]
-    let personalEvents: [GoogleCalendarEvent]
-    let professionalEvents: [GoogleCalendarEvent]
-    let personalColor: Color
-    let professionalColor: Color
-    let personalTaskLists: [GoogleTaskList]
-    let personalTasks: [String: [GoogleTask]]
-    let professionalTaskLists: [GoogleTaskList]
-    let professionalTasks: [String: [GoogleTask]]
+    let account1Events: [GoogleCalendarEvent]
+    let account2Events: [GoogleCalendarEvent]
+    let account1Color: Color
+    let account2Color: Color
+    let account1TaskLists: [GoogleTaskList]
+    let account1Tasks: [String: [GoogleTask]]
+    let account2TaskLists: [GoogleTaskList]
+    let account2Tasks: [String: [GoogleTask]]
     let hideCompletedTasks: Bool
     let fixedStartHour: Int?
     let showTasksSection: Bool
@@ -41,17 +41,17 @@ struct WeekTimelineComponent: View {
     private let minTimelineHeight: CGFloat = 100 // Minimum height for timeline section
     
     // MARK: - Initializer
-    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, personalTaskLists: [GoogleTaskList] = [], personalTasks: [String: [GoogleTask]] = [:], professionalTaskLists: [GoogleTaskList] = [], professionalTasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil, onTaskTap: ((GoogleTask, String) -> Void)? = nil, showTasksSection: Bool = true, fixedStartHour: Int? = nil) {
+    init(currentDate: Date, weekEvents: [Date: [GoogleCalendarEvent]], account1Events: [GoogleCalendarEvent], account2Events: [GoogleCalendarEvent], account1Color: Color, account2Color: Color, account1TaskLists: [GoogleTaskList] = [], account1Tasks: [String: [GoogleTask]] = [:], account2TaskLists: [GoogleTaskList] = [], account2Tasks: [String: [GoogleTask]] = [:], hideCompletedTasks: Bool = false, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil, onDayTap: ((Date) -> Void)? = nil, onTaskTap: ((GoogleTask, String) -> Void)? = nil, showTasksSection: Bool = true, fixedStartHour: Int? = nil) {
         self.currentDate = currentDate
         self.weekEvents = weekEvents
-        self.personalEvents = personalEvents
-        self.professionalEvents = professionalEvents
-        self.personalColor = personalColor
-        self.professionalColor = professionalColor
-        self.personalTaskLists = personalTaskLists
-        self.personalTasks = personalTasks
-        self.professionalTaskLists = professionalTaskLists
-        self.professionalTasks = professionalTasks
+        self.account1Events = account1Events
+        self.account2Events = account2Events
+        self.account1Color = account1Color
+        self.account2Color = account2Color
+        self.account1TaskLists = account1TaskLists
+        self.account1Tasks = account1Tasks
+        self.account2TaskLists = account2TaskLists
+        self.account2Tasks = account2Tasks
         self.hideCompletedTasks = hideCompletedTasks
 
         self.onEventTap = onEventTap
@@ -71,7 +71,7 @@ struct WeekTimelineComponent: View {
         let height: CGFloat
         let width: CGFloat
         let xOffset: CGFloat
-        let isPersonal: Bool
+        let isAccount1: Bool
     }
     
     struct DayData {
@@ -135,9 +135,9 @@ struct WeekTimelineComponent: View {
             startTimer()
             // Initialize tasks row height based on content if not already set
             if tasksRowHeight == 120 {
-                let personalHeight = calculateRowHeight(for: personalTasksByDate)
-                let professionalHeight = calculateRowHeight(for: professionalTasksByDate)
-                let calculatedHeight = personalHeight + professionalHeight + 0.5 // Add separator height
+                let account1Height = calculateRowHeight(for: account1TasksByDate)
+                let account2Height = calculateRowHeight(for: account2TasksByDate)
+                let calculatedHeight = account1Height + account2Height + 0.5 // Add separator height
                 tasksRowHeight = max(minTasksRowHeight, calculatedHeight)
             }
         }
@@ -216,9 +216,9 @@ struct WeekTimelineComponent: View {
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
         let allDayEvents = events.filter { $0.isAllDay || isEvent24Hours($0) }
         let timedEvents = events.filter { !$0.isAllDay && !isEvent24Hours($0) && isEventInTimeRange($0) }
-        let personalTasksForDate = filteredTasksForDate(personalTasks.values.flatMap { $0 }, date: date)
-        let professionalTasksForDate = filteredTasksForDate(professionalTasks.values.flatMap { $0 }, date: date)
-        let tasks = personalTasksForDate + professionalTasksForDate
+        let account1TasksForDate = filteredTasksForDate(account1Tasks.values.flatMap { $0 }, date: date)
+        let account2TasksForDate = filteredTasksForDate(account2Tasks.values.flatMap { $0 }, date: date)
+        let tasks = account1TasksForDate + account2TasksForDate
         
         return DayData(
             date: date,
@@ -260,25 +260,25 @@ struct WeekTimelineComponent: View {
     // MARK: - Daily Tasks Section
     private func dailyTasksSection(dayColumnWidth: CGFloat) -> some View {
         // Calculate optimal heights for each row based on content
-        let personalRowHeight = calculateOptimalRowHeight(for: personalTasksByDate, isPersonal: true, dayColumnWidth: dayColumnWidth)
-        let professionalRowHeight = calculateOptimalRowHeight(for: professionalTasksByDate, isPersonal: false, dayColumnWidth: dayColumnWidth)
+        let account1RowHeight = calculateOptimalRowHeight(for: account1TasksByDate, isAccount1: true, dayColumnWidth: dayColumnWidth)
+        let account2RowHeight = calculateOptimalRowHeight(for: account2TasksByDate, isAccount1: false, dayColumnWidth: dayColumnWidth)
 
         // Use the user's preferred height as the maximum, but allow shrinking for less content
         let maxIndividualHeight = (tasksRowHeight - 0.5) / 2 // Account for separator line
-        let constrainedPersonalHeight = min(personalRowHeight, maxIndividualHeight)
-        let constrainedProfessionalHeight = min(professionalRowHeight, maxIndividualHeight)
+        let constrainedAccount1Height = min(account1RowHeight, maxIndividualHeight)
+        let constrainedAccount2Height = min(account2RowHeight, maxIndividualHeight)
 
         return VStack(spacing: 0) {
             // First-account tasks row (defaults to "Linked Account 1",
             // user-renameable in Settings).
             dailyTasksRow(
-                title: appPrefs.accountName(for: .personal),
-                color: personalColor,
-                tasks: personalTasksByDate,
+                title: appPrefs.accountName(for: .account1),
+                color: account1Color,
+                tasks: account1TasksByDate,
                 dayColumnWidth: dayColumnWidth,
-                rowHeight: constrainedPersonalHeight,
-                optimalHeight: personalRowHeight,
-                isPersonal: true
+                rowHeight: constrainedAccount1Height,
+                optimalHeight: account1RowHeight,
+                isAccount1: true
             )
 
             // Separator between the two account rows
@@ -289,19 +289,19 @@ struct WeekTimelineComponent: View {
             // Second-account tasks row (defaults to "Linked Account 2",
             // user-renameable in Settings).
             dailyTasksRow(
-                title: appPrefs.accountName(for: .professional),
-                color: professionalColor,
-                tasks: professionalTasksByDate,
+                title: appPrefs.accountName(for: .account2),
+                color: account2Color,
+                tasks: account2TasksByDate,
                 dayColumnWidth: dayColumnWidth,
-                rowHeight: constrainedProfessionalHeight,
-                optimalHeight: professionalRowHeight,
-                isPersonal: false
+                rowHeight: constrainedAccount2Height,
+                optimalHeight: account2RowHeight,
+                isAccount1: false
             )
         }
-        .frame(height: constrainedPersonalHeight + constrainedProfessionalHeight + 0.5)
+        .frame(height: constrainedAccount1Height + constrainedAccount2Height + 0.5)
     }
     
-    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat, rowHeight: CGFloat, optimalHeight: CGFloat, isPersonal: Bool) -> some View {
+    private func dailyTasksRow(title: String, color: Color, tasks: [Date: [GoogleTask]], dayColumnWidth: CGFloat, rowHeight: CGFloat, optimalHeight: CGFloat, isAccount1: Bool) -> some View {
         HStack(spacing: 0) {
             // Task type indicator circle with checkmark
             VStack {
@@ -342,7 +342,7 @@ struct WeekTimelineComponent: View {
                         color: color,
                         rowHeight: rowHeight,
                         optimalHeight: optimalHeight,
-                        isPersonal: isPersonal
+                        isAccount1: isAccount1
                     )
                     .frame(width: dayColumnWidth, height: rowHeight)
                     .background(Color(uiColor: .systemBackground))
@@ -357,9 +357,9 @@ struct WeekTimelineComponent: View {
         }
     }
     
-    private func dailyTasksCell(tasks: [GoogleTask], color: Color, rowHeight: CGFloat, optimalHeight: CGFloat, isPersonal: Bool) -> some View {
-        let taskLists = isPersonal ? personalTaskLists : professionalTaskLists
-        let tasksDict = isPersonal ? personalTasks : professionalTasks
+    private func dailyTasksCell(tasks: [GoogleTask], color: Color, rowHeight: CGFloat, optimalHeight: CGFloat, isAccount1: Bool) -> some View {
+        let taskLists = isAccount1 ? account1TaskLists : account2TaskLists
+        let tasksDict = isAccount1 ? account1Tasks : account2Tasks
         // Always enable scrolling when there are tasks to ensure each cell can scroll independently
         let needsScrolling = !tasks.isEmpty && rowHeight > 20
         
@@ -377,9 +377,9 @@ struct WeekTimelineComponent: View {
                                 rowHeight: min(rowHeight, 80), // Limit individual card height for better display
                                 onTaskTap: { task in
                                     // Find the task list ID for this task
-                                    if let taskListId = personalTasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
+                                    if let taskListId = account1Tasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
                                         onTaskTap?(task, taskListId)
-                                    } else if let taskListId = professionalTasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
+                                    } else if let taskListId = account2Tasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
                                         onTaskTap?(task, taskListId)
                                     }
                                 }
@@ -428,9 +428,9 @@ struct WeekTimelineComponent: View {
                             rowHeight: rowHeight,
                             onTaskTap: { task in
                                 // Find the task list ID for this task
-                                if let taskListId = personalTasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
+                                if let taskListId = account1Tasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
                                     onTaskTap?(task, taskListId)
-                                } else if let taskListId = professionalTasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
+                                } else if let taskListId = account2Tasks.first(where: { $0.value.contains { $0.id == task.id } })?.key {
                                     onTaskTap?(task, taskListId)
                                 }
                             }
@@ -496,9 +496,9 @@ struct WeekTimelineComponent: View {
         return max(40, min(calculatedHeight, 200))
     }
     
-    private func calculateOptimalRowHeight(for tasksByDate: [Date: [GoogleTask]], isPersonal: Bool, dayColumnWidth: CGFloat) -> CGFloat {
-        let taskLists = isPersonal ? personalTaskLists : professionalTaskLists
-        let tasksDict = isPersonal ? personalTasks : professionalTasks
+    private func calculateOptimalRowHeight(for tasksByDate: [Date: [GoogleTask]], isAccount1: Bool, dayColumnWidth: CGFloat) -> CGFloat {
+        let taskLists = isAccount1 ? account1TaskLists : account2TaskLists
+        let tasksDict = isAccount1 ? account1Tasks : account2Tasks
         
         var maxRequiredHeight: CGFloat = minTasksRowHeight
         
@@ -508,7 +508,7 @@ struct WeekTimelineComponent: View {
             let dayTasks = tasksByDate[dayStartDate] ?? []
             
             if !dayTasks.isEmpty {
-                let groupedTasks = groupTasksByList(dayTasks, color: isPersonal ? personalColor : professionalColor, taskLists: taskLists, tasksDict: tasksDict)
+                let groupedTasks = groupTasksByList(dayTasks, color: isAccount1 ? account1Color : account2Color, taskLists: taskLists, tasksDict: tasksDict)
                 
                 var dayHeight: CGFloat = 8 // Base padding
                 
@@ -684,8 +684,8 @@ struct WeekTimelineComponent: View {
     }
     
     private func allDayEventView(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let color = isPersonal ? personalColor : professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let color = isAccount1 ? account1Color : account2Color
         
         return HStack(spacing: 4) {
             Circle()
@@ -790,7 +790,7 @@ struct WeekTimelineComponent: View {
     }
     
     private func timedEventView(layout: EventLayout) -> some View {
-        let color = layout.isPersonal ? personalColor : professionalColor
+        let color = layout.isAccount1 ? account1Color : account2Color
         
         return RoundedRectangle(cornerRadius: 4)
             .fill(color)
@@ -883,8 +883,8 @@ struct WeekTimelineComponent: View {
     }
     
     // MARK: - Task Grouping
-    private var personalTasksByDate: [Date: [GoogleTask]] {
-        groupTasksByDate(personalTasks)
+    private var account1TasksByDate: [Date: [GoogleTask]] {
+        groupTasksByDate(account1Tasks)
     }
     
     // MARK: - Task List Grouping
@@ -913,8 +913,8 @@ struct WeekTimelineComponent: View {
         return groupedTasks.mapValues { TaskGroup(tasks: $0, color: color) }
     }
     
-    private var professionalTasksByDate: [Date: [GoogleTask]] {
-        groupTasksByDate(professionalTasks)
+    private var account2TasksByDate: [Date: [GoogleTask]] {
+        groupTasksByDate(account2Tasks)
     }
     
     private func groupTasksByDate(_ tasksDict: [String: [GoogleTask]]) -> [Date: [GoogleTask]] {
@@ -1061,7 +1061,7 @@ struct WeekTimelineComponent: View {
                 let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
                 let height = max(20, CGFloat(dayDuration / 3600.0) * hourHeight)
                 
-                let isPersonal = event.ownerAccountKind == .personal
+                let isAccount1 = event.ownerAccountKind == .account1
                 
                 let layout = EventLayout(
                     event: event,
@@ -1069,7 +1069,7 @@ struct WeekTimelineComponent: View {
                     height: height,
                     width: columnWidth - 4, // Leave small gap
                     xOffset: CGFloat(index) * columnWidth + 2,
-                    isPersonal: isPersonal
+                    isAccount1: isAccount1
                 )
                 
                 layouts.append(layout)
@@ -1183,14 +1183,14 @@ struct WeekTimelineComponent_Previews: PreviewProvider {
         WeekTimelineComponent(
             currentDate: Date(),
             weekEvents: [:],
-            personalEvents: [],
-            professionalEvents: [],
-            personalColor: .purple,
-            professionalColor: .green,
-            personalTaskLists: [],
-            personalTasks: [:],
-            professionalTaskLists: [],
-            professionalTasks: [:],
+            account1Events: [],
+            account2Events: [],
+            account1Color: .purple,
+            account2Color: .green,
+            account1TaskLists: [],
+            account1Tasks: [:],
+            account2TaskLists: [],
+            account2Tasks: [:],
             hideCompletedTasks: false
         )
         .previewLayout(.sizeThatFits)

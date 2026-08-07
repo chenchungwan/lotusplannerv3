@@ -6,8 +6,8 @@ struct TaskDetailsView: View {
     let taskListId: String
     let accountKind: GoogleAuthManager.AccountKind
     let accentColor: Color
-    let personalTaskLists: [GoogleTaskList]
-    let professionalTaskLists: [GoogleTaskList]
+    let account1TaskLists: [GoogleTaskList]
+    let account2TaskLists: [GoogleTaskList]
     let appPrefs: AppPreferences
     let viewModel: TasksViewModel
     let onSave: (GoogleTask) -> Void
@@ -15,6 +15,11 @@ struct TaskDetailsView: View {
     let onMove: (GoogleTask, String) -> Void
     let onCrossAccountMove: (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void
     let isNew: Bool
+    /// True when hosted inside `CreateItemSheet`, which owns the
+    /// NavigationStack so the tab strip can sit above the form.
+    let isEmbedded: Bool
+    /// Reports title/notes edits so the host can carry them to another tab.
+    let onDraftChange: ((String, String) -> Void)?
     
     @Environment(\.dismiss) private var dismiss
     @State private var editedTitle: String
@@ -87,13 +92,13 @@ struct TaskDetailsView: View {
     }
 
 
-    init(task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind, accentColor: Color, personalTaskLists: [GoogleTaskList], professionalTaskLists: [GoogleTaskList], appPrefs: AppPreferences, viewModel: TasksViewModel, onSave: @escaping (GoogleTask) -> Void, onDelete: @escaping () -> Void, onMove: @escaping (GoogleTask, String) -> Void, onCrossAccountMove: @escaping (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void, isNew: Bool = false) {
+    init(task: GoogleTask, taskListId: String, accountKind: GoogleAuthManager.AccountKind, accentColor: Color, account1TaskLists: [GoogleTaskList], account2TaskLists: [GoogleTaskList], appPrefs: AppPreferences, viewModel: TasksViewModel, onSave: @escaping (GoogleTask) -> Void, onDelete: @escaping () -> Void, onMove: @escaping (GoogleTask, String) -> Void, onCrossAccountMove: @escaping (GoogleTask, GoogleAuthManager.AccountKind, String) -> Void, isNew: Bool = false, isEmbedded: Bool = false, onDraftChange: ((String, String) -> Void)? = nil) {
         self.task = task
         self.taskListId = taskListId
         self.accountKind = accountKind
         self.accentColor = accentColor
-        self.personalTaskLists = personalTaskLists
-        self.professionalTaskLists = professionalTaskLists
+        self.account1TaskLists = account1TaskLists
+        self.account2TaskLists = account2TaskLists
         self.appPrefs = appPrefs
         self.viewModel = viewModel
         self.onSave = onSave
@@ -101,6 +106,8 @@ struct TaskDetailsView: View {
         self.onMove = onMove
         self.onCrossAccountMove = onCrossAccountMove
         self.isNew = isNew
+        self.isEmbedded = isEmbedded
+        self.onDraftChange = onDraftChange
         
         // Store original due date to detect changes properly
         self.originalDueDate = task.dueDate
@@ -167,7 +174,7 @@ struct TaskDetailsView: View {
     }
     
     var availableTaskLists: [GoogleTaskList] {
-        selectedAccountKind == .personal ? personalTaskLists : professionalTaskLists
+        selectedAccountKind == .account1 ? account1TaskLists : account2TaskLists
     }
     
     var currentTaskListName: String {
@@ -175,7 +182,7 @@ struct TaskDetailsView: View {
     }
     
     var currentAccentColor: Color {
-        selectedAccountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
+        selectedAccountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color
     }
     
     var hasChanges: Bool {
@@ -219,8 +226,11 @@ struct TaskDetailsView: View {
         return hasValidTitle && hasValidList && hasValidTimes
     }
     
-    var body: some View {
-        NavigationStack {
+    /// The form plus its navigation chrome (title, Cancel/Create). Split out
+    /// of `body` so `CreateItemSheet` can host it inside its own
+    /// NavigationStack — the toolbar items surface in that stack's bar.
+    @ViewBuilder
+    private var formContent: some View {
             Form {
                 // Basic Information Section
                 Section("Basic Information") {
@@ -234,10 +244,10 @@ struct TaskDetailsView: View {
                 // Account Section
                 Section("Account") {
                     VStack(alignment: .leading, spacing: 12) {
-                        // Two rows: Personal and Professional, each with its own current list on the same line
-                        ForEach([GoogleAuthManager.AccountKind.personal, .professional], id: \.self) { kind in
+                        // Two rows: Account 1 and Account 2, each with its own current list on the same line
+                        ForEach([GoogleAuthManager.AccountKind.account1, .account2], id: \.self) { kind in
                             if GoogleAuthManager.shared.isLinked(kind: kind) {
-                                let lists: [GoogleTaskList] = (kind == .personal) ? personalTaskLists : professionalTaskLists
+                                let lists: [GoogleTaskList] = (kind == .account1) ? account1TaskLists : account2TaskLists
                                 let currentId: String = (selectedAccountKind == kind ? selectedListId : lists.first?.id) ?? lists.first?.id ?? ""
                                 let currentTitle: String = lists.first(where: { $0.id == currentId })?.title ?? (lists.first?.title ?? "Select list")
 
@@ -261,7 +271,7 @@ struct TaskDetailsView: View {
                                     } label: {
                                         HStack(spacing: 6) {
                                             Image(systemName: selectedAccountKind == kind ? "largecircle.fill.circle" : "circle")
-                                                .foregroundColor(selectedAccountKind == kind ? (kind == .personal ? appPrefs.personalColor : appPrefs.professionalColor) : .secondary)
+                                                .foregroundColor(selectedAccountKind == kind ? (kind == .account1 ? appPrefs.account1Color : appPrefs.account2Color) : .secondary)
                                             Text(appPrefs.accountName(for: kind) + ":")
                                         }
                                     }
@@ -573,8 +583,27 @@ struct TaskDetailsView: View {
                     .opacity((canSave && (isNew || hasChanges) && !isSaving) ? 1.0 : 0.5)
                 }
             }
+            .onChange(of: editedTitle) { _, newValue in
+                onDraftChange?(newValue, editedNotes)
+            }
+            .onChange(of: editedNotes) { _, newValue in
+                onDraftChange?(editedTitle, newValue)
+            }
+    }
+
+    var body: some View {
+        Group {
+            if isEmbedded {
+                formContent
+            } else {
+                NavigationStack {
+                    formContent
+                }
+            }
         }
-        .presentationDetents([.large, .height(isAllDay ? 600 : (!isNew ? 850 : 750))]) // Increase height when delete button and time pickers are visible
+        // When embedded the host sheet owns its own detents; matching them
+        // here keeps the sheet from resizing as the user switches tabs.
+        .presentationDetents(isEmbedded ? [.large] : [.large, .height(isAllDay ? 600 : (!isNew ? 850 : 750))]) // Increase height when delete button and time pickers are visible
         .presentationDragIndicator(.visible)
         .alert("Delete Task", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
@@ -784,7 +813,7 @@ struct TaskDetailsView: View {
             let rule = RecurrenceRule(
                 seriesId: existing?.seriesId ?? UUID(),
                 currentTaskId: task.id,
-                accountKind: selectedAccountKind == .professional ? "professional" : "personal",
+                accountKind: selectedAccountKind.rawValue,
                 listId: selectedListId,
                 frequency: freq,
                 interval: max(1, repeatInterval),
@@ -930,7 +959,7 @@ struct TaskDetailsView: View {
                 let pendingFrequency = repeatFrequency
                 let pendingInterval = max(1, repeatInterval)
                 let pendingEndDate = repeatEndDate
-                let pendingAccountKind = selectedAccountKind == .professional ? "professional" : "personal"
+                let pendingAccountKind = selectedAccountKind.rawValue
                 let pendingListId = targetListId
 
                 // Create task with time window parameters

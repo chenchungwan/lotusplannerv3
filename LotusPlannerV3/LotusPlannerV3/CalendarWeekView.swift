@@ -83,7 +83,7 @@ struct CalendarWeekView: View {
     }
     
     private func dayRow(_ date: Date) -> some View {
-        let allEvents = calendarViewModel.personalEvents + calendarViewModel.professionalEvents
+        let allEvents = calendarViewModel.account1Events + calendarViewModel.account2Events
         let dayEvents = allEvents.filter { event in
             guard let startTime = event.startTime else { return event.isAllDay }
             
@@ -130,10 +130,10 @@ struct CalendarWeekView: View {
             TimelineComponent(
                 date: date,
                 events: dayEvents,
-                personalEvents: calendarViewModel.personalEvents,
-                professionalEvents: calendarViewModel.professionalEvents,
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
+                account1Events: calendarViewModel.account1Events,
+                account2Events: calendarViewModel.account2Events,
+                account1Color: appPrefs.account1Color,
+                account2Color: appPrefs.account2Color,
                 onEventTap: { event in selectedEvent = event }
             )
         }

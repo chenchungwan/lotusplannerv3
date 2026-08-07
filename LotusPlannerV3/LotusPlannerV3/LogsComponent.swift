@@ -61,7 +61,7 @@ struct LogsComponent: View {
                         Spacer()
 
                         Button(action: {
-                            viewModel.showingAddLogSheet = true
+                            NavigationManager.shared.present(.addLog)
                         }) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)

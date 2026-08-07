@@ -53,8 +53,8 @@ struct DayViewCustom: View {
             if bulkEditManager.state.isActive {
                 BulkEditToolbarView(
                     bulkEditManager: bulkEditManager,
-                    visibleOpenTaskIds: filteredTasksDictForDay(tasksVM.personalTasks, on: navigationManager.currentDate).openTaskIds
-                        .union(filteredTasksDictForDay(tasksVM.professionalTasks, on: navigationManager.currentDate).openTaskIds)
+                    visibleOpenTaskIds: filteredTasksDictForDay(tasksVM.account1Tasks, on: navigationManager.currentDate).openTaskIds
+                        .union(filteredTasksDictForDay(tasksVM.account2Tasks, on: navigationManager.currentDate).openTaskIds)
                 )
             }
 
@@ -85,9 +85,9 @@ struct DayViewCustom: View {
                     task: t,
                     taskListId: listId,
                     accountKind: account,
-                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: tasksVM.personalTaskLists,
-                    professionalTaskLists: tasksVM.professionalTaskLists,
+                    accentColor: account == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                    account1TaskLists: tasksVM.account1TaskLists,
+                    account2TaskLists: tasksVM.account2TaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
                     onSave: { updated in
@@ -369,18 +369,18 @@ struct DayViewCustom: View {
             eventsTimelineView(date: date)
         case .eventsList:
             eventsListView(date: date)
-        case .tasksPersonalGrouped:
-            tasksGroupedView(for: .personal, date: date)
-        case .tasksProfessionalGrouped:
-            tasksGroupedView(for: .professional, date: date)
-        case .tasksPersonalTwoColumn:
-            tasksTwoColumnView(for: .personal, date: date)
-        case .tasksProfessionalTwoColumn:
-            tasksTwoColumnView(for: .professional, date: date)
-        case .tasksPersonalCompact:
-            tasksCompactView(for: .personal, date: date)
-        case .tasksProfessionalCompact:
-            tasksCompactView(for: .professional, date: date)
+        case .tasksAccount1Grouped:
+            tasksGroupedView(for: .account1, date: date)
+        case .tasksAccount2Grouped:
+            tasksGroupedView(for: .account2, date: date)
+        case .tasksAccount1TwoColumn:
+            tasksTwoColumnView(for: .account1, date: date)
+        case .tasksAccount2TwoColumn:
+            tasksTwoColumnView(for: .account2, date: date)
+        case .tasksAccount1Compact:
+            tasksCompactView(for: .account1, date: date)
+        case .tasksAccount2Compact:
+            tasksCompactView(for: .account2, date: date)
         case .logWeight:
             singleLogSection(date: date, builtIn: .weight)
         case .logWorkout:
@@ -466,8 +466,8 @@ struct DayViewCustom: View {
     // MARK: - Events
 
     private func eventsTimelineView(date: Date) -> some View {
-        let personalEvents = calendarVM.personalEvents.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
-        let professionalEvents = calendarVM.professionalEvents.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
+        let account1Events = calendarVM.account1Events.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
+        let account2Events = calendarVM.account2Events.filter { Calendar.current.isDate($0.startTime ?? .distantPast, inSameDayAs: date) }
         let all = calendarVM.events(for: date)
         // `DraggableTimeboxComponent` owns its own ScrollView + ScrollViewReader
         // and auto-scrolls to the current hour on appear. Wrapping it in another
@@ -476,25 +476,25 @@ struct DayViewCustom: View {
         return DraggableTimeboxComponent(
             date: date,
             events: all,
-            personalEvents: personalEvents,
-            professionalEvents: professionalEvents,
-            personalTasks: filteredTasksDictForDay(tasksVM.personalTasks, on: date),
-            professionalTasks: filteredTasksDictForDay(tasksVM.professionalTasks, on: date),
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor,
+            account1Events: account1Events,
+            account2Events: account2Events,
+            account1Tasks: filteredTasksDictForDay(tasksVM.account1Tasks, on: date),
+            account2Tasks: filteredTasksDictForDay(tasksVM.account2Tasks, on: date),
+            account1Color: appPrefs.account1Color,
+            account2Color: appPrefs.account2Color,
             onEventTap: { ev in
                 onEventTap?(ev)
                 selectedEvent = ev
             },
             onTaskTap: { task, listId in
-                let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                 selectedTask = task
                 selectedTaskListId = listId
                 selectedTaskAccount = accountKind
                 showingTaskDetails = true
             },
             onTaskToggle: { task, listId in
-                let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                 Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind) }
             },
             showAllDaySection: true,
@@ -513,10 +513,10 @@ struct DayViewCustom: View {
     private func eventsListView(date: Date) -> some View {
         EventsListComponent(
             events: calendarVM.events(for: date),
-            personalEvents: calendarVM.personalEvents,
-            professionalEvents: calendarVM.professionalEvents,
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor,
+            account1Events: calendarVM.account1Events,
+            account2Events: calendarVM.account2Events,
+            account1Color: appPrefs.account1Color,
+            account2Color: appPrefs.account2Color,
             onEventTap: { ev in
                 onEventTap?(ev)
                 selectedEvent = ev
@@ -531,13 +531,13 @@ struct DayViewCustom: View {
     @ViewBuilder
     private func tasksGroupedView(for account: GoogleAuthManager.AccountKind, date: Date) -> some View {
         if auth.isLinked(kind: account) {
-            let dict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-            let lists = account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+            let dict = account == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
+            let lists = account == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
             ScrollView(.vertical, showsIndicators: true) {
                 TasksComponent(
                     taskLists: lists,
                     tasksDict: filteredTasksDictForDay(dict, on: date),
-                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    accentColor: account == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
                     accountType: account,
                     onTaskToggle: { task, listId in
                         Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: account) }
@@ -574,13 +574,13 @@ struct DayViewCustom: View {
     @ViewBuilder
     private func tasksTwoColumnView(for account: GoogleAuthManager.AccountKind, date: Date) -> some View {
         if auth.isLinked(kind: account) {
-            let dict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-            let lists = account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+            let dict = account == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
+            let lists = account == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
             ScrollView(.vertical, showsIndicators: true) {
                 TwoColumnTasksComponent(
                     taskLists: lists,
                     tasksDict: filteredTasksDictForDay(dict, on: date),
-                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    accentColor: account == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
                     accountType: account,
                     onTaskToggle: { task, listId in
                         Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: account) }
@@ -619,13 +619,13 @@ struct DayViewCustom: View {
     @ViewBuilder
     private func tasksCompactView(for account: GoogleAuthManager.AccountKind, date: Date) -> some View {
         if auth.isLinked(kind: account) {
-            let dict = account == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
-            let lists = account == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+            let dict = account == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
+            let lists = account == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
             ScrollView(.vertical, showsIndicators: true) {
                 TasksCompactComponent(
                     taskLists: lists,
                     tasksDict: filteredTasksDictForDay(dict, on: date),
-                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
+                    accentColor: account == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
                     accountType: account,
                     onTaskToggle: { task, listId in
                         Task { await tasksVM.toggleTaskCompletion(task, in: listId, for: account) }
@@ -654,7 +654,7 @@ struct DayViewCustom: View {
     }
 
     private func notLinkedPlaceholder(for account: GoogleAuthManager.AccountKind) -> some View {
-        let name = account == .personal ? appPrefs.personalAccountName : appPrefs.professionalAccountName
+        let name = account == .account1 ? appPrefs.account1Name : appPrefs.account2Name
         return Text("\(name) account not linked")
             .font(.caption)
             .foregroundColor(.secondary)

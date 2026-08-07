@@ -24,8 +24,8 @@ struct DraggableTimeboxWeekContent: View {
     let allDayHeight: CGFloat
     let eventsByDate: [Date: [GoogleCalendarEvent]]
     let tasksByDate: [Date: [String: [GoogleTask]]]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Color: Color
+    let account2Color: Color
     let isBulkEditMode: Bool
     let selectedTaskIds: Set<String>
     let onEventTap: (GoogleCalendarEvent) -> Void
@@ -55,7 +55,7 @@ struct DraggableTimeboxWeekContent: View {
     /// days on every drag frame, doing O(n²) lane packing per frame.
     @State private var laneCache: [Date: [LaidOutTimedItem]] = [:]
     /// Per-day pre-resolved all-day events + tasks. Avoids the per-render
-    /// linear `tasksVM.personalTasks[listId]?.contains(where:)` lookup
+    /// linear `tasksVM.account1Tasks[listId]?.contains(where:)` lookup
     /// that ran inside `allDayBand` for every all-day task.
     @State private var allDayCache: [Date: AllDayCacheEntry] = [:]
 
@@ -76,8 +76,8 @@ struct DraggableTimeboxWeekContent: View {
     // MARK: - Internal models
 
     private enum ItemKind {
-        case event(GoogleCalendarEvent, isPersonal: Bool)
-        case task(GoogleTask, listId: String, isPersonal: Bool)
+        case event(GoogleCalendarEvent, isAccount1: Bool)
+        case task(GoogleTask, listId: String, isAccount1: Bool)
     }
 
     private struct TimedItem: Identifiable {
@@ -87,7 +87,7 @@ struct DraggableTimeboxWeekContent: View {
         let startTime: Date
         let endTime: Date
         var duration: TimeInterval { endTime.timeIntervalSince(startTime) }
-        var isPersonal: Bool {
+        var isAccount1: Bool {
             switch kind {
             case .event(_, let p): return p
             case .task(_, _, let p): return p
@@ -114,7 +114,7 @@ struct DraggableTimeboxWeekContent: View {
     private struct AllDayTaskRow: Identifiable {
         let task: GoogleTask
         let listId: String
-        let isPersonal: Bool
+        let isAccount1: Bool
         var id: String { task.id }
     }
 
@@ -258,10 +258,10 @@ struct DraggableTimeboxWeekContent: View {
         // that drag ticks read from the cache without recomputing.
         .onChange(of: weekDates) { _, _ in recomputeRenderCaches() }
         .onChange(of: pendingMoves) { _, _ in recomputeRenderCaches() }
-        .onReceive(calendarVM.$personalEvents) { _ in recomputeRenderCaches() }
-        .onReceive(calendarVM.$professionalEvents) { _ in recomputeRenderCaches() }
-        .onReceive(tasksVM.$personalTasks) { _ in recomputeRenderCaches() }
-        .onReceive(tasksVM.$professionalTasks) { _ in recomputeRenderCaches() }
+        .onReceive(calendarVM.$account1Events) { _ in recomputeRenderCaches() }
+        .onReceive(calendarVM.$account2Events) { _ in recomputeRenderCaches() }
+        .onReceive(tasksVM.$account1Tasks) { _ in recomputeRenderCaches() }
+        .onReceive(tasksVM.$account2Tasks) { _ in recomputeRenderCaches() }
         .onReceive(timeWindowManager.$timeWindows) { _ in recomputeRenderCaches() }
         .onReceive(appPrefs.$hideCompletedTasks) { _ in recomputeRenderCaches() }
     }
@@ -287,17 +287,17 @@ struct DraggableTimeboxWeekContent: View {
     }
 
     /// Builds a single day's all-day entry. Replaces the per-render
-    /// `tasksVM.personalTasks[listId]?.contains(where:)` linear search
+    /// `tasksVM.account1Tasks[listId]?.contains(where:)` linear search
     /// inside `allDayBand` — that lookup now happens once per data
     /// change instead of every drag frame.
     private func makeAllDayEntry(events: [GoogleCalendarEvent], tasksDict: [String: [GoogleTask]]) -> AllDayCacheEntry {
         let allDayEvents = events.filter { $0.isAllDay }
         // O(P) once instead of O(P) per task.
-        let personalListIds = Set(tasksVM.personalTasks.keys)
+        let account1ListIds = Set(tasksVM.account1Tasks.keys)
 
         var allDayTasks: [AllDayTaskRow] = []
         for (listId, tasks) in tasksDict {
-            let isPersonal = personalListIds.contains(listId)
+            let isAccount1 = account1ListIds.contains(listId)
             for task in tasks {
                 let pending = pendingMoves["task_\(task.id)"]
                 let isAllDay: Bool = {
@@ -309,7 +309,7 @@ struct DraggableTimeboxWeekContent: View {
                 }()
                 guard isAllDay else { continue }
                 if appPrefs.hideCompletedTasks && task.isCompleted { continue }
-                allDayTasks.append(AllDayTaskRow(task: task, listId: listId, isPersonal: isPersonal))
+                allDayTasks.append(AllDayTaskRow(task: task, listId: listId, isAccount1: isAccount1))
             }
         }
         return AllDayCacheEntry(events: allDayEvents, tasks: allDayTasks)
@@ -485,11 +485,11 @@ struct DraggableTimeboxWeekContent: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(entry.events, id: \.id) { event in
-                    let isPersonal = calendarVM.accountKind(for: event) == .personal
-                    allDayEventCard(event: event, isPersonal: isPersonal, columnDate: date)
+                    let isAccount1 = calendarVM.accountKind(for: event) == .account1
+                    allDayEventCard(event: event, isAccount1: isAccount1, columnDate: date)
                 }
                 ForEach(entry.tasks) { row in
-                    allDayTaskCard(task: row.task, listId: row.listId, isPersonal: row.isPersonal, columnDate: date)
+                    allDayTaskCard(task: row.task, listId: row.listId, isAccount1: row.isAccount1, columnDate: date)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -498,8 +498,8 @@ struct DraggableTimeboxWeekContent: View {
         }
     }
 
-    private func allDayEventCard(event: GoogleCalendarEvent, isPersonal: Bool, columnDate: Date) -> some View {
-        let bg = isPersonal ? personalColor : professionalColor
+    private func allDayEventCard(event: GoogleCalendarEvent, isAccount1: Bool, columnDate: Date) -> some View {
+        let bg = isAccount1 ? account1Color : account2Color
         let id = "event_\(event.id)"
         let isDragging = dragState?.itemId == id
         return HStack(spacing: 6) {
@@ -521,14 +521,14 @@ struct DraggableTimeboxWeekContent: View {
         .onTapGesture { onEventTap(event) }
         .gesture(allDayDragGesture(
             itemId: id,
-            kind: .event(event, isPersonal: isPersonal),
+            kind: .event(event, isAccount1: isAccount1),
             originalDate: columnDate,
             duration: defaultEventDuration
         ))
     }
 
-    private func allDayTaskCard(task: GoogleTask, listId: String, isPersonal: Bool, columnDate: Date) -> some View {
-        let accent = isPersonal ? personalColor : professionalColor
+    private func allDayTaskCard(task: GoogleTask, listId: String, isAccount1: Bool, columnDate: Date) -> some View {
+        let accent = isAccount1 ? account1Color : account2Color
         let id = "task_\(task.id)"
         let isDragging = dragState?.itemId == id
         let isSelected = selectedTaskIds.contains(task.id)
@@ -571,7 +571,7 @@ struct DraggableTimeboxWeekContent: View {
         .onTapGesture { onTaskTap(task, listId) }
         .gesture(allDayDragGesture(
             itemId: id,
-            kind: .task(task, listId: listId, isPersonal: isPersonal),
+            kind: .task(task, listId: listId, isAccount1: isAccount1),
             originalDate: columnDate,
             duration: defaultTaskDuration
         ))
@@ -582,15 +582,15 @@ struct DraggableTimeboxWeekContent: View {
     @ViewBuilder
     private func timedItemView(item: TimedItem) -> some View {
         switch item.kind {
-        case .event(let event, let isPersonal):
-            timedEventCard(event: event, isPersonal: isPersonal)
-        case .task(let task, let listId, let isPersonal):
-            timedTaskCard(task: task, listId: listId, isPersonal: isPersonal)
+        case .event(let event, let isAccount1):
+            timedEventCard(event: event, isAccount1: isAccount1)
+        case .task(let task, let listId, let isAccount1):
+            timedTaskCard(task: task, listId: listId, isAccount1: isAccount1)
         }
     }
 
-    private func timedEventCard(event: GoogleCalendarEvent, isPersonal: Bool) -> some View {
-        let bg = isPersonal ? personalColor : professionalColor
+    private func timedEventCard(event: GoogleCalendarEvent, isAccount1: Bool) -> some View {
+        let bg = isAccount1 ? account1Color : account2Color
         return VStack(alignment: .leading, spacing: 1) {
             Text(event.summary)
                 .font(.body)
@@ -607,8 +607,8 @@ struct DraggableTimeboxWeekContent: View {
         .onTapGesture { onEventTap(event) }
     }
 
-    private func timedTaskCard(task: GoogleTask, listId: String, isPersonal: Bool) -> some View {
-        let accent = isPersonal ? personalColor : professionalColor
+    private func timedTaskCard(task: GoogleTask, listId: String, isAccount1: Bool) -> some View {
+        let accent = isAccount1 ? account1Color : account2Color
         let isSelected = selectedTaskIds.contains(task.id)
         return HStack(spacing: 8) {
             if isBulkEditMode {
@@ -674,13 +674,13 @@ struct DraggableTimeboxWeekContent: View {
     }
 
     private func shadowBox(state: WeekDragState, label: String) -> some View {
-        let isPersonal: Bool = {
+        let isAccount1: Bool = {
             switch state.kind {
             case .event(_, let p): return p
             case .task(_, _, let p): return p
             }
         }()
-        let accent = isPersonal ? personalColor : professionalColor
+        let accent = isAccount1 ? account1Color : account2Color
         return ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 5)
                 .strokeBorder(accent.opacity(0.9), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
@@ -907,8 +907,8 @@ struct DraggableTimeboxWeekContent: View {
     private func commitTask(task: GoogleTask, listId: String, state: WeekDragState, targetIsAllDay: Bool) {
         // Determine which account this task belongs to from the in-memory
         // task dictionaries — the drag state doesn't carry it.
-        let isPersonal = tasksVM.personalTasks[listId]?.contains(where: { $0.id == task.id }) ?? false
-        let kind: GoogleAuthManager.AccountKind = isPersonal ? .personal : .professional
+        let isAccount1 = tasksVM.account1Tasks[listId]?.contains(where: { $0.id == task.id }) ?? false
+        let kind: GoogleAuthManager.AccountKind = isAccount1 ? .account1 : .account2
 
         if targetIsAllDay {
             TaskScheduler.scheduleAllDay(
@@ -942,7 +942,7 @@ struct DraggableTimeboxWeekContent: View {
 
         for event in events where !event.isAllDay {
             guard let start = event.startTime, let end = event.endTime else { continue }
-            let isPersonal = calendarVM.accountKind(for: event) == .personal
+            let isAccount1 = calendarVM.accountKind(for: event) == .account1
             let id = "event_\(event.id)"
             let dur = end.timeIntervalSince(start)
             // Apply pending optimistic override.
@@ -952,7 +952,7 @@ struct DraggableTimeboxWeekContent: View {
                 guard onThisDate else { continue }
                 result.append(TimedItem(
                     id: id,
-                    kind: .event(event, isPersonal: isPersonal),
+                    kind: .event(event, isAccount1: isAccount1),
                     title: event.summary,
                     startTime: p.start,
                     endTime: p.start.addingTimeInterval(dur)
@@ -963,7 +963,7 @@ struct DraggableTimeboxWeekContent: View {
             guard Calendar.current.isDate(start, inSameDayAs: date) else { continue }
             result.append(TimedItem(
                 id: id,
-                kind: .event(event, isPersonal: isPersonal),
+                kind: .event(event, isAccount1: isAccount1),
                 title: event.summary,
                 startTime: start,
                 endTime: end
@@ -973,7 +973,7 @@ struct DraggableTimeboxWeekContent: View {
         for (listId, tasks) in tasksDict {
             for task in tasks {
                 let id = "task_\(task.id)"
-                let isPersonal = tasksVM.personalTasks[listId]?.contains(where: { $0.id == task.id }) ?? false
+                let isAccount1 = tasksVM.account1Tasks[listId]?.contains(where: { $0.id == task.id }) ?? false
                 if let p = pendingMoves[id] {
                     if p.isAllDay { continue }
                     let onThisDate = Calendar.current.isDate(p.date, inSameDayAs: date)
@@ -986,7 +986,7 @@ struct DraggableTimeboxWeekContent: View {
                     }
                     result.append(TimedItem(
                         id: id,
-                        kind: .task(task, listId: listId, isPersonal: isPersonal),
+                        kind: .task(task, listId: listId, isAccount1: isAccount1),
                         title: task.title,
                         startTime: p.start,
                         endTime: p.start.addingTimeInterval(dur)
@@ -1022,7 +1022,7 @@ struct DraggableTimeboxWeekContent: View {
                     : anchoredStart.addingTimeInterval(defaultTaskDuration)
                 result.append(TimedItem(
                     id: id,
-                    kind: .task(task, listId: listId, isPersonal: isPersonal),
+                    kind: .task(task, listId: listId, isAccount1: isAccount1),
                     title: task.title,
                     startTime: anchoredStart,
                     endTime: anchoredEnd

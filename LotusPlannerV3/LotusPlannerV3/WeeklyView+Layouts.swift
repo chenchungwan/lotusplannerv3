@@ -9,12 +9,12 @@ extension WeeklyView {
     // MARK: - Week Tasks Content (without header)
     func weekTasksContent(dayColumnWidth: CGFloat, fixedWidth: CGFloat) -> some View {
         // Determine whether there are any tasks to show this week for each account
-        let personalHasAny = weekDates.contains { date in
-            let dict = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
+        let account1HasAny = weekDates.contains { date in
+            let dict = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
             return !dict.allSatisfy { $0.value.isEmpty }
         }
-        let professionalHasAny = weekDates.contains { date in
-            let dict = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
+        let account2HasAny = weekDates.contains { date in
+            let dict = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
             return !dict.allSatisfy { $0.value.isEmpty }
         }
 
@@ -70,25 +70,25 @@ extension WeeklyView {
             }
             .background(Color(.systemGray6).opacity(0.15))
             
-            // Divider after events row (before personal tasks)
+            // Divider after events row (before account 1 tasks)
             Rectangle()
                 .fill(Color(.systemGray3))
                 .frame(height: 2)
 
-            // Personal Tasks Row
-            if authManager.isLinked(kind: .personal) && personalHasAny {
+            // Account 1 Tasks Row
+            if authManager.isLinked(kind: .account1) && account1HasAny {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Personal Tasks Header with expand/collapse button
+                    // Account 1 Tasks Header with expand/collapse button
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            personalTasksExpanded.toggle()
+                            account1TasksExpanded.toggle()
                         }
                     }) {
                         HStack {
-                            Image(systemName: personalTasksExpanded ? "chevron.down" : "chevron.right")
+                            Image(systemName: account1TasksExpanded ? "chevron.down" : "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text("\(appPrefs.personalAccountName) Tasks")
+                            Text("\(appPrefs.account1Name) Tasks")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.primary)
@@ -100,13 +100,13 @@ extension WeeklyView {
                     }
                     .buttonStyle(.plain)
                     
-                    // Personal Tasks content (collapsible)
-                    if personalTasksExpanded {
+                    // Account 1 Tasks content (collapsible)
+                    if account1TasksExpanded {
                         // Fixed-width 7-day task columns
                         HStack(alignment: .top, spacing: 0) {
                             // 7-day task columns with fixed width
                             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                weekTaskColumnPersonal(date: date)
+                                weekTaskColumnAccount1(date: date)
                                     .frame(width: dayColumnWidth, alignment: .top)
                                     .background(Color(.systemBackground))
                                     .overlay(
@@ -133,26 +133,26 @@ extension WeeklyView {
             }
             
             // Divider between task types
-            if authManager.isLinked(kind: .personal) && authManager.isLinked(kind: .professional) && personalHasAny && professionalHasAny {
+            if authManager.isLinked(kind: .account1) && authManager.isLinked(kind: .account2) && account1HasAny && account2HasAny {
                 Rectangle()
                     .fill(Color(.systemGray3))
                     .frame(height: 2)
             }
             
-            // Professional Tasks Row
-            if authManager.isLinked(kind: .professional) && professionalHasAny {
+            // Account 2 Tasks Row
+            if authManager.isLinked(kind: .account2) && account2HasAny {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Professional Tasks Header with expand/collapse button
+                    // Account 2 Tasks Header with expand/collapse button
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            professionalTasksExpanded.toggle()
+                            account2TasksExpanded.toggle()
                         }
                     }) {
                         HStack {
-                            Image(systemName: professionalTasksExpanded ? "chevron.down" : "chevron.right")
+                            Image(systemName: account2TasksExpanded ? "chevron.down" : "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text("\(appPrefs.professionalAccountName) Tasks")
+                            Text("\(appPrefs.account2Name) Tasks")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.primary)
@@ -164,13 +164,13 @@ extension WeeklyView {
                     }
                     .buttonStyle(.plain)
                     
-                    // Professional Tasks content (collapsible)
-                    if professionalTasksExpanded {
+                    // Account 2 Tasks content (collapsible)
+                    if account2TasksExpanded {
                         // Fixed-width 7-day task columns
                         HStack(alignment: .top, spacing: 0) {
                             // 7-day task columns with fixed width
                             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                weekTaskColumnProfessional(date: date)
+                                weekTaskColumnAccount2(date: date)
                                     .frame(width: dayColumnWidth, alignment: .top)
                                     .background(Color(.systemBackground))
                                     .overlay(
@@ -262,7 +262,7 @@ extension WeeklyView {
             }
             
             // Empty state message when no accounts are linked
-            if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+            if !authManager.isLinked(kind: .account1) && !authManager.isLinked(kind: .account2) {
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.badge.plus")
@@ -284,7 +284,7 @@ extension WeeklyView {
                 .buttonStyle(.plain)
             }
             // Show "No tasks" message when accounts are linked but no tasks exist
-            else if !personalHasAny && !professionalHasAny {
+            else if !account1HasAny && !account2HasAny {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 48))
@@ -379,12 +379,12 @@ extension WeeklyView {
                             
                             Divider()
                             
-                            // Personal Tasks Column
-                            if authManager.isLinked(kind: .personal) {
+                            // Account 1 Tasks Column
+                            if authManager.isLinked(kind: .account1) {
                                 VStack(spacing: 0) {
-                                    // Personal Tasks column header
+                                    // Account 1 Tasks column header
                                     VStack(alignment: .center, spacing: 4) {
-                                        Text(appPrefs.personalAccountName)
+                                        Text(appPrefs.account1Name)
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.primary)
@@ -397,9 +397,9 @@ extension WeeklyView {
                                         .fill(Color(.systemGray4))
                                         .frame(height: 1)
                                     
-                                    // Personal Tasks column content
+                                    // Account 1 Tasks column content
                                     ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                        weekDayRowPersonalTasksColumn(date: date)
+                                        weekDayRowAccount1TasksColumn(date: date)
                                         
                                         if index < weekDates.count - 1 {
                                             Rectangle()
@@ -414,12 +414,12 @@ extension WeeklyView {
                                 Divider()
                             }
                             
-                            // Professional Tasks Column
-                            if authManager.isLinked(kind: .professional) {
+                            // Account 2 Tasks Column
+                            if authManager.isLinked(kind: .account2) {
                                 VStack(spacing: 0) {
-                                    // Professional Tasks column header
+                                    // Account 2 Tasks column header
                                     VStack(alignment: .center, spacing: 4) {
-                                        Text(appPrefs.professionalAccountName)
+                                        Text(appPrefs.account2Name)
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.primary)
@@ -432,9 +432,9 @@ extension WeeklyView {
                                         .fill(Color(.systemGray4))
                                         .frame(height: 1)
                                     
-                                    // Professional Tasks column content
+                                    // Account 2 Tasks column content
                                     ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                        weekDayRowProfessionalTasksColumn(date: date)
+                                        weekDayRowAccount2TasksColumn(date: date)
                                         
                                         if index < weekDates.count - 1 {
                                             Rectangle()
@@ -610,32 +610,32 @@ extension WeeklyView {
         .frame(minHeight: 80, alignment: .topLeading)
     }
     
-    func weekDayRowPersonalTasksColumn(date: Date) -> some View {
+    func weekDayRowAccount1TasksColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 4) {
-                let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
-                if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                let account1TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
+                if !account1TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                     TasksComponent(
-                        taskLists: tasksViewModel.personalTaskLists,
-                        tasksDict: personalTasksForDate,
-                        accentColor: appPrefs.personalColor,
-                        accountType: .personal,
+                        taskLists: tasksViewModel.account1TaskLists,
+                        tasksDict: account1TasksForDate,
+                        accentColor: appPrefs.account1Color,
+                        accountType: .account1,
                         onTaskToggle: { task, listId in
                             Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                             }
                         },
                         onTaskDetails: { task, listId in
-                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
+                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account1)
                         },
                         onListRename: { listId, newName in
                             Task {
-                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                             }
                         },
                         onOrderChanged: { newOrder in
                             Task {
-                                await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                                await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                             }
                         },
                         hideDueDateTag: true,
@@ -659,32 +659,32 @@ extension WeeklyView {
         .frame(minHeight: 80, alignment: .topLeading)
     }
     
-    func weekDayRowProfessionalTasksColumn(date: Date) -> some View {
+    func weekDayRowAccount2TasksColumn(date: Date) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 4) {
-                let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
-                if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                let account2TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
+                if !account2TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                     TasksComponent(
-                        taskLists: tasksViewModel.professionalTaskLists,
-                        tasksDict: professionalTasksForDate,
-                        accentColor: appPrefs.professionalColor,
-                        accountType: .professional,
+                        taskLists: tasksViewModel.account2TaskLists,
+                        tasksDict: account2TasksForDate,
+                        accentColor: appPrefs.account2Color,
+                        accountType: .account2,
                         onTaskToggle: { task, listId in
                             Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                             }
                         },
                         onTaskDetails: { task, listId in
-                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
+                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account2)
                         },
                         onListRename: { listId, newName in
                             Task {
-                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                             }
                         },
                         onOrderChanged: { newOrder in
                             Task {
-                                await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                                await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                             }
                         },
                         hideDueDateTag: true,
@@ -791,32 +791,32 @@ extension WeeklyView {
             
             Divider()
             
-            // Personal Tasks column
-            if authManager.isLinked(kind: .personal) {
+            // Account 1 Tasks column
+            if authManager.isLinked(kind: .account1) {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
-                    if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                    let account1TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
+                    if !account1TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                         TasksComponent(
-                            taskLists: tasksViewModel.personalTaskLists,
-                            tasksDict: personalTasksForDate,
-                            accentColor: appPrefs.personalColor,
-                            accountType: .personal,
+                            taskLists: tasksViewModel.account1TaskLists,
+                            tasksDict: account1TasksForDate,
+                            accentColor: appPrefs.account1Color,
+                            accountType: .account1,
                             onTaskToggle: { task, listId in
                                 Task {
-                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                                 }
                             },
                             onTaskDetails: { task, listId in
-                                taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account1)
                             },
                             onListRename: { listId, newName in
                                 Task {
-                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                                 }
                             },
                             onOrderChanged: { newOrder in
                                 Task {
-                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                                 }
                             },
                             hideDueDateTag: true,
@@ -842,32 +842,32 @@ extension WeeklyView {
                 Divider()
             }
             
-            // Professional Tasks column
-            if authManager.isLinked(kind: .professional) {
+            // Account 2 Tasks column
+            if authManager.isLinked(kind: .account2) {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
-                    if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                    let account2TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
+                    if !account2TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                         TasksComponent(
-                            taskLists: tasksViewModel.professionalTaskLists,
-                            tasksDict: professionalTasksForDate,
-                            accentColor: appPrefs.professionalColor,
-                            accountType: .professional,
+                            taskLists: tasksViewModel.account2TaskLists,
+                            tasksDict: account2TasksForDate,
+                            accentColor: appPrefs.account2Color,
+                            accountType: .account2,
                             onTaskToggle: { task, listId in
                                 Task {
-                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                                 }
                             },
                             onTaskDetails: { task, listId in
-                                taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account2)
                             },
                             onListRename: { listId, newName in
                                 Task {
-                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                                 }
                             },
                             onOrderChanged: { newOrder in
                                 Task {
-                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                                    await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                                 }
                             },
                             hideDueDateTag: true,
@@ -990,33 +990,33 @@ extension WeeklyView {
             
             Divider()
             
-            // Personal Tasks column
-            if authManager.isLinked(kind: .personal) {
+            // Account 1 Tasks column
+            if authManager.isLinked(kind: .account1) {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
-                        let personalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .personal)
-                        if !personalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                        let account1TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
+                        if !account1TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                             TasksComponent(
-                                taskLists: tasksViewModel.personalTaskLists,
-                                tasksDict: personalTasksForDate,
-                                accentColor: appPrefs.personalColor,
-                                accountType: .personal,
+                                taskLists: tasksViewModel.account1TaskLists,
+                                tasksDict: account1TasksForDate,
+                                accentColor: appPrefs.account1Color,
+                                accountType: .account1,
                                 onTaskToggle: { task, listId in
                                     Task {
-                                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                                     }
                                 },
                                 onTaskDetails: { task, listId in
-                                    taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .personal)
+                                    taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account1)
                                 },
                                 onListRename: { listId, newName in
                                     Task {
-                                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                                     }
                                 },
                                 onOrderChanged: { newOrder in
                                     Task {
-                                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                                        await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                                     }
                                 },
                                 hideDueDateTag: true,
@@ -1041,33 +1041,33 @@ extension WeeklyView {
                 Divider()
             }
             
-            // Professional Tasks column
-            if authManager.isLinked(kind: .professional) {
+            // Account 2 Tasks column
+            if authManager.isLinked(kind: .account2) {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
-                        let professionalTasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .professional)
-                        if !professionalTasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                        let account2TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
+                        if !account2TasksForDate.allSatisfy({ $0.value.isEmpty }) {
                             TasksComponent(
-                                taskLists: tasksViewModel.professionalTaskLists,
-                                tasksDict: professionalTasksForDate,
-                                accentColor: appPrefs.professionalColor,
-                                accountType: .professional,
+                                taskLists: tasksViewModel.account2TaskLists,
+                                tasksDict: account2TasksForDate,
+                                accentColor: appPrefs.account2Color,
+                                accountType: .account2,
                                 onTaskToggle: { task, listId in
                                     Task {
-                                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                                     }
                                 },
                                 onTaskDetails: { task, listId in
-                                    taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .professional)
+                                    taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account2)
                                 },
                                 onListRename: { listId, newName in
                                     Task {
-                                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                                     }
                                 },
                                 onOrderChanged: { newOrder in
                                     Task {
-                                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                                        await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                                     }
                                 },
                                 hideDueDateTag: true,
@@ -1119,8 +1119,8 @@ extension WeeklyView {
     }
 
     func rowEventCard(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let eventColor = isAccount1 ? appPrefs.account1Color : appPrefs.account2Color
         
         return Button(action: {
             selectedCalendarEvent = event

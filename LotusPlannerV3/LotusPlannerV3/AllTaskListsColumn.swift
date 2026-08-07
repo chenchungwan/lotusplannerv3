@@ -2,14 +2,14 @@ import SwiftUI
 
 // MARK: - All Task Lists Column (Left Side)
 struct AllTaskListsColumn: View {
-    let personalLists: [GoogleTaskList]
-    let professionalLists: [GoogleTaskList]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Lists: [GoogleTaskList]
+    let account2Lists: [GoogleTaskList]
+    let account1Color: Color
+    let account2Color: Color
     @Binding var selectedListId: String?
     @Binding var selectedAccountKind: GoogleAuthManager.AccountKind?
-    let hasPersonal: Bool
-    let hasProfessional: Bool
+    let hasAccount1: Bool
+    let hasAccount2: Bool
     let onSelectionChanged: (String, GoogleAuthManager.AccountKind) -> Void
     let initialExpandedAccount: GoogleAuthManager.AccountKind?
 
@@ -23,38 +23,38 @@ struct AllTaskListsColumn: View {
     @State private var newListName = ""
     
     // State for collapsing/expanding sections
-    @State private var isPersonalExpanded: Bool
-    @State private var isProfessionalExpanded: Bool
+    @State private var isAccount1Expanded: Bool
+    @State private var isAccount2Expanded: Bool
     
-    init(personalLists: [GoogleTaskList], 
-         professionalLists: [GoogleTaskList], 
-         personalColor: Color, 
-         professionalColor: Color, 
+    init(account1Lists: [GoogleTaskList], 
+         account2Lists: [GoogleTaskList], 
+         account1Color: Color, 
+         account2Color: Color, 
          selectedListId: Binding<String?>, 
          selectedAccountKind: Binding<GoogleAuthManager.AccountKind?>, 
-         hasPersonal: Bool, 
-         hasProfessional: Bool, 
+         hasAccount1: Bool, 
+         hasAccount2: Bool, 
          onSelectionChanged: @escaping (String, GoogleAuthManager.AccountKind) -> Void,
          initialExpandedAccount: GoogleAuthManager.AccountKind?) {
-        self.personalLists = personalLists
-        self.professionalLists = professionalLists
-        self.personalColor = personalColor
-        self.professionalColor = professionalColor
+        self.account1Lists = account1Lists
+        self.account2Lists = account2Lists
+        self.account1Color = account1Color
+        self.account2Color = account2Color
         self._selectedListId = selectedListId
         self._selectedAccountKind = selectedAccountKind
-        self.hasPersonal = hasPersonal
-        self.hasProfessional = hasProfessional
+        self.hasAccount1 = hasAccount1
+        self.hasAccount2 = hasAccount2
         self.onSelectionChanged = onSelectionChanged
         self.initialExpandedAccount = initialExpandedAccount
         
         // Set initial expansion state based on the last selected account
         if let expandedAccount = initialExpandedAccount {
-            self._isPersonalExpanded = State(initialValue: expandedAccount == .personal)
-            self._isProfessionalExpanded = State(initialValue: expandedAccount == .professional)
+            self._isAccount1Expanded = State(initialValue: expandedAccount == .account1)
+            self._isAccount2Expanded = State(initialValue: expandedAccount == .account2)
         } else {
             // No last selection, both sections expanded by default
-            self._isPersonalExpanded = State(initialValue: true)
-            self._isProfessionalExpanded = State(initialValue: true)
+            self._isAccount1Expanded = State(initialValue: true)
+            self._isAccount2Expanded = State(initialValue: true)
         }
     }
     
@@ -67,45 +67,45 @@ struct AllTaskListsColumn: View {
             // All Lists
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    // Personal Lists Section
-                    if hasPersonal {
-                        // Personal Header
+                    // Account 1 Lists Section
+                    if hasAccount1 {
+                        // Account 1 Header
                         Button(action: {
-                            isPersonalExpanded.toggle()
+                            isAccount1Expanded.toggle()
                         }) {
                             HStack {
-                                Text(appPrefs.personalAccountName)
+                                Text(appPrefs.account1Name)
                                     .font(.headline)
                                     .fontWeight(.bold)
-                                    .foregroundColor(personalColor)
+                                    .foregroundColor(account1Color)
                                 Spacer()
-                                Text("\(personalLists.count) \(personalLists.count == 1 ? "List" : "Lists")")
+                                Text("\(account1Lists.count) \(account1Lists.count == 1 ? "List" : "Lists")")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Image(systemName: isPersonalExpanded ? "chevron.up" : "chevron.down")
+                                Image(systemName: isAccount1Expanded ? "chevron.up" : "chevron.down")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.horizontal, adaptivePadding)
                             .padding(.vertical, 8)
-                            .background(personalColor.opacity(0.1))
+                            .background(account1Color.opacity(0.1))
                         }
                         .buttonStyle(.plain)
                         
-                        // Personal Lists
-                        if isPersonalExpanded {
-                            ForEach(personalLists) { taskList in
-                                let personalCounts = taskCounts(for: taskList.id, kind: .personal)
+                        // Account 1 Lists
+                        if isAccount1Expanded {
+                            ForEach(account1Lists) { taskList in
+                                let account1Counts = taskCounts(for: taskList.id, kind: .account1)
                                 TaskListRow(
                                     taskList: taskList,
-                                    accentColor: personalColor,
-                                    incompleteCount: personalCounts.incomplete,
-                                    totalCount: personalCounts.total,
-                                    isSelected: selectedListId == taskList.id && selectedAccountKind == .personal,
+                                    accentColor: account1Color,
+                                    incompleteCount: account1Counts.incomplete,
+                                    totalCount: account1Counts.total,
+                                    isSelected: selectedListId == taskList.id && selectedAccountKind == .account1,
                                     onTap: {
                                         selectedListId = taskList.id
-                                        selectedAccountKind = .personal
-                                        onSelectionChanged(taskList.id, .personal)
+                                        selectedAccountKind = .account1
+                                        onSelectionChanged(taskList.id, .account1)
                                     }
                                 )
                                 Divider()
@@ -113,45 +113,45 @@ struct AllTaskListsColumn: View {
                         }
                     }
                     
-                    // Professional Lists Section
-                    if hasProfessional {
-                        // Professional Header
+                    // Account 2 Lists Section
+                    if hasAccount2 {
+                        // Account 2 Header
                         Button(action: {
-                            isProfessionalExpanded.toggle()
+                            isAccount2Expanded.toggle()
                         }) {
                             HStack {
-                                Text(appPrefs.professionalAccountName)
+                                Text(appPrefs.account2Name)
                                     .font(.headline)
                                     .fontWeight(.bold)
-                                    .foregroundColor(professionalColor)
+                                    .foregroundColor(account2Color)
                                 Spacer()
-                                Text("\(professionalLists.count) \(professionalLists.count == 1 ? "List" : "Lists")")
+                                Text("\(account2Lists.count) \(account2Lists.count == 1 ? "List" : "Lists")")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Image(systemName: isProfessionalExpanded ? "chevron.up" : "chevron.down")
+                                Image(systemName: isAccount2Expanded ? "chevron.up" : "chevron.down")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.horizontal, adaptivePadding)
                             .padding(.vertical, 8)
-                            .background(professionalColor.opacity(0.1))
+                            .background(account2Color.opacity(0.1))
                         }
                         .buttonStyle(.plain)
                         
-                        // Professional Lists
-                        if isProfessionalExpanded {
-                            ForEach(professionalLists) { taskList in
-                                let professionalCounts = taskCounts(for: taskList.id, kind: .professional)
+                        // Account 2 Lists
+                        if isAccount2Expanded {
+                            ForEach(account2Lists) { taskList in
+                                let account2Counts = taskCounts(for: taskList.id, kind: .account2)
                                 TaskListRow(
                                     taskList: taskList,
-                                    accentColor: professionalColor,
-                                    incompleteCount: professionalCounts.incomplete,
-                                    totalCount: professionalCounts.total,
-                                    isSelected: selectedListId == taskList.id && selectedAccountKind == .professional,
+                                    accentColor: account2Color,
+                                    incompleteCount: account2Counts.incomplete,
+                                    totalCount: account2Counts.total,
+                                    isSelected: selectedListId == taskList.id && selectedAccountKind == .account2,
                                     onTap: {
                                         selectedListId = taskList.id
-                                        selectedAccountKind = .professional
-                                        onSelectionChanged(taskList.id, .professional)
+                                        selectedAccountKind = .account2
+                                        onSelectionChanged(taskList.id, .account2)
                                     }
                                 )
                                 Divider()
@@ -165,10 +165,10 @@ struct AllTaskListsColumn: View {
             NewListSheet(
                 appPrefs: appPrefs,
                 accountKind: newListAccountKind,
-                hasPersonal: hasPersonal,
-                hasProfessional: hasProfessional,
-                personalColor: personalColor,
-                professionalColor: professionalColor,
+                hasAccount1: hasAccount1,
+                hasAccount2: hasAccount2,
+                account1Color: account1Color,
+                account2Color: account2Color,
                 listName: $newListName,
                 selectedAccount: $newListAccountKind,
                 onCreate: {
@@ -181,10 +181,10 @@ struct AllTaskListsColumn: View {
     private func taskCounts(for listId: String, kind: GoogleAuthManager.AccountKind) -> (incomplete: Int, total: Int) {
         let tasks: [GoogleTask]
         switch kind {
-        case .personal:
-            tasks = tasksVM.personalTasks[listId] ?? []
-        case .professional:
-            tasks = tasksVM.professionalTasks[listId] ?? []
+        case .account1:
+            tasks = tasksVM.account1Tasks[listId] ?? []
+        case .account2:
+            tasks = tasksVM.account2Tasks[listId] ?? []
         }
         let total = tasks.count
         let incomplete = tasks.filter { !$0.isCompleted }.count
@@ -194,13 +194,13 @@ struct AllTaskListsColumn: View {
     private func createNewList() {
         // Determine which account to use
         let accountToUse: GoogleAuthManager.AccountKind?
-        if hasPersonal && hasProfessional {
+        if hasAccount1 && hasAccount2 {
             // Use the selected account from the sheet
             accountToUse = newListAccountKind
-        } else if hasPersonal {
-            accountToUse = .personal
-        } else if hasProfessional {
-            accountToUse = .professional
+        } else if hasAccount1 {
+            accountToUse = .account1
+        } else if hasAccount2 {
+            accountToUse = .account2
         } else {
             accountToUse = nil
         }

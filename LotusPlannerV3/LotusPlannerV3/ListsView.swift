@@ -36,7 +36,7 @@ struct ListsView: View {
                 if isLoading {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if !auth.isLinked(kind: .personal) && !auth.isLinked(kind: .professional) {
+                } else if !auth.isLinked(kind: .account1) && !auth.isLinked(kind: .account2) {
                     // No accounts linked
                     VStack(spacing: 20) {
                         Image(systemName: "person.crop.circle.badge.exclamationmark")
@@ -78,14 +78,14 @@ struct ListsView: View {
         ZStack {
             // List selector (always present but hidden when detail is shown)
             AllTaskListsColumn(
-                personalLists: tasksVM.personalTaskLists,
-                professionalLists: tasksVM.professionalTaskLists,
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
+                account1Lists: tasksVM.account1TaskLists,
+                account2Lists: tasksVM.account2TaskLists,
+                account1Color: appPrefs.account1Color,
+                account2Color: appPrefs.account2Color,
                 selectedListId: $selectedListId,
                 selectedAccountKind: $selectedAccountKind,
-                hasPersonal: auth.isLinked(kind: .personal),
-                hasProfessional: auth.isLinked(kind: .professional),
+                hasAccount1: auth.isLinked(kind: .account1),
+                hasAccount2: auth.isLinked(kind: .account2),
                 onSelectionChanged: { listId, accountKind in
                     saveLastSelection(listId: listId, accountKind: accountKind)
                     // Show detail view with animation
@@ -159,14 +159,14 @@ struct ListsView: View {
         HStack(spacing: 0) {
             // Left Column: All Task Lists
             AllTaskListsColumn(
-                personalLists: tasksVM.personalTaskLists,
-                professionalLists: tasksVM.professionalTaskLists,
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
+                account1Lists: tasksVM.account1TaskLists,
+                account2Lists: tasksVM.account2TaskLists,
+                account1Color: appPrefs.account1Color,
+                account2Color: appPrefs.account2Color,
                 selectedListId: $selectedListId,
                 selectedAccountKind: $selectedAccountKind,
-                hasPersonal: auth.isLinked(kind: .personal),
-                hasProfessional: auth.isLinked(kind: .professional),
+                hasAccount1: auth.isLinked(kind: .account1),
+                hasAccount2: auth.isLinked(kind: .account2),
                 onSelectionChanged: { listId, accountKind in
                     saveLastSelection(listId: listId, accountKind: accountKind)
                 },
@@ -219,7 +219,7 @@ struct ListsView: View {
         }
         
         // Verify the list still exists in the loaded data
-        let lists = savedAccountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        let lists = savedAccountKind == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
         if lists.contains(where: { $0.id == savedListId }) {
             selectedListId = savedListId
             selectedAccountKind = savedAccountKind
@@ -253,7 +253,7 @@ struct ListsView: View {
         }
         
         // Verify the list still exists in the loaded data
-        let lists = savedAccountKind == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
+        let lists = savedAccountKind == .account1 ? tasksVM.account1TaskLists : tasksVM.account2TaskLists
         if lists.contains(where: { $0.id == savedListId }) {
             return savedAccountKind // Return the account kind of the last selected list
         }

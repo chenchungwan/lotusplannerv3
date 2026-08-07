@@ -14,12 +14,9 @@ struct ContentView: View {
     @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var logsViewModel = LogsViewModel.shared
     @ObservedObject private var tasksVM = TasksViewModel.shared
-    @ObservedObject private var calendarVM = CalendarViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var weeklyBulkEditManager = BulkEditManager()
     @StateObject private var timeboxBulkEditManager = BulkEditManager()
-    @State private var newListName = ""
-    @State private var newListAccountKind: GoogleAuthManager.AccountKind?
 
     var body: some View {
         NavigationStack {
@@ -33,14 +30,12 @@ struct ContentView: View {
         }) { sheet in
             globalSheet(for: sheet)
         }
-        // Log sheets attached at ContentView scope so they present regardless
-        // of which subview (Day, Week, Tasks, Lists, Goals, Journal, etc.) is
-        // currently active. CalendarView previously hosted these but is only
-        // mounted for the day-interval calendar mode, so the popups silently
-        // queued until the user navigated back to D view.
-        .sheet(isPresented: $logsViewModel.showingAddLogSheet) {
-            AddLogEntryView(viewModel: logsViewModel)
-        }
+        // Log edit sheet attached at ContentView scope so it presents
+        // regardless of which subview (Day, Week, Tasks, Lists, Goals,
+        // Journal, etc.) is currently active. CalendarView previously hosted
+        // it but is only mounted for the day-interval calendar mode, so the
+        // popup silently queued until the user navigated back to D view.
+        // (Log *creation* goes through `activeSheet` / `CreateItemSheet`.)
         .sheet(isPresented: $logsViewModel.showingEditLogSheet) {
             EditLogEntryView(viewModel: logsViewModel)
         }
@@ -48,6 +43,17 @@ struct ContentView: View {
 
     @ViewBuilder
     private func globalSheet(for sheet: NavigationManager.AppSheet) -> some View {
+        // All create flows share one window so the user can switch item type
+        // from the tab strip instead of dismissing and reopening.
+        if let kind = sheet.createItemKind {
+            CreateItemSheet(initialKind: kind)
+        } else {
+            otherGlobalSheet(for: sheet)
+        }
+    }
+
+    @ViewBuilder
+    private func otherGlobalSheet(for sheet: NavigationManager.AppSheet) -> some View {
         switch sheet {
         case .settings:
             SettingsView()
@@ -95,23 +101,9 @@ struct ContentView: View {
             }
             .presentationDetents([.large])
 
-        case .addEvent:
-            NavigationStack {
-                AddItemView(
-                    currentDate: navigationManager.currentDate,
-                    tasksViewModel: tasksVM,
-                    calendarViewModel: calendarVM,
-                    appPrefs: appPrefs,
-                    showEventOnly: true
-                )
-            }
-
-        case .addTask:
-            newTaskSheet
-
         case .aiTaskEntry:
-            let personalLinked = auth.isLinked(kind: .personal)
-            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
+            let account1Linked = auth.isLinked(kind: .account1)
+            let defaultAccount: GoogleAuthManager.AccountKind = account1Linked ? .account1 : .account2
             AITaskEntryView(
                 tasksViewModel: tasksVM,
                 authManager: auth,
@@ -119,83 +111,9 @@ struct ContentView: View {
                 defaultAccountKind: defaultAccount
             )
 
-        case .addList:
-            NewListSheet(
-                appPrefs: appPrefs,
-                accountKind: newListAccountKind,
-                hasPersonal: auth.isLinked(kind: .personal),
-                hasProfessional: auth.isLinked(kind: .professional),
-                personalColor: appPrefs.personalColor,
-                professionalColor: appPrefs.professionalColor,
-                listName: $newListName,
-                selectedAccount: $newListAccountKind,
-                onCreate: createNewList
-            )
-            .onAppear {
-                newListName = ""
-                newListAccountKind = nil
-            }
-        }
-    }
-
-    private var newTaskSheet: some View {
-        let personalLinked = auth.isLinked(kind: .personal)
-        let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? .personal : .professional
-        let defaultLists = defaultAccount == .personal ? tasksVM.personalTaskLists : tasksVM.professionalTaskLists
-        let defaultListId = defaultLists.first?.id ?? ""
-        let newTask = GoogleTask(
-            id: UUID().uuidString,
-            title: "",
-            notes: nil,
-            status: "needsAction",
-            due: nil,
-            completed: nil,
-            updated: nil,
-            position: "0"
-        )
-
-        return NavigationStack {
-            TaskDetailsView(
-                task: newTask,
-                taskListId: defaultListId,
-                accountKind: defaultAccount,
-                accentColor: defaultAccount == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksVM.personalTaskLists,
-                professionalTaskLists: tasksVM.professionalTaskLists,
-                appPrefs: appPrefs,
-                viewModel: tasksVM,
-                onSave: { updatedTask in
-                    Task {
-                        await tasksVM.updateTask(updatedTask, in: defaultListId, for: defaultAccount)
-                    }
-                },
-                onDelete: {},
-                onMove: { updatedTask, targetListId in
-                    Task {
-                        await tasksVM.moveTask(updatedTask, from: defaultListId, to: targetListId, for: defaultAccount)
-                    }
-                },
-                onCrossAccountMove: { updatedTask, targetAccount, targetListId in
-                    Task {
-                        await tasksVM.crossAccountMoveTask(updatedTask, from: (defaultAccount, defaultListId), to: (targetAccount, targetListId))
-                    }
-                },
-                isNew: true
-            )
-        }
-    }
-
-    private func createNewList() {
-        guard let accountKind = newListAccountKind else { return }
-
-        Task {
-            let title = newListName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let _ = await tasksVM.createTaskList(title: title, for: accountKind)
-            await MainActor.run {
-                navigationManager.dismissActiveSheet()
-                newListName = ""
-                newListAccountKind = nil
-            }
+        // Create flows are handled by `globalSheet(for:)` above.
+        case .addEvent, .addTask, .addList, .addGoal, .addLog:
+            EmptyView()
         }
     }
 

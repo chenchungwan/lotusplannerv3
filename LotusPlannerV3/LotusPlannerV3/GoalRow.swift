@@ -41,15 +41,15 @@ struct GoalRow: View {
     // Helper to get task from linked task data — searches all lists
     private func getTask(from linkedTask: LinkedTaskData) -> GoogleTask? {
         // First try the stored list
-        let tasksDict = linkedTask.accountKindEnum == .personal ? tasksVM.personalTasks : tasksVM.professionalTasks
+        let tasksDict = linkedTask.accountKindEnum == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
         if let task = tasksDict[linkedTask.listId]?.first(where: { $0.id == linkedTask.taskId }) {
             return task
         }
         // Search all lists in case the task was moved
-        for (_, tasks) in tasksVM.personalTasks {
+        for (_, tasks) in tasksVM.account1Tasks {
             if let task = tasks.first(where: { $0.id == linkedTask.taskId }) { return task }
         }
-        for (_, tasks) in tasksVM.professionalTasks {
+        for (_, tasks) in tasksVM.account2Tasks {
             if let task = tasks.first(where: { $0.id == linkedTask.taskId }) { return task }
         }
         return nil

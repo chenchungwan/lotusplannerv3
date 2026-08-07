@@ -258,18 +258,18 @@ extension WeeklyView {
             }
         case .eventsWeeklyList:
             customWeeklyEventsList()
-        case .personalTasksWeek:
-            customWeekByDayStrip(title: "\(appPrefs.personalAccountName) Tasks", systemImage: "person.circle") { date in
-                weekTaskColumnPersonal(date: date)
+        case .account1TasksWeek:
+            customWeekByDayStrip(title: "\(appPrefs.account1Name) Tasks", systemImage: "person.circle") { date in
+                weekTaskColumnAccount1(date: date)
             }
-        case .personalTasksWeeklyList:
-            customWeeklyTasksList(accountKind: .personal)
-        case .professionalTasksWeek:
-            customWeekByDayStrip(title: "\(appPrefs.professionalAccountName) Tasks", systemImage: "briefcase") { date in
-                weekTaskColumnProfessional(date: date)
+        case .account1TasksWeeklyList:
+            customWeeklyTasksList(accountKind: .account1)
+        case .account2TasksWeek:
+            customWeekByDayStrip(title: "\(appPrefs.account2Name) Tasks", systemImage: "briefcase") { date in
+                weekTaskColumnAccount2(date: date)
             }
-        case .professionalTasksWeeklyList:
-            customWeeklyTasksList(accountKind: .professional)
+        case .account2TasksWeeklyList:
+            customWeeklyTasksList(accountKind: .account2)
         case .weightLogWeek:
             customLogWeekStrip(title: "Weight", systemImage: "scalemass", logType: .weight)
         case .workoutLogWeek:
@@ -387,18 +387,18 @@ extension WeeklyView {
     }
 
     private func customWeeklyTasksList(accountKind: GoogleAuthManager.AccountKind) -> some View {
-        let isPersonal = accountKind == .personal
-        let taskLists = isPersonal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+        let isAccount1 = accountKind == .account1
+        let taskLists = isAccount1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
         let tasks = filteredTasksForDisplayedWeek(accountKind: accountKind)
         let title = "\(appPrefs.accountName(for: accountKind)) Tasks"
 
         return VStack(alignment: .leading, spacing: 0) {
-            customWeeklySectionHeader(title: title, systemImage: isPersonal ? "person.circle" : "briefcase")
+            customWeeklySectionHeader(title: title, systemImage: isAccount1 ? "person.circle" : "briefcase")
 
             TasksComponent(
                 taskLists: taskLists,
                 tasksDict: tasks,
-                accentColor: isPersonal ? appPrefs.personalColor : appPrefs.professionalColor,
+                accentColor: isAccount1 ? appPrefs.account1Color : appPrefs.account2Color,
                 accountType: accountKind,
                 onTaskToggle: { task, listId in
                     Task {
@@ -438,7 +438,7 @@ extension WeeklyView {
 
     private func filteredTasksForDisplayedWeek(accountKind: GoogleAuthManager.AccountKind) -> [String: [GoogleTask]] {
         guard let range = displayedWeekRange else { return [:] }
-        let tasksDict = accountKind == .personal ? tasksViewModel.personalTasks : tasksViewModel.professionalTasks
+        let tasksDict = accountKind == .account1 ? tasksViewModel.account1Tasks : tasksViewModel.account2Tasks
         let calendar = Calendar.mondayFirst
 
         return tasksDict.mapValues { tasks in
@@ -510,8 +510,8 @@ extension WeeklyView {
     }
 
     private func customWeeklyEventListRow(_ event: GoogleCalendarEvent) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let eventColor = isAccount1 ? appPrefs.account1Color : appPrefs.account2Color
 
         return Button {
             selectedCalendarEvent = event

@@ -15,8 +15,8 @@ struct DayViewNewExpanded: View {
     @State private var tasksSectionHeight: CGFloat = 400
     @State private var isTasksDividerDragging = false
     @State private var isLogsSectionCollapsed: Bool = false
-    @State private var personalTasksHeight: CGFloat = 300
-    @State private var isPersonalProfessionalDividerDragging = false
+    @State private var account1TasksHeight: CGFloat = 300
+    @State private var isAccount1Account2DividerDragging = false
 
     // MARK: - Selection State
     @State private var selectedTask: GoogleTask?
@@ -39,8 +39,8 @@ struct DayViewNewExpanded: View {
         self._tasksSectionHeight = State(initialValue: AppPreferences.shared.dayViewTimeboxTasksSectionHeight)
         self._isTasksDividerDragging = State(initialValue: false)
         self._isLogsSectionCollapsed = State(initialValue: AppPreferences.shared.dayViewTimeboxLogsSectionCollapsed)
-        self._personalTasksHeight = State(initialValue: 300)
-        self._isPersonalProfessionalDividerDragging = State(initialValue: false)
+        self._account1TasksHeight = State(initialValue: 300)
+        self._isAccount1Account2DividerDragging = State(initialValue: false)
     }
     
     var body: some View {
@@ -81,9 +81,9 @@ struct DayViewNewExpanded: View {
                     task: t,
                     taskListId: listId,
                     accountKind: account,
-                    accentColor: account == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: tasksVM.personalTaskLists,
-                    professionalTaskLists: tasksVM.professionalTaskLists,
+                    accentColor: account == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                    account1TaskLists: tasksVM.account1TaskLists,
+                    account2TaskLists: tasksVM.account2TaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksVM,
                     onSave: { updatedTask in
@@ -154,10 +154,10 @@ struct DayViewNewExpanded: View {
                                 let bDate = b.startTime ?? Date.distantPast
                                 return aDate < bDate
                             },
-                            personalEvents: calendarVM.personalEvents,
-                            professionalEvents: calendarVM.professionalEvents,
-                            personalColor: appPrefs.personalColor,
-                            professionalColor: appPrefs.professionalColor,
+                            account1Events: calendarVM.account1Events,
+                            account2Events: calendarVM.account2Events,
+                            account1Color: appPrefs.account1Color,
+                            account2Color: appPrefs.account2Color,
                             onEventTap: { ev in
                                 if let onEventTap = onEventTap {
                                     onEventTap(ev)
@@ -176,12 +176,12 @@ struct DayViewNewExpanded: View {
                 DraggableTimeboxComponent(
                     date: navigationManager.currentDate,
                     events: getAllEventsForDate(navigationManager.currentDate),
-                    personalEvents: calendarVM.personalEvents,
-                    professionalEvents: calendarVM.professionalEvents,
-                    personalTasks: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate),
-                    professionalTasks: filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate),
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
+                    account1Events: calendarVM.account1Events,
+                    account2Events: calendarVM.account2Events,
+                    account1Tasks: filteredTasksForDate(tasksVM.account1Tasks, date: navigationManager.currentDate),
+                    account2Tasks: filteredTasksForDate(tasksVM.account2Tasks, date: navigationManager.currentDate),
+                    account1Color: appPrefs.account1Color,
+                    account2Color: appPrefs.account2Color,
                     onEventTap: { ev in
                         if let onEventTap = onEventTap {
                             onEventTap(ev)
@@ -191,7 +191,7 @@ struct DayViewNewExpanded: View {
                     },
                     onTaskTap: { task, listId in
                         // Determine account kind
-                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                         selectedTask = task
                         selectedTaskListId = listId
                         selectedTaskAccount = accountKind
@@ -199,7 +199,7 @@ struct DayViewNewExpanded: View {
                     },
                     onTaskToggle: { task, listId in
                         // Determine account kind
-                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.personalTasks[listId] != nil ? .personal : .professional
+                        let accountKind: GoogleAuthManager.AccountKind = tasksVM.account1Tasks[listId] != nil ? .account1 : .account2
                         Task {
                             await tasksVM.toggleTaskCompletion(task, in: listId, for: accountKind)
                         }
@@ -290,47 +290,47 @@ struct DayViewNewExpanded: View {
             if bulkEditManager.state.isActive {
                 BulkEditToolbarView(
                     bulkEditManager: bulkEditManager,
-                    visibleOpenTaskIds: filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate).openTaskIds
-                        .union(filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate).openTaskIds)
+                    visibleOpenTaskIds: filteredTasksForDate(tasksVM.account1Tasks, date: navigationManager.currentDate).openTaskIds
+                        .union(filteredTasksForDate(tasksVM.account2Tasks, date: navigationManager.currentDate).openTaskIds)
                 )
             }
 
             // Show different layouts based on which accounts are linked
-            if auth.isLinked(kind: .personal) && auth.isLinked(kind: .professional) {
+            if auth.isLinked(kind: .account1) && auth.isLinked(kind: .account2) {
                 // Both accounts linked - show split view with divider
-                // Personal Tasks section (top)
+                // Account 1 Tasks section (top)
                 ScrollView(.vertical, showsIndicators: true) {
-                    personalTasksSection
+                    account1TasksSection
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
-                .frame(height: personalTasksHeight)
+                .frame(height: account1TasksHeight)
                 .background(Color(.systemBackground))
 
-                // Draggable divider between Personal and Professional tasks
-                personalProfessionalTasksDivider
+                // Draggable divider between Account 1 and Account 2 tasks
+                account1Account2TasksDivider
 
-                // Professional Tasks section (bottom)
+                // Account 2 Tasks section (bottom)
                 ScrollView(.vertical, showsIndicators: true) {
-                    professionalTasksSection
+                    account2TasksSection
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
                 .frame(maxHeight: .infinity)
                 .background(Color(.systemBackground))
-            } else if auth.isLinked(kind: .personal) {
-                // Only personal account linked - take full height
+            } else if auth.isLinked(kind: .account1) {
+                // Only account 1 linked - take full height
                 ScrollView(.vertical, showsIndicators: true) {
-                    personalTasksSection
+                    account1TasksSection
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
                 .frame(maxHeight: .infinity)
                 .background(Color(.systemBackground))
-            } else if auth.isLinked(kind: .professional) {
-                // Only professional account linked - take full height
+            } else if auth.isLinked(kind: .account2) {
+                // Only account 2 linked - take full height
                 ScrollView(.vertical, showsIndicators: true) {
-                    professionalTasksSection
+                    account2TasksSection
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
@@ -358,34 +358,34 @@ struct DayViewNewExpanded: View {
     }
     
     // MARK: - Task Sections
-    private var personalTasksSection: some View {
+    private var account1TasksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            let personalFiltered = filteredTasksForDate(tasksVM.personalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .personal) {
+            let account1Filtered = filteredTasksForDate(tasksVM.account1Tasks, date: navigationManager.currentDate)
+            if auth.isLinked(kind: .account1) {
                 TasksComponent(
-                    taskLists: tasksVM.personalTaskLists,
-                    tasksDict: personalFiltered,
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
+                    taskLists: tasksVM.account1TaskLists,
+                    tasksDict: account1Filtered,
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksVM.toggleTaskCompletion(task, in: listId, for: .personal)
+                            await tasksVM.toggleTaskCompletion(task, in: listId, for: .account1)
                         }
                     },
                     onTaskDetails: { task, listId in
                         selectedTask = task
                         selectedTaskListId = listId
-                        selectedTaskAccount = .personal
+                        selectedTaskAccount = .account1
                         showingTaskDetails = true
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksVM.updateTaskListOrder(newOrder, for: .personal)
+                            await tasksVM.updateTaskListOrder(newOrder, for: .account1)
                         }
                     },
                     hideDueDateTag: false,
@@ -409,34 +409,34 @@ struct DayViewNewExpanded: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
-    private var professionalTasksSection: some View {
+    private var account2TasksSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            let professionalFiltered = filteredTasksForDate(tasksVM.professionalTasks, date: navigationManager.currentDate)
-            if auth.isLinked(kind: .professional) {
+            let account2Filtered = filteredTasksForDate(tasksVM.account2Tasks, date: navigationManager.currentDate)
+            if auth.isLinked(kind: .account2) {
                 TasksComponent(
-                    taskLists: tasksVM.professionalTaskLists,
-                    tasksDict: professionalFiltered,
-                    accentColor: appPrefs.professionalColor,
-                    accountType: .professional,
+                    taskLists: tasksVM.account2TaskLists,
+                    tasksDict: account2Filtered,
+                    accentColor: appPrefs.account2Color,
+                    accountType: .account2,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksVM.toggleTaskCompletion(task, in: listId, for: .professional)
+                            await tasksVM.toggleTaskCompletion(task, in: listId, for: .account2)
                         }
                     },
                     onTaskDetails: { task, listId in
                         selectedTask = task
                         selectedTaskListId = listId
-                        selectedTaskAccount = .professional
+                        selectedTaskAccount = .account2
                         showingTaskDetails = true
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            await tasksVM.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksVM.updateTaskListOrder(newOrder, for: .professional)
+                            await tasksVM.updateTaskListOrder(newOrder, for: .account2)
                         }
                     },
                     hideDueDateTag: false,
@@ -536,27 +536,27 @@ struct DayViewNewExpanded: View {
             )
     }
 
-    private var personalProfessionalTasksDivider: some View {
+    private var account1Account2TasksDivider: some View {
         Rectangle()
-            .fill(isPersonalProfessionalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+            .fill(isAccount1Account2DividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(height: 8)
             .overlay(
                 Image(systemName: "line.3.horizontal")
                     .font(.caption)
-                    .foregroundColor(isPersonalProfessionalDividerDragging ? .white : .gray)
+                    .foregroundColor(isAccount1Account2DividerDragging ? .white : .gray)
             )
             .contentShape(Rectangle())
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        isPersonalProfessionalDividerDragging = true
-                        let newHeight = personalTasksHeight + value.translation.height
+                        isAccount1Account2DividerDragging = true
+                        let newHeight = account1TasksHeight + value.translation.height
                         let minHeight: CGFloat = 150
                         let maxHeight: CGFloat = 600
-                        personalTasksHeight = max(minHeight, min(maxHeight, newHeight))
+                        account1TasksHeight = max(minHeight, min(maxHeight, newHeight))
                     }
                     .onEnded { _ in
-                        isPersonalProfessionalDividerDragging = false
+                        isAccount1Account2DividerDragging = false
                     }
             )
     }

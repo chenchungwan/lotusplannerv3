@@ -377,10 +377,10 @@ class BulkEditManager: ObservableObject {
                 // Get the current tasks from the appropriate list
                 let currentTasks: [GoogleTask]
                 switch accountKind {
-                case .personal:
-                    currentTasks = tasksVM.personalTasks[listId] ?? []
-                case .professional:
-                    currentTasks = tasksVM.professionalTasks[listId] ?? []
+                case .account1:
+                    currentTasks = tasksVM.account1Tasks[listId] ?? []
+                case .account2:
+                    currentTasks = tasksVM.account2Tasks[listId] ?? []
                 }
 
                 // Find the current version of the task (which should be completed)
@@ -454,10 +454,10 @@ class BulkEditManager: ObservableObject {
                 // Delete from destination list
                 let destinationTasks: [GoogleTask]
                 switch destinationAccountKind {
-                case .personal:
-                    destinationTasks = tasksVM.personalTasks[destinationListId] ?? []
-                case .professional:
-                    destinationTasks = tasksVM.professionalTasks[destinationListId] ?? []
+                case .account1:
+                    destinationTasks = tasksVM.account1Tasks[destinationListId] ?? []
+                case .account2:
+                    destinationTasks = tasksVM.account2Tasks[destinationListId] ?? []
                 }
 
                 if let movedTask = destinationTasks.first(where: { $0.title == task.title }) {
@@ -564,10 +564,10 @@ class BulkEditManager: ObservableObject {
                 // Get current task version from tasksVM
                 let currentTasks: [GoogleTask]
                 switch accountKind {
-                case .personal:
-                    currentTasks = tasksVM.personalTasks[listId] ?? []
-                case .professional:
-                    currentTasks = tasksVM.professionalTasks[listId] ?? []
+                case .account1:
+                    currentTasks = tasksVM.account1Tasks[listId] ?? []
+                case .account2:
+                    currentTasks = tasksVM.account2Tasks[listId] ?? []
                 }
 
                 // Find current version of the task

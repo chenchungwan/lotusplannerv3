@@ -3,10 +3,10 @@ import SwiftUI
 struct TimelineComponent: View {
     let date: Date
     let events: [GoogleCalendarEvent]
-    let personalEvents: [GoogleCalendarEvent]
-    let professionalEvents: [GoogleCalendarEvent]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Events: [GoogleCalendarEvent]
+    let account2Events: [GoogleCalendarEvent]
+    let account1Color: Color
+    let account2Color: Color
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     
     @State private var currentTime = Date()
@@ -24,7 +24,7 @@ struct TimelineComponent: View {
         let height: CGFloat
         let width: CGFloat
         let xOffset: CGFloat
-        let isPersonal: Bool
+        let isAccount1: Bool
     }
     
     
@@ -39,13 +39,13 @@ struct TimelineComponent: View {
         return events.filter { !$0.isAllDay }
     }
     
-    init(date: Date, events: [GoogleCalendarEvent], personalEvents: [GoogleCalendarEvent], professionalEvents: [GoogleCalendarEvent], personalColor: Color, professionalColor: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
+    init(date: Date, events: [GoogleCalendarEvent], account1Events: [GoogleCalendarEvent], account2Events: [GoogleCalendarEvent], account1Color: Color, account2Color: Color, onEventTap: ((GoogleCalendarEvent) -> Void)? = nil) {
         self.date = date
         self.events = events
-        self.personalEvents = personalEvents
-        self.professionalEvents = professionalEvents
-        self.personalColor = personalColor
-        self.professionalColor = professionalColor
+        self.account1Events = account1Events
+        self.account2Events = account2Events
+        self.account1Color = account1Color
+        self.account2Color = account2Color
         self.onEventTap = onEventTap
     }
     
@@ -154,8 +154,8 @@ struct TimelineComponent: View {
     
     // Individual all-day event block
     private func allDayEventBlock(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let eventColor = isPersonal ? personalColor : professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let eventColor = isAccount1 ? account1Color : account2Color
         
         return HStack(spacing: 8) {
             Circle()
@@ -231,7 +231,7 @@ struct TimelineComponent: View {
     }
     
     private func eventView(layout: EventLayout) -> some View {
-        let backgroundColor = layout.isPersonal ? personalColor : professionalColor
+        let backgroundColor = layout.isAccount1 ? account1Color : account2Color
         
         return VStack(alignment: .leading, spacing: 2) {
             Text(layout.event.summary)
@@ -384,7 +384,7 @@ struct TimelineComponent: View {
                 let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
                 let height = max(30.0, CGFloat(dayDuration / 3600.0) * hourHeight)
                 
-                let isPersonal = event.ownerAccountKind == .personal
+                let isAccount1 = event.ownerAccountKind == .account1
                 
                 let layout = EventLayout(
                     event: event,
@@ -392,7 +392,7 @@ struct TimelineComponent: View {
                     height: height,
                     width: columnWidth - 4, // Leave small gap
                     xOffset: offsetX + CGFloat(index) * columnWidth + 2,
-                    isPersonal: isPersonal
+                    isAccount1: isAccount1
                 )
                 
                 layouts.append(layout)
@@ -410,10 +410,10 @@ struct TimelineComponent_Previews: PreviewProvider {
         TimelineComponent(
             date: Date(),
             events: [],
-            personalEvents: [],
-            professionalEvents: [],
-            personalColor: .purple,
-            professionalColor: .green
+            account1Events: [],
+            account2Events: [],
+            account1Color: .purple,
+            account2Color: .green
         )
         .previewLayout(.sizeThatFits)
     }

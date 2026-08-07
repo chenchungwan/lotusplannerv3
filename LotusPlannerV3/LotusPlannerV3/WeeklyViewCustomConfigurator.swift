@@ -189,8 +189,8 @@ struct WeeklyViewCustomConfigurator: View {
         if let pos = selectedPos, let placement = placements[pos] {
             HStack(spacing: 10) {
                 Label(placement.component.displayName(
-                    personal: appPrefs.personalAccountName,
-                    professional: appPrefs.professionalAccountName
+                    account1: appPrefs.account1Name,
+                    account2: appPrefs.account2Name
                 ), systemImage: placement.component.systemImage)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
@@ -456,8 +456,8 @@ struct WeeklyViewCustomConfigurator: View {
                     Image(systemName: placement.component.systemImage)
                         .foregroundColor(.accentColor)
                     Text(placement.component.displayName(
-                        personal: appPrefs.personalAccountName,
-                        professional: appPrefs.professionalAccountName
+                        account1: appPrefs.account1Name,
+                        account2: appPrefs.account2Name
                     ))
                     .font(.caption2)
                     .multilineTextAlignment(.center)
@@ -477,10 +477,10 @@ struct WeeklyViewCustomConfigurator: View {
             .pastWeekSummary,
             .eventsWeek,
             .eventsWeeklyList,
-            .personalTasksWeek,
-            .personalTasksWeeklyList,
-            .professionalTasksWeek,
-            .professionalTasksWeeklyList
+            .account1TasksWeek,
+            .account1TasksWeeklyList,
+            .account2TasksWeek,
+            .account2TasksWeeklyList
         ]
         if appPrefs.showWeightLogs {
             items.append(.weightLogWeek)
@@ -567,8 +567,8 @@ struct WeeklyViewCustomConfigurator: View {
                 .frame(width: 24)
 
             Text(component.displayName(
-                personal: appPrefs.personalAccountName,
-                professional: appPrefs.professionalAccountName
+                account1: appPrefs.account1Name,
+                account2: appPrefs.account2Name
             ))
             .font(.body)
             .foregroundColor(.primary)
@@ -627,7 +627,7 @@ struct WeeklyViewCustomConfigurator: View {
             proposed[sourcePos] = nil
         }
         guard canPlace(placementToApply, at: target, in: proposed) else {
-            dropError = "\(payload.component.displayName(personal: appPrefs.personalAccountName, professional: appPrefs.professionalAccountName)) needs open cells in its required weekly span."
+            dropError = "\(payload.component.displayName(account1: appPrefs.account1Name, account2: appPrefs.account2Name)) needs open cells in its required weekly span."
             return
         }
         proposed[target] = placementToApply
@@ -960,8 +960,8 @@ private struct WeeklyCellDragModifier: ViewModifier {
                 )
             ) {
                 Label(component.displayName(
-                    personal: AppPreferences.shared.personalAccountName,
-                    professional: AppPreferences.shared.professionalAccountName
+                    account1: AppPreferences.shared.account1Name,
+                    account2: AppPreferences.shared.account2Name
                 ), systemImage: component.systemImage)
                 .padding(10)
                 .background(.regularMaterial)

@@ -20,7 +20,7 @@ struct TasksCompactComponent: View {
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 // Account title
-                Text(accountType == .personal ? "\(appPrefs.personalAccountName) Tasks" : "\(appPrefs.professionalAccountName) Tasks")
+                Text(accountType == .account1 ? "\(appPrefs.account1Name) Tasks" : "\(appPrefs.account2Name) Tasks")
                     .font(.headline)
                     .foregroundColor(accentColor)
                 
@@ -178,7 +178,7 @@ private struct TaskCompactRow: View {
         taskLists: [],
         tasksDict: [:],
         accentColor: .purple,
-        accountType: .personal,
+        accountType: .account1,
         onTaskToggle: { _, _ in },
         onTaskDetails: { _, _ in }
     )

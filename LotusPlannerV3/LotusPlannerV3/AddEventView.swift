@@ -36,6 +36,11 @@ struct AddItemView: View {
     let existingEvent: GoogleCalendarEvent?
     let existingEventAccountKind: GoogleAuthManager.AccountKind?
     let showEventOnly: Bool
+    /// True when hosted inside `CreateItemSheet`, which owns the
+    /// NavigationStack so the tab strip can sit above the form.
+    let isEmbedded: Bool
+    /// Reports title/notes edits so the host can carry them to another tab.
+    let onDraftChange: ((String, String) -> Void)?
     
     private let authManager = GoogleAuthManager.shared
 
@@ -79,10 +84,10 @@ struct AddItemView: View {
     private var availableTaskLists: [GoogleTaskList] {
         guard let accountKind = selectedAccountKind else { return [] }
         switch accountKind {
-        case .personal:
-            return tasksViewModel.personalTaskLists
-        case .professional:
-            return tasksViewModel.professionalTaskLists
+        case .account1:
+            return tasksViewModel.account1TaskLists
+        case .account2:
+            return tasksViewModel.account2TaskLists
         }
     }
     
@@ -148,7 +153,7 @@ struct AddItemView: View {
     
     private var accentColor: Color {
         guard let accountKind = selectedAccountKind else { return .accentColor }
-        return accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor
+        return accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color
     }
     
     private var isEditingEvent: Bool { existingEvent != nil }
@@ -159,7 +164,11 @@ struct AddItemView: View {
          appPrefs: AppPreferences,
          existingEvent: GoogleCalendarEvent? = nil,
          accountKind: GoogleAuthManager.AccountKind? = nil,
-         showEventOnly: Bool = false) {
+         showEventOnly: Bool = false,
+         isEmbedded: Bool = false,
+         initialTitle: String = "",
+         initialNotes: String = "",
+         onDraftChange: ((String, String) -> Void)? = nil) {
         self.currentDate = currentDate
         self.tasksViewModel = tasksViewModel
         self.calendarViewModel = calendarViewModel
@@ -167,6 +176,8 @@ struct AddItemView: View {
         self.existingEvent = existingEvent
         self.existingEventAccountKind = accountKind
         self.showEventOnly = showEventOnly
+        self.isEmbedded = isEmbedded
+        self.onDraftChange = onDraftChange
         // default times
         let cal = Calendar.current
         if let ev = existingEvent {
@@ -193,6 +204,8 @@ struct AddItemView: View {
             self.originalEventStart = initStart
             self.originalEventEnd = max(initStart, adjustedEnd)
         } else {
+            _itemTitle = State(initialValue: initialTitle)
+            _itemNotes = State(initialValue: initialNotes)
             let rounded = cal.nextDate(after: Date(), matching: DateComponents(minute: cal.component(.minute, from: Date()) < 30 ? 30 : 0), matchingPolicy: .nextTime, direction: .forward) ?? Date()
             let initEnd = cal.date(byAdding: .minute, value: 30, to: rounded)!
             _eventStart = State(initialValue: rounded)
@@ -205,26 +218,54 @@ struct AddItemView: View {
             
             if showEventOnly {
                 _selectedTab = State(initialValue: 1)
-                // Auto-pick the account only when exactly one is linked.
-                // When both are linked, leave it unset so the user is
-                // forced to choose explicitly — the Create button is
-                // already disabled until `selectedAccountKind != nil`.
-                // Hard-defaulting to `.personal` here was sending events
-                // into the wrong Gmail when the user meant to create on
-                // the professional account.
-                let personalLinked = authManager.isLinked(kind: .personal)
-                let professionalLinked = authManager.isLinked(kind: .professional)
-                if personalLinked && !professionalLinked {
-                    _selectedAccountKind = State(initialValue: .personal)
-                } else if professionalLinked && !personalLinked {
-                    _selectedAccountKind = State(initialValue: .professional)
+                // Default to the first linked account in Account-section
+                // order (Account 1, then Account 2) so the form opens
+                // ready to submit. The selection stays editable, and the
+                // chosen account is highlighted in the Account row so it's
+                // visible before the user taps Create.
+                if authManager.isLinked(kind: .account1) {
+                    _selectedAccountKind = State(initialValue: .account1)
+                } else if authManager.isLinked(kind: .account2) {
+                    _selectedAccountKind = State(initialValue: .account2)
                 }
             }
         }
     }
     
     var body: some View {
-        NavigationStack {
+        Group {
+            if isEmbedded {
+                formContent
+            } else {
+                NavigationStack {
+                    formContent
+                }
+            }
+        }
+        .sheet(isPresented: $showingEndTimePicker) {
+            EndTimePickerView(
+                startTime: eventStart,
+                endTime: $eventEnd,
+                onDismiss: { showingEndTimePicker = false }
+            )
+        }
+        .alert("Delete Event", isPresented: $showingDeleteEventAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteEvent()
+            }
+        } message: {
+            if let event = existingEvent {
+                Text("Are you sure you want to delete '\(event.summary ?? "this event")'? This action cannot be undone.")
+            }
+        }
+    }
+
+    /// The form plus its navigation chrome (title, Cancel/Create). Split out
+    /// of `body` so `CreateItemSheet` can host it inside its own
+    /// NavigationStack — the toolbar items surface in that stack's bar.
+    @ViewBuilder
+    private var formContent: some View {
             VStack(spacing: 0) {
                 // Tab selector (hidden when creating event-only, or editing an existing event)
                 if !(showEventOnly || isEditingEvent) {
@@ -270,63 +311,63 @@ struct AddItemView: View {
                     // MARK: - Account Section
                     Section("Account") {
                         HStack(spacing: 12) {
-                            if authManager.isLinked(kind: .personal) {
+                            if authManager.isLinked(kind: .account1) {
                                 Button(action: {
                                     let previousAccount = selectedAccountKind
-                                    selectedAccountKind = .personal
+                                    selectedAccountKind = .account1
                                     selectedTaskListId = ""
                                     isCreatingNewList = false
                                     // When switching accounts for an existing event, preserve isAllDay and times
-                                    if isEditingEvent && previousAccount != nil && previousAccount != .personal {
+                                    if isEditingEvent && previousAccount != nil && previousAccount != .account1 {
                                         // Don't reset isAllDay or times - preserve them
                                         // The eventStart and eventEnd should remain unchanged
                                     }
                                 }) {
                                     HStack {
                                         Image(systemName: "person.circle.fill")
-                                        Text(appPrefs.personalAccountName)
+                                        Text(appPrefs.account1Name)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(selectedAccountKind == .personal ? appPrefs.personalColor.opacity(0.2) : Color(.systemGray6))
+                                            .fill(selectedAccountKind == .account1 ? appPrefs.account1Color.opacity(0.2) : Color(.systemGray6))
                                     )
-                                    .foregroundColor(selectedAccountKind == .personal ? appPrefs.personalColor : .primary)
+                                    .foregroundColor(selectedAccountKind == .account1 ? appPrefs.account1Color : .primary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedAccountKind == .personal ? appPrefs.personalColor : Color.clear, lineWidth: 2)
+                                            .stroke(selectedAccountKind == .account1 ? appPrefs.account1Color : Color.clear, lineWidth: 2)
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
 
-                            if authManager.isLinked(kind: .professional) {
+                            if authManager.isLinked(kind: .account2) {
                                 Button(action: {
                                     let previousAccount = selectedAccountKind
-                                    selectedAccountKind = .professional
+                                    selectedAccountKind = .account2
                                     selectedTaskListId = ""
                                     isCreatingNewList = false
                                     // When switching accounts for an existing event, preserve isAllDay and times
-                                    if isEditingEvent && previousAccount != nil && previousAccount != .professional {
+                                    if isEditingEvent && previousAccount != nil && previousAccount != .account2 {
                                         // Don't reset isAllDay or times - preserve them
                                         // The eventStart and eventEnd should remain unchanged
                                     }
                                 }) {
                                     HStack {
                                         Image(systemName: "briefcase.circle.fill")
-                                        Text(appPrefs.professionalAccountName)
+                                        Text(appPrefs.account2Name)
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(selectedAccountKind == .professional ? appPrefs.professionalColor.opacity(0.2) : Color(.systemGray6))
+                                            .fill(selectedAccountKind == .account2 ? appPrefs.account2Color.opacity(0.2) : Color(.systemGray6))
                                     )
-                                    .foregroundColor(selectedAccountKind == .professional ? appPrefs.professionalColor : .primary)
+                                    .foregroundColor(selectedAccountKind == .account2 ? appPrefs.account2Color : .primary)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .stroke(selectedAccountKind == .professional ? appPrefs.professionalColor : Color.clear, lineWidth: 2)
+                                            .stroke(selectedAccountKind == .account2 ? appPrefs.account2Color : Color.clear, lineWidth: 2)
                                     )
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -539,24 +580,12 @@ struct AddItemView: View {
                 
                 // Removed delete button from top toolbar
             }
-        }
-        .sheet(isPresented: $showingEndTimePicker) {
-            EndTimePickerView(
-                startTime: eventStart,
-                endTime: $eventEnd,
-                onDismiss: { showingEndTimePicker = false }
-            )
-        }
-        .alert("Delete Event", isPresented: $showingDeleteEventAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                deleteEvent()
+            .onChange(of: itemTitle) { _, newValue in
+                onDraftChange?(newValue, itemNotes)
             }
-        } message: {
-            if let event = existingEvent {
-                Text("Are you sure you want to delete '\(event.summary ?? "this event")'? This action cannot be undone.")
+            .onChange(of: itemNotes) { _, newValue in
+                onDraftChange?(itemTitle, newValue)
             }
-        }
     }
     
     private func createTask() {

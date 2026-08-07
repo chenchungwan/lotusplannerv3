@@ -50,7 +50,7 @@ struct TasksComponent: View {
     
     // Account-specific title
     private var accountTitle: String {
-        accountType == .personal ? "\(appPrefs.personalAccountName) Tasks" : "\(appPrefs.professionalAccountName) Tasks"
+        accountType == .account1 ? "\(appPrefs.account1Name) Tasks" : "\(appPrefs.account2Name) Tasks"
     }
     
     var body: some View {
@@ -397,7 +397,7 @@ struct TwoColumnTasksComponent: View {
     }
 
     private var accountTitle: String {
-        accountType == .personal ? "\(appPrefs.personalAccountName) Tasks" : "\(appPrefs.professionalAccountName) Tasks"
+        accountType == .account1 ? "\(appPrefs.account1Name) Tasks" : "\(appPrefs.account2Name) Tasks"
     }
 
     var body: some View {
@@ -1114,7 +1114,7 @@ private struct TaskComponentRow: View {
         .draggable(DraggableTaskInfo(
             taskId: task.id,
             listId: listId,
-            accountKind: accountKind == .personal ? "personal" : "professional"
+            accountKind: accountKind.rawValue
         )) {
             // Custom drag preview: small rounded-rect tile in the
             // account's accent color, mirroring how a task renders on
@@ -1231,7 +1231,7 @@ struct TasksComponent_Previews: PreviewProvider {
             taskLists: [],
             tasksDict: [:],
             accentColor: .purple,
-            accountType: .personal,
+            accountType: .account1,
             onTaskToggle: { _, _ in },
             onTaskDetails: { _, _ in },
             onListRename: { _, _ in },

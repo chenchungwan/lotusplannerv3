@@ -103,20 +103,20 @@ extension GoogleCalendarEvent {
     /// subscription) vs. the saved per-kind emails. Used everywhere
     /// the UI needs to show event color/account or pick a token to
     /// authorize a PATCH/DELETE — without this, an event that appears
-    /// in both `personalEvents` and `professionalEvents` (cross-account
+    /// in both `account1Events` and `account2Events` (cross-account
     /// subscription) gets misattributed to whichever array we check
     /// first.
     var ownerAccountKind: GoogleAuthManager.AccountKind {
         let auth = GoogleAuthManager.shared
         let owner = (calendarId ?? "").lowercased()
-        let professionalEmail = auth.getEmail(for: .professional).lowercased()
-        let personalEmail = auth.getEmail(for: .personal).lowercased()
-        if !professionalEmail.isEmpty, owner == professionalEmail {
-            return .professional
+        let account2Email = auth.getEmail(for: .account2).lowercased()
+        let account1Email = auth.getEmail(for: .account1).lowercased()
+        if !account2Email.isEmpty, owner == account2Email {
+            return .account2
         }
-        if !personalEmail.isEmpty, owner == personalEmail {
-            return .personal
+        if !account1Email.isEmpty, owner == account1Email {
+            return .account1
         }
-        return .personal
+        return .account1
     }
 }

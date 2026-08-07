@@ -35,10 +35,10 @@ struct SettingsView: View {
     @State private var showingDeleteAllAlert = false
     @State private var showingDeleteSuccessAlert = false
     @State private var showingDeleteGoalsAlert = false
-    @State private var showPersonalAccount = true
-    @State private var showProfessionalAccount = true
-    @State private var showingPersonalColorPicker = false
-    @State private var showingProfessionalColorPicker = false
+    @State private var showAccount1Account = true
+    @State private var showAccount2Account = true
+    @State private var showingAccount1ColorPicker = false
+    @State private var showingAccount2ColorPicker = false
     @State private var pendingUnlink: GoogleAuthManager.AccountKind?
     /// Non-nil when a custom-day-view version is being edited; drives the
     /// configurator sheet. `UUID` identifies the slot in
@@ -378,18 +378,18 @@ struct SettingsView: View {
             Form {
                 Section("Linked Accounts") {
                     accountRow(
-                        kind: appPrefs.personalAccountName,
-                        kindEnum: .personal,
-                        isVisible: $showPersonalAccount,
-                        accountColor: $appPrefs.personalColor,
-                        showingColorPicker: $showingPersonalColorPicker
+                        kind: appPrefs.account1Name,
+                        kindEnum: .account1,
+                        isVisible: $showAccount1Account,
+                        accountColor: $appPrefs.account1Color,
+                        showingColorPicker: $showingAccount1ColorPicker
                     )
                     accountRow(
-                        kind: appPrefs.professionalAccountName,
-                        kindEnum: .professional,
-                        isVisible: $showProfessionalAccount,
-                        accountColor: $appPrefs.professionalColor,
-                        showingColorPicker: $showingProfessionalColorPicker
+                        kind: appPrefs.account2Name,
+                        kindEnum: .account2,
+                        isVisible: $showAccount2Account,
+                        accountColor: $appPrefs.account2Color,
+                        showingColorPicker: $showingAccount2ColorPicker
                     )
                 }
 
@@ -961,17 +961,17 @@ struct SettingsView: View {
                         selectedColor: accountColor,
                         onColorChange: { color in
                             switch kindEnum {
-                            case .personal:
-                                appPrefs.updatePersonalColor(color)
-                            case .professional:
-                                appPrefs.updateProfessionalColor(color)
+                            case .account1:
+                                appPrefs.updateAccount1Color(color)
+                            case .account2:
+                                appPrefs.updateAccount2Color(color)
                             }
                         }
                     )
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    TextField("Account name", text: kindEnum == .personal ? $appPrefs.personalAccountName : $appPrefs.professionalAccountName)
+                    TextField("Account name", text: kindEnum == .account1 ? $appPrefs.account1Name : $appPrefs.account2Name)
                         .font(.body)
                         .textFieldStyle(.plain)
                         .frame(maxWidth: 200)
@@ -1402,10 +1402,10 @@ struct SettingsView: View {
         _ = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
         
         // Check current authentication states
-        _ = auth.isLinked(kind: .personal)
-        _ = auth.getEmail(for: .personal)
-        _ = auth.isLinked(kind: .professional)
-        _ = auth.getEmail(for: .professional)
+        _ = auth.isLinked(kind: .account1)
+        _ = auth.getEmail(for: .account1)
+        _ = auth.isLinked(kind: .account2)
+        _ = auth.getEmail(for: .account2)
         
         // Check UserDefaults for tokens
         let _ = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.contains("google") }
@@ -1425,8 +1425,8 @@ struct SettingsView: View {
         }
         
         // Force update authentication states
-        auth.unlink(kind: .personal)
-        auth.unlink(kind: .professional)
+        auth.unlink(kind: .account1)
+        auth.unlink(kind: .account2)
         
         // Cleared tokens
     }

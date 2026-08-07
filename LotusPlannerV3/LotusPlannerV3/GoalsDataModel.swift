@@ -35,12 +35,12 @@ struct LinkedTaskData: Codable, Hashable {
     init(taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind, taskTitle: String? = nil) {
         self.taskId = taskId
         self.listId = listId
-        self.accountKind = accountKind == .personal ? "personal" : "professional"
+        self.accountKind = accountKind.rawValue
         self.taskTitle = taskTitle
     }
 
     var accountKindEnum: GoogleAuthManager.AccountKind {
-        return accountKind == "personal" ? .personal : .professional
+        return accountKind == "personal" ? .account1 : .account2
     }
 }
 

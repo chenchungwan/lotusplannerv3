@@ -24,7 +24,7 @@ struct CalendarView: View {
         self._verticalTopRowHeight = State(initialValue: AppPreferences.shared.calendarVerticalTopRowHeight)
         self._verticalTopLeftWidth = State(initialValue: AppPreferences.shared.calendarVerticalTopLeftWidth)
         self._verticalBottomLeftWidth = State(initialValue: AppPreferences.shared.calendarVerticalBottomLeftWidth)
-        self._weekTasksPersonalWidth = State(initialValue: AppPreferences.shared.calendarWeekTasksPersonalWidth)
+        self._weekTasksAccount1Width = State(initialValue: AppPreferences.shared.calendarWeekTasksAccount1Width)
         self._weekTopSectionHeight = State(initialValue: AppPreferences.shared.calendarWeekTopSectionHeight)
         self._longEventsLeftWidth = State(initialValue: AppPreferences.shared.calendarVerticalTopLeftWidth) // Reuse same preference
     }
@@ -64,20 +64,20 @@ struct CalendarView: View {
     @State private var currentTimeTimer: Timer?
     @State private var currentTimeSlot: Double = 0
     @State private var movablePhotos: [MovablePhoto] = []
-    @State private var cachedPersonalTasks: [String: [GoogleTask]] = [:]
-    @State private var cachedProfessionalTasks: [String: [GoogleTask]] = [:]
+    @State private var cachedAccount1Tasks: [String: [GoogleTask]] = [:]
+    @State private var cachedAccount2Tasks: [String: [GoogleTask]] = [:]
     @State private var weekTasksSectionWidth: CGFloat = UIScreen.main.bounds.width * 0.6
     @State private var weekCanvasView = PKCanvasView()
-    @State private var cachedWeekPersonalTasks: [String: [GoogleTask]] = [:]
-    @State private var cachedWeekProfessionalTasks: [String: [GoogleTask]] = [:]
+    @State private var cachedWeekAccount1Tasks: [String: [GoogleTask]] = [:]
+    @State private var cachedWeekAccount2Tasks: [String: [GoogleTask]] = [:]
     @State private var weekTopSectionHeight: CGFloat = 400
 
     // Bulk edit manager
     @StateObject private var bulkEditManager = BulkEditManager()
     @State private var isWeekDividerDragging = false
     @State private var monthCanvasView = PKCanvasView()
-    @State private var cachedMonthPersonalTasks: [String: [GoogleTask]] = [:]
-    @State private var cachedMonthProfessionalTasks: [String: [GoogleTask]] = [:]
+    @State private var cachedMonthAccount1Tasks: [String: [GoogleTask]] = [:]
+    @State private var cachedMonthAccount2Tasks: [String: [GoogleTask]] = [:]
     
     // Day view vertical slider state
     @State private var dayLeftSectionWidth: CGFloat
@@ -94,8 +94,8 @@ struct CalendarView: View {
     @State private var selectedCalendarEvent: GoogleCalendarEvent?
     @State private var showingEventDetails = false
     
-    // Personal/Professional task divider widths for all views
-    @State private var weekTasksPersonalWidth: CGFloat = UIScreen.main.bounds.width * 0.3
+    // Account 1/Account 2 task divider widths for all views
+    @State private var weekTasksAccount1Width: CGFloat = UIScreen.main.bounds.width * 0.3
     @State private var isWeekTasksDividerDragging = false
     
     // Long layout adjustable sizes and drag states
@@ -151,9 +151,9 @@ struct CalendarView: View {
                 task: sel.task,
                 taskListId: sel.listId,
                 accountKind: sel.accountKind,
-                accentColor: sel.accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                accentColor: sel.accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
                 onSave: { updatedTask in
@@ -278,8 +278,8 @@ struct CalendarView: View {
         }
         .sheet(isPresented: $bulkEditManager.state.showingMoveDestinationPicker) {
             BulkMoveDestinationPicker(
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 onSelect: { targetAccount, targetListId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
@@ -349,7 +349,7 @@ struct CalendarView: View {
                 UndoToast(
                     action: action,
                     count: undoData.count,
-                    accentColor: appPrefs.personalColor,
+                    accentColor: appPrefs.account1Color,
                     onUndo: {
                         performUndo(action: action, data: undoData)
                         bulkEditManager.state.showingUndoToast = false
@@ -373,26 +373,26 @@ struct CalendarView: View {
         baseContentWithBulkEditSheets
         .onChange(of: authManager.linkedStates) { oldValue, newValue in
             // When an account is unlinked, clear associated tasks and calendar events
-            if !(newValue[.personal] ?? false) {
-                tasksViewModel.clearTasks(for: .personal)
+            if !(newValue[.account1] ?? false) {
+                tasksViewModel.clearTasks(for: .account1)
                 // Safely clear calendar data on main actor
                 Task { @MainActor in
-                    calendarViewModel.personalEvents = []
-                    calendarViewModel.personalCalendars = []
+                    calendarViewModel.account1Events = []
+                    calendarViewModel.account1Calendars = []
                 }
             }
-            if !(newValue[.professional] ?? false) {
-                tasksViewModel.clearTasks(for: .professional)
+            if !(newValue[.account2] ?? false) {
+                tasksViewModel.clearTasks(for: .account2)
                 // Safely clear calendar data on main actor
                 Task { @MainActor in
-                    calendarViewModel.professionalEvents = []
-                    calendarViewModel.professionalCalendars = []
+                    calendarViewModel.account2Events = []
+                    calendarViewModel.account2Calendars = []
                 }
             }
             // When an account becomes linked, load tasks and calendar data immediately
-            let personalJustLinked = (newValue[.personal] ?? false) && !(oldValue[.personal] ?? false)
-            let professionalJustLinked = (newValue[.professional] ?? false) && !(oldValue[.professional] ?? false)
-            if personalJustLinked || professionalJustLinked {
+            let account1JustLinked = (newValue[.account1] ?? false) && !(oldValue[.account1] ?? false)
+            let account2JustLinked = (newValue[.account2] ?? false) && !(oldValue[.account2] ?? false)
+            if account1JustLinked || account2JustLinked {
                 Task {
                     await tasksViewModel.loadTasks()
                     await calendarViewModel.refreshDataForCurrentView()
@@ -426,9 +426,9 @@ struct CalendarView: View {
         }
         .sheet(isPresented: $showingNewTask) {
             // Create-task UI matching TasksView create flow
-            let personalLinked = authManager.isLinked(kind: GoogleAuthManager.AccountKind.personal)
-            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? GoogleAuthManager.AccountKind.personal : GoogleAuthManager.AccountKind.professional
-            let defaultLists = defaultAccount == GoogleAuthManager.AccountKind.personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let account1Linked = authManager.isLinked(kind: GoogleAuthManager.AccountKind.account1)
+            let defaultAccount: GoogleAuthManager.AccountKind = account1Linked ? GoogleAuthManager.AccountKind.account1 : GoogleAuthManager.AccountKind.account2
+            let defaultLists = defaultAccount == GoogleAuthManager.AccountKind.account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
             let defaultListId = defaultLists.first?.id ?? ""
             let newTask = GoogleTask(
                 id: UUID().uuidString,
@@ -443,9 +443,9 @@ struct CalendarView: View {
                 task: newTask,
                 taskListId: defaultListId,
                 accountKind: defaultAccount,
-                accentColor: defaultAccount == GoogleAuthManager.AccountKind.personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                accentColor: defaultAccount == GoogleAuthManager.AccountKind.account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
                 onSave: { updatedTask in
@@ -517,26 +517,26 @@ struct CalendarView: View {
         }
         .onChange(of: authManager.linkedStates) { oldValue, newValue in
             // When an account is unlinked, clear associated tasks and calendar events
-            if !(newValue[.personal] ?? false) {
-                tasksViewModel.clearTasks(for: .personal)
+            if !(newValue[.account1] ?? false) {
+                tasksViewModel.clearTasks(for: .account1)
                 // Safely clear calendar data on main actor
                 Task { @MainActor in
-                    calendarViewModel.personalEvents = []
-                    calendarViewModel.personalCalendars = []
+                    calendarViewModel.account1Events = []
+                    calendarViewModel.account1Calendars = []
                 }
             }
-            if !(newValue[.professional] ?? false) {
-                tasksViewModel.clearTasks(for: .professional)
+            if !(newValue[.account2] ?? false) {
+                tasksViewModel.clearTasks(for: .account2)
                 // Safely clear calendar data on main actor
                 Task { @MainActor in
-                    calendarViewModel.professionalEvents = []
-                    calendarViewModel.professionalCalendars = []
+                    calendarViewModel.account2Events = []
+                    calendarViewModel.account2Calendars = []
                 }
             }
             // When an account becomes linked, load tasks and calendar data immediately
-            let personalJustLinked = (newValue[.personal] ?? false) && !(oldValue[.personal] ?? false)
-            let professionalJustLinked = (newValue[.professional] ?? false) && !(oldValue[.professional] ?? false)
-            if personalJustLinked || professionalJustLinked {
+            let account1JustLinked = (newValue[.account1] ?? false) && !(oldValue[.account1] ?? false)
+            let account2JustLinked = (newValue[.account2] ?? false) && !(oldValue[.account2] ?? false)
+            if account1JustLinked || account2JustLinked {
                 Task {
                     await tasksViewModel.loadTasks()
                     await calendarViewModel.refreshDataForCurrentView()
@@ -570,9 +570,9 @@ struct CalendarView: View {
         }
         .sheet(isPresented: $showingNewTask) {
             // Create-task UI matching TasksView create flow
-            let personalLinked = authManager.isLinked(kind: GoogleAuthManager.AccountKind.personal)
-            let defaultAccount: GoogleAuthManager.AccountKind = personalLinked ? GoogleAuthManager.AccountKind.personal : GoogleAuthManager.AccountKind.professional
-            let defaultLists = defaultAccount == GoogleAuthManager.AccountKind.personal ? tasksViewModel.personalTaskLists : tasksViewModel.professionalTaskLists
+            let account1Linked = authManager.isLinked(kind: GoogleAuthManager.AccountKind.account1)
+            let defaultAccount: GoogleAuthManager.AccountKind = account1Linked ? GoogleAuthManager.AccountKind.account1 : GoogleAuthManager.AccountKind.account2
+            let defaultLists = defaultAccount == GoogleAuthManager.AccountKind.account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
             let defaultListId = defaultLists.first?.id ?? ""
             let newTask = GoogleTask(
                 id: UUID().uuidString,
@@ -587,9 +587,9 @@ struct CalendarView: View {
                 task: newTask,
                 taskListId: defaultListId,
                 accountKind: defaultAccount,
-                accentColor: defaultAccount == GoogleAuthManager.AccountKind.personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                accentColor: defaultAccount == GoogleAuthManager.AccountKind.account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
                 onSave: { updatedTask in
@@ -619,9 +619,9 @@ struct CalendarView: View {
                     task: task,
                     taskListId: taskListId,
                     accountKind: accountKind,
-                    accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                    personalTaskLists: tasksViewModel.personalTaskLists,
-                    professionalTaskLists: tasksViewModel.professionalTaskLists,
+                    accentColor: accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                    account1TaskLists: tasksViewModel.account1TaskLists,
+                    account2TaskLists: tasksViewModel.account2TaskLists,
                     appPrefs: appPrefs,
                     viewModel: tasksViewModel,
                     onSave: { updatedTask in
@@ -977,7 +977,7 @@ struct CalendarView: View {
     }
 
     private var visibleOpenTaskIds: Set<String> {
-        cachedMonthPersonalTasks.openTaskIds.union(cachedMonthProfessionalTasks.openTaskIds)
+        cachedMonthAccount1Tasks.openTaskIds.union(cachedMonthAccount2Tasks.openTaskIds)
     }
 
     private var allVisibleOpenTasksSelected: Bool {
@@ -1110,29 +1110,29 @@ struct CalendarView: View {
             }
 
             HStack(spacing: 0) {
-                // Personal Tasks Component
+                // Account 1 Tasks Component
                 TasksComponent(
-                    taskLists: tasksViewModel.personalTaskLists,
-                    tasksDict: cachedMonthPersonalTasks,
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
+                    taskLists: tasksViewModel.account1TaskLists,
+                    tasksDict: cachedMonthAccount1Tasks,
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                             updateCachedTasks()
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .account1)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                         }
                     },
                     isSingleDayView: true,
@@ -1149,29 +1149,29 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.all, 8)
             
-            // Professional Tasks Component
+            // Account 2 Tasks Component
             TasksComponent(
-                taskLists: tasksViewModel.professionalTaskLists,
-                tasksDict: cachedMonthProfessionalTasks,
-                accentColor: appPrefs.professionalColor,
-                accountType: .professional,
+                taskLists: tasksViewModel.account2TaskLists,
+                tasksDict: cachedMonthAccount2Tasks,
+                accentColor: appPrefs.account2Color,
+                accountType: .account2,
                 onTaskToggle: { task, listId in
                     Task {
-                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                         updateCachedTasks()
                     }
                 },
                 onTaskDetails: { task, listId in
-                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .account2)
                 },
                 onListRename: { listId, newName in
                     Task {
-                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                     }
                 },
                 onOrderChanged: { newOrder in
                     Task {
-                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                     }
                 },
                 isSingleDayView: true,
@@ -1201,7 +1201,7 @@ struct CalendarView: View {
     
     private var weekBottomSection: some View {
         GeometryReader { geometry in
-            if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+            if !authManager.isLinked(kind: .account1) && !authManager.isLinked(kind: .account2) {
                 // Centered empty state for weekly view
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 12) {
@@ -1222,7 +1222,7 @@ struct CalendarView: View {
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
             } else {
                 HStack(spacing: 0) {
-                    // Tasks section (personal and professional columns)
+                    // Tasks section (account 1 and account 2 columns)
                     weekTasksSection
                         .frame(width: weekTasksSectionWidth)
                     
@@ -1240,62 +1240,62 @@ struct CalendarView: View {
     
     private var weekTasksSection: some View {
         HStack(spacing: 0) {
-            // Personal Tasks
+            // Account 1 Tasks
             TasksComponent(
-                taskLists: tasksViewModel.personalTaskLists,
-                tasksDict: cachedWeekPersonalTasks,
-                accentColor: appPrefs.personalColor,
-                accountType: .personal,
+                taskLists: tasksViewModel.account1TaskLists,
+                tasksDict: cachedWeekAccount1Tasks,
+                accentColor: appPrefs.account1Color,
+                accountType: .account1,
                 onTaskToggle: { task, listId in
                     Task {
-                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                         updateCachedTasks()
                     }
                 },
                 onTaskDetails: { task, listId in
-                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .account1)
                 },
                 onListRename: { listId, newName in
                     Task {
-                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                     }
                 },
                 onOrderChanged: { newOrder in
                     Task {
-                        await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                     }
                 },
                 isSingleDayView: true,
                 showTitle: false
             )
-            .frame(width: weekTasksPersonalWidth, alignment: .topLeading)
+            .frame(width: weekTasksAccount1Width, alignment: .topLeading)
             
             // Vertical divider
             weekTasksDivider
             
-            // Professional Tasks
+            // Account 2 Tasks
             TasksComponent(
-                taskLists: tasksViewModel.professionalTaskLists,
-                tasksDict: cachedWeekProfessionalTasks,
-                accentColor: appPrefs.professionalColor,
-                accountType: .professional,
+                taskLists: tasksViewModel.account2TaskLists,
+                tasksDict: cachedWeekAccount2Tasks,
+                accentColor: appPrefs.account2Color,
+                accountType: .account2,
                 onTaskToggle: { task, listId in
                     Task {
-                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                        await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                         updateCachedTasks()
                     }
                 },
                 onTaskDetails: { task, listId in
-                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
+                    taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .account2)
                 },
                 onListRename: { listId, newName in
                     Task {
-                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                        await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                     }
                 },
                 onOrderChanged: { newOrder in
                     Task {
-                        await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                        await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                     }
                 },
                 isSingleDayView: true,
@@ -1332,12 +1332,12 @@ struct CalendarView: View {
             DragGesture()
                 .onChanged { value in
                     isWeekTasksDividerDragging = true
-                    let newWidth = weekTasksPersonalWidth + value.translation.width
-                    weekTasksPersonalWidth = max(150, min(UIScreen.main.bounds.width * 0.6, newWidth))
+                    let newWidth = weekTasksAccount1Width + value.translation.width
+                    weekTasksAccount1Width = max(150, min(UIScreen.main.bounds.width * 0.6, newWidth))
                 }
                 .onEnded { _ in
                     isWeekTasksDividerDragging = false
-                    appPrefs.updateCalendarWeekTasksPersonalWidth(weekTasksPersonalWidth)
+                    appPrefs.updateCalendarWeekTasksAccount1Width(weekTasksAccount1Width)
                 }
         )
     }
@@ -1510,17 +1510,17 @@ struct CalendarView: View {
     
     private var singleMonthSection: some View {
         let monthEvents = getMonthEventsGroupedByDate()
-        let personalEvents = calendarViewModel.personalEvents
-        let professionalEvents = calendarViewModel.professionalEvents
+        let account1Events = calendarViewModel.account1Events
+        let account2Events = calendarViewModel.account2Events
         
         
         return MonthTimelineComponent(
             currentDate: currentDate,
             monthEvents: monthEvents,
-            personalEvents: personalEvents,
-            professionalEvents: professionalEvents,
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor,
+            account1Events: account1Events,
+            account2Events: account2Events,
+            account1Color: appPrefs.account1Color,
+            account2Color: appPrefs.account2Color,
             onEventTap: { ev in
                 selectedCalendarEvent = ev
                 showingEventDetails = true
@@ -1609,12 +1609,12 @@ struct CalendarView: View {
             .onChange(of: navigationManager.currentDate) { oldValue, newValue in
                 currentDate = newValue
             }
-            .onChange(of: tasksViewModel.personalTasks) { oldValue, newValue in
+            .onChange(of: tasksViewModel.account1Tasks) { oldValue, newValue in
                 updateCachedTasks()
                 // Force view update
                 tasksViewModel.objectWillChange.send()
             }
-            .onChange(of: tasksViewModel.professionalTasks) { oldValue, newValue in
+            .onChange(of: tasksViewModel.account2Tasks) { oldValue, newValue in
                 updateCachedTasks()
                 // Force view update
                 tasksViewModel.objectWillChange.send()
@@ -1727,9 +1727,9 @@ struct CalendarView: View {
                 task: task,
                 taskListId: listId,
                 accountKind: accountKind,
-                accentColor: accountKind == .personal ? appPrefs.personalColor : appPrefs.professionalColor,
-                personalTaskLists: tasksViewModel.personalTaskLists,
-                professionalTaskLists: tasksViewModel.professionalTaskLists,
+                accentColor: accountKind == .account1 ? appPrefs.account1Color : appPrefs.account2Color,
+                account1TaskLists: tasksViewModel.account1TaskLists,
+                account2TaskLists: tasksViewModel.account2TaskLists,
                 appPrefs: appPrefs,
                 viewModel: tasksViewModel,
                 onSave: { updatedTask in
@@ -1874,7 +1874,7 @@ struct CalendarView: View {
                     bulkEditToolbar
                 }
 
-                // Personal & Professional tasks (full width) with vertical scrolling
+                // Account 1 & Account 2 tasks (full width) with vertical scrolling
                 ScrollView(.vertical, showsIndicators: true) {
                     topLeftDaySection
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1994,10 +1994,10 @@ struct CalendarView: View {
                 TimelineComponent(
                     date: currentDate,
                     events: getAllEventsForDate(currentDate),
-                    personalEvents: calendarViewModel.personalEvents,
-                    professionalEvents: calendarViewModel.professionalEvents,
-                    personalColor: appPrefs.personalColor,
-                    professionalColor: appPrefs.professionalColor,
+                    account1Events: calendarViewModel.account1Events,
+                    account2Events: calendarViewModel.account2Events,
+                    account1Color: appPrefs.account1Color,
+                    account2Color: appPrefs.account2Color,
                     onEventTap: { ev in
                         selectedCalendarEvent = ev
                         showingEventDetails = true
@@ -2035,10 +2035,10 @@ struct CalendarView: View {
             }
         return EventsListComponent(
             events: events,
-            personalEvents: calendarViewModel.personalEvents,
-            professionalEvents: calendarViewModel.professionalEvents,
-            personalColor: appPrefs.personalColor,
-            professionalColor: appPrefs.professionalColor,
+            account1Events: calendarViewModel.account1Events,
+            account2Events: calendarViewModel.account2Events,
+            account1Color: appPrefs.account1Color,
+            account2Color: appPrefs.account2Color,
             onEventTap: { ev in
                 selectedCalendarEvent = ev
                 showingEventDetails = true
@@ -2261,17 +2261,17 @@ struct CalendarView: View {
                     // Event slots (only show when showEvents is true - for old implementation)
                     if showEvents {
                         HStack(spacing: 2) {
-                            // Personal events column
-                            if let personalEvent = getPersonalEvent(for: slot) {
-                                eventBlock(event: personalEvent, color: .blue, isPersonal: true)
+                            // Account 1 events column
+                            if let account1Event = getAccount1Event(for: slot) {
+                                eventBlock(event: account1Event, color: .blue, isAccount1: true)
                             } else {
                                 Spacer()
                                     .frame(height: 20)
                             }
                             
-                            // Professional events column  
-                            if let professionalEvent = getProfessionalEvent(for: slot) {
-                                eventBlock(event: professionalEvent, color: .green, isPersonal: false)
+                            // Account 2 events column  
+                            if let account2Event = getAccount2Event(for: slot) {
+                                eventBlock(event: account2Event, color: .green, isAccount1: false)
                             } else {
                                 Spacer()
                                     .frame(height: 20)
@@ -2292,7 +2292,7 @@ struct CalendarView: View {
         .id(slot)
     }
     
-    private func eventBlock(event: String, color: Color, isPersonal: Bool) -> some View {
+    private func eventBlock(event: String, color: Color, isAccount1: Bool) -> some View {
         RoundedRectangle(cornerRadius: 6)
             .fill(color.opacity(0.2))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2427,7 +2427,7 @@ struct CalendarView: View {
         let event: GoogleCalendarEvent
         let startSlot: Int
         let endSlot: Int
-        let isPersonal: Bool
+        let isAccount1: Bool
         
         func hash(into hasher: inout Hasher) {
             hasher.combine(id)
@@ -2460,8 +2460,8 @@ struct CalendarView: View {
         var timelineEvents: [TimelineEvent] = []
         let calendar = Calendar.current
         
-        // Process personal events
-        for event in calendarViewModel.personalEvents {
+        // Process account 1 events
+        for event in calendarViewModel.account1Events {
             if event.isAllDay { continue }
             
             guard let startTime = event.startTime,
@@ -2502,13 +2502,13 @@ struct CalendarView: View {
                     event: event,
                     startSlot: max(0, startSlot),
                     endSlot: min(48, endSlot),
-                    isPersonal: true
+                    isAccount1: true
                 ))
             }
         }
         
-        // Process professional events
-        for event in calendarViewModel.professionalEvents {
+        // Process account 2 events
+        for event in calendarViewModel.account2Events {
             if event.isAllDay { continue }
             
             guard let startTime = event.startTime,
@@ -2549,7 +2549,7 @@ struct CalendarView: View {
                     event: event,
                     startSlot: max(0, startSlot),
                     endSlot: min(48, endSlot),
-                    isPersonal: false
+                    isAccount1: false
                 ))
             }
         }
@@ -2585,7 +2585,7 @@ struct CalendarView: View {
     }
     
     private func eventBlockView(event: TimelineEvent) -> some View {
-        let color: Color = event.isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        let color: Color = event.isAccount1 ? appPrefs.account1Color : appPrefs.account2Color
         
         return RoundedRectangle(cornerRadius: 6)
             .fill(color.opacity(0.2))
@@ -2639,11 +2639,11 @@ struct CalendarView: View {
         var eventsGroupedByDate: [Date: [GoogleCalendarEvent]] = [:]
         
         var allEvents: [GoogleCalendarEvent] = []
-        if authManager.isLinked(kind: .personal) {
-            allEvents += calendarViewModel.personalEvents
+        if authManager.isLinked(kind: .account1) {
+            allEvents += calendarViewModel.account1Events
         }
-        if authManager.isLinked(kind: .professional) {
-            allEvents += calendarViewModel.professionalEvents
+        if authManager.isLinked(kind: .account2) {
+            allEvents += calendarViewModel.account2Events
         }
         
         
@@ -2743,12 +2743,12 @@ struct CalendarView: View {
     
 
     // Real event data from Google Calendar
-    private func getPersonalEvent(for slot: Int) -> String? {
-        return getEventForTimeSlot(slot, events: calendarViewModel.personalEvents)
+    private func getAccount1Event(for slot: Int) -> String? {
+        return getEventForTimeSlot(slot, events: calendarViewModel.account1Events)
     }
     
-    private func getProfessionalEvent(for slot: Int) -> String? {
-        return getEventForTimeSlot(slot, events: calendarViewModel.professionalEvents)
+    private func getAccount2Event(for slot: Int) -> String? {
+        return getEventForTimeSlot(slot, events: calendarViewModel.account2Events)
     }
     
     private func getEventForTimeSlot(_ slot: Int, events: [GoogleCalendarEvent]) -> String? {
@@ -2776,14 +2776,14 @@ struct CalendarView: View {
     }
     
     private func getAllDayEvents() -> [GoogleCalendarEvent] {
-        let allEvents = (authManager.isLinked(kind: .personal) ? calendarViewModel.personalEvents : []) +
-                        (authManager.isLinked(kind: .professional) ? calendarViewModel.professionalEvents : [])
+        let allEvents = (authManager.isLinked(kind: .account1) ? calendarViewModel.account1Events : []) +
+                        (authManager.isLinked(kind: .account2) ? calendarViewModel.account2Events : [])
         return allEvents.filter { $0.isAllDay }
     }
     
     private func allDayEventBlock(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = calendarViewModel.accountKind(for: event) == .personal
-        let color: Color = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        let isAccount1 = calendarViewModel.accountKind(for: event) == .account1
+        let color: Color = isAccount1 ? appPrefs.account1Color : appPrefs.account2Color
         
         return HStack(spacing: 8) {
             Circle()
@@ -2812,31 +2812,31 @@ struct CalendarView: View {
     
     private var topLeftDaySection: some View {
         HStack(spacing: 8) {
-            // Personal Tasks
-            let personalFiltered = filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate)
-            if authManager.isLinked(kind: .personal) && !personalFiltered.values.flatMap({ $0 }).isEmpty {
+            // Account 1 Tasks
+            let account1Filtered = filteredTasksForDate(tasksViewModel.account1Tasks, date: currentDate)
+            if authManager.isLinked(kind: .account1) && !account1Filtered.values.flatMap({ $0 }).isEmpty {
                 TasksComponent(
-                    taskLists: tasksViewModel.personalTaskLists,
-                    tasksDict: personalFiltered,
-                    accentColor: appPrefs.personalColor,
-                    accountType: .personal,
+                    taskLists: tasksViewModel.account1TaskLists,
+                    tasksDict: account1Filtered,
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .personal)
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                             updateCachedTasks()
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .personal)
+                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .account1)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .personal)
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksViewModel.updateTaskListOrder(newOrder, for: .personal)
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
                         }
                     },
                     isSingleDayView: true,
@@ -2851,7 +2851,7 @@ struct CalendarView: View {
                     }
                 )
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-            } else if !authManager.isLinked(kind: .personal) && !authManager.isLinked(kind: .professional) {
+            } else if !authManager.isLinked(kind: .account1) && !authManager.isLinked(kind: .account2) {
                 // Empty state in Day view, placed in Tasks area
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 8) {
@@ -2872,31 +2872,31 @@ struct CalendarView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             
-            // Professional Tasks
-            let professionalFiltered = filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate)
-            if authManager.isLinked(kind: .professional) && !professionalFiltered.values.flatMap({ $0 }).isEmpty {
+            // Account 2 Tasks
+            let account2Filtered = filteredTasksForDate(tasksViewModel.account2Tasks, date: currentDate)
+            if authManager.isLinked(kind: .account2) && !account2Filtered.values.flatMap({ $0 }).isEmpty {
                 TasksComponent(
-                    taskLists: tasksViewModel.professionalTaskLists,
-                    tasksDict: professionalFiltered,
-                    accentColor: appPrefs.professionalColor,
-                    accountType: .professional,
+                    taskLists: tasksViewModel.account2TaskLists,
+                    tasksDict: account2Filtered,
+                    accentColor: appPrefs.account2Color,
+                    accountType: .account2,
                     onTaskToggle: { task, listId in
                         Task {
-                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                             updateCachedTasks()
                         }
                     },
                     onTaskDetails: { task, listId in
-                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .professional)
+                        taskSheetSelection = CalendarTaskSelection(task: task, listId: listId, accountKind: .account2)
                     },
                     onListRename: { listId, newName in
                         Task {
-                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                         }
                     },
                     onOrderChanged: { newOrder in
                         Task {
-                            await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                         }
                     },
                     isSingleDayView: true,
@@ -2920,14 +2920,14 @@ struct CalendarView: View {
     
 
     
-    private func personalTaskListCard(taskList: GoogleTaskList, tasks: [GoogleTask]) -> some View {
+    private func account1TaskListCard(taskList: GoogleTaskList, tasks: [GoogleTask]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Task list header
             HStack {
                 Text(taskList.title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(appPrefs.personalColor)
+                    .foregroundColor(appPrefs.account1Color)
                 
                 Spacer()
                 
@@ -2937,7 +2937,7 @@ struct CalendarView: View {
             // Tasks for this list
             VStack(spacing: 4) {
                 ForEach(tasks, id: \.id) { task in
-                    personalTaskRow(task: task, taskListId: taskList.id)
+                    account1TaskRow(task: task, taskListId: taskList.id)
                 }
             }
         }
@@ -2961,16 +2961,16 @@ struct CalendarView: View {
     
 
     
-    private func personalTaskRow(task: GoogleTask, taskListId: String) -> some View {
+    private func account1TaskRow(task: GoogleTask, taskListId: String) -> some View {
         HStack(spacing: 8) {
             Button(action: {
                 Task {
-                    await tasksViewModel.toggleTaskCompletion(task, in: taskListId, for: .personal)
+                    await tasksViewModel.toggleTaskCompletion(task, in: taskListId, for: .account1)
                 }
             }) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.body)
-                    .foregroundColor(task.isCompleted ? appPrefs.personalColor : .secondary)
+                    .foregroundColor(task.isCompleted ? appPrefs.account1Color : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
             
@@ -3003,7 +3003,7 @@ struct CalendarView: View {
         .onLongPressGesture {
             selectedTask = task
             selectedTaskListId = taskListId
-            selectedAccountKind = .personal
+            selectedAccountKind = .account1
             DispatchQueue.main.async {
                 showingTaskDetails = true
             }
@@ -3012,32 +3012,32 @@ struct CalendarView: View {
     
     private var topRightDaySection: some View {
         TasksComponent(
-            taskLists: tasksViewModel.professionalTaskLists,
-            tasksDict: filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate),
-            accentColor: appPrefs.professionalColor,
-            accountType: .professional,
+            taskLists: tasksViewModel.account2TaskLists,
+            tasksDict: filteredTasksForDate(tasksViewModel.account2Tasks, date: currentDate),
+            accentColor: appPrefs.account2Color,
+            accountType: .account2,
             onTaskToggle: { task, listId in
                 Task {
-                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .professional)
+                    await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                     updateCachedTasks()
                 }
             },
             onTaskDetails: { task, listId in
                 selectedTask = task
                 selectedTaskListId = listId
-                selectedAccountKind = .professional
+                selectedAccountKind = .account2
                 DispatchQueue.main.async {
                     showingTaskDetails = true
                 }
             },
             onListRename: { listId, newName in
                 Task {
-                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .professional)
+                    await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
                 }
             },
             onOrderChanged: { newOrder in
                 Task {
-                    await tasksViewModel.updateTaskListOrder(newOrder, for: .professional)
+                    await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
                 }
             },
             isSingleDayView: true
@@ -3063,14 +3063,14 @@ struct CalendarView: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
     
-    private func professionalTaskListCard(taskList: GoogleTaskList, tasks: [GoogleTask]) -> some View {
+    private func account2TaskListCard(taskList: GoogleTaskList, tasks: [GoogleTask]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Task list header
             HStack {
                 Text(taskList.title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(appPrefs.professionalColor)
+                    .foregroundColor(appPrefs.account2Color)
                 
                 Spacer()
                 
@@ -3080,7 +3080,7 @@ struct CalendarView: View {
             // Tasks for this list
             VStack(spacing: 4) {
                 ForEach(tasks, id: \.id) { task in
-                    professionalTaskRow(task: task, taskListId: taskList.id)
+                    account2TaskRow(task: task, taskListId: taskList.id)
                 }
             }
         }
@@ -3089,16 +3089,16 @@ struct CalendarView: View {
         .cornerRadius(8)
     }
     
-    private func professionalTaskRow(task: GoogleTask, taskListId: String) -> some View {
+    private func account2TaskRow(task: GoogleTask, taskListId: String) -> some View {
         HStack(spacing: 8) {
             Button(action: {
                 Task {
-                    await tasksViewModel.toggleTaskCompletion(task, in: taskListId, for: .professional)
+                    await tasksViewModel.toggleTaskCompletion(task, in: taskListId, for: .account2)
                 }
             }) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.body)
-                    .foregroundColor(task.isCompleted ? appPrefs.professionalColor : .secondary)
+                    .foregroundColor(task.isCompleted ? appPrefs.account2Color : .secondary)
             }
             .buttonStyle(PlainButtonStyle())
             
@@ -3131,7 +3131,7 @@ struct CalendarView: View {
         .onLongPressGesture {
             selectedTask = task
             selectedTaskListId = taskListId
-            selectedAccountKind = .professional
+            selectedAccountKind = .account2
             DispatchQueue.main.async {
                 showingTaskDetails = true
             }
@@ -3194,17 +3194,17 @@ struct CalendarView: View {
     private func getAllTasksForBulkEdit() -> [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] {
         var allTasks: [(task: GoogleTask, listId: String, accountKind: GoogleAuthManager.AccountKind)] = []
 
-        // Add personal tasks
-        for (listId, tasks) in cachedMonthPersonalTasks {
+        // Add account 1 tasks
+        for (listId, tasks) in cachedMonthAccount1Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .personal))
+                allTasks.append((task: task, listId: listId, accountKind: .account1))
             }
         }
 
-        // Add professional tasks
-        for (listId, tasks) in cachedMonthProfessionalTasks {
+        // Add account 2 tasks
+        for (listId, tasks) in cachedMonthAccount2Tasks {
             for task in tasks {
-                allTasks.append((task: task, listId: listId, accountKind: .professional))
+                allTasks.append((task: task, listId: listId, accountKind: .account2))
             }
         }
 
@@ -3232,13 +3232,13 @@ struct CalendarView: View {
 
     private func updateCachedTasks() {
 
-        cachedPersonalTasks = authManager.isLinked(kind: .personal) ? filteredTasksForDate(tasksViewModel.personalTasks, date: currentDate) : [:]
-        cachedProfessionalTasks = authManager.isLinked(kind: .professional) ? filteredTasksForDate(tasksViewModel.professionalTasks, date: currentDate) : [:]
+        cachedAccount1Tasks = authManager.isLinked(kind: .account1) ? filteredTasksForDate(tasksViewModel.account1Tasks, date: currentDate) : [:]
+        cachedAccount2Tasks = authManager.isLinked(kind: .account2) ? filteredTasksForDate(tasksViewModel.account2Tasks, date: currentDate) : [:]
 
 
         // Debug: Print first few task titles to verify content
-        let _ = cachedPersonalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
-        let _ = cachedProfessionalTasks.values.flatMap { $0 }.prefix(3).map { $0.title }
+        let _ = cachedAccount1Tasks.values.flatMap { $0 }.prefix(3).map { $0.title }
+        let _ = cachedAccount2Tasks.values.flatMap { $0 }.prefix(3).map { $0.title }
 
         // Force UI update
         DispatchQueue.main.async {
@@ -3253,8 +3253,8 @@ struct CalendarView: View {
 
     
     private func updateMonthCachedTasks() {
-        cachedMonthPersonalTasks = authManager.isLinked(kind: .personal) ? filteredTasksForMonth(tasksViewModel.personalTasks, date: currentDate) : [:]
-        cachedMonthProfessionalTasks = authManager.isLinked(kind: .professional) ? filteredTasksForMonth(tasksViewModel.professionalTasks, date: currentDate) : [:]
+        cachedMonthAccount1Tasks = authManager.isLinked(kind: .account1) ? filteredTasksForMonth(tasksViewModel.account1Tasks, date: currentDate) : [:]
+        cachedMonthAccount2Tasks = authManager.isLinked(kind: .account2) ? filteredTasksForMonth(tasksViewModel.account2Tasks, date: currentDate) : [:]
     }
     
     private func filteredTasksForDate(_ tasksDict: [String: [GoogleTask]], date: Date) -> [String: [GoogleTask]] {

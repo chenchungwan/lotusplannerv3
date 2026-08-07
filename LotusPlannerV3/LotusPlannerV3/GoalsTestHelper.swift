@@ -29,7 +29,7 @@ extension GoalsManager {
         // Create sample goals
         let healthCategoryId = categories.first { $0.title == "Health & Fitness" }?.id ?? UUID()
         let careerCategoryId = categories.first { $0.title == "Career" }?.id ?? UUID()
-        let personalCategoryId = categories.first { $0.title == "Personal Growth" }?.id ?? UUID()
+        let personalGrowthCategoryId = categories.first { $0.title == "Personal Growth" }?.id ?? UUID()
 
         let sampleGoals = [
             GoalData(
@@ -52,7 +52,7 @@ extension GoalsManager {
                 title: "Read 12 Books",
                 description: "Read one book per month",
                 successMetric: "Complete 12 books by end of year",
-                categoryId: personalCategoryId,
+                categoryId: personalGrowthCategoryId,
                 targetTimeframe: .year,
                 dueDate: GoalData.calculateDueDate(for: .year)
             ),
@@ -60,7 +60,7 @@ extension GoalsManager {
                 title: "Meditate Daily",
                 description: "Establish daily meditation practice",
                 successMetric: "Meditate for 10+ minutes daily for 30 days",
-                categoryId: personalCategoryId,
+                categoryId: personalGrowthCategoryId,
                 targetTimeframe: .month,
                 dueDate: GoalData.calculateDueDate(for: .month)
             )

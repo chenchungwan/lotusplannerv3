@@ -92,10 +92,10 @@ struct GoalDetailSheet: View {
 
     /// Search all loaded task lists for a task by ID
     private func findTask(_ taskId: String) -> GoogleTask? {
-        for (_, tasks) in tasksVM.personalTasks {
+        for (_, tasks) in tasksVM.account1Tasks {
             if let task = tasks.first(where: { $0.id == taskId }) { return task }
         }
-        for (_, tasks) in tasksVM.professionalTasks {
+        for (_, tasks) in tasksVM.account2Tasks {
             if let task = tasks.first(where: { $0.id == taskId }) { return task }
         }
         return nil

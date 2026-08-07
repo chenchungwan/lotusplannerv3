@@ -23,46 +23,46 @@ class AppPreferences: ObservableObject {
     }
     
     
-    @Published var personalColor: Color {
+    @Published var account1Color: Color {
         didSet {
-            UserDefaults.standard.set(personalColor.toHex(), forKey: "personalColor")
+            UserDefaults.standard.set(account1Color.toHex(), forKey: "personalColor")
         }
     }
     
-    @Published var professionalColor: Color {
+    @Published var account2Color: Color {
         didSet {
-            UserDefaults.standard.set(professionalColor.toHex(), forKey: "professionalColor")
+            UserDefaults.standard.set(account2Color.toHex(), forKey: "professionalColor")
         }
     }
 
     // Custom account names (editable by user)
-    @Published var personalAccountName: String {
+    @Published var account1Name: String {
         didSet {
-            let trimmed = String(personalAccountName.prefix(30))
-            if trimmed != personalAccountName {
-                personalAccountName = trimmed
+            let trimmed = String(account1Name.prefix(30))
+            if trimmed != account1Name {
+                account1Name = trimmed
             }
-            UserDefaults.standard.set(personalAccountName, forKey: "personalAccountName")
+            UserDefaults.standard.set(account1Name, forKey: "personalAccountName")
         }
     }
 
-    @Published var professionalAccountName: String {
+    @Published var account2Name: String {
         didSet {
-            let trimmed = String(professionalAccountName.prefix(30))
-            if trimmed != professionalAccountName {
-                professionalAccountName = trimmed
+            let trimmed = String(account2Name.prefix(30))
+            if trimmed != account2Name {
+                account2Name = trimmed
             }
-            UserDefaults.standard.set(professionalAccountName, forKey: "professionalAccountName")
+            UserDefaults.standard.set(account2Name, forKey: "professionalAccountName")
         }
     }
 
     // Helper function to get account name by kind
     func accountName(for kind: GoogleAuthManager.AccountKind) -> String {
         switch kind {
-        case .personal:
-            return personalAccountName
-        case .professional:
-            return professionalAccountName
+        case .account1:
+            return account1Name
+        case .account2:
+            return account2Name
         }
     }
 
@@ -587,9 +587,9 @@ class AppPreferences: ObservableObject {
         }
     }
     
-    @Published var calendarWeekTasksPersonalWidth: CGFloat {
+    @Published var calendarWeekTasksAccount1Width: CGFloat {
         didSet {
-            UserDefaults.standard.set(calendarWeekTasksPersonalWidth, forKey: "calendarWeekTasksPersonalWidth")
+            UserDefaults.standard.set(calendarWeekTasksAccount1Width, forKey: "calendarWeekTasksPersonalWidth")
         }
     }
     
@@ -600,9 +600,9 @@ class AppPreferences: ObservableObject {
     }
     
     // TasksView Divider Positions
-    @Published var tasksViewPersonalWidth: CGFloat {
+    @Published var tasksViewAccount1Width: CGFloat {
         didSet {
-            UserDefaults.standard.set(tasksViewPersonalWidth, forKey: "tasksViewPersonalWidth")
+            UserDefaults.standard.set(tasksViewAccount1Width, forKey: "tasksViewPersonalWidth")
         }
     }
     
@@ -774,15 +774,15 @@ class AppPreferences: ObservableObject {
 
         
         // Load colors from UserDefaults or use defaults
-        let personalHex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
-        let professionalHex = UserDefaults.standard.string(forKey: "professionalColor") ?? "#38eb50"
+        let account1Hex = UserDefaults.standard.string(forKey: "personalColor") ?? "#dcd6ff"
+        let account2Hex = UserDefaults.standard.string(forKey: "professionalColor") ?? "#38eb50"
         
-        self.personalColor = Color(hex: personalHex) ?? Color(hex: "#dcd6ff") ?? .purple
-        self.professionalColor = Color(hex: professionalHex) ?? Color(hex: "#38eb50") ?? .green
+        self.account1Color = Color(hex: account1Hex) ?? Color(hex: "#dcd6ff") ?? .purple
+        self.account2Color = Color(hex: account2Hex) ?? Color(hex: "#38eb50") ?? .green
 
         // Load custom account names or use defaults
-        self.personalAccountName = UserDefaults.standard.string(forKey: "personalAccountName") ?? "Linked Account 1"
-        self.professionalAccountName = UserDefaults.standard.string(forKey: "professionalAccountName") ?? "Linked Account 2"
+        self.account1Name = UserDefaults.standard.string(forKey: "personalAccountName") ?? "Linked Account 1"
+        self.account2Name = UserDefaults.standard.string(forKey: "professionalAccountName") ?? "Linked Account 2"
 
         // Load divider positions from UserDefaults or use defaults
         self.dayViewCompactTasksHeight = UserDefaults.standard.object(forKey: "dayViewCompactTasksHeight") as? CGFloat ?? 300
@@ -814,11 +814,11 @@ class AppPreferences: ObservableObject {
         self.calendarVerticalTopRowHeight = UserDefaults.standard.object(forKey: "calendarVerticalTopRowHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.55
         self.calendarVerticalTopLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalTopLeftWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
         self.calendarVerticalBottomLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalBottomLeftWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
-        self.calendarWeekTasksPersonalWidth = UserDefaults.standard.object(forKey: "calendarWeekTasksPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.3
+        self.calendarWeekTasksAccount1Width = UserDefaults.standard.object(forKey: "calendarWeekTasksPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.3
         self.calendarWeekTopSectionHeight = UserDefaults.standard.object(forKey: "calendarWeekTopSectionHeight") as? CGFloat ?? 400
         
         // Load TasksView divider positions
-        self.tasksViewPersonalWidth = UserDefaults.standard.object(forKey: "tasksViewPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
+        self.tasksViewAccount1Width = UserDefaults.standard.object(forKey: "tasksViewPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
         
         // Load WeekTimelineComponent divider positions
         self.weekTimelineTasksRowHeight = UserDefaults.standard.object(forKey: "weekTimelineTasksRowHeight") as? CGFloat ?? 120
@@ -891,12 +891,12 @@ class AppPreferences: ObservableObject {
     }
     
     
-    func updatePersonalColor(_ color: Color) {
-        personalColor = color
+    func updateAccount1Color(_ color: Color) {
+        account1Color = color
     }
     
-    func updateProfessionalColor(_ color: Color) {
-        professionalColor = color
+    func updateAccount2Color(_ color: Color) {
+        account2Color = color
     }
     
     func updateShowCustomLogs(_ value: Bool) {
@@ -1061,8 +1061,8 @@ class AppPreferences: ObservableObject {
         calendarVerticalBottomLeftWidth = value
     }
     
-    func updateCalendarWeekTasksPersonalWidth(_ value: CGFloat) {
-        calendarWeekTasksPersonalWidth = value
+    func updateCalendarWeekTasksAccount1Width(_ value: CGFloat) {
+        calendarWeekTasksAccount1Width = value
     }
     
     func updateCalendarWeekTopSectionHeight(_ value: CGFloat) {
@@ -1070,8 +1070,8 @@ class AppPreferences: ObservableObject {
     }
     
     // TasksView Divider Position Update Methods
-    func updateTasksViewPersonalWidth(_ value: CGFloat) {
-        tasksViewPersonalWidth = value
+    func updateTasksViewAccount1Width(_ value: CGFloat) {
+        tasksViewAccount1Width = value
     }
     
     // WeekTimelineComponent Divider Position Update Methods

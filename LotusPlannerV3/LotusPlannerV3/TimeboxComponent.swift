@@ -3,12 +3,12 @@ import SwiftUI
 struct TimeboxComponent: View {
     let date: Date
     let events: [GoogleCalendarEvent]
-    let personalEvents: [GoogleCalendarEvent]
-    let professionalEvents: [GoogleCalendarEvent]
-    let personalTasks: [String: [GoogleTask]]
-    let professionalTasks: [String: [GoogleTask]]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Events: [GoogleCalendarEvent]
+    let account2Events: [GoogleCalendarEvent]
+    let account1Tasks: [String: [GoogleTask]]
+    let account2Tasks: [String: [GoogleTask]]
+    let account1Color: Color
+    let account2Color: Color
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     let onTaskTap: ((GoogleTask, String) -> Void)?
     let onTaskToggle: ((GoogleTask, String) -> Void)?
@@ -35,7 +35,7 @@ struct TimeboxComponent: View {
         let height: CGFloat
         let width: CGFloat
         let xOffset: CGFloat
-        let isPersonal: Bool
+        let isAccount1: Bool
         let isTask: Bool // true for task, false for event
         let item: Any // Either GoogleCalendarEvent or GoogleTask
     }
@@ -45,12 +45,12 @@ struct TimeboxComponent: View {
     init(
         date: Date,
         events: [GoogleCalendarEvent],
-        personalEvents: [GoogleCalendarEvent],
-        professionalEvents: [GoogleCalendarEvent],
-        personalTasks: [String: [GoogleTask]] = [:],
-        professionalTasks: [String: [GoogleTask]] = [:],
-        personalColor: Color,
-        professionalColor: Color,
+        account1Events: [GoogleCalendarEvent],
+        account2Events: [GoogleCalendarEvent],
+        account1Tasks: [String: [GoogleTask]] = [:],
+        account2Tasks: [String: [GoogleTask]] = [:],
+        account1Color: Color,
+        account2Color: Color,
         onEventTap: ((GoogleCalendarEvent) -> Void)? = nil,
         onTaskTap: ((GoogleTask, String) -> Void)? = nil,
         onTaskToggle: ((GoogleTask, String) -> Void)? = nil,
@@ -61,12 +61,12 @@ struct TimeboxComponent: View {
     ) {
         self.date = date
         self.events = events
-        self.personalEvents = personalEvents
-        self.professionalEvents = professionalEvents
-        self.personalTasks = personalTasks
-        self.professionalTasks = professionalTasks
-        self.personalColor = personalColor
-        self.professionalColor = professionalColor
+        self.account1Events = account1Events
+        self.account2Events = account2Events
+        self.account1Tasks = account1Tasks
+        self.account2Tasks = account2Tasks
+        self.account1Color = account1Color
+        self.account2Color = account2Color
         self.onEventTap = onEventTap
         self.onTaskTap = onTaskTap
         self.onTaskToggle = onTaskToggle
@@ -139,17 +139,17 @@ struct TimeboxComponent: View {
     }
     
     // MARK: - All-Day Items
-    private var allDayEventsData: [(event: GoogleCalendarEvent, isPersonal: Bool)] {
+    private var allDayEventsData: [(event: GoogleCalendarEvent, isAccount1: Bool)] {
         guard showAllDaySection else { return [] }
         return events
             .filter { $0.isAllDay }
             .map { event in
-            let isPersonal = event.ownerAccountKind == .personal
-                return (event, isPersonal)
+            let isAccount1 = event.ownerAccountKind == .account1
+                return (event, isAccount1)
             }
         }
         
-    private var allDayTasksData: [(task: GoogleTask, listId: String, isPersonal: Bool)] {
+    private var allDayTasksData: [(task: GoogleTask, listId: String, isAccount1: Bool)] {
         guard showAllDaySection else { return [] }
         let allTasks = getTasksForDate(date).filter { task in
             if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
@@ -159,8 +159,8 @@ struct TimeboxComponent: View {
         }
         
         return allTasks.map { task in
-            let (listId, isPersonal) = findTaskListAndKind(for: task)
-            return (task, listId, isPersonal)
+            let (listId, isAccount1) = findTaskListAndKind(for: task)
+            return (task, listId, isAccount1)
         }
     }
     
@@ -196,7 +196,7 @@ struct TimeboxComponent: View {
                 
                 VStack(spacing: 4) {
                 ForEach(allDayEventsData, id: \.event.id) { item in
-                    allDayEventBlock(event: item.event, isPersonal: item.isPersonal)
+                    allDayEventBlock(event: item.event, isAccount1: item.isAccount1)
                     }
                 }
                 .padding(.trailing, 8)
@@ -213,7 +213,7 @@ struct TimeboxComponent: View {
             
             VStack(spacing: 4) {
                 ForEach(allDayTasksData, id: \.task.id) { item in
-                    allDayTaskBlock(task: item.task, listId: item.listId, isPersonal: item.isPersonal)
+                    allDayTaskBlock(task: item.task, listId: item.listId, isAccount1: item.isAccount1)
                 }
             }
             .padding(.trailing, 8)
@@ -222,8 +222,8 @@ struct TimeboxComponent: View {
         .padding(.vertical, 8)
     }
     
-    private func allDayEventBlock(event: GoogleCalendarEvent, isPersonal: Bool) -> some View {
-        let itemColor = isPersonal ? personalColor : professionalColor
+    private func allDayEventBlock(event: GoogleCalendarEvent, isAccount1: Bool) -> some View {
+        let itemColor = isAccount1 ? account1Color : account2Color
 
         return HStack(spacing: 8) {
             Circle()
@@ -250,8 +250,8 @@ struct TimeboxComponent: View {
         }
     }
     
-    private func allDayTaskBlock(task: GoogleTask, listId: String, isPersonal: Bool) -> some View {
-        let itemColor = isPersonal ? personalColor : professionalColor
+    private func allDayTaskBlock(task: GoogleTask, listId: String, isAccount1: Bool) -> some View {
+        let itemColor = isAccount1 ? account1Color : account2Color
         let isSelected = selectedTaskIds.contains(task.id)
 
         return HStack(spacing: 8) {
@@ -380,12 +380,12 @@ struct TimeboxComponent: View {
     
     @ViewBuilder
     private func timelineItemView(layout: TimelineItemLayout) -> some View {
-        let backgroundColor = layout.isPersonal ? personalColor : professionalColor
+        let backgroundColor = layout.isAccount1 ? account1Color : account2Color
         
         if layout.isTask, let task = layout.item as? GoogleTask {
             // Task style matching all-day task style (light tinted background)
             let (listId, _) = findTaskListAndKind(for: task)
-            let accentColor = layout.isPersonal ? personalColor : professionalColor
+            let accentColor = layout.isAccount1 ? account1Color : account2Color
             let isSelected = selectedTaskIds.contains(task.id)
 
             HStack(spacing: 6) {
@@ -438,7 +438,8 @@ struct TimeboxComponent: View {
                 }
             }
             .onDrag {
-                let json: [String: String] = ["type": "task", "id": task.id, "listId": listId, "accountKind": layout.isPersonal ? "personal" : "professional"]
+                let kind: GoogleAuthManager.AccountKind = layout.isAccount1 ? .account1 : .account2
+                let json: [String: String] = ["type": "task", "id": task.id, "listId": listId, "accountKind": kind.rawValue]
                 let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
                 return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
             }
@@ -485,7 +486,8 @@ struct TimeboxComponent: View {
             }
             .onDrag {
                 if let event = layout.item as? GoogleCalendarEvent {
-                    let json: [String: String] = ["type": "event", "id": event.id, "accountKind": layout.isPersonal ? "personal" : "professional", "calendarId": event.calendarId ?? "primary"]
+                    let kind: GoogleAuthManager.AccountKind = layout.isAccount1 ? .account1 : .account2
+                    let json: [String: String] = ["type": "event", "id": event.id, "accountKind": kind.rawValue, "calendarId": event.calendarId ?? "primary"]
                     let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()
                     return NSItemProvider(object: (String(data: data, encoding: .utf8) ?? "") as NSString)
                 }
@@ -557,11 +559,11 @@ struct TimeboxComponent: View {
         let calendar = Calendar.current
         var allTasks: [GoogleTask] = []
         
-        // Get tasks from both personal and professional
-        for (_, tasks) in personalTasks {
+        // Get tasks from both account 1 and account 2
+        for (_, tasks) in account1Tasks {
             allTasks.append(contentsOf: tasks)
         }
-        for (_, tasks) in professionalTasks {
+        for (_, tasks) in account2Tasks {
             allTasks.append(contentsOf: tasks)
         }
         
@@ -584,16 +586,16 @@ struct TimeboxComponent: View {
         }
     }
     
-    private func findTaskListAndKind(for task: GoogleTask) -> (listId: String, isPersonal: Bool) {
-        // Check personal tasks first
-        for (listId, tasks) in personalTasks {
+    private func findTaskListAndKind(for task: GoogleTask) -> (listId: String, isAccount1: Bool) {
+        // Check account 1 tasks first
+        for (listId, tasks) in account1Tasks {
             if tasks.contains(where: { $0.id == task.id }) {
                 return (listId, true)
             }
         }
         
-        // Check professional tasks
-        for (listId, tasks) in professionalTasks {
+        // Check account 2 tasks
+        for (listId, tasks) in account2Tasks {
             if tasks.contains(where: { $0.id == task.id }) {
                 return (listId, false)
             }
@@ -625,27 +627,27 @@ struct TimeboxComponent: View {
         }
         
         // Combine events and tasks into a unified array
-        var allItems: [(isTask: Bool, item: Any, startTime: Date, endTime: Date, isPersonal: Bool)] = []
+        var allItems: [(isTask: Bool, item: Any, startTime: Date, endTime: Date, isAccount1: Bool)] = []
         
         // Add events
         for event in timedEvents {
             guard let startTime = event.startTime, let endTime = event.endTime else { continue }
-            let isPersonal = event.ownerAccountKind == .personal
-            allItems.append((isTask: false, item: event, startTime: startTime, endTime: endTime, isPersonal: isPersonal))
+            let isAccount1 = event.ownerAccountKind == .account1
+            allItems.append((isTask: false, item: event, startTime: startTime, endTime: endTime, isAccount1: isAccount1))
         }
         
         // Add tasks
         for task in timedTasks {
             guard let timeWindow = timeWindowManager.getTimeWindow(for: task.id) else { continue }
-            let (_, isPersonal) = findTaskListAndKind(for: task)
-            allItems.append((isTask: true, item: task, startTime: timeWindow.startTime, endTime: timeWindow.endTime, isPersonal: isPersonal))
+            let (_, isAccount1) = findTaskListAndKind(for: task)
+            allItems.append((isTask: true, item: task, startTime: timeWindow.startTime, endTime: timeWindow.endTime, isAccount1: isAccount1))
         }
         
         // Sort by start time
         allItems.sort { $0.startTime < $1.startTime }
         
         // Group overlapping items
-        var itemGroups: [[(isTask: Bool, item: Any, startTime: Date, endTime: Date, isPersonal: Bool)]] = []
+        var itemGroups: [[(isTask: Bool, item: Any, startTime: Date, endTime: Date, isAccount1: Bool)]] = []
         
         for item in allItems {
             var addedToGroup = false
@@ -690,7 +692,7 @@ struct TimeboxComponent: View {
                     height: height,
                     width: columnWidth - 4,
                     xOffset: offsetX + CGFloat(index) * columnWidth + 2,
-                    isPersonal: item.isPersonal,
+                    isAccount1: item.isAccount1,
                     isTask: item.isTask,
                     item: item.item
                 )

@@ -8,10 +8,12 @@ enum WeeklyCustomComponent: String, Codable, Identifiable, Hashable, CaseIterabl
     case pastWeekSummary
     case eventsWeek
     case eventsWeeklyList
-    case personalTasksWeek
-    case personalTasksWeeklyList
-    case professionalTasksWeek
-    case professionalTasksWeeklyList
+    // Raw values are pinned to the historical spelling because they are
+    // persisted in the synced "customWeeklyViewLibrary.v1" JSON layout library.
+    case account1TasksWeek = "personalTasksWeek"
+    case account1TasksWeeklyList = "personalTasksWeeklyList"
+    case account2TasksWeek = "professionalTasksWeek"
+    case account2TasksWeeklyList = "professionalTasksWeeklyList"
     case weightLogWeek
     case workoutLogWeek
     case foodLogWeek
@@ -36,7 +38,7 @@ enum WeeklyCustomComponent: String, Codable, Identifiable, Hashable, CaseIterabl
 
     var id: String { rawValue }
 
-    func displayName(personal: String, professional: String) -> String {
+    func displayName(account1: String, account2: String) -> String {
         switch self {
         case .verticalWeek: return "Vertical Week Layout"
         case .horizontalWeek: return "Horizontal Week Layout"
@@ -44,10 +46,10 @@ enum WeeklyCustomComponent: String, Codable, Identifiable, Hashable, CaseIterabl
         case .pastWeekSummary: return "Past Week Summary"
         case .eventsWeek: return "Events Week"
         case .eventsWeeklyList: return "Events Weekly List"
-        case .personalTasksWeek: return "\(personal) Tasks Week"
-        case .personalTasksWeeklyList: return "\(personal) Tasks Weekly List"
-        case .professionalTasksWeek: return "\(professional) Tasks Week"
-        case .professionalTasksWeeklyList: return "\(professional) Tasks Weekly List"
+        case .account1TasksWeek: return "\(account1) Tasks Week"
+        case .account1TasksWeeklyList: return "\(account1) Tasks Weekly List"
+        case .account2TasksWeek: return "\(account2) Tasks Week"
+        case .account2TasksWeeklyList: return "\(account2) Tasks Weekly List"
         case .weightLogWeek: return "Weight Logs Week"
         case .workoutLogWeek: return "Workout Logs Week"
         case .foodLogWeek: return "Food Logs Week"
@@ -79,8 +81,8 @@ enum WeeklyCustomComponent: String, Codable, Identifiable, Hashable, CaseIterabl
         case .weeklyGoalsBar, .weeklyGoals, .monthlyGoals, .yearlyGoals, .goalsPicker: return "target"
         case .pastWeekSummary: return "chart.bar"
         case .eventsWeek, .eventsWeeklyList: return "calendar"
-        case .personalTasksWeek, .personalTasksWeeklyList: return "person.circle"
-        case .professionalTasksWeek, .professionalTasksWeeklyList: return "briefcase"
+        case .account1TasksWeek, .account1TasksWeeklyList: return "person.circle"
+        case .account2TasksWeek, .account2TasksWeeklyList: return "briefcase"
         case .weightLogWeek: return "scalemass"
         case .workoutLogWeek: return "figure.run"
         case .foodLogWeek: return "fork.knife"
@@ -95,8 +97,8 @@ enum WeeklyCustomComponent: String, Codable, Identifiable, Hashable, CaseIterabl
     var isDayByDay: Bool {
         switch self {
         case .eventsWeek,
-             .personalTasksWeek,
-             .professionalTasksWeek,
+             .account1TasksWeek,
+             .account2TasksWeek,
              .weightLogWeek,
              .workoutLogWeek,
              .foodLogWeek,
@@ -110,8 +112,8 @@ enum WeeklyCustomComponent: String, Codable, Identifiable, Hashable, CaseIterabl
              .weeklyGoalsBar,
              .pastWeekSummary,
              .eventsWeeklyList,
-             .personalTasksWeeklyList,
-             .professionalTasksWeeklyList,
+             .account1TasksWeeklyList,
+             .account2TasksWeeklyList,
              .weeklyGoals,
              .customLogWeek,
              .customLogWeek2,

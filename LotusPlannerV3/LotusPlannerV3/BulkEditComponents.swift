@@ -305,18 +305,18 @@ struct UndoToast: View {
 struct BulkMoveDestinationPicker: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var appPrefs = AppPreferences.shared
-    let personalTaskLists: [GoogleTaskList]
-    let professionalTaskLists: [GoogleTaskList]
+    let account1TaskLists: [GoogleTaskList]
+    let account2TaskLists: [GoogleTaskList]
     let onSelect: (GoogleAuthManager.AccountKind, String) -> Void
 
     var body: some View {
         NavigationView {
             List {
-                if !personalTaskLists.isEmpty {
-                    Section(appPrefs.personalAccountName) {
-                        ForEach(personalTaskLists) { list in
+                if !account1TaskLists.isEmpty {
+                    Section(appPrefs.account1Name) {
+                        ForEach(account1TaskLists) { list in
                             Button {
-                                onSelect(.personal, list.id)
+                                onSelect(.account1, list.id)
                                 dismiss()
                             } label: {
                                 HStack {
@@ -332,11 +332,11 @@ struct BulkMoveDestinationPicker: View {
                     }
                 }
 
-                if !professionalTaskLists.isEmpty {
-                    Section(appPrefs.professionalAccountName) {
-                        ForEach(professionalTaskLists) { list in
+                if !account2TaskLists.isEmpty {
+                    Section(appPrefs.account2Name) {
+                        ForEach(account2TaskLists) { list in
                             Button {
-                                onSelect(.professional, list.id)
+                                onSelect(.account2, list.id)
                                 dismiss()
                             } label: {
                                 HStack {

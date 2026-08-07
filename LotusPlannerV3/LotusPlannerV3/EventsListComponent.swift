@@ -2,10 +2,10 @@ import SwiftUI
 
 struct EventsListComponent: View {
     let events: [GoogleCalendarEvent]
-    let personalEvents: [GoogleCalendarEvent]
-    let professionalEvents: [GoogleCalendarEvent]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Events: [GoogleCalendarEvent]
+    let account2Events: [GoogleCalendarEvent]
+    let account1Color: Color
+    let account2Color: Color
     let onEventTap: (GoogleCalendarEvent) -> Void
     let date: Date
 
@@ -59,17 +59,17 @@ struct EventsListComponent: View {
                                 }
                             }
                             Spacer()
-                            let isPersonal = ev.ownerAccountKind == .personal
+                            let isAccount1 = ev.ownerAccountKind == .account1
                             Circle()
-                                .fill(isPersonal ? personalColor : professionalColor)
+                                .fill(isAccount1 ? account1Color : account2Color)
                                 .frame(width: 8, height: 8)
                         }
                         .padding(10)
                         .background(
                             (
-                                (ev.ownerAccountKind == .personal)
-                                ? personalColor.opacity(0.12)
-                                : professionalColor.opacity(0.12)
+                                (ev.ownerAccountKind == .account1)
+                                ? account1Color.opacity(0.12)
+                                : account2Color.opacity(0.12)
                             )
                         )
                         .cornerRadius(8)

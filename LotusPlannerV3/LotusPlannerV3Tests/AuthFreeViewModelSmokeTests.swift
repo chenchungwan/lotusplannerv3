@@ -9,15 +9,15 @@ final class AuthFreeViewModelSmokeTests: XCTestCase {
         XCTAssertFalse(viewModel.isLoading)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertFalse(viewModel.showError)
-        XCTAssertFalse(viewModel.qualitySummary(for: .personal).isEmpty)
+        XCTAssertFalse(viewModel.qualitySummary(for: .account1).isEmpty)
     }
 
     func testTasksViewModelStartsWithoutNetworkState() {
         let viewModel = TasksViewModel()
 
         XCTAssertFalse(viewModel.isLoading)
-        XCTAssertTrue(viewModel.personalTasks.isEmpty)
-        XCTAssertTrue(viewModel.professionalTasks.isEmpty)
-        XCTAssertFalse(viewModel.qualitySummary(for: .personal).isEmpty)
+        XCTAssertTrue(viewModel.account1Tasks.isEmpty)
+        XCTAssertTrue(viewModel.account2Tasks.isEmpty)
+        XCTAssertFalse(viewModel.qualitySummary(for: .account1).isEmpty)
     }
 }

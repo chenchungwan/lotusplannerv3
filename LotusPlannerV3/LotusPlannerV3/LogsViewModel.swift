@@ -143,7 +143,7 @@ class LogsViewModel: ObservableObject {
     }
 
     var accentColor: Color {
-        return AppPreferences.shared.personalColor
+        return AppPreferences.shared.account1Color
     }
     
     // MARK: - Data Loading and Syncing

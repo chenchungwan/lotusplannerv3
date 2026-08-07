@@ -81,7 +81,7 @@ class DataManager: ObservableObject {
         await preloadTaskLists()
         
         // Preload month cache only (do not mutate published arrays) if accounts are linked
-        if authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) {
+        if authManager.isLinked(kind: .account1) || authManager.isLinked(kind: .account2) {
             await calendarViewModel.preloadMonthIntoCache(containing: Date())
         }
         
@@ -121,7 +121,7 @@ class DataManager: ObservableObject {
         let authManager = GoogleAuthManager.shared
         
         // FUNCTIONALITY PRESERVED: Only refresh if accounts are actually linked
-        guard authManager.isLinked(kind: .personal) || authManager.isLinked(kind: .professional) else {
+        guard authManager.isLinked(kind: .account1) || authManager.isLinked(kind: .account2) else {
             return
         }
         

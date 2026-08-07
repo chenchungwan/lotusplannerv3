@@ -317,8 +317,8 @@ extension WeeklyView {
     }
     
     func weekEventCard(event: GoogleCalendarEvent) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let eventColor = isPersonal ? appPrefs.personalColor : appPrefs.professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let eventColor = isAccount1 ? appPrefs.account1Color : appPrefs.account2Color
         
         return Button(action: {
             selectedCalendarEvent = event
@@ -359,10 +359,11 @@ extension WeeklyView {
         }
         .buttonStyle(.plain)
         .onDrag {
+            let kind: GoogleAuthManager.AccountKind = isAccount1 ? .account1 : .account2
             let json: [String: String] = [
                 "type": "event",
                 "id": event.id,
-                "accountKind": isPersonal ? "personal" : "professional",
+                "accountKind": kind.rawValue,
                 "calendarId": event.calendarId ?? "primary"
             ]
             let data = (try? JSONSerialization.data(withJSONObject: json)) ?? Data()

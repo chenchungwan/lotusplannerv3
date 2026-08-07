@@ -275,8 +275,8 @@ final class LotusPlannerV3Tests: XCTestCase {
     func testAppPreferencesInitialization() {
         let prefs = AppPreferences.shared
         XCTAssertNotNil(prefs, "App preferences should initialize")
-        XCTAssertNotNil(prefs.personalColor, "Personal color should be set")
-        XCTAssertNotNil(prefs.professionalColor, "Professional color should be set")
+        XCTAssertNotNil(prefs.account1Color, "Account 1 color should be set")
+        XCTAssertNotNil(prefs.account2Color, "Account 2 color should be set")
     }
 
     @MainActor
@@ -284,11 +284,11 @@ final class LotusPlannerV3Tests: XCTestCase {
         let prefs = AppPreferences.shared
         let testColor = Color.red
 
-        prefs.updatePersonalColor(testColor)
-        XCTAssertEqual(prefs.personalColor, testColor, "Personal color should update")
+        prefs.updateAccount1Color(testColor)
+        XCTAssertEqual(prefs.account1Color, testColor, "Account 1 color should update")
 
-        prefs.updateProfessionalColor(testColor)
-        XCTAssertEqual(prefs.professionalColor, testColor, "Professional color should update")
+        prefs.updateAccount2Color(testColor)
+        XCTAssertEqual(prefs.account2Color, testColor, "Account 2 color should update")
     }
 
     @MainActor
@@ -329,14 +329,14 @@ final class LotusPlannerV3Tests: XCTestCase {
     func testAppPreferencesAccountNames() {
         let prefs = AppPreferences.shared
 
-        prefs.personalAccountName = "My Personal"
-        XCTAssertEqual(prefs.personalAccountName, "My Personal", "Personal account name should update")
+        prefs.account1Name = "My First Account"
+        XCTAssertEqual(prefs.account1Name, "My First Account", "Account 1 name should update")
 
-        prefs.professionalAccountName = "Work Account"
-        XCTAssertEqual(prefs.professionalAccountName, "Work Account", "Professional account name should update")
+        prefs.account2Name = "Work Account"
+        XCTAssertEqual(prefs.account2Name, "Work Account", "Account 2 name should update")
 
-        XCTAssertEqual(prefs.accountName(for: .personal), "My Personal", "Should get personal account name")
-        XCTAssertEqual(prefs.accountName(for: .professional), "Work Account", "Should get professional account name")
+        XCTAssertEqual(prefs.accountName(for: .account1), "My First Account", "Should get account 1 name")
+        XCTAssertEqual(prefs.accountName(for: .account2), "Work Account", "Should get account 2 name")
     }
 
     @MainActor
@@ -344,8 +344,8 @@ final class LotusPlannerV3Tests: XCTestCase {
         let prefs = AppPreferences.shared
         let longName = String(repeating: "a", count: 50)
 
-        prefs.personalAccountName = longName
-        XCTAssertEqual(prefs.personalAccountName.count, 30, "Account name should be truncated to 30 chars")
+        prefs.account1Name = longName
+        XCTAssertEqual(prefs.account1Name.count, 30, "Account name should be truncated to 30 chars")
     }
 
     @MainActor
@@ -353,8 +353,8 @@ final class LotusPlannerV3Tests: XCTestCase {
         let prefs = AppPreferences.shared
 
         // Empty account names should not crash
-        prefs.personalAccountName = ""
-        XCTAssertEqual(prefs.personalAccountName, "", "Should handle empty string")
+        prefs.account1Name = ""
+        XCTAssertEqual(prefs.account1Name, "", "Should handle empty string")
     }
 
     // MARK: - Calendar Utility Tests
@@ -863,17 +863,17 @@ final class RecentFeaturesRegressionTests: XCTestCase {
         let prefs = AppPreferences.shared
         let veryLongName = String(repeating: "x", count: 100)
 
-        prefs.personalAccountName = veryLongName
+        prefs.account1Name = veryLongName
 
-        XCTAssertLessThanOrEqual(prefs.personalAccountName.count, 30, "Account name should be truncated")
+        XCTAssertLessThanOrEqual(prefs.account1Name.count, 30, "Account name should be truncated")
     }
 
     func testAccountTypeEnum() {
         // Test that account types are properly defined
-        let personal = GoogleAuthManager.AccountKind.personal
-        let professional = GoogleAuthManager.AccountKind.professional
+        let account1 = GoogleAuthManager.AccountKind.account1
+        let account2 = GoogleAuthManager.AccountKind.account2
 
-        XCTAssertNotEqual(personal, professional, "Account types should be distinct")
+        XCTAssertNotEqual(account1, account2, "Account types should be distinct")
     }
 
     // MARK: - Logging Feature Tests

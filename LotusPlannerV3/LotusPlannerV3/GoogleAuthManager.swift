@@ -4,11 +4,18 @@ import SwiftUI
 import GoogleSignIn
 #endif
 
-/// Singleton responsible for linking/unlinking Google accounts (Personal & Professional).
+/// Singleton responsible for linking/unlinking Google accounts (Account 1 & Account 2).
 /// This sample shows the flow with GoogleSignIn SDK but gracefully degrades to a stub
 /// if the library isn't added yet so the app continues to compile.
 final class GoogleAuthManager: ObservableObject {
-    enum AccountKind: String { case personal, professional }
+    // The two accounts are interchangeable; the user names them in Settings.
+    // Raw values stay "personal"/"professional" because they are persisted in
+    // Keychain keys, UserDefaults keys, iCloud key-value store JSON and
+    // CloudKit JSON. Renaming them would orphan existing user data.
+    enum AccountKind: String {
+        case account1 = "personal"
+        case account2 = "professional"
+    }
 
     static let shared = GoogleAuthManager()
     private init() {
@@ -101,8 +108,8 @@ final class GoogleAuthManager: ObservableObject {
 
     private func defaultName(for kind: AccountKind) -> String {
         switch kind {
-        case .personal: return "Linked Account 1"
-        case .professional: return "Linked Account 2"
+        case .account1: return "Linked Account 1"
+        case .account2: return "Linked Account 2"
         }
     }
 
@@ -154,10 +161,10 @@ final class GoogleAuthManager: ObservableObject {
             let userEmail = (result.user.profile?.email ?? "Unknown").lowercased()
 
             // Refuse to bind the same Gmail to both kinds — every code
-            // path downstream assumes personal != professional, so a
+            // path downstream assumes account 1 != account 2, so a
             // duplicate link silently breaks creation, deletion, and
             // update flows.
-            let otherKind: AccountKind = (kind == .personal) ? .professional : .personal
+            let otherKind: AccountKind = (kind == .account1) ? .account2 : .account1
             let otherEmail = (UserDefaults.standard.string(forKey: emailKeyPrefix + otherKind.rawValue) ?? "").lowercased()
             if !otherEmail.isEmpty, otherEmail == userEmail {
                 GIDSignIn.sharedInstance.signOut()
@@ -227,8 +234,8 @@ final class GoogleAuthManager: ObservableObject {
         // Clear keychain items
         keychainManager.clearAllItems()
         // Also clear UserDefaults as backup
-        unlink(kind: .personal)
-        unlink(kind: .professional)
+        unlink(kind: .account1)
+        unlink(kind: .account2)
     }
     
     // MARK: - Access Token Management
@@ -332,18 +339,18 @@ final class GoogleAuthManager: ObservableObject {
     // MARK: - Helpers
     private func updateStates() {
         linkedStates = [
-            .personal: loadTokenSecurely(for: tokenKeyPrefix + AccountKind.personal.rawValue) != nil,
-            .professional: loadTokenSecurely(for: tokenKeyPrefix + AccountKind.professional.rawValue) != nil
+            .account1: loadTokenSecurely(for: tokenKeyPrefix + AccountKind.account1.rawValue) != nil,
+            .account2: loadTokenSecurely(for: tokenKeyPrefix + AccountKind.account2.rawValue) != nil
         ]
         
         accountEmails = [
-            .personal: UserDefaults.standard.string(forKey: emailKeyPrefix + AccountKind.personal.rawValue) ?? "",
-            .professional: UserDefaults.standard.string(forKey: emailKeyPrefix + AccountKind.professional.rawValue) ?? ""
+            .account1: UserDefaults.standard.string(forKey: emailKeyPrefix + AccountKind.account1.rawValue) ?? "",
+            .account2: UserDefaults.standard.string(forKey: emailKeyPrefix + AccountKind.account2.rawValue) ?? ""
         ]
         
         customAccountNames = [
-            .personal: UserDefaults.standard.string(forKey: customNameKeyPrefix + AccountKind.personal.rawValue) ?? defaultName(for: .personal),
-            .professional: UserDefaults.standard.string(forKey: customNameKeyPrefix + AccountKind.professional.rawValue) ?? defaultName(for: .professional)
+            .account1: UserDefaults.standard.string(forKey: customNameKeyPrefix + AccountKind.account1.rawValue) ?? defaultName(for: .account1),
+            .account2: UserDefaults.standard.string(forKey: customNameKeyPrefix + AccountKind.account2.rawValue) ?? defaultName(for: .account2)
         ]
     }
 
@@ -361,10 +368,11 @@ final class GoogleAuthManager: ObservableObject {
 }
 
 extension GoogleAuthManager.AccountKind {
+    /// The label to show the user for this account. The two accounts have no
+    /// inherent identity — the user names them in Settings (defaulting to
+    /// "Linked Account 1" / "Linked Account 2"), so nothing user-facing may
+    /// hardcode a name.
     var displayName: String {
-        switch self {
-        case .personal: return "Personal"
-        case .professional: return "Professional"
-        }
+        AppPreferences.shared.accountName(for: self)
     }
 }

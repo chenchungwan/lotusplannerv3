@@ -23,10 +23,10 @@ struct TimelineConfig {
 struct TimelineBaseView: View {
     let date: Date
     let events: [GoogleCalendarEvent]
-    let personalEvents: [GoogleCalendarEvent]
-    let professionalEvents: [GoogleCalendarEvent]
-    let personalColor: Color
-    let professionalColor: Color
+    let account1Events: [GoogleCalendarEvent]
+    let account2Events: [GoogleCalendarEvent]
+    let account1Color: Color
+    let account2Color: Color
     let config: TimelineConfig
     let onEventTap: ((GoogleCalendarEvent) -> Void)?
     
@@ -40,25 +40,25 @@ struct TimelineBaseView: View {
         let height: CGFloat
         let width: CGFloat
         let xOffset: CGFloat
-        let isPersonal: Bool
+        let isAccount1: Bool
     }
     
     init(
         date: Date,
         events: [GoogleCalendarEvent],
-        personalEvents: [GoogleCalendarEvent],
-        professionalEvents: [GoogleCalendarEvent],
-        personalColor: Color,
-        professionalColor: Color,
+        account1Events: [GoogleCalendarEvent],
+        account2Events: [GoogleCalendarEvent],
+        account1Color: Color,
+        account2Color: Color,
         config: TimelineConfig = .default,
         onEventTap: ((GoogleCalendarEvent) -> Void)? = nil
     ) {
         self.date = date
         self.events = events
-        self.personalEvents = personalEvents
-        self.professionalEvents = professionalEvents
-        self.personalColor = personalColor
-        self.professionalColor = professionalColor
+        self.account1Events = account1Events
+        self.account2Events = account2Events
+        self.account1Color = account1Color
+        self.account2Color = account2Color
         self.config = config
         self.onEventTap = onEventTap
     }
@@ -203,8 +203,8 @@ struct TimelineBaseView: View {
     }
     
     private func allDayEventView(_ event: GoogleCalendarEvent) -> some View {
-        let isPersonal = event.ownerAccountKind == .personal
-        let color = isPersonal ? personalColor : professionalColor
+        let isAccount1 = event.ownerAccountKind == .account1
+        let color = isAccount1 ? account1Color : account2Color
         
         return HStack(spacing: 4) {
             Circle()
@@ -228,7 +228,7 @@ struct TimelineBaseView: View {
     }
     
     private func timelineEventView(layout: EventLayout) -> some View {
-        let color = layout.isPersonal ? personalColor : professionalColor
+        let color = layout.isAccount1 ? account1Color : account2Color
         
         return AnyView(
             VStack(alignment: .leading, spacing: 2) {
@@ -398,7 +398,7 @@ struct TimelineBaseView: View {
                 let dayDuration = dayEndTime.timeIntervalSince(dayStartTime)
                 let height = max(20, CGFloat(dayDuration / 3600.0) * config.hourHeight)
                 
-                let isPersonal = event.ownerAccountKind == .personal
+                let isAccount1 = event.ownerAccountKind == .account1
                 
                 let layout = EventLayout(
                     event: event,
@@ -406,7 +406,7 @@ struct TimelineBaseView: View {
                     height: height,
                     width: columnWidth - 4, // Leave small gap
                     xOffset: CGFloat(index) * columnWidth + 2,
-                    isPersonal: isPersonal
+                    isAccount1: isAccount1
                 )
                 
                 layouts.append(layout)
