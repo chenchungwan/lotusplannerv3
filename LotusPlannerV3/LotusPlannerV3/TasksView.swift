@@ -661,6 +661,18 @@ struct TasksView: View {
         selectedFilter = filter
         referenceDate = Date()
         navigationManager.showingAllTasks = false
+        switch filter {
+        case .day:
+            navigationManager.updateInterval(.day, date: referenceDate)
+        case .week:
+            navigationManager.updateInterval(.week, date: referenceDate)
+        case .month:
+            navigationManager.updateInterval(.month, date: referenceDate)
+        case .year:
+            navigationManager.updateInterval(.year, date: referenceDate)
+        case .all:
+            break
+        }
         cachedFilteredPersonalTasks.removeAll()
         cachedFilteredProfessionalTasks.removeAll()
         lastFilterState = ""

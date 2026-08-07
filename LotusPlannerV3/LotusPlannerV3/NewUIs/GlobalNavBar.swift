@@ -16,25 +16,25 @@ struct GlobalNavBar: View {
 
     private var buttonSize: CGFloat {
         #if targetEnvironment(macCatalyst)
-        30
+        34
         #else
-        isCompact ? 36 : 42
+        isCompact ? 40 : 46
         #endif
     }
 
     private var iconFont: Font {
         #if targetEnvironment(macCatalyst)
-        .body
+        .title3
         #else
-        isCompact ? .body : .title3
+        isCompact ? .title3 : .title2
         #endif
     }
 
     private var titleFont: Font {
         #if targetEnvironment(macCatalyst)
-        .headline
+        .title3
         #else
-        isCompact ? .headline : .title2
+        isCompact ? .title3 : .title
         #endif
     }
 
@@ -48,6 +48,12 @@ struct GlobalNavBar: View {
 
     private var isCalendarLikeView: Bool {
         navigationManager.currentView == .calendar || navigationManager.currentView == .bookView
+    }
+
+    private var usesCalendarIntervalSymbols: Bool {
+        isCalendarLikeView ||
+        navigationManager.currentView == .yearlyCalendar ||
+        navigationManager.currentView == .timebox
     }
 
     private var canNavigateDate: Bool {
@@ -133,39 +139,35 @@ struct GlobalNavBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
+            // Top line: navigation — menu, date, interval selectors (left-aligned)
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: isCompact ? 4 : 8) {
                     mainMenu
-                    Spacer(minLength: 0)
-                }
 
-                HStack(spacing: isCompact ? 6 : 8) {
-                    if canNavigateDate {
-                        iconButton("chevron.left") { step(-1) }
-                            .keyboardShortcut("[", modifiers: [])
+                    HStack(spacing: isCompact ? 3 : 4) {
+                        if canNavigateDate {
+                            iconButton("chevron.left") { step(-1) }
+                                .keyboardShortcut("[", modifiers: [])
+                        }
+                        titleButton
+                        if canNavigateDate {
+                            iconButton("chevron.right") { step(1) }
+                                .keyboardShortcut("]", modifiers: [])
+                        }
                     }
-                    titleButton
-                    if canNavigateDate {
-                        iconButton("chevron.right") { step(1) }
-                            .keyboardShortcut("]", modifiers: [])
-                    }
-                }
-                .frame(maxWidth: isCompact ? 300 : 460)
 
-                HStack(spacing: isCompact ? 4 : 8) {
-                    Spacer(minLength: 0)
+                    intervalControls
                 }
+                .padding(.horizontal, isCompact ? 8 : 12)
             }
-            .padding(.horizontal, isCompact ? 8 : 12)
             .frame(height: barHeight / 2)
 
+            // Bottom line: editing/actions (right-aligned)
             GeometryReader { geometry in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: isCompact ? 4 : 8) {
                         Spacer(minLength: 0)
-                        intervalControls
                         actionControls
-                        Spacer(minLength: 0)
                     }
                     .padding(.horizontal, isCompact ? 8 : 12)
                     .frame(minWidth: geometry.size.width)
@@ -190,8 +192,8 @@ struct GlobalNavBar: View {
                 .foregroundColor(titleColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: isCompact ? 180 : 300, alignment: .leading)
         }
         .disabled(!canNavigateDate)
     }
@@ -260,7 +262,7 @@ struct GlobalNavBar: View {
                     intervalButton(.day, symbol: "d.circle")
                 }
                 if navigationManager.currentView != .tasks {
-                    intervalButton(.week, symbol: isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .goals ? "w.circle" : "s.circle")
+                    intervalButton(.week, symbol: usesCalendarIntervalSymbols || navigationManager.currentView == .goals ? "w.circle" : "s.circle")
                 }
                 if navigationManager.currentView != .goals {
                     timeboxOrWeekButton
@@ -307,18 +309,27 @@ struct GlobalNavBar: View {
             } else if navigationManager.currentView == .bookView {
                 navigationManager.updateInterval(.week, date: Date())
                 NotificationCenter.default.post(name: .bookViewNavigateToTimebox, object: Date())
-            } else if isCalendarLikeView || navigationManager.currentView == .yearlyCalendar {
+            } else if navigationManager.currentView == .timebox {
+                return
+            } else if usesCalendarIntervalSymbols {
                 navigationManager.switchToTimebox()
             } else {
                 handleTimeIntervalChange(.week)
             }
         } label: {
-            Image(systemName: isCalendarLikeView || navigationManager.currentView == .yearlyCalendar ? "t.circle" : "w.circle")
+            Image(systemName: usesCalendarIntervalSymbols ? "t.circle" : "w.circle")
                 .font(iconFont)
                 .frame(width: buttonSize, height: buttonSize)
-                .foregroundColor(navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary)
+                .foregroundColor(timeboxOrWeekButtonColor)
         }
         .help("Timebox")
+    }
+
+    private var timeboxOrWeekButtonColor: Color {
+        if navigationManager.currentView == .tasks {
+            return intervalColor(.week)
+        }
+        return navigationManager.currentView == .timebox || navigationManager.isShowingTimebox ? .accentColor : .secondary
     }
 
     private var taskFilterControl: some View {
@@ -474,6 +485,9 @@ struct GlobalNavBar: View {
 
     private func intervalColor(_ interval: TimelineInterval) -> Color {
         if navigationManager.showingAllTasks || navigationManager.currentView == .yearlyCalendar && interval != .year {
+            return .secondary
+        }
+        if navigationManager.currentView == .timebox {
             return .secondary
         }
         return navigationManager.currentInterval == interval ? .accentColor : .secondary

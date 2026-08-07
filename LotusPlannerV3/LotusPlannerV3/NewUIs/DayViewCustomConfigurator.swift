@@ -819,26 +819,35 @@ struct DayViewCustomConfigurator: View {
         max(22, min(32, cardHeight * 0.06))
     }
 
-    /// Non-interactive visual mock of the global nav bar.
+    /// Non-interactive visual mock of the global nav bar (2-line: nav left, actions right).
     private func navBarPreview(cardWidth: CGFloat) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "line.3.horizontal")
-            Image(systemName: "chevron.left")
-            Text("Day")
-                .lineLimit(1)
-            Image(systemName: "chevron.right")
-            Spacer()
-            Image(systemName: "d.circle")
-            Image(systemName: "w.circle")
-            Image(systemName: "m.circle")
-            Image(systemName: "y.circle")
-            Spacer()
-            Image(systemName: "arrow.trianglehead.clockwise.icloud")
-            Image(systemName: "plus")
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: "line.3.horizontal")
+                Image(systemName: "chevron.left")
+                Text("Day")
+                    .lineLimit(1)
+                Image(systemName: "chevron.right")
+                Image(systemName: "d.circle")
+                Image(systemName: "w.circle")
+                Image(systemName: "t.circle")
+                Image(systemName: "m.circle")
+                Image(systemName: "y.circle")
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 4) {
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.trianglehead.clockwise.icloud")
+                Image(systemName: "eye")
+                Image(systemName: "checkmark.rectangle.stack")
+                Image(systemName: "plus")
+            }
         }
-        .font(.system(size: 9, weight: .regular))
+        .font(.system(size: 8, weight: .regular))
         .foregroundColor(.secondary)
         .padding(.horizontal, 8)
+        .padding(.vertical, 2)
         .frame(maxHeight: .infinity)
         .background(Color.secondary.opacity(0.08))
         .overlay(

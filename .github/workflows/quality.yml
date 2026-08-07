@@ -40,10 +40,16 @@ jobs:
       - name: SwiftLint
         run: |
           if command -v swiftlint >/dev/null 2>&1; then
-            swiftlint --config .swiftlint.yml
+            swiftlint --config .swiftlint.yml --no-cache
           else
-            brew install swiftlint
-            swiftlint --config .swiftlint.yml
+            SWIFTLINT_VERSION="0.65.0"
+            SWIFTLINT_DIR="$RUNNER_TEMP/swiftlint"
+            mkdir -p "$SWIFTLINT_DIR"
+            curl -L \
+              "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" \
+              -o "$SWIFTLINT_DIR/portable_swiftlint.zip"
+            unzip -q "$SWIFTLINT_DIR/portable_swiftlint.zip" -d "$SWIFTLINT_DIR"
+            "$SWIFTLINT_DIR/swiftlint" --config .swiftlint.yml --no-cache
           fi
 
       - name: Warning Budget
