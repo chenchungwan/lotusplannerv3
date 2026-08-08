@@ -92,6 +92,11 @@ struct GlobalNavBar: View {
         isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews
     }
 
+    private var showsPhotoExport: Bool {
+        navigationManager.currentView == .calendar &&
+        (navigationManager.currentInterval == .day || navigationManager.currentInterval == .week)
+    }
+
     private var dateLabel: String {
         if navigationManager.currentView == .lists { return "Task Lists" }
 
@@ -311,6 +316,13 @@ struct GlobalNavBar: View {
                 .help("Hide completed tasks")
             }
 
+            if showsPhotoExport {
+                iconButton("square.and.arrow.down", color: .accentColor) {
+                    saveCurrentPageToPhotos()
+                }
+                .help("Save page to Photos")
+            }
+
             bulkEditControl
 
             iconButton("sparkles", color: .accentColor) {
@@ -400,6 +412,29 @@ struct GlobalNavBar: View {
         }
         .disabled(isSyncing)
         .help("Sync")
+    }
+
+    private func saveCurrentPageToPhotos() {
+        let formatter = DateFormatter()
+        if navigationManager.currentInterval == .week,
+           let weekInterval = Calendar.mondayFirst.dateInterval(
+               of: .weekOfYear,
+               for: navigationManager.currentDate
+           ) {
+            formatter.dateFormat = "M/d"
+            let start = formatter.string(from: weekInterval.start)
+            let weekEnd = Calendar.mondayFirst.date(
+                byAdding: .day,
+                value: 6,
+                to: weekInterval.start
+            ) ?? weekInterval.start
+            let end = formatter.string(from: weekEnd)
+            PrintDayHelper.saveExpandedWindowToPhotos(jobName: "Week \(start) – \(end)")
+        } else {
+            formatter.dateStyle = .medium
+            let date = formatter.string(from: navigationManager.currentDate)
+            PrintDayHelper.saveCurrentWindowToPhotos(jobName: "Day — \(date)")
+        }
     }
 
     @ViewBuilder

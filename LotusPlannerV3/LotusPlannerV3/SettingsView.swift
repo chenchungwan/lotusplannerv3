@@ -45,16 +45,13 @@ struct SettingsView: View {
     /// `CustomDayViewLibrary` being edited (pre-existing or brand-new).
     private struct ConfiguratorTarget: Identifiable { let id: UUID }
     @State private var configuratorTarget: ConfiguratorTarget?
-    @State private var weeklyConfiguratorTarget: ConfiguratorTarget?
     /// Used on Mac Catalyst to open the configurator in its own native window
     /// instead of the cramped .fullScreenCover sheet.
     @Environment(\.openWindow) private var openWindow
     @State private var pendingDeleteVersionId: UUID?
-    @State private var pendingDeleteWeeklyVersionId: UUID?
     /// Bumped after the configurator dismisses or the library changes so the
     /// versions list re-renders with the latest names / active selection.
     @State private var customConfigVersion = 0
-    @State private var customWeeklyConfigVersion = 0
 
     // Check if device forces stacked layout (iPhone portrait)
     private var shouldUseStackedLayout: Bool {
@@ -70,15 +67,6 @@ struct SettingsView: View {
 
     private var isCustomDayViewConfigured: Bool {
         !customDayViewLibrary.versions.isEmpty
-    }
-
-    private var customWeeklyViewLibrary: CustomWeeklyViewLibrary {
-        _ = customWeeklyConfigVersion
-        return CustomWeeklyViewLibrary.load()
-    }
-
-    private var isCustomWeeklyViewConfigured: Bool {
-        !customWeeklyViewLibrary.versions.isEmpty
     }
 
     /// The custom day view configurator currently only runs on iPad; layouts
@@ -237,140 +225,9 @@ struct SettingsView: View {
             CustomDayViewLibrary.localActiveId = nil
         }
         CustomDayViewLibrary.save(library)
-    }
-
-    // MARK: - Custom weekly view versions
-
-    @ViewBuilder
-    private var customWeeklyViewVersionRows: some View {
-        let library = customWeeklyViewLibrary
-        let canAddMore = library.versions.count < CustomWeeklyViewLibrary.maxVersions
-
-        ForEach(library.versions) { version in
-            customWeeklyViewVersionRow(version: version, activeId: library.resolvedActiveId)
+        if library.versions.isEmpty && appPrefs.dayViewLayout == .custom {
+            appPrefs.updateDayViewLayout(.newClassic)
         }
-
-        if canAddMore {
-            Button {
-                addCustomWeeklyViewVersion()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.body)
-                        .foregroundColor(.accentColor)
-                    Text(library.versions.isEmpty ? "Add Version" : "Add Another Version")
-                        .font(.footnote)
-                        .foregroundColor(.accentColor)
-                    Spacer()
-                    Text("\(library.versions.count) / \(CustomWeeklyViewLibrary.maxVersions)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.leading, 28)
-            }
-            .buttonStyle(.plain)
-            .contentShape(Rectangle())
-        } else {
-            Text("You've reached the limit of \(CustomWeeklyViewLibrary.maxVersions) versions. Delete one to add another.")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .padding(.leading, 28)
-        }
-    }
-
-    @ViewBuilder
-    private func customWeeklyViewVersionRow(version: NamedCustomWeeklyViewConfig, activeId: UUID?) -> some View {
-        let isActive = version.id == activeId
-        HStack(spacing: 10) {
-            Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
-                .foregroundColor(isActive ? .accentColor : .secondary)
-                .font(.body)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    setActiveCustomWeeklyViewVersion(id: version.id)
-                }
-
-            TextField("Version name", text: Binding(
-                get: {
-                    customWeeklyViewLibrary.versions.first(where: { $0.id == version.id })?.name ?? version.name
-                },
-                set: { newName in
-                    renameCustomWeeklyViewVersion(id: version.id, to: newName)
-                }
-            ))
-            .textFieldStyle(.plain)
-            .font(.footnote)
-            .fontWeight(isActive ? .semibold : .regular)
-            .lineLimit(1)
-            .submitLabel(.done)
-
-            Spacer(minLength: 4)
-
-            Button {
-                #if targetEnvironment(macCatalyst)
-                openWindow(id: "weekly-configurator", value: version.id)
-                #else
-                weeklyConfiguratorTarget = ConfiguratorTarget(id: version.id)
-                #endif
-            } label: {
-                Text("Edit Layout")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.accentColor.opacity(0.15)))
-                    .foregroundColor(.accentColor)
-            }
-            .buttonStyle(.plain)
-
-            Button(role: .destructive) {
-                pendingDeleteWeeklyVersionId = version.id
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-                    .font(.footnote)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.leading, 28)
-    }
-
-    private func addCustomWeeklyViewVersion() {
-        let library = customWeeklyViewLibrary
-        guard library.versions.count < CustomWeeklyViewLibrary.maxVersions else { return }
-        let newId = UUID()
-        #if targetEnvironment(macCatalyst)
-        openWindow(id: "weekly-configurator", value: newId)
-        #else
-        weeklyConfiguratorTarget = ConfiguratorTarget(id: newId)
-        #endif
-    }
-
-    private func setActiveCustomWeeklyViewVersion(id: UUID) {
-        let library = CustomWeeklyViewLibrary.load()
-        guard library.versions.contains(where: { $0.id == id }) else { return }
-        guard CustomWeeklyViewLibrary.localActiveId != id else { return }
-        CustomWeeklyViewLibrary.localActiveId = id
-        appPrefs.updateUseCustomWeeklyView(true)
-    }
-
-    private func renameCustomWeeklyViewVersion(id: UUID, to newName: String) {
-        var library = CustomWeeklyViewLibrary.load()
-        guard let idx = library.versions.firstIndex(where: { $0.id == id }) else { return }
-        guard library.versions[idx].name != newName else { return }
-        library.versions[idx].name = newName
-        CustomWeeklyViewLibrary.save(library)
-    }
-
-    private func deleteCustomWeeklyViewVersion(id: UUID) {
-        var library = CustomWeeklyViewLibrary.load()
-        library.versions.removeAll { $0.id == id }
-        if library.activeId == id {
-            library.activeId = library.versions.first?.id
-        }
-        if CustomWeeklyViewLibrary.localActiveId == id {
-            CustomWeeklyViewLibrary.localActiveId = nil
-        }
-        CustomWeeklyViewLibrary.save(library)
     }
 
     var body: some View {
@@ -442,17 +299,23 @@ struct SettingsView: View {
                 Section("Daily View Preferences") {
                     // Day View Layout Options with Radio Buttons
                     ForEach(appPrefs.availableDayViewLayouts) { option in
+                        let canSelect = option != .custom || isCustomDayViewConfigured
                         Group {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {
                                         Image(systemName: appPrefs.dayViewLayout == option ? "largecircle.fill.circle" : "circle")
-                                            .foregroundColor(appPrefs.dayViewLayout == option ? .accentColor : .secondary)
+                                            .foregroundColor(
+                                                canSelect
+                                                ? (appPrefs.dayViewLayout == option ? .accentColor : .secondary)
+                                                : .secondary.opacity(0.4)
+                                            )
                                             .font(.title2)
 
                                         Text(option.displayName)
                                             .font(.body)
                                             .fontWeight(appPrefs.dayViewLayout == option ? .semibold : .regular)
+                                            .foregroundColor(canSelect ? .primary : .secondary)
 
                                         if option.isBeta {
                                             Text("Beta")
@@ -466,20 +329,13 @@ struct SettingsView: View {
                                                 )
                                         }
 
-                                        if option == .custom, isCustomDayViewConfigured {
-                                            Text("Configured")
-                                                .font(.caption2)
-                                                .fontWeight(.semibold)
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(
-                                                    Capsule().fill(Color.green)
-                                                )
-                                        }
                                     }
 
-                                    Text(option.description)
+                                    Text(
+                                        option == .custom && !canSelect
+                                        ? "Save at least one custom layout before selecting this view."
+                                        : option.description
+                                    )
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                         .padding(.leading, 28)
@@ -489,7 +345,9 @@ struct SettingsView: View {
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                appPrefs.updateDayViewLayout(option)
+                                if canSelect {
+                                    appPrefs.updateDayViewLayout(option)
+                                }
                             }
 
                             // Render the saved-versions manager as sub-rows
@@ -508,13 +366,13 @@ struct SettingsView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Image(systemName: !appPrefs.useRowBasedWeeklyView && !appPrefs.useCustomWeeklyView ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(!appPrefs.useRowBasedWeeklyView && !appPrefs.useCustomWeeklyView ? .accentColor : .secondary)
+                                Image(systemName: !appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(!appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
                                     .font(.title2)
                                 
                                 Text("Vertical Layout (week in 7 columns)")
                                     .font(.body)
-                                    .fontWeight(!appPrefs.useRowBasedWeeklyView && !appPrefs.useCustomWeeklyView ? .semibold : .regular)
+                                    .fontWeight(!appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
                             }
                         }
                         
@@ -528,13 +386,13 @@ struct SettingsView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
-                                Image(systemName: appPrefs.useRowBasedWeeklyView && !appPrefs.useCustomWeeklyView ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(appPrefs.useRowBasedWeeklyView && !appPrefs.useCustomWeeklyView ? .accentColor : .secondary)
+                                Image(systemName: appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
+                                    .foregroundColor(appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
                                     .font(.title2)
                                 
                                 Text("Horizontal Layout (week in 7 rows)")
                                     .font(.body)
-                                    .fontWeight(appPrefs.useRowBasedWeeklyView && !appPrefs.useCustomWeeklyView ? .semibold : .regular)
+                                    .fontWeight(appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
                             }
                         }
                         
@@ -544,55 +402,6 @@ struct SettingsView: View {
                     .onTapGesture {
                         appPrefs.updateUseRowBasedWeeklyView(true)
                     }
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: appPrefs.useCustomWeeklyView ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(appPrefs.useCustomWeeklyView ? .accentColor : .secondary)
-                                    .font(.title2)
-
-                                Text("Custom")
-                                    .font(.body)
-                                    .fontWeight(appPrefs.useCustomWeeklyView ? .semibold : .regular)
-
-                                Text("Beta")
-                                    .font(.caption2)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule().fill(Color.orange)
-                                    )
-
-                                if isCustomWeeklyViewConfigured {
-                                    Text("Configured")
-                                        .font(.caption2)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(
-                                            Capsule().fill(Color.green)
-                                        )
-                                }
-                            }
-
-                            Text("Build your own weekly page by dragging components onto a grid.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.leading, 28)
-                        }
-
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateUseCustomWeeklyView(true)
-                    }
-
-                    customWeeklyViewVersionRows
                 }
 
                 // Tasks View Preference
@@ -873,17 +682,9 @@ struct SettingsView: View {
             }) { target in
                 DayViewCustomConfigurator(versionId: target.id)
             }
-            .fullScreenCover(item: $weeklyConfiguratorTarget, onDismiss: {
-                customWeeklyConfigVersion &+= 1
-            }) { target in
-                WeeklyViewCustomConfigurator(versionId: target.id)
-            }
             #endif
             .onReceive(NotificationCenter.default.publisher(for: CustomDayViewLibrary.didChangeNotification)) { _ in
                 customConfigVersion &+= 1
-            }
-            .onReceive(NotificationCenter.default.publisher(for: CustomWeeklyViewLibrary.didChangeNotification)) { _ in
-                customWeeklyConfigVersion &+= 1
             }
             .confirmationDialog(
                 "Delete this custom day view?",
@@ -904,26 +705,6 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("The layout for this version will be removed. This cannot be undone.")
-            }
-            .confirmationDialog(
-                "Delete this custom weekly view?",
-                isPresented: Binding(
-                    get: { pendingDeleteWeeklyVersionId != nil },
-                    set: { if !$0 { pendingDeleteWeeklyVersionId = nil } }
-                ),
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    if let id = pendingDeleteWeeklyVersionId {
-                        deleteCustomWeeklyViewVersion(id: id)
-                    }
-                    pendingDeleteWeeklyVersionId = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    pendingDeleteWeeklyVersionId = nil
-                }
-            } message: {
-                Text("The layout for this weekly version will be removed. This cannot be undone.")
             }
         }
     }

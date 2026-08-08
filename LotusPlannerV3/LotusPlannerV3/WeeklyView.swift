@@ -45,7 +45,6 @@ struct WeeklyView: View {
     @State var scrollToCurrentDayTrigger = false
     @State var scrollToCurrentDayHorizontalTrigger = false
     @State var scrollToCurrentDayRowTrigger = false
-    @State var weeklyCustomConfigVersion = 0
     
     // MARK: - Adaptive Layout Properties
     var isCompact: Bool {
@@ -109,225 +108,6 @@ struct WeeklyView: View {
         self.hideNavBar = hideNavBar
     }
 
-    // MARK: - Past-week summary
-
-    /// True when `currentDate` falls in a week strictly before the week
-    /// containing today. Drives the retrospective summary strip — hidden
-    /// for the current week and any future week.
-    var isPastWeek: Bool {
-        let cal = Calendar.mondayFirst
-        guard let nowWeek = cal.dateInterval(of: .weekOfYear, for: Date()),
-              let dispWeek = cal.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else {
-            return false
-        }
-        return dispWeek.end <= nowWeek.start
-    }
-
-    /// Half-open interval `[start, end)` of the displayed week. Used as
-    /// the date filter for every summary stat.
-    var displayedWeekRange: (start: Date, end: Date)? {
-        let cal = Calendar.mondayFirst
-        guard let interval = cal.dateInterval(of: .weekOfYear, for: navigationManager.currentDate) else { return nil }
-        return (interval.start, interval.end)
-    }
-
-    /// Horizontally-scrollable strip of stat tiles for the displayed
-    /// past week. Tier-1 (always shown): Goals, Tasks, Workouts.
-    /// Tier-2 (only when their log type is enabled and has data):
-    /// Sleep, Weight, Custom logs (per collection).
-    var pastWeekSummaryStrip: some View {
-        let stats = pastWeekStats()
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(stats.indices, id: \.self) { i in
-                    pastWeekStatTile(stats[i])
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-        .background(Color(.systemGray6))
-    }
-
-    struct PastWeekStat {
-        let label: String
-        let value: String
-        let systemImage: String
-        let tint: Color
-    }
-
-    func pastWeekStatTile(_ stat: PastWeekStat) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: stat.systemImage)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(stat.tint)
-                Text(stat.label)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.secondary)
-            }
-            Text(stat.value)
-                .font(.title3.weight(.semibold))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(minWidth: 96, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.systemBackground))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 0.5))
-        )
-    }
-
-    /// Computes the tile values for the displayed past week. Each tile
-    /// corresponds to one source of retrospective data; tier-2 tiles are
-    /// suppressed when their log type is disabled or has no data.
-    func pastWeekStats() -> [PastWeekStat] {
-        guard let range = displayedWeekRange else { return [] }
-        let cal = Calendar.current
-        var stats: [PastWeekStat] = []
-
-        // Goals — count weekly-timeframe goals due in this week and how
-        // many were marked complete.
-        let weekGoals = GoalsManager.shared.goals.filter { goal in
-            goal.targetTimeframe == .week &&
-            goal.dueDate >= range.start &&
-            goal.dueDate < range.end
-        }
-        let goalsDone = weekGoals.filter { $0.isCompleted }.count
-        stats.append(PastWeekStat(
-            label: "Goals",
-            value: "\(goalsDone) / \(weekGoals.count)",
-            systemImage: "target",
-            tint: .accentColor
-        ))
-
-        // Tasks completed — Google Tasks `completed` is the timestamp of
-        // completion; we count tasks whose completion fell inside this
-        // week, across both accounts.
-        let tasksCompleted = countTasksCompleted(in: range)
-        stats.append(PastWeekStat(
-            label: "Tasks done",
-            value: "\(tasksCompleted)",
-            systemImage: "checkmark.circle",
-            tint: .green
-        ))
-
-        // Workouts logged this week — only when workout logs are enabled.
-        if appPrefs.showWorkoutLogs {
-            let workoutCount = logsViewModel.workoutEntries.filter {
-                $0.date >= range.start && $0.date < range.end
-            }.count
-            stats.append(PastWeekStat(
-                label: "Workouts",
-                value: "\(workoutCount)",
-                systemImage: "figure.run",
-                tint: .orange
-            ))
-        }
-
-        // Sleep average — across non-empty sleep entries this week.
-        if appPrefs.showSleepLogs {
-            let entries = logsViewModel.sleepEntries.filter {
-                $0.date >= range.start && $0.date < range.end
-            }
-            let durations: [TimeInterval] = entries.compactMap { e in
-                guard let bed = e.bedTime, let wake = e.wakeUpTime else { return nil }
-                let dur = wake.timeIntervalSince(bed)
-                return dur > 0 ? dur : nil
-            }
-            if !durations.isEmpty {
-                let avgSec = durations.reduce(0, +) / Double(durations.count)
-                let h = Int(avgSec / 3600)
-                let m = Int((avgSec.truncatingRemainder(dividingBy: 3600)) / 60)
-                stats.append(PastWeekStat(
-                    label: "Sleep avg",
-                    value: String(format: "%dh %02dm", h, m),
-                    systemImage: "bed.double",
-                    tint: .indigo
-                ))
-            }
-        }
-
-        // Weight delta — last weight in this week vs. last weight before
-        // this week. Skipped when the user has fewer than two readings.
-        if appPrefs.showWeightLogs {
-            let entries = logsViewModel.weightEntries
-            let inWeek = entries
-                .filter { $0.date >= range.start && $0.date < range.end }
-                .sorted { $0.date < $1.date }
-            let priorBefore = entries
-                .filter { $0.date < range.start }
-                .sorted { $0.date < $1.date }
-                .last
-            if let last = inWeek.last, let prior = priorBefore {
-                let delta = last.weight - prior.weight
-                let signed = delta > 0 ? "+\(String(format: "%.1f", delta))" : String(format: "%.1f", delta)
-                stats.append(PastWeekStat(
-                    label: "Weight Δ",
-                    value: signed,
-                    systemImage: "scalemass",
-                    tint: .blue
-                ))
-            }
-        }
-
-        // Custom logs — per collection completion ratio (entries marked
-        // complete this week / item-count × days-tracked).
-        for collection in 0..<CustomLogManager.maxCollections where appPrefs.showCustomLogs(for: collection) {
-            let items = customLogManager.items(in: collection).filter { $0.isEnabled }
-            guard !items.isEmpty else { continue }
-            // Count item-day completions falling in this week.
-            let completions = customLogManager.entries.filter { entry in
-                entry.collectionIndex == collection &&
-                entry.isCompleted &&
-                entry.date >= range.start && entry.date < range.end &&
-                items.contains(where: { $0.id == entry.itemId })
-            }.count
-            // Possible total = items × days in the week.
-            let dayCount = cal.dateComponents([.day], from: range.start, to: range.end).day ?? 7
-            let total = items.count * max(1, dayCount)
-            let name = appPrefs.customLogSectionName(for: collection)
-            stats.append(PastWeekStat(
-                label: name,
-                value: "\(completions) / \(total)",
-                systemImage: "list.bullet.rectangle",
-                tint: .purple
-            ))
-        }
-
-        return stats
-    }
-
-    /// Tasks across both accounts whose `completed` ISO timestamp falls
-    /// within `range`. Iterates the in-memory task dictionaries directly
-    /// since Google Tasks doesn't expose a "completed-within" query.
-    func countTasksCompleted(in range: (start: Date, end: Date)) -> Int {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let fallback = ISO8601DateFormatter()
-        fallback.formatOptions = [.withInternetDateTime]
-
-        var count = 0
-        let buckets = [tasksViewModel.account1Tasks, tasksViewModel.account2Tasks]
-        for dict in buckets {
-            for (_, tasks) in dict {
-                for task in tasks where task.isCompleted {
-                    guard let completedString = task.completed else { continue }
-                    let date = formatter.date(from: completedString) ?? fallback.date(from: completedString)
-                    guard let date else { continue }
-                    if date >= range.start && date < range.end {
-                        count += 1
-                    }
-                }
-            }
-        }
-        return count
-    }
-
     var baseView: some View {
         VStack(spacing: 0) {
             // Bulk Edit Toolbar (shown when in bulk edit mode)
@@ -341,13 +121,6 @@ struct WeeklyView: View {
             if !hideNavBar {
                 GlobalNavBar()
                     .background(.ultraThinMaterial)
-            }
-
-            // Retrospective summary, only for past weeks. Hidden for the
-            // current week and future weeks since there's nothing to look
-            // back on.
-            if isPastWeek {
-                pastWeekSummaryStrip
             }
 
             mainContent
@@ -491,9 +264,6 @@ struct WeeklyView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 scrollToCurrentDay()
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: CustomWeeklyViewLibrary.didChangeNotification)) { _ in
-            weeklyCustomConfigVersion &+= 1
         }
     }
 
@@ -707,9 +477,7 @@ struct WeeklyView: View {
     // MARK: - Main Content
     @ViewBuilder
     var mainContent: some View {
-        if appPrefs.useCustomWeeklyView {
-            customWeeklyView
-        } else if appPrefs.useRowBasedWeeklyView {
+        if appPrefs.useRowBasedWeeklyView {
             // Row-based layout: each day is a row
             weekRowBasedViewWithStickyColumn
         } else {
