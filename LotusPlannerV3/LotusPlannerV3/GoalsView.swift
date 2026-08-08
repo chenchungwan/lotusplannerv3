@@ -2,15 +2,10 @@ import SwiftUI
 
 struct GoalsView: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var appPrefs = AppPreferences.shared
     @ObservedObject private var navigationManager = NavigationManager.shared
     @State private var showingCreateCategory = false
     @State private var goalToEdit: GoalData?
     @State private var selectedGoal: GoalData?
-    
-    // MARK: - Device-Aware Layout
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    @Environment(\.verticalSizeClass) var verticalSizeClass
     
     // Computed properties for better performance
     private var sortedCategories: [GoalCategoryData] {
@@ -24,82 +19,6 @@ struct GoalsView: View {
         }
         let completed = allGoals.filter { $0.isCompleted }.count
         return (completed, allGoals.count)
-    }
-    
-    // Adaptive column count based on device
-    private var adaptiveColumns: [GridItem] {
-        let columnCount: Int
-        let spacing: CGFloat = adaptiveGridSpacing
-        
-        if horizontalSizeClass == .compact && verticalSizeClass == .regular {
-            // iPhone portrait: 1 column
-            columnCount = 1
-        } else if horizontalSizeClass == .compact && verticalSizeClass == .compact {
-            // iPhone landscape: 2 columns
-            columnCount = 2
-        } else {
-            // iPad: 2-3 columns depending on width
-            columnCount = 2
-        }
-        
-        return Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
-    }
-    
-    private var adaptiveGridSpacing: CGFloat {
-        if horizontalSizeClass == .compact && verticalSizeClass == .regular {
-            return 12 // iPhone portrait: tighter spacing
-        } else if horizontalSizeClass == .compact {
-            return 12 // iPhone landscape: tighter spacing
-        } else {
-            return 16 // iPad: standard spacing
-        }
-    }
-    
-    private var adaptivePadding: CGFloat {
-        horizontalSizeClass == .compact ? 12 : 16
-    }
-    
-    private var adaptiveMinCardHeight: CGFloat {
-        if horizontalSizeClass == .compact && verticalSizeClass == .regular {
-            return 200 // iPhone portrait: taller cards for readability
-        } else if horizontalSizeClass == .compact {
-            return 150 // iPhone landscape: shorter cards
-        } else {
-            return 180 // iPad: medium height
-        }
-    }
-    
-    private var filteredGoals: [GoalData] {
-        let allGoals = goalsManager.goals
-        
-        switch navigationManager.currentInterval {
-        case .day:
-            // For day view, show all goals (yearly view)
-            return allGoals
-        case .week:
-            return filterGoalsForWeek(allGoals, date: navigationManager.currentDate)
-        case .month:
-            return filterGoalsForMonth(allGoals, date: navigationManager.currentDate)
-        case .year:
-            return filterGoalsForYear(allGoals, date: navigationManager.currentDate)
-        }
-    }
-    
-    private var goalsTitle: String {
-        switch navigationManager.currentInterval {
-        case .day:
-            return "All Goals"
-        case .week:
-            let weekNumber = Calendar.mondayFirst.component(.weekOfYear, from: navigationManager.currentDate)
-            return "Week \(weekNumber) Weekly Goals"
-        case .month:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM yyyy"
-            return "\(formatter.string(from: navigationManager.currentDate)) Monthly Goals"
-        case .year:
-            let year = Calendar.current.component(.year, from: navigationManager.currentDate)
-            return "\(year) Yearly Goals"
-        }
     }
     
     var body: some View {
@@ -120,8 +39,7 @@ struct GoalsView: View {
             // Main Content
             if navigationManager.currentInterval == .day {
                 AllGoalsTableContent()
-            } else if appPrefs.useGoalCardView {
-                // Individual Goal Card Grid View
+            } else {
                 GoalCardGridView(
                     sortedCategories: sortedCategories,
                     getFilteredGoals: getFilteredGoalsForCategory,
@@ -134,52 +52,6 @@ struct GoalsView: View {
                     currentInterval: navigationManager.currentInterval,
                     currentDate: navigationManager.currentDate
                 )
-            } else {
-                // Category Cards Grid View
-                ScrollView {
-                    LazyVGrid(
-                        columns: adaptiveColumns,
-                        spacing: adaptiveGridSpacing
-                    ) {
-                        ForEach(sortedCategories) { category in
-                            GoalCategoryCard(
-                                category: category,
-                                goals: getFilteredGoalsForCategory(category.id),
-                                onGoalTap: { goal in
-                                    selectedGoal = goal
-                                },
-                                onGoalEdit: { goal in
-                                    goalToEdit = goal
-                                },
-                                onGoalDelete: { goal in
-                                    goalsManager.deleteGoal(goal.id)
-                                },
-                                onCategoryEdit: { category in
-                                    // Handle category edit
-                                },
-                                onCategoryDelete: { category in
-                                    goalsManager.deleteCategory(category.id)
-                                },
-                                showTags: navigationManager.currentInterval == .day,
-                                currentInterval: navigationManager.currentInterval,
-                                currentDate: navigationManager.currentDate,
-                                showQuickAdd: navigationManager.currentInterval != .day
-                            )
-                            .frame(minHeight: adaptiveMinCardHeight)
-                        }
-
-                        // Add Category Card (only show if under max limit)
-                        if goalsManager.canAddCategory {
-                            AddCategoryCard(
-                                onAddCategory: { categoryName in
-                                    goalsManager.addCategory(title: categoryName)
-                                }
-                            )
-                            .frame(minHeight: adaptiveMinCardHeight)
-                        }
-                    }
-                    .padding(adaptivePadding)
-                }
             }
         }
         // Use `.sheet(item:)` here instead of the (isPresented:, state:) pair:

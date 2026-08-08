@@ -245,7 +245,7 @@ struct GlobalNavBar: View {
             }
             if !appPrefs.hideGoals {
                 Button { navigationManager.switchToGoals() } label: {
-                    Label("Goals (Beta)", systemImage: "target")
+                    Label("Goals", systemImage: "target")
                 }
             }
 

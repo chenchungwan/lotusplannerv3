@@ -199,13 +199,6 @@ class AppPreferences: ObservableObject {
         }
     }
 
-    // Goal view layout: false = category cards (default), true = individual goal cards
-    @Published var useGoalCardView: Bool {
-        didSet {
-            UserDefaults.standard.set(useGoalCardView, forKey: "useGoalCardView")
-        }
-    }
-
     // Hide book view
     @Published var hideBookView: Bool {
         didSet {
@@ -756,7 +749,6 @@ class AppPreferences: ObservableObject {
 
         self.hideCompletedTasks = UserDefaults.standard.object(forKey: "hideCompletedTasks") as? Bool ?? false
         self.hideGoals = UserDefaults.standard.object(forKey: "hideGoals") as? Bool ?? true
-        self.useGoalCardView = UserDefaults.standard.object(forKey: "useGoalCardView") as? Bool ?? false
         self.hideBookView = UserDefaults.standard.object(forKey: "hideBookView") as? Bool ?? true
         // One-time migration: force verbose logging off so users running
         // a build that left it on previously see the new default. The

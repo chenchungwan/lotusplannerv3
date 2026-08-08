@@ -16,7 +16,7 @@ struct GoalCardGridView: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
 
     // Empty-state copy-from-previous-period flow: confirmation + "no goals
-    // found" alert. Mirrors the per-category flow in `GoalCategoryCard`.
+    // found" alert.
     @State private var showingCopyAlert = false
     @State private var showingNoGoalsAlert = false
 
@@ -140,10 +140,8 @@ struct GoalCardGridView: View {
 
     /// Copies every goal from the previous period (matching the current
     /// interval) into the current period, preserving title / description /
-    /// success metric / category / linkedTasks but resetting `isCompleted`
-    /// and shifting the due date forward by one period. Mirrors
-    /// `GoalCategoryCard.copyGoalsFromPreviousPeriod` but operates across
-    /// every category rather than a single one.
+    /// success metric / category but leaving linkedTasks empty, resetting
+    /// `isCompleted`, and shifting the due date forward by one period.
     private func copyAllGoalsFromPreviousPeriod() {
         let calendar = Calendar.mondayFirst
         let timeframe: GoalTimeframe
@@ -208,11 +206,9 @@ struct GoalCardGridView: View {
                 dueDate: newDueDate,
                 isCompleted: false,
                 createdAt: Date(),
-                updatedAt: Date(),
-                linkedTasks: oldGoal.linkedTasks
+                updatedAt: Date()
             )
             goalsManager.addGoal(newGoal)
         }
     }
 }
-

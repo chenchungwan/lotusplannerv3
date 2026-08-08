@@ -540,36 +540,12 @@ struct SettingsView: View {
                     }
 
                     if !appPrefs.hideGoals {
-                        Toggle(isOn: $appPrefs.useGoalCardView) {
-                            HStack {
-                                Image(systemName: "square.grid.2x2")
-                                    .foregroundColor(appPrefs.useGoalCardView ? .accentColor : .secondary)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Goal Card View")
-                                        .font(.body)
-                                    Text("Show goals as individual cards instead of grouped by category")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-
                         GoalCategoriesInlineView()
                             .padding(.leading, 20)
                             .padding(.top, 8)
                     }
                 } header: {
-                    HStack(spacing: 8) {
-                        Text("Goal Preferences")
-                        Text("Beta")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
+                    Text("Goal Preferences")
                 }
 
                 // Book View section - temporarily hidden

@@ -2,17 +2,12 @@ import SwiftUI
 
 struct AllGoalsTableContent: View {
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var navigationManager = NavigationManager.shared
-    @ObservedObject private var appPrefs = AppPreferences.shared
     
     // MARK: - Device-Aware Layout
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    @Environment(\.verticalSizeClass) var verticalSizeClass
     
     // State for sheet presentations
     @State private var goalToEdit: GoalData?
-    @State private var categoryToEdit: GoalCategoryData?
-    @State private var showingEditCategory = false
     @State private var refreshTrigger = UUID()
     
     // Computed property to get all timeframes with oldest first (leftmost)
@@ -166,13 +161,6 @@ struct AllGoalsTableContent: View {
                                     },
                                     onGoalDelete: { goal in
                                         goalsManager.deleteGoal(goal.id)
-                                    },
-                                    onCategoryEdit: { category in
-                                        categoryToEdit = category
-                                        showingEditCategory = true
-                                    },
-                                    onCategoryDelete: { category in
-                                        goalsManager.deleteCategory(category.id)
                                     }
                                 )
                                 .id(timeframe.id)
@@ -200,11 +188,6 @@ struct AllGoalsTableContent: View {
         .sheet(item: $goalToEdit) { goal in
             CreateGoalView(editingGoal: goal) {
                 goalToEdit = nil
-            }
-        }
-        .sheet(isPresented: $showingEditCategory) {
-            if let category = categoryToEdit {
-                EditCategoryView(category: category)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .refreshAllGoalsView)) { _ in
@@ -257,15 +240,11 @@ struct TimeframeColumnView: View {
     let onGoalTap: (GoalData) -> Void
     let onGoalEdit: (GoalData) -> Void
     let onGoalDelete: (GoalData) -> Void
-    let onCategoryEdit: (GoalCategoryData) -> Void
-    let onCategoryDelete: (GoalCategoryData) -> Void
 
     @ObservedObject private var goalsManager = GoalsManager.shared
-    @ObservedObject private var navigationManager = NavigationManager.shared
-    @ObservedObject private var appPrefs = AppPreferences.shared
     @State private var isExpanded: Bool = true
 
-    init(timeframe: TimeframeGroup, categories: [GoalCategoryData], columnWidth: CGFloat, adaptivePadding: CGFloat, adaptiveSpacing: CGFloat, isCompact: Bool, onGoalTap: @escaping (GoalData) -> Void, onGoalEdit: @escaping (GoalData) -> Void, onGoalDelete: @escaping (GoalData) -> Void, onCategoryEdit: @escaping (GoalCategoryData) -> Void, onCategoryDelete: @escaping (GoalCategoryData) -> Void) {
+    init(timeframe: TimeframeGroup, categories: [GoalCategoryData], columnWidth: CGFloat, adaptivePadding: CGFloat, adaptiveSpacing: CGFloat, isCompact: Bool, onGoalTap: @escaping (GoalData) -> Void, onGoalEdit: @escaping (GoalData) -> Void, onGoalDelete: @escaping (GoalData) -> Void) {
         self.timeframe = timeframe
         self.categories = categories
         self.columnWidth = columnWidth
@@ -275,8 +254,6 @@ struct TimeframeColumnView: View {
         self.onGoalTap = onGoalTap
         self.onGoalEdit = onGoalEdit
         self.onGoalDelete = onGoalDelete
-        self.onCategoryEdit = onCategoryEdit
-        self.onCategoryDelete = onCategoryDelete
 
         // Auto-collapse past columns
         let now = Date()
@@ -364,39 +341,17 @@ struct TimeframeColumnView: View {
                 
                 // Goals content - scrollable area that takes remaining height
                 ScrollView(.vertical, showsIndicators: true) {
-                    if appPrefs.useGoalCardView {
-                        // Individual goal cards ordered by category
-                        LazyVStack(spacing: adaptiveSpacing) {
-                            ForEach(categories) { category in
-                                let goals = getGoals(for: category.id, in: timeframe)
-                                ForEach(goals) { goal in
-                                    GoalCard(
-                                        goal: goal,
-                                        category: category,
-                                        onTap: { onGoalTap(goal) },
-                                        onEdit: { onGoalEdit(goal) },
-                                        taskInfos: resolveTasksForGoal(goal)
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        LazyVStack(spacing: adaptiveSpacing) {
-                            ForEach(categories) { category in
-                                GoalCategoryCard(
+                    LazyVStack(spacing: adaptiveSpacing) {
+                        ForEach(categories) { category in
+                            let goals = getGoals(for: category.id, in: timeframe)
+                            ForEach(goals) { goal in
+                                GoalCard(
+                                    goal: goal,
                                     category: category,
-                                    goals: getGoals(for: category.id, in: timeframe),
-                                    onGoalTap: onGoalTap,
-                                    onGoalEdit: onGoalEdit,
-                                    onGoalDelete: onGoalDelete,
-                                    onCategoryEdit: onCategoryEdit,
-                                    onCategoryDelete: onCategoryDelete,
-                                    showTags: false,
-                                    currentInterval: convertToTimelineInterval(timeframe.type),
-                                    currentDate: timeframe.startDate,
-                                    showQuickAdd: false
+                                    onTap: { onGoalTap(goal) },
+                                    onEdit: { onGoalEdit(goal) },
+                                    taskInfos: resolveTasksForGoal(goal)
                                 )
-                                .frame(height: calculateCardHeight())
                             }
                         }
                     }
@@ -441,24 +396,6 @@ struct TimeframeColumnView: View {
         .frame(width: isExpanded ? columnWidth : 50)
     }
     
-    // Calculate fixed card height based on 3 goal lines - expanded by 50%
-    private func calculateCardHeight() -> CGFloat {
-        // Compact header height (category title, progress, etc)
-        let headerHeight: CGFloat = isCompact ? 45 : 50
-        
-        // Space for 3 goal lines (checkbox + text) - very compact
-        // Each goal row is ~26-28pt (icon + text + minimal padding)
-        let goalRowHeight: CGFloat = isCompact ? 24 : 26
-        let numberOfRows: CGFloat = 3
-        let goalsAreaHeight = goalRowHeight * numberOfRows
-        
-        // Minimal bottom padding
-        let bottomPadding: CGFloat = 8
-        
-        let baseHeight = headerHeight + goalsAreaHeight + bottomPadding
-        return baseHeight * 1.8  // Expanded by 80% total (50% + 20%)
-    }
-    
     private func getGoals(for categoryId: UUID, in timeframe: TimeframeGroup) -> [GoalData] {
         let categoryGoals = goalsManager.getGoalsForCategory(categoryId)
         return categoryGoals.filter { goal in
@@ -498,16 +435,6 @@ struct TimeframeColumnView: View {
         return currentWeekInterval.start == timeframeWeekStart
     }
     
-    private func convertToTimelineInterval(_ goalTimeframe: GoalTimeframe) -> TimelineInterval {
-        switch goalTimeframe {
-        case .week:
-            return .week
-        case .month:
-            return .month
-        case .year:
-            return .year
-        }
-    }
 }
 
 // MARK: - Edit Goal View
