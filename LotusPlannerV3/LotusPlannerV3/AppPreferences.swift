@@ -219,6 +219,12 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(useRowBasedWeeklyView, forKey: "useRowBasedWeeklyView")
         }
     }
+
+    @Published var showWeeklySummarySection: Bool {
+        didSet {
+            UserDefaults.standard.set(showWeeklySummarySection, forKey: "showWeeklySummarySection")
+        }
+    }
     
     // Tasks view layout preference
     @Published var tasksLayoutHorizontal: Bool {
@@ -645,6 +651,7 @@ class AppPreferences: ObservableObject {
 
         // Load row-based weekly view preference (default false - column layout)
         self.useRowBasedWeeklyView = UserDefaults.standard.bool(forKey: "useRowBasedWeeklyView")
+        self.showWeeklySummarySection = UserDefaults.standard.object(forKey: "showWeeklySummarySection") as? Bool ?? false
 
         // Load tasks layout preference (default false - vertical layout)
         var storedTasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")
@@ -930,6 +937,10 @@ class AppPreferences: ObservableObject {
     
     func updateUseRowBasedWeeklyView(_ value: Bool) {
         useRowBasedWeeklyView = value
+    }
+
+    func updateShowWeeklySummarySection(_ value: Bool) {
+        showWeeklySummarySection = value
     }
     
     func updateTasksLayoutHorizontal(_ value: Bool) {

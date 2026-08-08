@@ -5,8 +5,20 @@ import UniformTypeIdentifiers
 extension WeeklyView {
 
     // MARK: - Week Task Functions
-    func weekTasksDateHeader(dayColumnWidth: CGFloat, timeColumnWidth: CGFloat) -> some View {
+    func weekTasksDateHeader(dayColumnWidth: CGFloat, summaryColumnWidth: CGFloat = 0, timeColumnWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
+            if appPrefs.showWeeklySummarySection {
+                weeklySummaryHeader()
+                    .frame(width: summaryColumnWidth, height: 60)
+                    .background(Color(.systemGray6))
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(.systemGray4))
+                            .frame(width: 0.5),
+                        alignment: .trailing
+                    )
+            }
+
             // Day headers
             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                 weekTaskDateHeaderView(date: date)
@@ -54,6 +66,214 @@ extension WeeklyView {
             } else {
                 navigationManager.updateInterval(.day, date: date)
             }
+        }
+    }
+
+    var weeklySummaryConfig: WeeklySummaryConfig {
+        _ = weeklySummaryConfigVersion
+        return WeeklySummaryConfig.load()
+    }
+
+    func weeklySummaryRowHeight(minimum: CGFloat = 220) -> CGFloat {
+        let config = weeklySummaryConfig
+        let components = config.horizontalPlacements.compactMap { CustomComponent(rawValue: $0.component) }
+        let tallest = components.map(weeklySummaryPreferredHeight(for:)).max() ?? minimum
+        return max(minimum, tallest)
+    }
+
+    func weeklySummaryPreferredWidth(minimum: CGFloat) -> CGFloat {
+        let config = weeklySummaryConfig
+        let placements = appPrefs.useRowBasedWeeklyView ? config.horizontalPlacements : config.verticalPlacements
+        let widest = placements
+            .compactMap { CustomComponent(rawValue: $0.component) }
+            .map(weeklySummaryPreferredWidth(for:))
+            .max() ?? minimum
+        return max(minimum, widest)
+    }
+
+    func weeklySummaryPreferredWidth(for component: CustomComponent) -> CGFloat {
+        switch component {
+        case .logCustomWeek, .logCustomWeek2:
+            return 340
+        case .goalsWeek, .goalsMonth, .goalsYear, .goalsPicker:
+            return 360
+        case .weeklyGoalsBar:
+            return 420
+        case .weightGraph,
+             .weightGraphWeek,
+             .weightGraphMonth,
+             .weightGraphYear,
+             .workoutStreakGraph,
+             .workoutStreakGraphWeek,
+             .workoutStreakGraphMonth,
+             .workoutStreakGraphYear:
+            return 380
+        default:
+            return 280
+        }
+    }
+
+    func weeklySummaryPreferredHeight(for component: CustomComponent) -> CGFloat {
+        switch component {
+        case .logCustomWeek:
+            return weeklyRoutinePreferredHeight(collectionIndex: 0)
+        case .logCustomWeek2:
+            return weeklyRoutinePreferredHeight(collectionIndex: 1)
+        case .goalsWeek, .goalsMonth, .goalsYear, .goalsPicker:
+            return 260
+        case .weightGraph,
+             .weightGraphWeek,
+             .weightGraphMonth,
+             .weightGraphYear,
+             .workoutStreakGraph,
+             .workoutStreakGraphWeek,
+             .workoutStreakGraphMonth,
+             .workoutStreakGraphYear:
+            return 260
+        case .weeklyGoalsBar:
+            return 72
+        default:
+            return 220
+        }
+    }
+
+    func weeklyRoutinePreferredHeight(collectionIndex: Int) -> CGFloat {
+        let itemCount = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }.count
+        let headerHeight: CGFloat = 18
+        let dividerHeight: CGFloat = 1
+        let rowHeight: CGFloat = 24
+        let rowSpacing: CGFloat = 6
+        let verticalPadding: CGFloat = 20
+        let contentSpacing = rowSpacing * CGFloat(max(0, itemCount + 1))
+        let rowsHeight = rowHeight * CGFloat(max(1, itemCount))
+        return headerHeight + dividerHeight + rowsHeight + contentSpacing + verticalPadding
+    }
+
+    func weeklySummaryHeader() -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: "rectangle.leadinghalf.inset.filled")
+                .font(.system(size: 16, weight: .semibold))
+            Text("SUMMARY")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundColor(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+    }
+
+    func weeklySummaryColumn(width: CGFloat) -> some View {
+        let config = weeklySummaryConfig
+        let rows = max(1, config.verticalRows)
+        let placements = config.verticalPlacements
+
+        return VStack(spacing: 0) {
+            ForEach(0..<rows, id: \.self) { row in
+                let component = placements.first(where: { $0.row == row }).flatMap { CustomComponent(rawValue: $0.component) }
+                weeklySummaryCell(
+                    component: component
+                )
+                .frame(width: width, height: component.map(weeklySummaryPreferredHeight(for:)) ?? 220, alignment: .topLeading)
+
+                if row < rows - 1 {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 1)
+                }
+            }
+        }
+        .background(Color(.systemBackground))
+        .overlay(
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(width: 0.5),
+            alignment: .trailing
+        )
+    }
+
+    func weeklySummaryRowContent(cellWidth: CGFloat, cellHeight: CGFloat? = nil) -> some View {
+        let config = weeklySummaryConfig
+        let columns = max(1, config.horizontalCols)
+        let placements = config.horizontalPlacements
+        let preferredWidth = weeklySummaryPreferredWidth(minimum: cellWidth)
+        let preferredHeight = cellHeight ?? weeklySummaryRowHeight()
+
+        return HStack(alignment: .top, spacing: 0) {
+            ForEach(0..<columns, id: \.self) { col in
+                weeklySummaryCell(
+                    component: placements.first(where: { $0.col == col }).flatMap { CustomComponent(rawValue: $0.component) }
+                )
+                .frame(width: preferredWidth, height: preferredHeight, alignment: .topLeading)
+
+                if col < columns - 1 {
+                    Divider()
+                }
+            }
+        }
+        .background(Color(.systemBackground))
+    }
+
+    @ViewBuilder
+    func weeklySummaryCell(component: CustomComponent?) -> some View {
+        if let component {
+            weeklySummaryComponentView(component)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(6)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "square.dashed")
+                    .font(.title3)
+                Text("Summary")
+                    .font(.caption)
+            }
+            .foregroundColor(.secondary.opacity(0.7))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(8)
+        }
+    }
+
+    @ViewBuilder
+    func weeklySummaryComponentView(_ component: CustomComponent) -> some View {
+        switch component {
+        case .logCustomWeek:
+            CustomLogWeekComponent(currentDate: selectedDate)
+        case .logCustomWeek2:
+            CustomLogWeekComponent(currentDate: selectedDate, collectionIndex: 1)
+        case .goalsWeek:
+            GoalsTimeframeComponent(timeframe: .week, date: selectedDate)
+        case .goalsMonth:
+            GoalsTimeframeComponent(timeframe: .month, date: selectedDate)
+        case .goalsYear:
+            GoalsTimeframeComponent(timeframe: .year, date: selectedDate)
+        case .goalsPicker:
+            GoalsTimeframePickerComponent(date: selectedDate)
+        case .weeklyGoalsBar:
+            WeeklyGoalsBarComponent(currentDate: selectedDate)
+        case .weightGraph:
+            WeightGraphComponent(currentDate: selectedDate)
+        case .weightGraphWeek:
+            WeightGraphComponent(currentDate: selectedDate, fixedTimeframe: .week)
+        case .weightGraphMonth:
+            WeightGraphComponent(currentDate: selectedDate, fixedTimeframe: .month)
+        case .weightGraphYear:
+            WeightGraphComponent(currentDate: selectedDate, fixedTimeframe: .year)
+        case .workoutStreakGraph:
+            WorkoutStreakGraphComponent(currentDate: selectedDate)
+        case .workoutStreakGraphWeek:
+            WorkoutStreakGraphComponent(currentDate: selectedDate, fixedTimeframe: .week)
+        case .workoutStreakGraphMonth:
+            WorkoutStreakGraphComponent(currentDate: selectedDate, fixedTimeframe: .month)
+        case .workoutStreakGraphYear:
+            WorkoutStreakGraphComponent(currentDate: selectedDate, fixedTimeframe: .year)
+        default:
+            VStack(spacing: 6) {
+                Image(systemName: component.systemImage)
+                    .foregroundColor(.accentColor)
+                Text(component.displayName(account1: appPrefs.account1Name, account2: appPrefs.account2Name))
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
     

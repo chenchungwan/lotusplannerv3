@@ -326,9 +326,18 @@ extension WeeklyView {
                         Rectangle()
                             .fill(Color(.systemGray4))
                             .frame(height: 1)
+
+                        if appPrefs.showWeeklySummarySection {
+                            weeklySummaryStickyRow()
+
+                            Rectangle()
+                                .fill(Color(.systemGray5))
+                                .frame(height: 1)
+                        }
                         
                         ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                             weekDayColumnSticky(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
+                                .frame(height: rowBasedDayRowHeight)
                                 .id("day_row_\(index)")
                             
                             if index < weekDates.count - 1 {
@@ -345,141 +354,20 @@ extension WeeklyView {
                     
                     // Scrollable content (without date column)
                     ScrollView(.horizontal, showsIndicators: true) {
-                        HStack(alignment: .top, spacing: 0) {
-                            // Events Column
-                            VStack(spacing: 0) {
-                                // Events column header
-                                VStack(alignment: .center, spacing: 4) {
-                                    Text("Events")
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.primary)
-                                }
-                                .frame(height: 44)
-                                .frame(maxWidth: .infinity)
-                                .background(Color(.systemGray6).opacity(0.5))
-                                
+                        VStack(alignment: .leading, spacing: 0) {
+                            rowBasedContentHeaders()
+
+                            if appPrefs.showWeeklySummarySection {
+                                let summaryCellWidth = weeklySummaryPreferredWidth(minimum: contentColumnWidth())
+                                weeklySummaryRowContent(cellWidth: summaryCellWidth)
+                                    .frame(minWidth: summaryCellWidth, alignment: .leading)
+
                                 Rectangle()
-                                    .fill(Color(.systemGray4))
+                                    .fill(Color(.systemGray5))
                                     .frame(height: 1)
-                                
-                                // Events column content
-                                ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                    weekDayRowEventsColumn(date: date)
-                                    
-                                    if index < weekDates.count - 1 {
-                                        Rectangle()
-                                            .fill(Color(.systemGray5))
-                                            .frame(height: 1)
-                                    }
-                                }
                             }
-                            .frame(width: contentColumnWidth())
-                            .background(Color(.systemBackground))
-                            
-                            Divider()
-                            
-                            // Account 1 Tasks Column
-                            if authManager.isLinked(kind: .account1) {
-                                VStack(spacing: 0) {
-                                    // Account 1 Tasks column header
-                                    VStack(alignment: .center, spacing: 4) {
-                                        Text(appPrefs.account1Name)
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                    }
-                                    .frame(height: 44)
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color(.systemGray6).opacity(0.5))
-                                    
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(height: 1)
-                                    
-                                    // Account 1 Tasks column content
-                                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                        weekDayRowAccount1TasksColumn(date: date)
-                                        
-                                        if index < weekDates.count - 1 {
-                                            Rectangle()
-                                                .fill(Color(.systemGray5))
-                                                .frame(height: 1)
-                                        }
-                                    }
-                                }
-                                .frame(width: contentColumnWidth())
-                                .background(Color(.systemBackground))
-                                
-                                Divider()
-                            }
-                            
-                            // Account 2 Tasks Column
-                            if authManager.isLinked(kind: .account2) {
-                                VStack(spacing: 0) {
-                                    // Account 2 Tasks column header
-                                    VStack(alignment: .center, spacing: 4) {
-                                        Text(appPrefs.account2Name)
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                    }
-                                    .frame(height: 44)
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color(.systemGray6).opacity(0.5))
-                                    
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(height: 1)
-                                    
-                                    // Account 2 Tasks column content
-                                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                        weekDayRowAccount2TasksColumn(date: date)
-                                        
-                                        if index < weekDates.count - 1 {
-                                            Rectangle()
-                                                .fill(Color(.systemGray5))
-                                                .frame(height: 1)
-                                        }
-                                    }
-                                }
-                                .frame(width: contentColumnWidth())
-                                .background(Color(.systemBackground))
-                                
-                                Divider()
-                            }
-                            
-                            // Logs Columns (no width restrictions - natural sizing)
-                            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) || (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)) {
-                                VStack(spacing: 0) {
-                                    // Logs column header
-                                    VStack(alignment: .center, spacing: 4) {
-                                        Text("Logs")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                    }
-                                    .frame(height: 44)
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color(.systemGray6).opacity(0.5))
-                                    
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(height: 1)
-                                    
-                                    // Logs column content
-                                    ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
-                                        weekDayRowLogsColumn(date: date)
-                                        
-                                        if index < weekDates.count - 1 {
-                                            Rectangle()
-                                                .fill(Color(.systemGray5))
-                                                .frame(height: 1)
-                                        }
-                                    }
-                                }
-                                .background(Color(.systemBackground))
-                            }
+
+                            rowBasedContentRows()
                         }
                         .padding(.horizontal, 12)
                     }
@@ -494,6 +382,139 @@ extension WeeklyView {
                 }
             }
         }
+    }
+
+    func rowBasedContentHeaders() -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            rowBasedHeaderCell("Events")
+                .frame(width: contentColumnWidth())
+
+            Divider()
+                .frame(height: rowBasedHeaderHeight)
+
+            if authManager.isLinked(kind: .account1) {
+                rowBasedHeaderCell(appPrefs.account1Name)
+                    .frame(width: contentColumnWidth())
+
+                Divider()
+                    .frame(height: rowBasedHeaderHeight)
+            }
+
+            if authManager.isLinked(kind: .account2) {
+                rowBasedHeaderCell(appPrefs.account2Name)
+                    .frame(width: contentColumnWidth())
+
+                Divider()
+                    .frame(height: rowBasedHeaderHeight)
+            }
+
+            if rowBasedShowsLogs {
+                rowBasedHeaderCell("Logs")
+                    .frame(minWidth: logColumnWidth())
+            }
+        }
+        .frame(height: rowBasedHeaderHeight)
+        .background(Color(.systemGray6).opacity(0.5))
+        .overlay(
+            Rectangle()
+                .fill(Color(.systemGray4))
+                .frame(height: 1),
+            alignment: .bottom
+        )
+    }
+
+    func rowBasedHeaderCell(_ title: String) -> some View {
+        VStack(alignment: .center, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+        }
+        .frame(height: rowBasedHeaderHeight)
+        .frame(maxWidth: .infinity)
+    }
+
+    func rowBasedContentRows() -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
+                rowBasedDayContent(date: date)
+                    .frame(height: rowBasedDayRowHeight, alignment: .topLeading)
+
+                if index < weekDates.count - 1 {
+                    rowBasedDayDivider()
+                }
+            }
+        }
+    }
+
+    func rowBasedDayContent(date: Date) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            weekDayRowEventsColumn(date: date)
+                .frame(width: contentColumnWidth(), height: rowBasedDayRowHeight, alignment: .topLeading)
+                .background(Color(.systemBackground))
+
+            Divider()
+                .frame(height: rowBasedDayRowHeight)
+
+            if authManager.isLinked(kind: .account1) {
+                weekDayRowAccount1TasksColumn(date: date)
+                    .frame(width: contentColumnWidth(), height: rowBasedDayRowHeight, alignment: .topLeading)
+                    .background(Color(.systemBackground))
+
+                Divider()
+                    .frame(height: rowBasedDayRowHeight)
+            }
+
+            if authManager.isLinked(kind: .account2) {
+                weekDayRowAccount2TasksColumn(date: date)
+                    .frame(width: contentColumnWidth(), height: rowBasedDayRowHeight, alignment: .topLeading)
+                    .background(Color(.systemBackground))
+
+                Divider()
+                    .frame(height: rowBasedDayRowHeight)
+            }
+
+            if rowBasedShowsLogs {
+                weekDayRowLogsColumn(date: date)
+                    .frame(height: rowBasedDayRowHeight, alignment: .topLeading)
+                    .background(Color(.systemBackground))
+            }
+        }
+    }
+
+    func rowBasedDayDivider() -> some View {
+        Rectangle()
+            .fill(Color(.systemGray5))
+            .frame(height: 1)
+    }
+
+    var rowBasedShowsLogs: Bool {
+        appPrefs.showSleepLogs ||
+        appPrefs.showWeightLogs ||
+        appPrefs.showWorkoutLogs ||
+        appPrefs.showFoodLogs ||
+        appPrefs.showWaterLogs ||
+        (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) ||
+        (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1))
+    }
+
+    var rowBasedHeaderHeight: CGFloat { 44 }
+
+    var rowBasedDayRowHeight: CGFloat { 112 }
+
+    func weeklySummaryStickyRow() -> some View {
+        VStack(alignment: .center, spacing: 4) {
+            Image(systemName: "rectangle.grid.1x2")
+                .font(.system(size: 14, weight: .semibold))
+            Text("Summary")
+                .font(.caption)
+                .fontWeight(.semibold)
+        }
+        .foregroundColor(.secondary)
+        .frame(maxWidth: .infinity)
+        .frame(height: weeklySummaryRowHeight())
+        .padding(.horizontal, 4)
+        .background(Color(.systemGray6))
     }
     
     func weekDayColumnSticky(date: Date, isToday: Bool) -> some View {

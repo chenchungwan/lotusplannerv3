@@ -39,6 +39,7 @@ struct LotusPlannerV3App: App {
         // Start syncing the custom day view library (all named versions +
         // active selection) across devices via iCloud KVS.
         CustomDayViewLibrary.startSync()
+        WeeklySummaryConfig.startSync()
 
         // Same KVS sync wiring for task recurrence rules. Rules created on
         // one device replicate to others without any extra work.
@@ -68,6 +69,14 @@ struct LotusPlannerV3App: App {
             }
         }
         .defaultSize(width: 1280, height: 820)
+
+        WindowGroup("Customize Weekly Summary", id: "weekly-summary-configurator") {
+            WeeklySummaryConfigurator()
+                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .environmentObject(appPrefs)
+                .preferredColorScheme(appPrefs.isDarkMode ? .dark : .light)
+        }
+        .defaultSize(width: 1100, height: 720)
 
         #endif
     }

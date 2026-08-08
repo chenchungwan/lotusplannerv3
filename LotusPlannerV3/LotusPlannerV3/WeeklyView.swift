@@ -45,6 +45,7 @@ struct WeeklyView: View {
     @State var scrollToCurrentDayTrigger = false
     @State var scrollToCurrentDayHorizontalTrigger = false
     @State var scrollToCurrentDayRowTrigger = false
+    @State var weeklySummaryConfigVersion = 0
     
     // MARK: - Adaptive Layout Properties
     var isCompact: Bool {
@@ -82,8 +83,9 @@ struct WeeklyView: View {
     }
     
     func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
-        // Total width for all 7 days
-        return dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
+        let dayWidth = dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+        let summaryWidth = appPrefs.showWeeklySummarySection ? weeklySummaryPreferredWidth(minimum: dayWidth) : 0
+        return dayWidth * 7 + summaryWidth
     }
     
     // MARK: - Horizontal View Adaptive Properties
@@ -141,6 +143,9 @@ struct WeeklyView: View {
             if !bulkEditManager.state.isActive {
                 bulkEditManager.state.selectedTaskIds.removeAll()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: WeeklySummaryConfig.didChangeNotification)) { _ in
+            weeklySummaryConfigVersion &+= 1
         }
         .sheet(item: Binding<GoogleCalendarEvent?>(
             get: { selectedCalendarEvent },
@@ -493,12 +498,14 @@ struct WeeklyView: View {
             let visibleDays = visibleDaysCount(for: geometry)
             let columnWidth = dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays)
             let contentWidth = totalContentWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+            let summaryWidth = appPrefs.showWeeklySummarySection ? weeklySummaryPreferredWidth(minimum: columnWidth) : 0
+            let daysWidth = columnWidth * 7
             
             ScrollViewReader { horizontalProxy in
                 ScrollView(.horizontal, showsIndicators: true) {
                     VStack(spacing: 0) {
                         // Fixed header (stays at top when scrolling vertically)
-                        weekTasksDateHeader(dayColumnWidth: columnWidth, timeColumnWidth: 50)
+                        weekTasksDateHeader(dayColumnWidth: columnWidth, summaryColumnWidth: summaryWidth, timeColumnWidth: 50)
                             .frame(width: contentWidth)
                             .background(Color(.systemGray6))
                         
@@ -510,7 +517,13 @@ struct WeeklyView: View {
                         // Scrollable content (scrolls vertically)
                         ScrollView(.vertical, showsIndicators: true) {
                             ScrollViewReader { verticalProxy in
-                                weekTasksContent(dayColumnWidth: columnWidth, fixedWidth: contentWidth)
+                                HStack(alignment: .top, spacing: 0) {
+                                    if appPrefs.showWeeklySummarySection {
+                                        weeklySummaryColumn(width: summaryWidth)
+                                    }
+
+                                    weekTasksContent(dayColumnWidth: columnWidth, fixedWidth: daysWidth)
+                                }
                                     .onAppear {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                             scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
@@ -535,4 +548,3 @@ struct WeeklyView: View {
         }
     }
     }
-

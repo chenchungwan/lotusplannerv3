@@ -52,6 +52,7 @@ struct SettingsView: View {
     /// Bumped after the configurator dismisses or the library changes so the
     /// versions list re-renders with the latest names / active selection.
     @State private var customConfigVersion = 0
+    @State private var showingWeeklySummaryConfigurator = false
 
     // Check if device forces stacked layout (iPhone portrait)
     private var shouldUseStackedLayout: Bool {
@@ -402,6 +403,44 @@ struct SettingsView: View {
                     .onTapGesture {
                         appPrefs.updateUseRowBasedWeeklyView(true)
                     }
+
+                    Toggle(isOn: Binding(
+                        get: { appPrefs.showWeeklySummarySection },
+                        set: { appPrefs.updateShowWeeklySummarySection($0) }
+                    )) {
+                        HStack {
+                            Image(systemName: "rectangle.leadinghalf.inset.filled")
+                                .foregroundColor(appPrefs.showWeeklySummarySection ? .accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Add Weekly Summary")
+                                    .font(.body)
+                                Text(appPrefs.useRowBasedWeeklyView ? "Adds a summary row before Monday." : "Adds a summary column before Monday.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    if appPrefs.showWeeklySummarySection {
+                        Button {
+                            #if targetEnvironment(macCatalyst)
+                            openWindow(id: "weekly-summary-configurator")
+                            #else
+                            showingWeeklySummaryConfigurator = true
+                            #endif
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "slider.horizontal.3")
+                                Text("Customize Weekly Summary")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.leading, 28)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 // Tasks View Preference
@@ -681,6 +720,9 @@ struct SettingsView: View {
                 customConfigVersion &+= 1
             }) { target in
                 DayViewCustomConfigurator(versionId: target.id)
+            }
+            .fullScreenCover(isPresented: $showingWeeklySummaryConfigurator) {
+                WeeklySummaryConfigurator()
             }
             #endif
             .onReceive(NotificationCenter.default.publisher(for: CustomDayViewLibrary.didChangeNotification)) { _ in

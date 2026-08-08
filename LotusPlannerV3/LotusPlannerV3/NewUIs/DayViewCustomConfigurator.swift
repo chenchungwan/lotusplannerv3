@@ -1848,6 +1848,416 @@ private struct CellDragModifier: ViewModifier {
     }
 }
 
+// MARK: - Weekly Summary Configuration
+
+struct WeeklySummaryConfig: Codable {
+    static let userDefaultsKey = "weeklySummaryConfig.v1"
+    static let didChangeNotification = Notification.Name("WeeklySummaryConfigDidChange")
+
+    var verticalRows: Int
+    var horizontalCols: Int
+    var verticalPlacements: [CustomDayViewConfig.PlacementDTO]
+    var horizontalPlacements: [CustomDayViewConfig.PlacementDTO]
+
+    static func blank() -> WeeklySummaryConfig {
+        WeeklySummaryConfig(
+            verticalRows: 4,
+            horizontalCols: 4,
+            verticalPlacements: [],
+            horizontalPlacements: []
+        )
+    }
+
+    static func load() -> WeeklySummaryConfig {
+        let kvs = NSUbiquitousKeyValueStore.default
+        if let data = kvs.data(forKey: userDefaultsKey),
+           let config = try? JSONDecoder().decode(WeeklySummaryConfig.self, from: data) {
+            return config
+        }
+        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+           let config = try? JSONDecoder().decode(WeeklySummaryConfig.self, from: data) {
+            return config
+        }
+        return .blank()
+    }
+
+    static func save(_ config: WeeklySummaryConfig) {
+        guard let data = try? JSONEncoder().encode(config) else { return }
+        UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        NSUbiquitousKeyValueStore.default.set(data, forKey: userDefaultsKey)
+        NSUbiquitousKeyValueStore.default.synchronize()
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    static func startSync() {
+        let kvs = NSUbiquitousKeyValueStore.default
+        kvs.synchronize()
+
+        if kvs.data(forKey: userDefaultsKey) == nil,
+           let localData = UserDefaults.standard.data(forKey: userDefaultsKey) {
+            kvs.set(localData, forKey: userDefaultsKey)
+            kvs.synchronize()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: kvs,
+            queue: .main
+        ) { notification in
+            let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] ?? []
+            guard changedKeys.isEmpty || changedKeys.contains(userDefaultsKey) else { return }
+
+            if let data = kvs.data(forKey: userDefaultsKey) {
+                UserDefaults.standard.set(data, forKey: userDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+            }
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
+    }
+}
+
+struct WeeklySummaryConfigurator: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
+    @State private var config = WeeklySummaryConfig.load()
+    @State private var dropError: String?
+
+    private let minCells = 1
+    private let maxCells = 12
+
+    private var isRowBased: Bool { appPrefs.useRowBasedWeeklyView }
+    private var cellCount: Int {
+        isRowBased ? config.horizontalCols : config.verticalRows
+    }
+    private var placements: [CustomDayViewConfig.PlacementDTO] {
+        isRowBased ? config.horizontalPlacements : config.verticalPlacements
+    }
+
+    private var availablePaletteComponents: [CustomComponent] {
+        var items: [CustomComponent] = []
+        if appPrefs.showCustomLogs(for: 0) { items.append(.logCustomWeek) }
+        if appPrefs.showCustomLogs(for: 1) { items.append(.logCustomWeek2) }
+        if appPrefs.showWeightLogs {
+            items.append(.weightGraph)
+            items.append(.weightGraphWeek)
+            items.append(.weightGraphMonth)
+            items.append(.weightGraphYear)
+        }
+        if appPrefs.showWorkoutLogs {
+            items.append(.workoutStreakGraph)
+            items.append(.workoutStreakGraphWeek)
+            items.append(.workoutStreakGraphMonth)
+            items.append(.workoutStreakGraphYear)
+        }
+        if !appPrefs.hideGoals {
+            items.append(.goalsWeek)
+            items.append(.goalsMonth)
+            items.append(.goalsYear)
+            items.append(.goalsPicker)
+        }
+        let placed = Set(placements.compactMap { CustomComponent(rawValue: $0.component) })
+        return items.filter { !placed.contains($0) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            GeometryReader { proxy in
+                HStack(spacing: 0) {
+                    VStack(spacing: 16) {
+                        summaryHeader
+                        summaryGrid(in: proxy.size)
+                    }
+                    .frame(width: proxy.size.width * 2.0 / 3.0)
+                    .background(Color(.systemGroupedBackground))
+
+                    Divider()
+
+                    componentPalette
+                        .frame(width: proxy.size.width * 1.0 / 3.0)
+                }
+            }
+            .navigationTitle("Customize Weekly Summary")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        WeeklySummaryConfig.save(config)
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+            .alert(
+                "Can't Place Component",
+                isPresented: Binding(
+                    get: { dropError != nil },
+                    set: { if !$0 { dropError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { dropError = nil }
+            } message: {
+                Text(dropError ?? "")
+            }
+        }
+        #if targetEnvironment(macCatalyst)
+        .frame(minWidth: 900, minHeight: 620)
+        #endif
+    }
+
+    private var summaryHeader: some View {
+        HStack(spacing: 16) {
+            Label(isRowBased ? "Summary Row" : "Summary Column", systemImage: "rectangle.grid.1x2")
+                .font(.headline)
+
+            Spacer()
+
+            Button {
+                updateCellCount(max(minCells, cellCount - 1))
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.plain)
+            .disabled(cellCount <= minCells)
+
+            Text("\(cellCount)")
+                .font(.body.monospacedDigit())
+                .frame(minWidth: 24)
+
+            Button {
+                updateCellCount(min(maxCells, cellCount + 1))
+            } label: {
+                Image(systemName: "plus.circle")
+            }
+            .buttonStyle(.plain)
+            .disabled(cellCount >= maxCells)
+        }
+        .padding()
+    }
+
+    private func summaryGrid(in size: CGSize) -> some View {
+        let count = max(1, cellCount)
+        let spacing: CGFloat = 8
+        let availableW = max(0, size.width * 2.0 / 3.0 - 32)
+        let availableH = max(0, size.height - 96)
+        let cellW = isRowBased ? max(120, (availableW - spacing * CGFloat(count - 1)) / CGFloat(count)) : min(260, availableW)
+        let cellH = isRowBased ? min(160, availableH) : max(96, (availableH - spacing * CGFloat(count - 1)) / CGFloat(count))
+
+        return ScrollView([.horizontal, .vertical], showsIndicators: true) {
+            Group {
+                if isRowBased {
+                    HStack(spacing: spacing) {
+                        cells(cellW: cellW, cellH: cellH)
+                    }
+                } else {
+                    VStack(spacing: spacing) {
+                        cells(cellW: cellW, cellH: cellH)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(minWidth: availableW, minHeight: availableH, alignment: .center)
+        }
+    }
+
+    private func cells(cellW: CGFloat, cellH: CGFloat) -> some View {
+        ForEach(0..<cellCount, id: \.self) { index in
+            let component = component(at: index)
+            summaryCell(index: index, component: component)
+                .frame(width: cellW, height: cellH)
+                .modifier(
+                    WeeklySummaryCellDragModifier(
+                        component: component,
+                        index: index,
+                        isRowBased: isRowBased
+                    )
+                )
+                .dropDestination(for: ComponentDragPayload.self) { items, _ in
+                    guard let payload = items.first else { return false }
+                    applyDrop(payload, at: index)
+                    return true
+                }
+                .contextMenu {
+                    if component != nil {
+                        Button(role: .destructive) {
+                            removePlacement(at: index)
+                        } label: {
+                            Label("Delete Component", systemImage: "trash")
+                        }
+                    }
+                }
+        }
+    }
+
+    private func summaryCell(index: Int, component: CustomComponent?) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(style: StrokeStyle(lineWidth: 1, dash: component == nil ? [6] : []))
+            .foregroundColor(component == nil ? .secondary.opacity(0.5) : .accentColor.opacity(0.8))
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(component == nil ? Color(.secondarySystemBackground) : Color.accentColor.opacity(0.08))
+            )
+            .overlay {
+                if let component {
+                    VStack(spacing: 6) {
+                        Image(systemName: component.systemImage)
+                            .foregroundColor(.accentColor)
+                        Text(component.displayName(account1: appPrefs.account1Name, account2: appPrefs.account2Name))
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .padding(.horizontal, 6)
+                    }
+                } else {
+                    Text("\(index + 1)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+            }
+    }
+
+    private var componentPalette: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Weekly Components")
+                    .font(.headline)
+                Text("Drag a component into the summary \(isRowBased ? "row" : "column").")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.top)
+            .padding(.bottom, 8)
+
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 8) {
+                    ForEach(availablePaletteComponents) { component in
+                        componentCard(component: component)
+                            .draggable(
+                                ComponentDragPayload(
+                                    component: component,
+                                    sourcePage: nil,
+                                    sourceRow: nil,
+                                    sourceCol: nil
+                                )
+                            ) {
+                                componentCard(component: component)
+                                    .frame(width: 200)
+                            }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Color(.secondarySystemBackground))
+    }
+
+    private func componentCard(component: CustomComponent) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: component.systemImage)
+                .foregroundColor(.accentColor)
+                .frame(width: 24)
+
+            Text(component.displayName(account1: appPrefs.account1Name, account2: appPrefs.account2Name))
+                .font(.body)
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            Image(systemName: "line.3.horizontal")
+                .foregroundColor(.secondary.opacity(0.6))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(.systemBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+    }
+
+    private func component(at index: Int) -> CustomComponent? {
+        let match = placements.first { placement in
+            isRowBased ? placement.col == index : placement.row == index
+        }
+        return match.flatMap { CustomComponent(rawValue: $0.component) }
+    }
+
+    private func applyDrop(_ payload: ComponentDragPayload, at index: Int) {
+        guard availablePaletteComponents.contains(payload.component) || component(at: index) == payload.component || !payload.isFromPalette else {
+            dropError = "That component is already in the summary."
+            return
+        }
+
+        if !payload.isFromPalette, let sourceRow = payload.sourceRow, let sourceCol = payload.sourceCol {
+            removePlacement(at: isRowBased ? sourceCol : sourceRow)
+        }
+        removePlacement(at: index)
+        var newPlacement = CustomDayViewConfig.PlacementDTO(
+            row: isRowBased ? 0 : index,
+            col: isRowBased ? index : 0,
+            component: payload.component.rawValue
+        )
+        if isRowBased {
+            config.horizontalPlacements.append(newPlacement)
+        } else {
+            newPlacement.col = 0
+            config.verticalPlacements.append(newPlacement)
+        }
+    }
+
+    private func removePlacement(at index: Int) {
+        if isRowBased {
+            config.horizontalPlacements.removeAll { $0.col == index }
+        } else {
+            config.verticalPlacements.removeAll { $0.row == index }
+        }
+    }
+
+    private func updateCellCount(_ newCount: Int) {
+        if isRowBased {
+            config.horizontalCols = newCount
+            config.horizontalPlacements.removeAll { $0.col >= newCount }
+        } else {
+            config.verticalRows = newCount
+            config.verticalPlacements.removeAll { $0.row >= newCount }
+        }
+    }
+}
+
+private struct WeeklySummaryCellDragModifier: ViewModifier {
+    let component: CustomComponent?
+    let index: Int
+    let isRowBased: Bool
+
+    func body(content: Content) -> some View {
+        if let component {
+            content.draggable(
+                ComponentDragPayload(
+                    component: component,
+                    sourcePage: 1,
+                    sourceRow: isRowBased ? 0 : index,
+                    sourceCol: isRowBased ? index : 0
+                )
+            ) {
+                VStack(spacing: 4) {
+                    Image(systemName: component.systemImage)
+                        .foregroundColor(.accentColor)
+                    Text(component.rawValue)
+                        .font(.caption)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.15)))
+            }
+        } else {
+            content
+        }
+    }
+}
+
 #Preview {
     DayViewCustomConfigurator(versionId: UUID())
 }
