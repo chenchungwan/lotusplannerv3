@@ -138,27 +138,51 @@ struct GlobalNavBar: View {
     }
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            // Use one line only when both groups fit at their natural widths.
+            HStack(spacing: isCompact ? 8 : 12) {
+                navigationControls
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 0)
+                actionControls
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, isCompact ? 8 : 12)
+            .frame(height: barHeight / 2)
+
+            twoLineBar
+        }
+        .background(Color(.systemBackground))
+        .buttonStyle(.borderless)
+        .simultaneousGesture(timeSwipeGesture)
+    }
+
+    private var navigationControls: some View {
+        HStack(spacing: isCompact ? 4 : 8) {
+            mainMenu
+
+            HStack(spacing: isCompact ? 3 : 4) {
+                if canNavigateDate {
+                    iconButton("chevron.left") { step(-1) }
+                        .keyboardShortcut("[", modifiers: [])
+                }
+                titleButton
+                if canNavigateDate {
+                    iconButton("chevron.right") { step(1) }
+                        .keyboardShortcut("]", modifiers: [])
+                }
+            }
+
+            intervalControls
+        }
+    }
+
+    private var twoLineBar: some View {
         VStack(spacing: 0) {
             // Top line: navigation — menu, date, interval selectors (left-aligned)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: isCompact ? 4 : 8) {
-                    mainMenu
-
-                    HStack(spacing: isCompact ? 3 : 4) {
-                        if canNavigateDate {
-                            iconButton("chevron.left") { step(-1) }
-                                .keyboardShortcut("[", modifiers: [])
-                        }
-                        titleButton
-                        if canNavigateDate {
-                            iconButton("chevron.right") { step(1) }
-                                .keyboardShortcut("]", modifiers: [])
-                        }
-                    }
-
-                    intervalControls
-                }
-                .padding(.horizontal, isCompact ? 8 : 12)
+                navigationControls
+                    .padding(.horizontal, isCompact ? 8 : 12)
             }
             .frame(height: barHeight / 2)
 
@@ -176,9 +200,6 @@ struct GlobalNavBar: View {
             .frame(height: barHeight / 2)
         }
         .frame(height: barHeight)
-        .background(Color(.systemBackground))
-        .buttonStyle(.borderless)
-        .simultaneousGesture(timeSwipeGesture)
     }
 
     private var titleButton: some View {
