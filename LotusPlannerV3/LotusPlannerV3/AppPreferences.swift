@@ -218,6 +218,33 @@ class AppPreferences: ObservableObject {
             UserDefaults.standard.set(showWeeklySummarySection, forKey: "showWeeklySummarySection")
         }
     }
+
+    /// `WeeklyLayoutComponent.rawValue`s hidden in both Vertical and Horizontal
+    /// weekly layouts. Empty by default — every component is visible.
+    @Published var weeklyLayoutHiddenComponents: Set<String> {
+        didSet {
+            let raw = Array(weeklyLayoutHiddenComponents)
+            UserDefaults.standard.set(raw, forKey: "weeklyLayoutHiddenComponents")
+            NSUbiquitousKeyValueStore.default.set(raw, forKey: "weeklyLayoutHiddenComponents")
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+
+    func isWeeklyLayoutComponentVisible(_ component: WeeklyLayoutComponent) -> Bool {
+        !weeklyLayoutHiddenComponents.contains(component.rawValue)
+    }
+
+    func setWeeklyLayoutComponent(_ component: WeeklyLayoutComponent, visible: Bool) {
+        if visible {
+            weeklyLayoutHiddenComponents.remove(component.rawValue)
+        } else {
+            weeklyLayoutHiddenComponents.insert(component.rawValue)
+        }
+    }
+
+    func replaceWeeklyLayoutHiddenComponents(_ hidden: Set<String>) {
+        weeklyLayoutHiddenComponents = hidden
+    }
     
     // Tasks view layout preference
     @Published var tasksLayoutHorizontal: Bool {
@@ -645,6 +672,10 @@ class AppPreferences: ObservableObject {
         // Load row-based weekly view preference (default false - column layout)
         self.useRowBasedWeeklyView = UserDefaults.standard.bool(forKey: "useRowBasedWeeklyView")
         self.showWeeklySummarySection = UserDefaults.standard.object(forKey: "showWeeklySummarySection") as? Bool ?? false
+
+        let kvsWeeklyHidden = NSUbiquitousKeyValueStore.default.array(forKey: "weeklyLayoutHiddenComponents") as? [String]
+        let localWeeklyHidden = UserDefaults.standard.stringArray(forKey: "weeklyLayoutHiddenComponents")
+        self.weeklyLayoutHiddenComponents = Set(kvsWeeklyHidden ?? localWeeklyHidden ?? [])
 
         // Load tasks layout preference (default false - vertical layout)
         var storedTasksLayoutHorizontal = UserDefaults.standard.bool(forKey: "tasksLayoutHorizontal")

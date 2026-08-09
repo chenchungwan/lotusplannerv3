@@ -555,11 +555,10 @@ extension WeeklyView {
             ForEach(sleepLogsForDate, id: \.id) { entry in
                 weekSleepLogCard(entry: entry)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     func weekSleepLogCard(entry: SleepLogEntry) -> some View {

@@ -3,13 +3,33 @@ import SwiftUI
 /// Per-log-type column and card rendering for the W view: built-in visibility check, log row builder, weight/workout/food/water/custom log columns and per-entry cards. Tightly scoped to log rendering — task and scroll helpers live elsewhere.
 extension WeeklyView {
 
+    /// Whether a built-in log type appears in weekly layouts.
+    /// Driven only by the weekly-components editor — day-view Log Preferences
+    /// toggles do not hide weekly sections (that was dropping Workout when it
+    /// was still enabled for the week).
     func isBuiltInLogVisible(_ logType: BuiltInLogType) -> Bool {
-        switch logType {
-        case .food: return appPrefs.showFoodLogs
-        case .sleep: return appPrefs.showSleepLogs
-        case .water: return appPrefs.showWaterLogs
-        case .weight: return appPrefs.showWeightLogs
-        case .workout: return appPrefs.showWorkoutLogs
+        appPrefs.isWeeklyLayoutComponentVisible(.from(logType: logType))
+    }
+
+    /// Weekly-layout gate for a custom-log collection.
+    func isWeeklyCustomLogVisible(collectionIndex: Int) -> Bool {
+        let component: WeeklyLayoutComponent = collectionIndex == 0 ? .customLog : .customLog2
+        return appPrefs.isWeeklyLayoutComponentVisible(component)
+    }
+
+    /// Log entries that should appear in weekly layouts, in `logDisplayOrder`.
+    func weeklyVisibleLogEntries(requireWeekData: Bool) -> [LogDisplayEntry] {
+        appPrefs.logDisplayOrder.filter { entry in
+            switch entry {
+            case .builtIn(let t):
+                return isBuiltInLogVisible(t)
+            case .custom:
+                return isWeeklyCustomLogVisible(collectionIndex: 0)
+                    && (!requireWeekData || hasCustomLogsForWeek(in: 0))
+            case .custom2:
+                return isWeeklyCustomLogVisible(collectionIndex: 1)
+                    && (!requireWeekData || hasCustomLogsForWeek(in: 1))
+            }
         }
     }
 
@@ -19,10 +39,10 @@ extension WeeklyView {
     @ViewBuilder
     func customLogRow(collectionIndex: Int, dayColumnWidth: CGFloat, fixedWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                     weekCustomLogColumn(date: date, collectionIndex: collectionIndex)
-                        .frame(width: dayColumnWidth)
+                        .frame(width: dayColumnWidth, alignment: .topLeading)
                         .background(Color(.systemBackground))
                         .id("customlog\(collectionIndex)_day_\(index)")
                 }
@@ -31,15 +51,16 @@ extension WeeklyView {
         }
         .padding(.vertical, 8)
         .background(Color(.systemGray6).opacity(0.15))
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
     func weekLogRow(for logType: BuiltInLogType, dayColumnWidth: CGFloat, fixedWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                     weekLogColumn(for: logType, date: date)
-                        .frame(width: dayColumnWidth)
+                        .frame(width: dayColumnWidth, alignment: .topLeading)
                         .background(Color(.systemBackground))
                         .id("\(logType.rawValue)_day_\(index)")
                 }
@@ -48,6 +69,7 @@ extension WeeklyView {
         }
         .padding(.vertical, 8)
         .background(Color(.systemGray6).opacity(0.15))
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -150,11 +172,10 @@ extension WeeklyView {
             ForEach(weightLogsForDate, id: \.id) { entry in
                 weekWeightLogCard(entry: entry)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekWeightLogCard(entry: WeightLogEntry) -> some View {
@@ -181,11 +202,10 @@ extension WeeklyView {
             ForEach(workoutLogsForDate, id: \.id) { entry in
                 weekWorkoutLogCard(entry: entry)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekWorkoutLogCard(entry: WorkoutLogEntry) -> some View {
@@ -221,11 +241,10 @@ extension WeeklyView {
             ForEach(foodLogsForDate, id: \.id) { entry in
                 weekFoodLogCard(entry: entry)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekFoodLogCard(entry: FoodLogEntry) -> some View {
@@ -297,11 +316,10 @@ extension WeeklyView {
                 .background(Color(.systemGray6).opacity(0.3))
                 .cornerRadius(4)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekEventCard(event: GoogleCalendarEvent) -> some View {
@@ -491,11 +509,10 @@ extension WeeklyView {
             ForEach(waterLogsForDate, id: \.id) { entry in
                 weekWaterLogCard(entry: entry)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     func weekWaterLogCard(entry: WaterLogEntry) -> some View {

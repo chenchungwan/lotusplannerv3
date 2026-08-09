@@ -144,3 +144,80 @@ enum LogDisplayEntry: Hashable, Identifiable {
     static let defaultOrder: [LogDisplayEntry] =
         BuiltInLogType.allCases.map { .builtIn($0) } + [.custom, .custom2]
 }
+
+// MARK: - Weekly Layout Component
+
+/// Sections that can be shown or hidden in the Vertical / Horizontal weekly
+/// layouts. Order is fixed at render time (events → account tasks → logs in
+/// `logDisplayOrder`); this enum only controls visibility.
+enum WeeklyLayoutComponent: String, CaseIterable, Identifiable, Codable, Hashable {
+    case events
+    case account1Tasks
+    case account2Tasks
+    case food
+    case sleep
+    case water
+    case weight
+    case workout
+    case customLog
+    case customLog2
+
+    var id: String { rawValue }
+
+    /// Editor list: events + both account task columns, then logs in the same
+    /// order as Log Preferences (`logDisplayOrder`).
+    static func settingsOrder(logDisplayOrder: [LogDisplayEntry]) -> [WeeklyLayoutComponent] {
+        [.events, .account1Tasks, .account2Tasks] + logDisplayOrder.map(Self.from(logEntry:))
+    }
+
+    static func from(logType: BuiltInLogType) -> WeeklyLayoutComponent {
+        switch logType {
+        case .food: return .food
+        case .sleep: return .sleep
+        case .water: return .water
+        case .weight: return .weight
+        case .workout: return .workout
+        }
+    }
+
+    static func from(logEntry: LogDisplayEntry) -> WeeklyLayoutComponent {
+        switch logEntry {
+        case .builtIn(let t): return from(logType: t)
+        case .custom: return .customLog
+        case .custom2: return .customLog2
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .events: return "calendar"
+        case .account1Tasks, .account2Tasks: return "checklist"
+        case .food: return "fork.knife"
+        case .sleep: return "bed.double.fill"
+        case .water: return "drop.fill"
+        case .weight: return "scalemass.fill"
+        case .workout: return "figure.run"
+        case .customLog, .customLog2: return "list.bullet.rectangle"
+        }
+    }
+
+    func displayName(
+        account1: String,
+        account2: String,
+        customLog: String,
+        customLog2: String
+    ) -> String {
+        switch self {
+        case .events: return "Events"
+        case .account1Tasks: return "\(account1) Tasks"
+        case .account2Tasks: return "\(account2) Tasks"
+        case .food: return "Food Logs"
+        case .sleep: return "Sleep Logs"
+        case .water: return "Water Logs"
+        case .weight: return "Weight Logs"
+        case .workout: return "Workout Logs"
+        case .customLog: return customLog
+        case .customLog2: return customLog2
+        }
+    }
+}

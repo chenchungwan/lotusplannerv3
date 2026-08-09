@@ -529,7 +529,11 @@ struct WeeklyView: View {
                                         weeklySummaryColumn(width: summaryWidth)
                                     }
 
+                                    // Hug content height so log/task rows don't
+                                    // stretch to fill leftover ScrollView space
+                                    // when the week is shorter than the viewport.
                                     weekTasksContent(dayColumnWidth: columnWidth, fixedWidth: daysWidth)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 // No horizontal padding here: it was fighting the
                                 // fixed day-grid width and squeezing columns so

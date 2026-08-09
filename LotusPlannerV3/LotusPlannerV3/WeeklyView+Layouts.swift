@@ -31,8 +31,21 @@ extension WeeklyView {
             return !dict.allSatisfy { $0.value.isEmpty }
         }
 
+        let showEvents = appPrefs.isWeeklyLayoutComponentVisible(.events)
+        let showAccount1 = appPrefs.isWeeklyLayoutComponentVisible(.account1Tasks)
+            && authManager.isLinked(kind: .account1)
+            && account1HasAny
+        let showAccount2 = appPrefs.isWeeklyLayoutComponentVisible(.account2Tasks)
+            && authManager.isLinked(kind: .account2)
+            && account2HasAny
+        let visibleLogEntries = weeklyVisibleLogEntries(requireWeekData: true)
+        let showLogs = !visibleLogEntries.isEmpty
+        let wantsTasks = appPrefs.isWeeklyLayoutComponentVisible(.account1Tasks)
+            || appPrefs.isWeeklyLayoutComponentVisible(.account2Tasks)
+
         return VStack(spacing: 0) {
             // Events Row (with expand/collapse header)
+            if showEvents {
             VStack(alignment: .leading, spacing: 0) {
                 // Events Header with expand/collapse button
                 Button(action: {
@@ -76,12 +89,14 @@ extension WeeklyView {
                 }
             }
             .background(Color(.systemGray6).opacity(0.15))
+            }
             
-            // Divider after events row (before account 1 tasks)
-            weekSectionDivider(width: fixedWidth)
+            if showEvents && (showAccount1 || showAccount2 || showLogs) {
+                weekSectionDivider(width: fixedWidth)
+            }
 
             // Account 1 Tasks Row
-            if authManager.isLinked(kind: .account1) && account1HasAny {
+            if showAccount1 {
                 VStack(alignment: .leading, spacing: 0) {
                     // Account 1 Tasks Header with expand/collapse button
                     Button(action: {
@@ -132,12 +147,12 @@ extension WeeklyView {
             }
             
             // Divider between task types
-            if authManager.isLinked(kind: .account1) && authManager.isLinked(kind: .account2) && account1HasAny && account2HasAny {
+            if showAccount1 && showAccount2 {
                 weekSectionDivider(width: fixedWidth)
             }
             
             // Account 2 Tasks Row
-            if authManager.isLinked(kind: .account2) && account2HasAny {
+            if showAccount2 {
                 VStack(alignment: .leading, spacing: 0) {
                     // Account 2 Tasks Header with expand/collapse button
                     Button(action: {
@@ -186,9 +201,10 @@ extension WeeklyView {
             }
             
             // Logs Section (all log types under one collapsible header)
-            if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) || (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)) {
-                // Divider before logs section
-                weekSectionDivider(width: fixedWidth)
+            if showLogs {
+                if showEvents || showAccount1 || showAccount2 {
+                    weekSectionDivider(width: fixedWidth)
+                }
                 
                 VStack(alignment: .leading, spacing: 0) {
                     // Logs Header with expand/collapse button
@@ -216,19 +232,7 @@ extension WeeklyView {
                     // Logs content (collapsible)
                     if logsExpanded {
                         VStack(spacing: 0) {
-                            // Logs in user-configured order (custom entry is
-                            // interleaved with built-ins instead of always last).
-                            let visibleEntries = appPrefs.logDisplayOrder.filter { entry in
-                                switch entry {
-                                case .builtIn(let t):
-                                    return isBuiltInLogVisible(t)
-                                case .custom:
-                                    return appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)
-                                case .custom2:
-                                    return appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)
-                                }
-                            }
-                            ForEach(Array(visibleEntries.enumerated()), id: \.element) { idx, entry in
+                            ForEach(Array(visibleLogEntries.enumerated()), id: \.element) { idx, entry in
                                 switch entry {
                                 case .builtIn(let t):
                                     weekLogRow(for: t, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
@@ -238,7 +242,7 @@ extension WeeklyView {
                                     customLogRow(collectionIndex: 1, dayColumnWidth: dayColumnWidth, fixedWidth: fixedWidth)
                                 }
 
-                                if idx < visibleEntries.count - 1 {
+                                if idx < visibleLogEntries.count - 1 {
                                     weekSectionDivider(width: fixedWidth, thickness: 1)
                                 }
                             }
@@ -248,8 +252,12 @@ extension WeeklyView {
                 .background(Color(.systemGray6).opacity(0.15))
             }
             
-            // Empty state message when no accounts are linked
-            if !authManager.isLinked(kind: .account1) && !authManager.isLinked(kind: .account2) {
+            // Empty state: task sections are enabled but no account is linked
+            if wantsTasks
+                && !authManager.isLinked(kind: .account1)
+                && !authManager.isLinked(kind: .account2)
+                && !showEvents
+                && !showLogs {
                 Button(action: { NavigationManager.shared.showSettings() }) {
                     VStack(spacing: 16) {
                         Image(systemName: "person.crop.circle.badge.plus")
@@ -270,8 +278,13 @@ extension WeeklyView {
                 }
                 .buttonStyle(.plain)
             }
-            // Show "No tasks" message when accounts are linked but no tasks exist
-            else if !account1HasAny && !account2HasAny {
+            // Show "No tasks" when task sections are on but empty, and nothing else is showing
+            else if wantsTasks
+                && !showAccount1
+                && !showAccount2
+                && !showEvents
+                && !showLogs
+                && (authManager.isLinked(kind: .account1) || authManager.isLinked(kind: .account2)) {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 48))
@@ -389,27 +402,41 @@ extension WeeklyView {
     func rowBasedDayContent(date: Date) -> some View {
         // No fixed height — the HStack sizes to the tallest column, and that
         // measured height is mirrored onto the sticky date cell.
-        HStack(alignment: .top, spacing: 0) {
-            weekDayRowEventsColumn(date: date)
-                .frame(width: contentColumnWidth(), alignment: .topLeading)
-                .background(Color(.systemBackground))
+        let showEvents = appPrefs.isWeeklyLayoutComponentVisible(.events)
+        let showAccount1 = appPrefs.isWeeklyLayoutComponentVisible(.account1Tasks)
+            && authManager.isLinked(kind: .account1)
+        let showAccount2 = appPrefs.isWeeklyLayoutComponentVisible(.account2Tasks)
+            && authManager.isLinked(kind: .account2)
 
-            Divider()
+        return HStack(alignment: .top, spacing: 0) {
+            if showEvents {
+                weekDayRowEventsColumn(date: date)
+                    .frame(width: contentColumnWidth(), alignment: .topLeading)
+                    .background(Color(.systemBackground))
 
-            if authManager.isLinked(kind: .account1) {
+                if showAccount1 || showAccount2 || rowBasedShowsLogs {
+                    Divider()
+                }
+            }
+
+            if showAccount1 {
                 weekDayRowAccount1TasksColumn(date: date)
                     .frame(width: contentColumnWidth(), alignment: .topLeading)
                     .background(Color(.systemBackground))
 
-                Divider()
+                if showAccount2 || rowBasedShowsLogs {
+                    Divider()
+                }
             }
 
-            if authManager.isLinked(kind: .account2) {
+            if showAccount2 {
                 weekDayRowAccount2TasksColumn(date: date)
                     .frame(width: contentColumnWidth(), alignment: .topLeading)
                     .background(Color(.systemBackground))
 
-                Divider()
+                if rowBasedShowsLogs {
+                    Divider()
+                }
             }
 
             if rowBasedShowsLogs {
@@ -427,13 +454,7 @@ extension WeeklyView {
     }
 
     var rowBasedShowsLogs: Bool {
-        appPrefs.showSleepLogs ||
-        appPrefs.showWeightLogs ||
-        appPrefs.showWorkoutLogs ||
-        appPrefs.showFoodLogs ||
-        appPrefs.showWaterLogs ||
-        (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) ||
-        (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1))
+        !weeklyVisibleLogEntries(requireWeekData: true).isEmpty
     }
 
     /// Floor for an empty day so the date column still has a tappable target.
@@ -680,12 +701,12 @@ extension WeeklyView {
                         Divider()
                     }
                 case .custom:
-                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date, in: 0) {
+                    if isWeeklyCustomLogVisible(collectionIndex: 0) && hasCustomLogsForDate(date, in: 0) {
                         weekDayRowCustomLogColumn(date: date, collectionIndex: 0)
                         Divider()
                     }
                 case .custom2:
-                    if appPrefs.showCustomLogs2 && hasCustomLogsForDate(date, in: 1) {
+                    if isWeeklyCustomLogVisible(collectionIndex: 1) && hasCustomLogsForDate(date, in: 1) {
                         weekDayRowCustomLogColumn(date: date, collectionIndex: 1)
                         Divider()
                     }
@@ -858,12 +879,12 @@ extension WeeklyView {
                         Divider()
                     }
                 case .custom:
-                    if appPrefs.showCustomLogs && hasCustomLogsForDate(date, in: 0) {
+                    if isWeeklyCustomLogVisible(collectionIndex: 0) && hasCustomLogsForDate(date, in: 0) {
                         weekDayFixedCustomLogCell(date: date, collectionIndex: 0, width: 228.6)
                         Divider()
                     }
                 case .custom2:
-                    if appPrefs.showCustomLogs2 && hasCustomLogsForDate(date, in: 1) {
+                    if isWeeklyCustomLogVisible(collectionIndex: 1) && hasCustomLogsForDate(date, in: 1) {
                         weekDayFixedCustomLogCell(date: date, collectionIndex: 1, width: 228.6)
                         Divider()
                     }
@@ -1052,8 +1073,8 @@ extension WeeklyView {
             let visibleEntries = appPrefs.logDisplayOrder.filter { entry in
                 switch entry {
                 case .builtIn(let t): return isBuiltInLogVisible(t)
-                case .custom:         return appPrefs.showCustomLogs && hasCustomLogsForDate(date, in: 0)
-                case .custom2:        return appPrefs.showCustomLogs2 && hasCustomLogsForDate(date, in: 1)
+                case .custom:         return isWeeklyCustomLogVisible(collectionIndex: 0) && hasCustomLogsForDate(date, in: 0)
+                case .custom2:        return isWeeklyCustomLogVisible(collectionIndex: 1) && hasCustomLogsForDate(date, in: 1)
                 }
             }
             ForEach(Array(visibleEntries.enumerated()), id: \.element) { idx, entry in

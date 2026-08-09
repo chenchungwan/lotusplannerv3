@@ -53,6 +53,7 @@ struct SettingsView: View {
     /// versions list re-renders with the latest names / active selection.
     @State private var customConfigVersion = 0
     @State private var showingWeeklySummaryConfigurator = false
+    @State private var showingWeeklyLayoutComponentsEditor = false
 
     // Check if device forces stacked layout (iPhone portrait)
     private var shouldUseStackedLayout: Bool {
@@ -364,44 +365,62 @@ struct SettingsView: View {
 
                 // Weekly View Preference
                 Section("Weekly View Preferences") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: !appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(!appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Vertical Layout (week in 7 columns)")
-                                    .font(.body)
-                                    .fontWeight(!appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
-                            }
+                    HStack(spacing: 10) {
+                        HStack {
+                            Image(systemName: !appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
+                                .foregroundColor(!appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
+                                .font(.title2)
+
+                            Text("Vertical Layout (week in 7 columns)")
+                                .font(.body)
+                                .fontWeight(!appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
                         }
-                        
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateUseRowBasedWeeklyView(false)
-                    }
-                    
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
-                                    .foregroundColor(appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
-                                    .font(.title2)
-                                
-                                Text("Horizontal Layout (week in 7 rows)")
-                                    .font(.body)
-                                    .fontWeight(appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
-                            }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateUseRowBasedWeeklyView(false)
                         }
-                        
-                        Spacer()
+
+                        Button {
+                            showingWeeklyLayoutComponentsEditor = true
+                        } label: {
+                            Text("Edit")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        appPrefs.updateUseRowBasedWeeklyView(true)
+
+                    HStack(spacing: 10) {
+                        HStack {
+                            Image(systemName: appPrefs.useRowBasedWeeklyView ? "largecircle.fill.circle" : "circle")
+                                .foregroundColor(appPrefs.useRowBasedWeeklyView ? .accentColor : .secondary)
+                                .font(.title2)
+
+                            Text("Horizontal Layout (week in 7 rows)")
+                                .font(.body)
+                                .fontWeight(appPrefs.useRowBasedWeeklyView ? .semibold : .regular)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appPrefs.updateUseRowBasedWeeklyView(true)
+                        }
+
+                        Button {
+                            showingWeeklyLayoutComponentsEditor = true
+                        } label: {
+                            Text("Edit")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     Toggle(isOn: Binding(
@@ -701,6 +720,9 @@ struct SettingsView: View {
                 WeeklySummaryConfigurator()
             }
             #endif
+            .sheet(isPresented: $showingWeeklyLayoutComponentsEditor) {
+                WeeklyLayoutComponentsEditor()
+            }
             .onReceive(NotificationCenter.default.publisher(for: CustomDayViewLibrary.didChangeNotification)) { _ in
                 customConfigVersion &+= 1
             }
