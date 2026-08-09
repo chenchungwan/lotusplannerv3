@@ -11,12 +11,6 @@ extension WeeklyView {
                 weeklySummaryHeader()
                     .frame(width: summaryColumnWidth, height: 60)
                     .background(Color(.systemGray6))
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .frame(width: 0.5),
-                        alignment: .trailing
-                    )
             }
 
             // Day headers
@@ -24,12 +18,6 @@ extension WeeklyView {
                 weekTaskDateHeaderView(date: date)
                     .frame(width: dayColumnWidth, height: 60)
                     .background(Color(.systemGray6))
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .frame(width: 0.5),
-                        alignment: .trailing
-                    )
                     .id("day_\(index)")
             }
         }
@@ -166,6 +154,7 @@ extension WeeklyView {
         let rows = max(1, config.verticalRows)
         let placements = config.verticalPlacements
 
+        // No inter-component rules — each summary cell already draws its own border.
         return VStack(spacing: 0) {
             ForEach(0..<rows, id: \.self) { row in
                 let component = placements.first(where: { $0.row == row }).flatMap { CustomComponent(rawValue: $0.component) }
@@ -173,21 +162,9 @@ extension WeeklyView {
                     component: component
                 )
                 .frame(width: width, height: component.map(weeklySummaryPreferredHeight(for:)) ?? 220, alignment: .topLeading)
-
-                if row < rows - 1 {
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                        .frame(height: 1)
-                }
             }
         }
         .background(Color(.systemBackground))
-        .overlay(
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(width: 0.5),
-            alignment: .trailing
-        )
     }
 
     func weeklySummaryRowContent(cellWidth: CGFloat, cellHeight: CGFloat? = nil) -> some View {
@@ -197,16 +174,13 @@ extension WeeklyView {
         let preferredWidth = weeklySummaryPreferredWidth(minimum: cellWidth)
         let preferredHeight = cellHeight ?? weeklySummaryRowHeight()
 
+        // No inter-component rules — each summary cell already draws its own border.
         return HStack(alignment: .top, spacing: 0) {
             ForEach(0..<columns, id: \.self) { col in
                 weeklySummaryCell(
                     component: placements.first(where: { $0.col == col }).flatMap { CustomComponent(rawValue: $0.component) }
                 )
                 .frame(width: preferredWidth, height: preferredHeight, alignment: .topLeading)
-
-                if col < columns - 1 {
-                    Divider()
-                }
             }
         }
         .background(Color(.systemBackground))
@@ -414,7 +388,7 @@ extension WeeklyView {
                   let accountKind = dict["accountKind"] else { return }
 
             DispatchQueue.main.async {
-                let isAccount1 = accountKind == "personal"
+                let isAccount1 = GoogleAuthManager.AccountKind.fromStoredValue(accountKind) == .account1
                 let events = isAccount1 ? calendarViewModel.account1Events : calendarViewModel.account2Events
                 guard let event = events.first(where: { $0.id == eventId }) else { return }
 

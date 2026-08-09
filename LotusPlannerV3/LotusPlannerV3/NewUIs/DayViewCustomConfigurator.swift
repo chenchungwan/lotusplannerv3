@@ -86,7 +86,7 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .eventsTimeline:                                   return "clock"
         case .eventsList:                                       return "calendar"
         case .tasksAccount1Grouped, .tasksAccount1TwoColumn, .tasksAccount1Compact: return "person.circle"
-        case .tasksAccount2Grouped, .tasksAccount2TwoColumn, .tasksAccount2Compact: return "briefcase"
+        case .tasksAccount2Grouped, .tasksAccount2TwoColumn, .tasksAccount2Compact: return "person.circle"
         case .logWeight:                                        return "scalemass"
         case .logWorkout:                                       return "figure.run"
         case .logFood:                                          return "fork.knife"

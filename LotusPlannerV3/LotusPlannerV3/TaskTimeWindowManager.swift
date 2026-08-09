@@ -30,27 +30,12 @@ class TaskTimeWindowManager: ObservableObject {
         }
     }
 
-    /// Clean up time windows for tasks that are all-day (based on task data)
-    /// Call this after tasks are loaded to remove time windows for all-day tasks
-    func cleanupTimeWindowsForAllDayTasks(tasks: [GoogleTask]) {
-        var deletedCount = 0
-
-        for task in tasks {
-            // Check if task has all-day format (10 characters: yyyy-MM-dd)
-            if let due = task.due, due.count == 10 {
-                // This is an all-day task - it should not have a time window
-                if getTimeWindow(for: task.id) != nil {
-                    deleteTimeWindow(for: task.id)
-                    deletedCount += 1
-                }
-            }
-        }
-
-        if deletedCount > 0 {
-            // Force UI update by triggering objectWillChange
-            objectWillChange.send()
-        }
-    }
+    // Deliberately absent: a routine that deleted a task's window whenever
+    // its `due` string was 10 characters long. `due` says nothing about
+    // whether a task is timed, and scheduling a task wrote exactly that
+    // format, so a refresh could erase the time the user had just set.
+    // Every path that makes a task all-day already deletes the window
+    // explicitly, so nothing needs to infer it from the due string.
 
     // MARK: - Load Time Windows
     func loadTimeWindows() {
@@ -142,6 +127,26 @@ class TaskTimeWindowManager: ObservableObject {
         )
 
         saveTimeWindow(timeWindow)
+    }
+
+    // MARK: - Transfer Time Window
+    /// Re-key a task's time window onto a new task ID.
+    ///
+    /// Google can't move a task between lists, so the app recreates it and
+    /// gets back a different ID. Windows are keyed by task ID, so without
+    /// this the time is stranded on an ID that no longer exists and the task
+    /// comes back untimed. No-ops when the source has no window.
+    func transferTimeWindow(fromTaskId: String, toTaskId: String) {
+        guard fromTaskId != toTaskId else { return }
+        guard let existing = getTimeWindow(for: fromTaskId) else { return }
+
+        deleteTimeWindow(for: fromTaskId)
+        saveTimeWindow(
+            taskId: toTaskId,
+            startTime: existing.startTime,
+            endTime: existing.endTime,
+            isAllDay: existing.isAllDay
+        )
     }
 
     // MARK: - Delete Time Window

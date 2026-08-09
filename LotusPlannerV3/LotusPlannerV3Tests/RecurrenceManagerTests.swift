@@ -56,14 +56,14 @@ final class RecurrenceManagerTests: XCTestCase {
     }
 
     func testRule_AccountKindEnum_DerivedFromString() {
-        let account1 = makeRule(currentTaskId: "x", accountKind: "personal")
-        let account2 = makeRule(currentTaskId: "x", accountKind: "professional")
+        let account1 = makeRule(currentTaskId: "x", accountKind: GoogleAuthManager.AccountKind.account1.rawValue)
+        let account2 = makeRule(currentTaskId: "x", accountKind: GoogleAuthManager.AccountKind.account2.rawValue)
         XCTAssertEqual(account1.accountKindEnum, .account1)
         XCTAssertEqual(account2.accountKindEnum, .account2)
     }
 
-    /// Anything not literally "professional" maps to account 1 — matches
-    /// the production fall-through logic. Verifies a corrupted-JSON
+    /// Any value that isn't a known `AccountKind` raw value maps to account 1 —
+    /// matches the production fall-through logic. Verifies a corrupted-JSON
     /// edge case doesn't crash the manager.
     func testRule_AccountKindEnum_UnknownStringMapsToAccount1() {
         let unknown = makeRule(currentTaskId: "x", accountKind: "garbage")
@@ -97,7 +97,7 @@ final class RecurrenceManagerTests: XCTestCase {
 
     private func makeRule(
         currentTaskId: String,
-        accountKind: String = "personal",
+        accountKind: String = GoogleAuthManager.AccountKind.account1.rawValue,
         frequency: RecurrenceFrequency = .weekly,
         interval: Int = 1,
         endDate: Date? = nil,

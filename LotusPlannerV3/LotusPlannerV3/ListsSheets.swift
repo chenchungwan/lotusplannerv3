@@ -96,7 +96,7 @@ struct NewListSheet: View {
                                     selectedAccount = .account2
                                 }) {
                                     HStack {
-                                        Image(systemName: "briefcase.circle.fill")
+                                        Image(systemName: "person.circle.fill")
                                         Text(appPrefs.account2Name)
                                     }
                                     .padding(.horizontal, 12)
@@ -211,7 +211,7 @@ struct RenameListSheet: View {
                         Picker("Account", selection: $newAccount) {
                             ForEach([GoogleAuthManager.AccountKind.account1, .account2], id: \.self) { kind in
                                 HStack {
-                                    Image(systemName: kind == .account1 ? "person.circle.fill" : "briefcase.circle.fill")
+                                    Image(systemName: "person.circle.fill")
                                     Text(appPrefs.accountName(for: kind))
                                 }
                                 .tag(kind)
@@ -220,7 +220,7 @@ struct RenameListSheet: View {
                         .pickerStyle(.menu)
                     } else {
                         HStack {
-                            Image(systemName: accountKind == .account1 ? "person.circle.fill" : "briefcase.circle.fill")
+                            Image(systemName: "person.circle.fill")
                                 .foregroundColor(accentColor)
                             Text(appPrefs.accountName(for: accountKind))
                                 .foregroundColor(accentColor)
@@ -348,7 +348,7 @@ struct MoveTasksDestinationPicker: View {
                                     dismiss()
                                 } label: {
                                     HStack {
-                                        Image(systemName: "briefcase.circle.fill")
+                                        Image(systemName: "person.circle.fill")
                                             .foregroundColor(account2Color)
                                         Text(list.title)
                                             .foregroundColor(.primary)
@@ -362,7 +362,7 @@ struct MoveTasksDestinationPicker: View {
                         }
                     } header: {
                         HStack {
-                            Image(systemName: "briefcase.circle.fill")
+                            Image(systemName: "person.circle.fill")
                                 .foregroundColor(account2Color)
                             Text(appPrefs.account2Name)
                         }

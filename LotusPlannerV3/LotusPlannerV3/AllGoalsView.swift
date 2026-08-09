@@ -625,9 +625,9 @@ struct LinkedTaskRow: View {
                     .foregroundColor(task.isCompleted ? .secondary : .primary)
 
                 HStack(spacing: 4) {
-                    Image(systemName: linkedTask.accountKind == "personal" ? "person.fill" : "briefcase.fill")
+                    Image(systemName: "person.fill")
                         .font(.caption2)
-                        .foregroundColor(linkedTask.accountKind == "personal" ? appPrefs.account1Color : appPrefs.account2Color)
+                        .foregroundColor(linkedTask.accountKindEnum == .account1 ? appPrefs.account1Color : appPrefs.account2Color)
 
                     if let dueDate = task.dueDate {
                         Text(dueDate, style: .date)
@@ -700,7 +700,7 @@ struct TaskPickerView: View {
                                 selectedListId = nil
                             }) {
                                 HStack {
-                                    Image(systemName: "briefcase.fill")
+                                    Image(systemName: "person.fill")
                                         .foregroundColor(appPrefs.account2Color)
                                     Text(appPrefs.account2Name)
                                         .foregroundColor(.primary)

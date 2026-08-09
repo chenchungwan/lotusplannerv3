@@ -24,18 +24,12 @@ extension WeeklyView {
                     weekCustomLogColumn(date: date, collectionIndex: collectionIndex)
                         .frame(width: dayColumnWidth)
                         .background(Color(.systemBackground))
-                        .overlay(
-                            Rectangle()
-                                .fill(Color(.systemGray4))
-                                .frame(width: 0.5),
-                            alignment: .trailing
-                        )
                         .id("customlog\(collectionIndex)_day_\(index)")
                 }
             }
-            .frame(width: fixedWidth)
+            .frame(width: fixedWidth, alignment: .topLeading)
         }
-        .padding(.all, 8)
+        .padding(.vertical, 8)
         .background(Color(.systemGray6).opacity(0.15))
     }
 
@@ -47,18 +41,12 @@ extension WeeklyView {
                     weekLogColumn(for: logType, date: date)
                         .frame(width: dayColumnWidth)
                         .background(Color(.systemBackground))
-                        .overlay(
-                            Rectangle()
-                                .fill(Color(.systemGray4))
-                                .frame(width: 0.5),
-                            alignment: .trailing
-                        )
                         .id("\(logType.rawValue)_day_\(index)")
                 }
             }
-            .frame(width: fixedWidth)
+            .frame(width: fixedWidth, alignment: .topLeading)
         }
-        .padding(.all, 8)
+        .padding(.vertical, 8)
         .background(Color(.systemGray6).opacity(0.15))
     }
 

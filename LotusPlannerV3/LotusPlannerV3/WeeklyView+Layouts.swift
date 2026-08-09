@@ -5,7 +5,20 @@ extension WeeklyView {
 
     // MARK: - Task Views
 
-    
+    /// Horizontal rule spanning Monday's leading edge to Sunday's trailing edge.
+    ///
+    /// The width has to be stated explicitly. Every other row in this stack is
+    /// rigid at `fixedWidth`, but a `Rectangle` is infinitely flexible, so it
+    /// takes whatever width the stack was offered — which is narrower than
+    /// `fixedWidth` once the summary column is competing for the same space.
+    /// The stack is centre-aligned, so the shortfall showed up as the rule
+    /// stopping short at both ends of the week.
+    func weekSectionDivider(width: CGFloat, thickness: CGFloat = 2) -> some View {
+        Rectangle()
+            .fill(Color(.systemGray3))
+            .frame(width: width, height: thickness)
+    }
+
     // MARK: - Week Tasks Content (without header)
     func weekTasksContent(dayColumnWidth: CGFloat, fixedWidth: CGFloat) -> some View {
         // Determine whether there are any tasks to show this week for each account
@@ -52,28 +65,20 @@ extension WeeklyView {
                             weekEventColumn(date: date)
                                 .frame(width: dayColumnWidth, alignment: .top)
                                 .background(Color(.systemBackground))
-                                .overlay(
-                                    Rectangle()
-                                        .fill(Color(.systemGray4))
-                                        .frame(width: 0.5),
-                                    alignment: .trailing
-                                )
                                 .onDrop(of: [.plainText], isTargeted: nil) { providers in
                                     handleEventDrop(providers: providers, targetDate: date)
                                 }
                                 .id("event_day_\(index)")
                         }
                     }
-                    .frame(width: fixedWidth) // Total fixed width
-                    .padding(.all, 8)
+                    .frame(width: fixedWidth, alignment: .topLeading)
+                    .padding(.vertical, 8)
                 }
             }
             .background(Color(.systemGray6).opacity(0.15))
             
             // Divider after events row (before account 1 tasks)
-            Rectangle()
-                .fill(Color(.systemGray3))
-                .frame(height: 2)
+            weekSectionDivider(width: fixedWidth)
 
             // Account 1 Tasks Row
             if authManager.isLinked(kind: .account1) && account1HasAny {
@@ -109,12 +114,6 @@ extension WeeklyView {
                                 weekTaskColumnAccount1(date: date)
                                     .frame(width: dayColumnWidth, alignment: .top)
                                     .background(Color(.systemBackground))
-                                    .overlay(
-                                        Rectangle()
-                                            .fill(Color(.systemGray4))
-                                            .frame(width: 0.5),
-                                        alignment: .trailing
-                                    )
                                     .dropDestination(for: DraggableTaskInfo.self) { items, _ in
                                         guard let item = items.first else { return false }
                                         handleTaskDrop(item, to: date)
@@ -125,8 +124,8 @@ extension WeeklyView {
                                     .id("day_\(index)")
                             }
                         }
-                        .frame(width: fixedWidth) // Total fixed width
-                        .padding(.all, 8)
+                        .frame(width: fixedWidth, alignment: .topLeading)
+                        .padding(.vertical, 8)
                     }
                 }
                 .background(Color(.systemGray6).opacity(0.3))
@@ -134,9 +133,7 @@ extension WeeklyView {
             
             // Divider between task types
             if authManager.isLinked(kind: .account1) && authManager.isLinked(kind: .account2) && account1HasAny && account2HasAny {
-                Rectangle()
-                    .fill(Color(.systemGray3))
-                    .frame(height: 2)
+                weekSectionDivider(width: fixedWidth)
             }
             
             // Account 2 Tasks Row
@@ -173,12 +170,6 @@ extension WeeklyView {
                                 weekTaskColumnAccount2(date: date)
                                     .frame(width: dayColumnWidth, alignment: .top)
                                     .background(Color(.systemBackground))
-                                    .overlay(
-                                        Rectangle()
-                                            .fill(Color(.systemGray4))
-                                            .frame(width: 0.5),
-                                        alignment: .trailing
-                                    )
                                     .dropDestination(for: DraggableTaskInfo.self) { items, _ in
                                         guard let item = items.first else { return false }
                                         handleTaskDrop(item, to: date)
@@ -187,8 +178,8 @@ extension WeeklyView {
                                     .id("day_\(index)")
                             }
                         }
-                        .frame(width: fixedWidth) // Total fixed width
-                        .padding(.all, 8)
+                        .frame(width: fixedWidth, alignment: .topLeading)
+                        .padding(.vertical, 8)
                     }
                 }
                 .background(Color(.systemGray6).opacity(0.3))
@@ -197,9 +188,7 @@ extension WeeklyView {
             // Logs Section (all log types under one collapsible header)
             if appPrefs.showSleepLogs || appPrefs.showWeightLogs || appPrefs.showWorkoutLogs || appPrefs.showFoodLogs || appPrefs.showWaterLogs || (appPrefs.showCustomLogs && hasCustomLogsForWeek(in: 0)) || (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1)) {
                 // Divider before logs section
-                Rectangle()
-                    .fill(Color(.systemGray3))
-                    .frame(height: 2)
+                weekSectionDivider(width: fixedWidth)
                 
                 VStack(alignment: .leading, spacing: 0) {
                     // Logs Header with expand/collapse button
@@ -250,9 +239,7 @@ extension WeeklyView {
                                 }
 
                                 if idx < visibleEntries.count - 1 {
-                                    Rectangle()
-                                        .fill(Color(.systemGray3))
-                                        .frame(height: 1)
+                                    weekSectionDivider(width: fixedWidth, thickness: 1)
                                 }
                             }
                         }
@@ -312,21 +299,6 @@ extension WeeklyView {
                 HStack(alignment: .top, spacing: 0) {
                     // Fixed/Sticky date column
                     VStack(spacing: 0) {
-                        // Column headers row
-                        VStack(alignment: .center, spacing: 4) {
-                            Text("Date")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(height: 44)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(.systemGray6).opacity(0.5))
-                        
-                        Rectangle()
-                            .fill(Color(.systemGray4))
-                            .frame(height: 1)
-
                         if appPrefs.showWeeklySummarySection {
                             weeklySummaryStickyRow()
 
@@ -337,7 +309,7 @@ extension WeeklyView {
                         
                         ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                             weekDayColumnSticky(date: date, isToday: Calendar.current.isDate(date, inSameDayAs: Date()))
-                                .frame(height: rowBasedDayRowHeight)
+                                .frame(height: rowBasedHeight(for: date))
                                 .id("day_row_\(index)")
                             
                             if index < weekDates.count - 1 {
@@ -355,8 +327,6 @@ extension WeeklyView {
                     // Scrollable content (without date column)
                     ScrollView(.horizontal, showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 0) {
-                            rowBasedContentHeaders()
-
                             if appPrefs.showWeeklySummarySection {
                                 let summaryCellWidth = weeklySummaryPreferredWidth(minimum: contentColumnWidth())
                                 weeklySummaryRowContent(cellWidth: summaryCellWidth)
@@ -384,99 +354,67 @@ extension WeeklyView {
         }
     }
 
-    func rowBasedContentHeaders() -> some View {
-        HStack(alignment: .top, spacing: 0) {
-            rowBasedHeaderCell("Events")
-                .frame(width: contentColumnWidth())
-
-            Divider()
-                .frame(height: rowBasedHeaderHeight)
-
-            if authManager.isLinked(kind: .account1) {
-                rowBasedHeaderCell(appPrefs.account1Name)
-                    .frame(width: contentColumnWidth())
-
-                Divider()
-                    .frame(height: rowBasedHeaderHeight)
-            }
-
-            if authManager.isLinked(kind: .account2) {
-                rowBasedHeaderCell(appPrefs.account2Name)
-                    .frame(width: contentColumnWidth())
-
-                Divider()
-                    .frame(height: rowBasedHeaderHeight)
-            }
-
-            if rowBasedShowsLogs {
-                rowBasedHeaderCell("Logs")
-                    .frame(minWidth: logColumnWidth())
-            }
-        }
-        .frame(height: rowBasedHeaderHeight)
-        .background(Color(.systemGray6).opacity(0.5))
-        .overlay(
-            Rectangle()
-                .fill(Color(.systemGray4))
-                .frame(height: 1),
-            alignment: .bottom
-        )
-    }
-
-    func rowBasedHeaderCell(_ title: String) -> some View {
-        VStack(alignment: .center, spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.primary)
-        }
-        .frame(height: rowBasedHeaderHeight)
-        .frame(maxWidth: .infinity)
-    }
-
     func rowBasedContentRows() -> some View {
         VStack(spacing: 0) {
             ForEach(Array(weekDates.enumerated()), id: \.element) { index, date in
                 rowBasedDayContent(date: date)
-                    .frame(height: rowBasedDayRowHeight, alignment: .topLeading)
+                    // Grow with the tallest cell; never shrink below the empty-day floor.
+                    .frame(minHeight: rowBasedDayMinHeight, alignment: .topLeading)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: RowBasedDayHeightKey.self,
+                                value: [rowBasedDayHeightKey(date): geo.size.height]
+                            )
+                        }
+                    )
 
                 if index < weekDates.count - 1 {
                     rowBasedDayDivider()
                 }
             }
         }
+        .onPreferenceChange(RowBasedDayHeightKey.self) { heights in
+            // Ceil so sub-point churn doesn't bounce the sticky date column.
+            let normalized = Dictionary(uniqueKeysWithValues: heights.map { ($0.key, ceil($0.value)) })
+            if normalized != rowBasedDayHeights {
+                rowBasedDayHeights = normalized
+            }
+        }
+        .onChange(of: weekDates) {
+            rowBasedDayHeights = [:]
+        }
     }
 
     func rowBasedDayContent(date: Date) -> some View {
+        // No fixed height — the HStack sizes to the tallest column, and that
+        // measured height is mirrored onto the sticky date cell.
         HStack(alignment: .top, spacing: 0) {
             weekDayRowEventsColumn(date: date)
-                .frame(width: contentColumnWidth(), height: rowBasedDayRowHeight, alignment: .topLeading)
+                .frame(width: contentColumnWidth(), alignment: .topLeading)
                 .background(Color(.systemBackground))
 
             Divider()
-                .frame(height: rowBasedDayRowHeight)
 
             if authManager.isLinked(kind: .account1) {
                 weekDayRowAccount1TasksColumn(date: date)
-                    .frame(width: contentColumnWidth(), height: rowBasedDayRowHeight, alignment: .topLeading)
+                    .frame(width: contentColumnWidth(), alignment: .topLeading)
                     .background(Color(.systemBackground))
 
                 Divider()
-                    .frame(height: rowBasedDayRowHeight)
             }
 
             if authManager.isLinked(kind: .account2) {
                 weekDayRowAccount2TasksColumn(date: date)
-                    .frame(width: contentColumnWidth(), height: rowBasedDayRowHeight, alignment: .topLeading)
+                    .frame(width: contentColumnWidth(), alignment: .topLeading)
                     .background(Color(.systemBackground))
 
                 Divider()
-                    .frame(height: rowBasedDayRowHeight)
             }
 
             if rowBasedShowsLogs {
                 weekDayRowLogsColumn(date: date)
-                    .frame(height: rowBasedDayRowHeight, alignment: .topLeading)
+                    .frame(alignment: .topLeading)
                     .background(Color(.systemBackground))
             }
         }
@@ -498,9 +436,16 @@ extension WeeklyView {
         (appPrefs.showCustomLogs2 && hasCustomLogsForWeek(in: 1))
     }
 
-    var rowBasedHeaderHeight: CGFloat { 44 }
+    /// Floor for an empty day so the date column still has a tappable target.
+    var rowBasedDayMinHeight: CGFloat { 80 }
 
-    var rowBasedDayRowHeight: CGFloat { 112 }
+    func rowBasedDayHeightKey(_ date: Date) -> TimeInterval {
+        Calendar.current.startOfDay(for: date).timeIntervalSinceReferenceDate
+    }
+
+    func rowBasedHeight(for date: Date) -> CGFloat {
+        max(rowBasedDayMinHeight, rowBasedDayHeights[rowBasedDayHeightKey(date)] ?? rowBasedDayMinHeight)
+    }
 
     func weeklySummaryStickyRow() -> some View {
         VStack(alignment: .center, spacing: 4) {
@@ -618,115 +563,111 @@ extension WeeklyView {
     }
 
     // MARK: - Individual Column Views for Horizontal Layout
+    // These expand with their content (no nested ScrollView) so the day row
+    // can grow to the tallest cell.
     func weekDayRowEventsColumn(date: Date) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                let eventsForDate = getEventsForDate(date)
-                ForEach(eventsForDate, id: \.id) { event in
-                    rowEventCard(event: event)
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            let eventsForDate = getEventsForDate(date)
+            ForEach(eventsForDate, id: \.id) { event in
+                rowEventCard(event: event)
             }
-            .padding(.all, 8)
         }
-        .frame(minHeight: 80, alignment: .topLeading)
+        .padding(.all, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekDayRowAccount1TasksColumn(date: Date) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                let account1TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
-                if !account1TasksForDate.allSatisfy({ $0.value.isEmpty }) {
-                    TasksComponent(
-                        taskLists: tasksViewModel.account1TaskLists,
-                        tasksDict: account1TasksForDate,
-                        accentColor: appPrefs.account1Color,
-                        accountType: .account1,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account1)
-                        },
-                        onListRename: { listId, newName in
-                            Task {
-                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
-                            }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task {
-                                await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
-                            }
-                        },
-                        hideDueDateTag: true,
-                        showEmptyState: false,
-                        isSingleDayView: true,
-                        showTitle: false,
-                        isBulkEditMode: bulkEditManager.state.isActive,
-                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                        onTaskSelectionToggle: { taskId in
-                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
-                                bulkEditManager.state.selectedTaskIds.remove(taskId)
-                            } else {
-                                bulkEditManager.state.selectedTaskIds.insert(taskId)
-                            }
+        VStack(alignment: .leading, spacing: 4) {
+            let account1TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account1)
+            if !account1TasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                TasksComponent(
+                    taskLists: tasksViewModel.account1TaskLists,
+                    tasksDict: account1TasksForDate,
+                    accentColor: appPrefs.account1Color,
+                    accountType: .account1,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account1)
                         }
-                    )
-                }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account1)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account1)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account1)
+                        }
+                    },
+                    hideDueDateTag: true,
+                    showEmptyState: false,
+                    isSingleDayView: true,
+                    showTitle: false,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
+                )
             }
-            .padding(.all, 8)
         }
-        .frame(minHeight: 80, alignment: .topLeading)
+        .padding(.all, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekDayRowAccount2TasksColumn(date: Date) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                let account2TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
-                if !account2TasksForDate.allSatisfy({ $0.value.isEmpty }) {
-                    TasksComponent(
-                        taskLists: tasksViewModel.account2TaskLists,
-                        tasksDict: account2TasksForDate,
-                        accentColor: appPrefs.account2Color,
-                        accountType: .account2,
-                        onTaskToggle: { task, listId in
-                            Task {
-                                await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
-                            }
-                        },
-                        onTaskDetails: { task, listId in
-                            taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account2)
-                        },
-                        onListRename: { listId, newName in
-                            Task {
-                                await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
-                            }
-                        },
-                        onOrderChanged: { newOrder in
-                            Task {
-                                await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
-                            }
-                        },
-                        hideDueDateTag: true,
-                        showEmptyState: false,
-                        isSingleDayView: true,
-                        showTitle: false,
-                        isBulkEditMode: bulkEditManager.state.isActive,
-                        selectedTaskIds: bulkEditManager.state.selectedTaskIds,
-                        onTaskSelectionToggle: { taskId in
-                            if bulkEditManager.state.selectedTaskIds.contains(taskId) {
-                                bulkEditManager.state.selectedTaskIds.remove(taskId)
-                            } else {
-                                bulkEditManager.state.selectedTaskIds.insert(taskId)
-                            }
+        VStack(alignment: .leading, spacing: 4) {
+            let account2TasksForDate = getFilteredTasksForSpecificDate(date: date, accountKind: .account2)
+            if !account2TasksForDate.allSatisfy({ $0.value.isEmpty }) {
+                TasksComponent(
+                    taskLists: tasksViewModel.account2TaskLists,
+                    tasksDict: account2TasksForDate,
+                    accentColor: appPrefs.account2Color,
+                    accountType: .account2,
+                    onTaskToggle: { task, listId in
+                        Task {
+                            await tasksViewModel.toggleTaskCompletion(task, in: listId, for: .account2)
                         }
-                    )
-                }
+                    },
+                    onTaskDetails: { task, listId in
+                        taskSheetSelection = WeeklyTaskSelection(task: task, listId: listId, accountKind: .account2)
+                    },
+                    onListRename: { listId, newName in
+                        Task {
+                            await tasksViewModel.renameTaskList(listId: listId, newTitle: newName, for: .account2)
+                        }
+                    },
+                    onOrderChanged: { newOrder in
+                        Task {
+                            await tasksViewModel.updateTaskListOrder(newOrder, for: .account2)
+                        }
+                    },
+                    hideDueDateTag: true,
+                    showEmptyState: false,
+                    isSingleDayView: true,
+                    showTitle: false,
+                    isBulkEditMode: bulkEditManager.state.isActive,
+                    selectedTaskIds: bulkEditManager.state.selectedTaskIds,
+                    onTaskSelectionToggle: { taskId in
+                        if bulkEditManager.state.selectedTaskIds.contains(taskId) {
+                            bulkEditManager.state.selectedTaskIds.remove(taskId)
+                        } else {
+                            bulkEditManager.state.selectedTaskIds.insert(taskId)
+                        }
+                    }
+                )
             }
-            .padding(.all, 8)
         }
-        .frame(minHeight: 80, alignment: .topLeading)
+        .padding(.all, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
     func weekDayRowLogsColumn(date: Date) -> some View {
@@ -756,44 +697,38 @@ extension WeeklyView {
     /// Vertical custom-log column for one date in the row-based layout.
     /// Factored out so both `.custom` and `.custom2` cases can share it.
     func weekDayRowCustomLogColumn(date: Date, collectionIndex: Int) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 2) {
-                let enabledItems = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
-                customLogSummary(items: enabledItems, date: date)
-            }
-            .padding(.all, 8)
+        VStack(alignment: .leading, spacing: 2) {
+            let enabledItems = customLogManager.items(in: collectionIndex).filter { $0.isEnabled }
+            customLogSummary(items: enabledItems, date: date)
         }
+        .padding(.all, 8)
         .frame(width: logColumnWidth(), alignment: .topLeading)
-        .frame(minHeight: 80)
     }
 
     @ViewBuilder
     func weekDayRowLogCell(for logType: BuiltInLogType, date: Date) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 4) {
-                switch logType {
-                case .food:
-                    let entries = getFoodLogsForDate(date)
-                    ForEach(entries, id: \.id) { entry in foodLogCard(entry: entry) }
-                case .sleep:
-                    let entries = getSleepLogsForDate(date)
-                    ForEach(entries, id: \.id) { entry in sleepLogCard(entry: entry) }
-                case .water:
-                    let entries = getWaterLogsForDate(date)
-                    ForEach(entries, id: \.id) { entry in waterLogCard(entry: entry) }
-                case .weight:
-                    let entries = getWeightLogsForDate(date)
-                    ForEach(entries, id: \.id) { entry in weightLogCard(entry: entry) }
-                case .workout:
-                    workoutStreakBadge(for: date)
-                    let entries = getWorkoutLogsForDate(date)
-                    ForEach(entries, id: \.id) { entry in workoutLogCard(entry: entry) }
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            switch logType {
+            case .food:
+                let entries = getFoodLogsForDate(date)
+                ForEach(entries, id: \.id) { entry in foodLogCard(entry: entry) }
+            case .sleep:
+                let entries = getSleepLogsForDate(date)
+                ForEach(entries, id: \.id) { entry in sleepLogCard(entry: entry) }
+            case .water:
+                let entries = getWaterLogsForDate(date)
+                ForEach(entries, id: \.id) { entry in waterLogCard(entry: entry) }
+            case .weight:
+                let entries = getWeightLogsForDate(date)
+                ForEach(entries, id: \.id) { entry in weightLogCard(entry: entry) }
+            case .workout:
+                workoutStreakBadge(for: date)
+                let entries = getWorkoutLogsForDate(date)
+                ForEach(entries, id: \.id) { entry in workoutLogCard(entry: entry) }
             }
-            .padding(.all, 8)
         }
+        .padding(.all, 8)
         .frame(width: logColumnWidth(), alignment: .topLeading)
-        .frame(minHeight: 80)
     }
 
     func weekDayRowContent(date: Date, isToday: Bool) -> some View {
@@ -1239,4 +1174,14 @@ extension WeeklyView {
         .frame(maxWidth: .infinity, alignment: .top)
     }
     
+}
+
+/// Aggregates measured day-row heights from the horizontal weekly content
+/// columns so the sticky date column can match each day's tallest cell.
+private struct RowBasedDayHeightKey: PreferenceKey {
+    static var defaultValue: [TimeInterval: CGFloat] = [:]
+
+    static func reduce(value: inout [TimeInterval: CGFloat], nextValue: () -> [TimeInterval: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: max)
+    }
 }

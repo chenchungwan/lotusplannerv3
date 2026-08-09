@@ -152,7 +152,8 @@ struct AITaskEntryView: View {
             await tasksViewModel.loadTasksOnDemand()
             let actions = try await ClaudeAIService.shared.planTaskActions(
                 from: input,
-                taskContext: taskContextForClaude()
+                taskContext: taskContextForClaude(),
+                accountLabels: accountLabelsForClaude()
             )
             await MainActor.run {
                 proposals = actions.map { proposal(for: $0) }
@@ -254,6 +255,12 @@ struct AITaskEntryView: View {
         await MainActor.run {
             isApplying = false
             dismiss()
+        }
+    }
+
+    private func accountLabelsForClaude() -> [AIAccountLabel] {
+        availableAccounts.map {
+            AIAccountLabel(kind: $0, name: appPrefs.accountName(for: $0))
         }
     }
 

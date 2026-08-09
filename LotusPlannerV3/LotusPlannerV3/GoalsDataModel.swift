@@ -29,7 +29,7 @@ enum GoalTimeframe: String, CaseIterable, Codable {
 struct LinkedTaskData: Codable, Hashable {
     let taskId: String
     var listId: String
-    let accountKind: String // "personal" or "professional"
+    let accountKind: String // Persisted GoogleAuthManager.AccountKind.rawValue
     var taskTitle: String? // Cached title for display when task not loaded
 
     init(taskId: String, listId: String, accountKind: GoogleAuthManager.AccountKind, taskTitle: String? = nil) {
@@ -40,7 +40,7 @@ struct LinkedTaskData: Codable, Hashable {
     }
 
     var accountKindEnum: GoogleAuthManager.AccountKind {
-        return accountKind == "personal" ? .account1 : .account2
+        return .fromStoredValue(accountKind)
     }
 }
 
@@ -48,7 +48,7 @@ struct LinkedTaskData: Codable, Hashable {
 struct GoalExtendedData: Codable {
     var notes: String = "" // Free-form notes (motivation, context, etc.)
     var defaultListId: String? // Default task list ID for new tasks
-    var defaultAccountKind: String? // "personal" or "professional"
+    var defaultAccountKind: String? // Persisted GoogleAuthManager.AccountKind.rawValue
 }
 
 // MARK: - Goal Data Model

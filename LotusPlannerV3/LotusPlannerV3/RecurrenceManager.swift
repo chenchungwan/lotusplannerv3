@@ -53,7 +53,8 @@ struct RecurrenceRule: Codable, Equatable {
     /// Google Task id of the most recently created instance. The
     /// `RecurrenceLibrary` is keyed by this so lookups by task id are O(1).
     var currentTaskId: String
-    /// "personal" or "professional" — matches `GoogleAuthManager.AccountKind.rawValue`.
+    /// Persisted `GoogleAuthManager.AccountKind.rawValue`. Read it back through
+    /// `accountKindEnum` rather than comparing the string directly.
     var accountKind: String
     var listId: String
     var frequency: RecurrenceFrequency
@@ -73,7 +74,7 @@ struct RecurrenceRule: Codable, Equatable {
     var updatedAt: Date
 
     var accountKindEnum: GoogleAuthManager.AccountKind {
-        accountKind == "professional" ? .account2 : .account1
+        .fromStoredValue(accountKind)
     }
 }
 

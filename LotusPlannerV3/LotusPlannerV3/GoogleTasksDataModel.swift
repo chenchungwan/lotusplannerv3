@@ -71,11 +71,25 @@ struct GoogleTask: Identifiable, Codable, Equatable {
         return GoogleTask.dueDateTimeFormatterNoFraction.date(from: due)
     }
 
-    var hasSpecificDueTime: Bool {
-        guard let due = due else { return false }
-        // All-day tasks have format "yyyy-MM-dd" (10 chars)
-        // Timed tasks have format "yyyy-MM-ddTHH:mm:ss.SSSZ" (24+ chars)
-        return due.count > 10
+    /// Google stores `due` as RFC 3339 and echoes it back that way, but the
+    /// app writes a bare local `yyyy-MM-dd` when scheduling. Keeping both
+    /// forms alive meant the same task looked different depending on whether
+    /// it came from the network or the local cache. Normalize before
+    /// caching or sending so there is only one representation in play.
+    ///
+    /// Note that `due` carries no time-of-day meaning: Google discards it.
+    /// A task's time lives in its `TaskTimeWindow`, never in this string.
+    static func normalizedDue(_ due: String?) -> String? {
+        guard let due else { return nil }
+        guard due.count == 10, due.contains("-"), !due.contains("T") else { return due }
+        return "\(due)T00:00:00.000Z"
+    }
+
+    /// Copy of this task with `due` in the same form the server would return.
+    var normalizedForCache: GoogleTask {
+        var copy = self
+        copy.due = GoogleTask.normalizedDue(due)
+        return copy
     }
 
     // MARK: - Priority Support

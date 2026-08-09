@@ -683,11 +683,7 @@ struct CreateGoalView: View {
             // Restore saved default list, or fall back to first linked task's list
             if let savedListId = goal.extendedData?.defaultListId, !savedListId.isEmpty {
                 selectedGoalListId = savedListId
-                if goal.extendedData?.defaultAccountKind == "professional" {
-                    selectedGoalAccountKind = .account2
-                } else {
-                    selectedGoalAccountKind = .account1
-                }
+                selectedGoalAccountKind = .fromStoredValue(goal.extendedData?.defaultAccountKind)
             } else if let firstLinked = goal.linkedTasks.first {
                 selectedGoalAccountKind = firstLinked.accountKindEnum
                 selectedGoalListId = firstLinked.listId

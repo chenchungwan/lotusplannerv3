@@ -49,7 +49,7 @@ struct TaskPickerSheet: View {
                                     selectedListId = nil
                                 } label: {
                                     HStack {
-                                        Image(systemName: account == .account1 ? "person.fill" : "briefcase.fill")
+                                        Image(systemName: "person.fill")
                                             .font(.caption)
                                         Text(appPrefs.accountName(for: account))
                                             .font(.callout)

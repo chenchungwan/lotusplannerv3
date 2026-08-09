@@ -615,15 +615,12 @@ struct TimeboxComponent: View {
         
         // Get timed tasks (tasks with time windows that are not all-day)
         let tasks = getTasksForDate(date)
+        // The time window is the only record of a task's time — `due` carries
+        // just a date. Anything with a non-all-day window belongs on the
+        // timeline, regardless of how `due` happens to be formatted.
         let timedTasks = tasks.filter { task in
-            // First check: task must have a specific due time (not all-day format)
-            guard task.hasSpecificDueTime else { return false }
-
-            // Second check: task must have a time window that's not marked as all-day
-            if let timeWindow = timeWindowManager.getTimeWindow(for: task.id) {
-                return !timeWindow.isAllDay
-            }
-            return false // No time window means it's all-day, so don't include here
+            guard let timeWindow = timeWindowManager.getTimeWindow(for: task.id) else { return false }
+            return !timeWindow.isAllDay
         }
         
         // Combine events and tasks into a unified array

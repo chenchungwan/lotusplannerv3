@@ -26,6 +26,43 @@ struct AITaskAgentAction: Identifiable, Equatable {
     var targetAccountKind: GoogleAuthManager.AccountKind?
 }
 
+/// Pairs a linked account with the name the user gave it, so the assistant can
+/// talk about accounts the way the user does instead of assuming fixed labels.
+struct AIAccountLabel {
+    let kind: GoogleAuthManager.AccountKind
+    let name: String
+
+    /// Name with characters that would break out of the JSON schema removed.
+    var promptName: String {
+        name
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Resolves whatever the model echoed back to one of the user's accounts.
+    /// Requires an unambiguous match; anything else routes nowhere and the
+    /// caller falls back to the default destination the user picked.
+    static func match(_ raw: String?, in labels: [AIAccountLabel]) -> GoogleAuthManager.AccountKind? {
+        guard let needle = raw?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .nilIfEmpty
+        else { return nil }
+
+        let candidates = labels.filter { !$0.promptName.isEmpty }
+        if let exact = candidates.first(where: { $0.promptName.lowercased() == needle }) {
+            return exact.kind
+        }
+
+        let partial = candidates.filter {
+            let name = $0.promptName.lowercased()
+            return name.contains(needle) || needle.contains(name)
+        }
+        return partial.count == 1 ? partial[0].kind : nil
+    }
+}
+
 enum ClaudeAIError: LocalizedError {
     case missingAPIKey
     case invalidResponse
@@ -153,6 +190,7 @@ final class ClaudeAIService {
     func planTaskActions(
         from input: String,
         taskContext: String,
+        accountLabels: [AIAccountLabel] = [],
         referenceDate: Date = Date()
     ) async throws -> [AITaskAgentAction] {
         let trimmedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -167,7 +205,11 @@ final class ClaudeAIService {
             ClaudeMessageRequest(
                 model: model,
                 maxTokens: 2500,
-                system: agentSystemPrompt(referenceDate: referenceDate, taskContext: taskContext),
+                system: agentSystemPrompt(
+                    referenceDate: referenceDate,
+                    taskContext: taskContext,
+                    accountLabels: accountLabels
+                ),
                 messages: [
                     ClaudeInputMessage(role: "user", content: trimmedInput)
                 ]
@@ -204,7 +246,7 @@ final class ClaudeAIService {
 
             let actions: [AITaskAgentAction]
             do {
-                actions = try decodeAgentActions(from: text)
+                actions = try decodeAgentActions(from: text, accountLabels: accountLabels)
             } catch {
                 devLog(
                     "Claude task agent parsing failed: \(error.localizedDescription) raw=\(text.prefix(1000))",
@@ -259,26 +301,41 @@ final class ClaudeAIService {
         """
     }
 
-    private func agentSystemPrompt(referenceDate: Date, taskContext: String) -> String {
+    private func agentSystemPrompt(
+        referenceDate: Date,
+        taskContext: String,
+        accountLabels: [AIAccountLabel]
+    ) -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.timeZone = TimeZone.current
         let today = dateFormatter.string(from: referenceDate)
 
+        // The accounts are named by the user, so the model is told the actual
+        // names rather than a fixed vocabulary. With fewer than two accounts
+        // there is nothing to disambiguate and the field is dropped entirely.
+        let accountNames = accountLabels.map(\.promptName).filter { !$0.isEmpty }
+        let accountsAreSelectable = accountNames.count > 1
+        let accountField = accountsAreSelectable
+            ? ",\"targetAccount\":\"\(accountNames.joined(separator: " or ")) or null\""
+            : ""
+        let accountRule = accountsAreSelectable
+            ? "\n- Use targetAccount only when the user clearly names one of these accounts: \(accountNames.map { "\"\($0)\"" }.joined(separator: ", ")). Copy the name exactly as written here."
+            : ""
+
         return """
         You are a planner task agent. Convert the user's request into task actions.
         Today is \(today) in the user's local timezone.
         Return only valid JSON with this exact shape:
-        {"actions":[{"type":"createTask|updateTaskDate|moveTaskToList","title":"string or null","notes":"string or null","dueDate":"yyyy-MM-dd or null","durationMinutes":number or null","taskQuery":"string or null","targetListName":"string or null","targetAccount":"personal or professional or null"}]}
+        {"actions":[{"type":"createTask|updateTaskDate|moveTaskToList","title":"string or null","notes":"string or null","dueDate":"yyyy-MM-dd or null","durationMinutes":number or null","taskQuery":"string or null","targetListName":"string or null"\(accountField)}]}
 
         Rules:
         - Use createTask for new tasks and project breakdowns.
         - Use updateTaskDate for requests like move/reschedule/push "xyz" to tomorrow, Friday, next week, or a specific date.
         - Use moveTaskToList for requests like move "xyz" to Work, Inbox, Errands, or another list.
         - For updateTaskDate and moveTaskToList, set taskQuery to the user's words identifying the existing task.
-        - Use targetListName only for list moves.
-        - Use targetAccount only if the user clearly mentions personal or professional/work.
+        - Use targetListName only for list moves.\(accountRule)
         - Do not invent tasks for management requests. If the user asks to move an existing task, return a management action.
         - Keep createTask titles short and actionable.
         - Use dueDate only when the user states or clearly implies a date.
@@ -289,7 +346,10 @@ final class ClaudeAIService {
         """
     }
 
-    private func decodeAgentActions(from text: String) throws -> [AITaskAgentAction] {
+    private func decodeAgentActions(
+        from text: String,
+        accountLabels: [AIAccountLabel]
+    ) throws -> [AITaskAgentAction] {
         let jsonText = extractJSONObject(from: text)
         guard let data = jsonText.data(using: .utf8) else {
             throw ClaudeAIError.invalidResponse
@@ -311,7 +371,7 @@ final class ClaudeAIService {
                 durationMinutes: item.durationMinutes,
                 taskQuery: item.taskQuery?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                 targetListName: item.targetListName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                targetAccountKind: item.targetAccountKind
+                targetAccountKind: AIAccountLabel.match(item.targetAccount, in: accountLabels)
             )
         }
     }
@@ -446,7 +506,10 @@ private struct ClaudeTaskAgentItem: Decodable {
     let durationMinutes: Int?
     let taskQuery: String?
     let targetListName: String?
-    let targetAccountKind: GoogleAuthManager.AccountKind?
+    /// Raw label echoed back by the model. Resolved against the user's own
+    /// account names by `AIAccountLabel.match(_:in:)`, since decoding has no
+    /// access to preferences.
+    let targetAccount: String?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
@@ -460,7 +523,7 @@ private struct ClaudeTaskAgentItem: Decodable {
         )
         self.taskQuery = Self.decodeString(for: ["taskQuery", "task_query", "query", "existingTask"], from: container)
         self.targetListName = Self.decodeString(for: ["targetListName", "target_list_name", "list", "listName"], from: container)
-        self.targetAccountKind = Self.decodeAccountKind(from: container)
+        self.targetAccount = Self.decodeString(for: ["targetAccount", "target_account", "account"], from: container)
     }
 
     private static func decodeActionType(
@@ -480,24 +543,6 @@ private struct ClaudeTaskAgentItem: Decodable {
             return .moveTaskToList
         default:
             return AITaskAgentActionType(rawValue: raw)
-        }
-    }
-
-    private static func decodeAccountKind(
-        from container: KeyedDecodingContainer<DynamicCodingKey>
-    ) -> GoogleAuthManager.AccountKind? {
-        guard let raw = decodeString(for: ["targetAccount", "target_account", "account"], from: container)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        else { return nil }
-
-        switch raw {
-        case "personal":
-            return .account1
-        case "professional", "work", "business":
-            return .account2
-        default:
-            return nil
         }
     }
 

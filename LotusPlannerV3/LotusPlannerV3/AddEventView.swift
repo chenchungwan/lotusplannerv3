@@ -355,7 +355,7 @@ struct AddItemView: View {
                                     }
                                 }) {
                                     HStack {
-                                        Image(systemName: "briefcase.circle.fill")
+                                        Image(systemName: "person.circle.fill")
                                         Text(appPrefs.account2Name)
                                     }
                                     .padding(.horizontal, 12)

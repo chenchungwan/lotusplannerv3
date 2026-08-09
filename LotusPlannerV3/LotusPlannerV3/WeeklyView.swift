@@ -46,6 +46,10 @@ struct WeeklyView: View {
     @State var scrollToCurrentDayHorizontalTrigger = false
     @State var scrollToCurrentDayRowTrigger = false
     @State var weeklySummaryConfigVersion = 0
+    /// Measured heights for each day row in the horizontal (row-based) weekly
+    /// layout, keyed by start-of-day. The content side reports these; the sticky
+    /// date column reads them so both sides stay aligned.
+    @State var rowBasedDayHeights: [TimeInterval: CGFloat] = [:]
     
     // MARK: - Adaptive Layout Properties
     var isCompact: Bool {
@@ -495,10 +499,14 @@ struct WeeklyView: View {
         return GeometryReader { geometry in
             let availableWidth = geometry.size.width
             let visibleDays = visibleDaysCount(for: geometry)
-            let columnWidth = dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays)
-            let contentWidth = totalContentWidth(availableWidth: availableWidth, visibleDays: visibleDays)
-            let summaryWidth = appPrefs.showWeeklySummarySection ? weeklySummaryPreferredWidth(minimum: columnWidth) : 0
+            // Floor so day edges land on whole points; fractional widths made
+            // column hairlines appear on some days and vanish on others.
+            let columnWidth = floor(dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays))
+            let summaryWidth = appPrefs.showWeeklySummarySection
+                ? floor(weeklySummaryPreferredWidth(minimum: columnWidth))
+                : 0
             let daysWidth = columnWidth * 7
+            let contentWidth = daysWidth + summaryWidth
             
             ScrollViewReader { horizontalProxy in
                 ScrollView(.horizontal, showsIndicators: true) {
@@ -511,7 +519,7 @@ struct WeeklyView: View {
                         // Divider below date header
                         Rectangle()
                             .fill(Color(.systemGray4))
-                            .frame(height: 1)
+                            .frame(width: contentWidth, height: 1)
                         
                         // Scrollable content (scrolls vertically)
                         ScrollView(.vertical, showsIndicators: true) {
@@ -523,18 +531,22 @@ struct WeeklyView: View {
 
                                     weekTasksContent(dayColumnWidth: columnWidth, fixedWidth: daysWidth)
                                 }
-                                    .onAppear {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
-                                        }
-                                    }
-                                    .onChange(of: scrollToCurrentDayTrigger) {
+                                // No horizontal padding here: it was fighting the
+                                // fixed day-grid width and squeezing columns so
+                                // trailing dividers rendered inconsistently.
+                                .padding(.bottom, 8)
+                                .frame(width: contentWidth, alignment: .topLeading)
+                                .onAppear {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
                                     }
-                                    .onChange(of: scrollToCurrentDayHorizontalTrigger) {
-                                        scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
-                                    }
-                                    .padding([.horizontal, .bottom], 8)
+                                }
+                                .onChange(of: scrollToCurrentDayTrigger) {
+                                    scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
+                                }
+                                .onChange(of: scrollToCurrentDayHorizontalTrigger) {
+                                    scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
+                                }
                             }
                         }
                         .frame(maxHeight: .infinity)

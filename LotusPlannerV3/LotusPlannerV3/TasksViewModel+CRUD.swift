@@ -110,6 +110,11 @@ extension TasksViewModel {
         // OPTIMISTIC UPDATE: Update UI immediately for instant feedback
         let originalTask = await getOriginalTask(task.id, from: listId, for: kind)
 
+        // Publish and cache the server's representation of `due`, not the
+        // caller's. Tasks read back out of the cache are indistinguishable
+        // from freshly fetched ones.
+        let task = task.normalizedForCache
+
         await MainActor.run {
             switch kind {
             case .account1:
@@ -166,13 +171,8 @@ extension TasksViewModel {
                     requestBody["notes"] = NSNull()
                 }
 
-                if let due = task.due {
-                    // Ensure due date is in RFC 3339 format
-                    if due.count == 10 && due.contains("-") && !due.contains("T") {
-                        requestBody["due"] = "\(due)T00:00:00.000Z"
-                    } else {
-                        requestBody["due"] = due
-                    }
+                if let due = GoogleTask.normalizedDue(task.due) {
+                    requestBody["due"] = due
                 } else {
                     // Explicitly clear due date on the server
                     requestBody["due"] = NSNull()
@@ -383,9 +383,16 @@ extension TasksViewModel {
                     newListId: targetListId,
                     newAccountKind: kind
                 )
+
+                // Carry the task's time over to the new ID. Done here rather
+                // than at the call sites because most of them discarded the
+                // returned task and silently dropped the time.
+                TaskTimeWindowManager.shared.transferTimeWindow(
+                    fromTaskId: originalTaskId,
+                    toTaskId: taskToAdd.id
+                )
             }
 
-            // Return the new task so caller can transfer time window
             return taskToAdd
 
         } catch {
@@ -483,9 +490,16 @@ extension TasksViewModel {
                     newListId: target.1,
                     newAccountKind: target.0
                 )
+
+                // Carry the task's time over to the new ID. Done here rather
+                // than at the call sites because most of them discarded the
+                // returned task and silently dropped the time.
+                TaskTimeWindowManager.shared.transferTimeWindow(
+                    fromTaskId: originalTaskId,
+                    toTaskId: taskToAdd.id
+                )
             }
 
-            // Return the new task so caller can transfer time window
             return taskToAdd
 
         } catch {
@@ -524,13 +538,8 @@ extension TasksViewModel {
             requestBody["notes"] = notes
         }
 
-        if let due = task.due {
-            // Ensure due date is in RFC 3339 format
-            if due.count == 10 && due.contains("-") && !due.contains("T") {
-                requestBody["due"] = "\(due)T00:00:00.000Z"
-            } else {
-                requestBody["due"] = due
-            }
+        if let due = GoogleTask.normalizedDue(task.due) {
+            requestBody["due"] = due
         }
 
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)

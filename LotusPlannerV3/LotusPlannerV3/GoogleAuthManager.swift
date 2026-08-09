@@ -15,6 +15,17 @@ final class GoogleAuthManager: ObservableObject {
     enum AccountKind: String {
         case account1 = "personal"
         case account2 = "professional"
+
+        /// Resolves a persisted `accountKind` string to a kind. Call this
+        /// instead of comparing against the raw values directly, so the legacy
+        /// spelling stays contained to this type. Unknown or missing values
+        /// fall back to the first account.
+        static func fromStoredValue(_ stored: String?) -> AccountKind {
+            guard let stored, let kind = AccountKind(rawValue: stored) else {
+                return .account1
+            }
+            return kind
+        }
     }
 
     static let shared = GoogleAuthManager()

@@ -521,7 +521,7 @@ struct DraggableTimeboxComponent: View {
     /// the ghost + time label without any branching.
     @MainActor
     private func updateExternalDragState(info: DraggableTaskInfo, atY y: CGFloat) {
-        let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .account1 : .account2
+        let kind: GoogleAuthManager.AccountKind = .fromStoredValue(info.accountKind)
         let dict = kind == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
         guard let task = dict[info.listId]?.first(where: { $0.id == info.taskId }) else { return }
 

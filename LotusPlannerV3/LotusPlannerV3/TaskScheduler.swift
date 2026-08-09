@@ -23,7 +23,7 @@ enum TaskScheduler {
     /// Returns nil when the task can't be found (e.g. it was deleted
     /// between drag start and drop).
     static func resolveTask(_ info: DraggableTaskInfo) -> (task: GoogleTask, kind: GoogleAuthManager.AccountKind)? {
-        let kind: GoogleAuthManager.AccountKind = info.accountKind == "personal" ? .account1 : .account2
+        let kind: GoogleAuthManager.AccountKind = .fromStoredValue(info.accountKind)
         let dict = kind == .account1 ? TasksViewModel.shared.account1Tasks : TasksViewModel.shared.account2Tasks
         guard let task = dict[info.listId]?.first(where: { $0.id == info.taskId }) else { return nil }
         return (task, kind)

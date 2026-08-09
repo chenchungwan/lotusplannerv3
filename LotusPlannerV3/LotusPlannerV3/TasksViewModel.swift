@@ -44,7 +44,7 @@ class TasksViewModel: ObservableObject {
     
     // MARK: - Filtered Task Caching
     private struct FilterCacheKey: Hashable {
-        let accountKind: String  // "personal" or "professional"
+        let accountKind: String  // GoogleAuthManager.AccountKind.rawValue
         let filter: String       // String representation of filter
         let subfilter: String    // String representation of subfilter
         let referenceDate: String // Date string for filter context
@@ -223,9 +223,6 @@ class TasksViewModel: ObservableObject {
                 lastFetchError.removeValue(forKey: kind)
                 lastSuccessfulFetch[kind] = Date()
             }
-
-            let allTasks = loadedTasksByList.values.flatMap { $0 }
-            TaskTimeWindowManager.shared.cleanupTimeWindowsForAllDayTasks(tasks: allTasks)
         } catch {
             errorMessage = "Failed to load tasks for \(kind.displayName): \(error.localizedDescription)"
             lastFetchError[kind] = error.localizedDescription
