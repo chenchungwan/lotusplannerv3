@@ -759,10 +759,6 @@ private struct TaskComponentListCard: View {
     @State private var isEditingTitle = false
     @State private var editedTitle = ""
     
-    private var isTopPriority: Bool {
-        taskList.title.localizedCaseInsensitiveContains("Top Priority")
-    }
-    
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short

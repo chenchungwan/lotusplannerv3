@@ -624,7 +624,7 @@ class AppPreferences: ObservableObject {
         // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
 #if os(iOS)
-        let screenWidth = UIScreen.main.bounds.width
+        let screenWidth = ScreenMetrics.width
 #else
         let screenWidth: CGFloat = 1024
 #endif
@@ -802,15 +802,15 @@ class AppPreferences: ObservableObject {
         self.dayViewTimeboxLogsSectionCollapsed = UserDefaults.standard.object(forKey: "dayViewTimeboxLogsSectionCollapsed") as? Bool ?? false
         
         // Load CalendarView additional divider positions
-        self.calendarTopSectionHeight = UserDefaults.standard.object(forKey: "calendarTopSectionHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.85
-        self.calendarVerticalTopRowHeight = UserDefaults.standard.object(forKey: "calendarVerticalTopRowHeight") as? CGFloat ?? UIScreen.main.bounds.height * 0.55
-        self.calendarVerticalTopLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalTopLeftWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
-        self.calendarVerticalBottomLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalBottomLeftWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
-        self.calendarWeekTasksAccount1Width = UserDefaults.standard.object(forKey: "calendarWeekTasksPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.3
+        self.calendarTopSectionHeight = UserDefaults.standard.object(forKey: "calendarTopSectionHeight") as? CGFloat ?? ScreenMetrics.height * 0.85
+        self.calendarVerticalTopRowHeight = UserDefaults.standard.object(forKey: "calendarVerticalTopRowHeight") as? CGFloat ?? ScreenMetrics.height * 0.55
+        self.calendarVerticalTopLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalTopLeftWidth") as? CGFloat ?? ScreenMetrics.width * 0.5
+        self.calendarVerticalBottomLeftWidth = UserDefaults.standard.object(forKey: "calendarVerticalBottomLeftWidth") as? CGFloat ?? ScreenMetrics.width * 0.5
+        self.calendarWeekTasksAccount1Width = UserDefaults.standard.object(forKey: "calendarWeekTasksPersonalWidth") as? CGFloat ?? ScreenMetrics.width * 0.3
         self.calendarWeekTopSectionHeight = UserDefaults.standard.object(forKey: "calendarWeekTopSectionHeight") as? CGFloat ?? 400
         
         // Load TasksView divider positions
-        self.tasksViewAccount1Width = UserDefaults.standard.object(forKey: "tasksViewPersonalWidth") as? CGFloat ?? UIScreen.main.bounds.width * 0.5
+        self.tasksViewAccount1Width = UserDefaults.standard.object(forKey: "tasksViewPersonalWidth") as? CGFloat ?? ScreenMetrics.width * 0.5
         
         // Load WeekTimelineComponent divider positions
         self.weekTimelineTasksRowHeight = UserDefaults.standard.object(forKey: "weekTimelineTasksRowHeight") as? CGFloat ?? 120

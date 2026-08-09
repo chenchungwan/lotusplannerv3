@@ -811,7 +811,6 @@ struct CreateGoalView: View {
         )
 
         let dueDate = calculateDueDate()
-        let goalTitle = title
         // Separate existing tasks (already created) from new ones
         let filledTasks = taskItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let newTasks = filledTasks.filter { $0.existingTaskId == nil }
@@ -948,7 +947,7 @@ struct CreateGoalView: View {
     }
 
     private func resolvedDueDate(_ item: PendingTask) -> Date {
-        if let existingId = item.existingTaskId {
+        if item.existingTaskId != nil {
             let result = lookupTask(item)
             return result?.task.dueDate ?? item.dueDate
         }

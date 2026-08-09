@@ -719,7 +719,7 @@ struct DayViewCustomConfigurator: View {
     /// Returns the current screen's aspect ratio (width / height).
     private func screenAspectRatio() -> CGFloat {
         #if os(iOS)
-        let bounds = UIScreen.main.bounds
+        let bounds = ScreenMetrics.bounds
         guard bounds.height > 0 else { return 4.0 / 3.0 }
         return bounds.width / bounds.height
         #else

@@ -377,7 +377,7 @@ extension WeeklyView {
                         scrollToCurrentDayRowWithProxy(proxy)
                     }
                 }
-                .onChange(of: scrollToCurrentDayRowTrigger) { _ in
+                .onChange(of: scrollToCurrentDayRowTrigger) {
                     scrollToCurrentDayRowWithProxy(proxy)
                 }
             }

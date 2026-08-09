@@ -164,8 +164,6 @@ class BulkEditManager: ObservableObject {
 
         Task {
             for taskInfo in tasksToMove {
-                let oldTaskId = taskInfo.task.id
-
                 // Use moveTask or crossAccountMoveTask to preserve goal links
                 if taskInfo.accountKind == destinationAccountKind {
                     // Same account move
@@ -263,7 +261,7 @@ class BulkEditManager: ObservableObject {
                 await tasksVM.updateTask(updatedTask, in: taskInfo.listId, for: taskInfo.accountKind)
 
                 // Save or delete time window
-                if let dueDate = dueDate, !isAllDay, let start = startTime, let end = endTime {
+                if dueDate != nil, !isAllDay, let start = startTime, let end = endTime {
                     // Save time window for timed tasks
                     TaskTimeWindowManager.shared.saveTimeWindow(
                         taskId: taskInfo.task.id,

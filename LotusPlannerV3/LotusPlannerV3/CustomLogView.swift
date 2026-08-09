@@ -55,7 +55,7 @@ struct CustomLogView: View {
                 }
             }
         }
-        .onChange(of: navigationManager.currentDate) { _ in
+        .onChange(of: navigationManager.currentDate) {
             // Refresh entries when date changes
             customLogManager.refreshData()
         }

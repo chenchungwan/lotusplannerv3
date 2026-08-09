@@ -323,47 +323,6 @@ class JournalStorageNew {
         }
     }
     
-    // MARK: - Debug Inspection
-    
-    /// Debug function to inspect iCloud Drive contents
-    func inspectiCloudContents() {
-        // Debug function - no output needed
-        let iCloudAvailable = isICloudAvailable()
-        
-        if let iCloudURL = iCloudURL {
-            do {
-                let contents = try FileManager.default.contentsOfDirectory(at: iCloudURL, includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey], options: [])
-                
-                for (index, url) in contents.enumerated() {
-                    let fileName = url.lastPathComponent
-                    let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-                    
-                    var isUbiquitous: AnyObject?
-                    try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-                    let isInCloud = (isUbiquitous as? Bool) == true
-                    
-                    var downloadStatus: AnyObject?
-                    try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
-                }
-            } catch {
-                // Error listing iCloud contents - silently fail
-            }
-        }
-        
-        // Check local storage as fallback
-        let localURL = localURL
-        do {
-            let contents = try FileManager.default.contentsOfDirectory(at: localURL, includingPropertiesForKeys: [.fileSizeKey], options: [])
-            
-            for (index, url) in contents.enumerated() {
-                let fileName = url.lastPathComponent
-                let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-            }
-        } catch {
-            // Error listing local contents - silently fail
-        }
-    }
-    
     // MARK: - Delete Drawing
     
     /// Delete a drawing

@@ -54,7 +54,7 @@ struct AllGoalsTableContent: View {
         }
         
         // Then try to find the current month
-        if let monthInterval = calendar.dateInterval(of: .month, for: now) {
+        if calendar.dateInterval(of: .month, for: now) != nil {
             let currentYear = calendar.component(.year, from: now)
             let currentMonth = calendar.component(.month, from: now)
             
@@ -177,7 +177,7 @@ struct AllGoalsTableContent: View {
                         scrollToCurrentTimeframe(proxy: proxy, delay: 0.3)
                         scrollToCurrentTimeframe(proxy: proxy, delay: 0.5)
                     }
-                    .onChange(of: refreshTrigger) { _ in
+                    .onChange(of: refreshTrigger) {
                         // Also scroll to current timeframe when view refreshes
                         scrollToCurrentTimeframe(proxy: proxy, delay: 0.1)
                         scrollToCurrentTimeframe(proxy: proxy, delay: 0.3)
@@ -186,9 +186,9 @@ struct AllGoalsTableContent: View {
             }
         }
         .sheet(item: $goalToEdit) { goal in
-            CreateGoalView(editingGoal: goal) {
+            CreateGoalView(editingGoal: goal, onDismiss: {
                 goalToEdit = nil
-            }
+            })
         }
         .onReceive(NotificationCenter.default.publisher(for: .refreshAllGoalsView)) { _ in
             // Force refresh by updating the refresh trigger

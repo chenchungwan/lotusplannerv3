@@ -332,13 +332,13 @@ struct PencilKitView: UIViewRepresentable {
 
         // Attach the scene-shared PKToolPicker once the view is in a window
         DispatchQueue.main.async {
-            if let window = canvasView.window, let picker = PKToolPicker.shared(for: window) {
-                context.coordinator.toolPicker = picker
-                picker.addObserver(canvasView)
-                picker.setVisible(showsToolPicker, forFirstResponder: canvasView)
-                if showsToolPicker {
-                    canvasView.becomeFirstResponder()
-                }
+            guard canvasView.window != nil else { return }
+            let picker = context.coordinator.toolPicker ?? PKToolPicker()
+            context.coordinator.toolPicker = picker
+            picker.addObserver(canvasView)
+            picker.setVisible(showsToolPicker, forFirstResponder: canvasView)
+            if showsToolPicker {
+                canvasView.becomeFirstResponder()
             }
         }
 
@@ -363,7 +363,8 @@ struct PencilKitView: UIViewRepresentable {
         } else {
             // If the picker hasn't been set yet, attempt to attach it now
             DispatchQueue.main.async {
-                if let window = uiView.window, let picker = PKToolPicker.shared(for: window) {
+                if uiView.window != nil {
+                    let picker = context.coordinator.toolPicker ?? PKToolPicker()
                     context.coordinator.toolPicker = picker
                     picker.addObserver(uiView)
                     picker.setVisible(showsToolPicker, forFirstResponder: uiView)

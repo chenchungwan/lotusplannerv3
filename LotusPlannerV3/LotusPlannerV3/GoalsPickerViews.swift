@@ -176,7 +176,7 @@ struct WeekPickerView: View {
                     }
                 }
                 .wheelOrMenuPickerStyle()
-                .onChange(of: selectedYear) { _ in
+                .onChange(of: selectedYear) {
                     updateSelectedDate()
                 }
             }
@@ -195,7 +195,7 @@ struct WeekPickerView: View {
                     }
                 }
                 .wheelOrMenuPickerStyle()
-                .onChange(of: selectedWeek) { _ in
+                .onChange(of: selectedWeek) {
                     updateSelectedDate()
                 }
             }

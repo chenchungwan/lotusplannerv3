@@ -658,7 +658,7 @@ struct TasksDetailColumn: View {
         } message: {
             Text("Update priority for \(bulkEditManager.state.selectedTaskIds.count) selected task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")?")
         }
-        .onChange(of: selectedListId) { _ in
+        .onChange(of: selectedListId) {
             // Reset inline task creation when list changes
             isCreatingNewTask = false
             newTaskTitle = ""

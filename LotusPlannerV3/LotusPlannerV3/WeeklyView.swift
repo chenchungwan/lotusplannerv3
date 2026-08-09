@@ -206,7 +206,6 @@ struct WeeklyView: View {
         .sheet(isPresented: $showingNewTask) {
             // Create-task UI matching TasksView create flow
             let account1Linked = authManager.isLinked(kind: .account1)
-            let account2Linked = authManager.isLinked(kind: .account2)
             let defaultAccount: GoogleAuthManager.AccountKind = selectedAccountKind ?? (account1Linked ? .account1 : .account2)
             let defaultLists = defaultAccount == .account1 ? tasksViewModel.account1TaskLists : tasksViewModel.account2TaskLists
             let defaultListId = defaultLists.first?.id ?? ""
@@ -249,7 +248,7 @@ struct WeeklyView: View {
             await tasksViewModel.loadTasks()
             await calendarViewModel.loadCalendarDataForWeek(containing: selectedDate)
         }
-        .onChange(of: selectedDate) { newValue in
+        .onChange(of: selectedDate) { _, newValue in
             regenerateWeekDates(for: newValue)
         }
         .onChange(of: navigationManager.currentDate) { oldValue, newValue in
@@ -279,7 +278,7 @@ struct WeeklyView: View {
             Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                    bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
                         bulkEditManager.state.undoAction = .complete
                         bulkEditManager.state.undoData = undoData
                         bulkEditManager.state.showingUndoToast = true
@@ -301,7 +300,7 @@ struct WeeklyView: View {
             Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                    bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
                         bulkEditManager.state.undoAction = .delete
                         bulkEditManager.state.undoData = undoData
                         bulkEditManager.state.showingUndoToast = true
@@ -324,7 +323,7 @@ struct WeeklyView: View {
             BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkUpdateDueDate(
+                    bulkEditManager.bulkUpdateDueDate(
                         tasks: allTasks,
                         dueDate: date,
                         isAllDay: isAllDay,
@@ -356,7 +355,7 @@ struct WeeklyView: View {
                 onSelect: { accountKind, listId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
-                        await bulkEditManager.bulkMove(
+                        bulkEditManager.bulkMove(
                             tasks: allTasks,
                             to: listId,
                             destinationAccountKind: accountKind,
@@ -384,7 +383,7 @@ struct WeeklyView: View {
             BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkUpdatePriority(
+                    bulkEditManager.bulkUpdatePriority(
                         tasks: allTasks,
                         priority: priority,
                         tasksVM: tasksViewModel
@@ -529,10 +528,10 @@ struct WeeklyView: View {
                                             scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
                                         }
                                     }
-                                    .onChange(of: scrollToCurrentDayTrigger) { _ in
+                                    .onChange(of: scrollToCurrentDayTrigger) {
                                         scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
                                     }
-                                    .onChange(of: scrollToCurrentDayHorizontalTrigger) { _ in
+                                    .onChange(of: scrollToCurrentDayHorizontalTrigger) {
                                         scrollToCurrentDayHorizontalWithProxy(horizontalProxy)
                                     }
                                     .padding([.horizontal, .bottom], 8)

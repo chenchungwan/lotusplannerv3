@@ -61,9 +61,9 @@ struct GoalsView: View {
             GoalDetailSheet(goal: goal)
         }
         .sheet(item: $goalToEdit) { goal in
-            CreateGoalView(editingGoal: goal) {
+            CreateGoalView(editingGoal: goal, onDismiss: {
                 goalToEdit = nil
-            }
+            })
         }
         // Goal creation lives in the shared `CreateItemSheet`, presented at
         // ContentView scope via `NavigationManager.activeSheet`.
@@ -83,11 +83,11 @@ struct GoalsView: View {
                 goalsManager.refreshData()
             }
         }
-        .onChange(of: navigationManager.currentDate) { _ in
+        .onChange(of: navigationManager.currentDate) {
             // Refresh goals when date changes
             goalsManager.refreshData()
         }
-        .onChange(of: navigationManager.currentInterval) { _ in
+        .onChange(of: navigationManager.currentInterval) {
             // Refresh goals when interval changes
             goalsManager.refreshData()
         }

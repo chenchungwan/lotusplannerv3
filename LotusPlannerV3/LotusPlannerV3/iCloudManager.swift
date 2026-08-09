@@ -433,8 +433,6 @@ final class iCloudManager: ObservableObject {
         // We can only clear local Core Data, which will eventually sync the deletions
         Task {
             await MainActor.run {
-                let context = persistenceController.container.viewContext
-                
                 // This is dangerous - only for development/testing
                 #if DEBUG
                 CoreDataManager.shared.deleteAllLogs()

@@ -100,7 +100,7 @@ class ConfigurationManager {
         
         var isValid = true
         
-        for (name, value) in requiredConfigs {
+        for (_, value) in requiredConfigs {
             if value.isEmpty || value.contains("YOUR_") || value.contains("_HERE") {
                 isValid = false
             }

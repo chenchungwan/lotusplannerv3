@@ -336,10 +336,6 @@ extension CalendarViewModel {
             let response = try JSONDecoder().decode(GoogleCalendarListResponse.self, from: data)
             let calendars = response.items ?? []
 
-            // Debug: Print calendar details
-            for calendar in calendars {
-            }
-
             return calendars
         } catch {
 

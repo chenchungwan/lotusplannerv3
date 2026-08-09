@@ -66,7 +66,7 @@ struct CalendarView: View {
     @State private var movablePhotos: [MovablePhoto] = []
     @State private var cachedAccount1Tasks: [String: [GoogleTask]] = [:]
     @State private var cachedAccount2Tasks: [String: [GoogleTask]] = [:]
-    @State private var weekTasksSectionWidth: CGFloat = UIScreen.main.bounds.width * 0.6
+    @State private var weekTasksSectionWidth: CGFloat = ScreenMetrics.width * 0.6
     @State private var weekCanvasView = PKCanvasView()
     @State private var cachedWeekAccount1Tasks: [String: [GoogleTask]] = [:]
     @State private var cachedWeekAccount2Tasks: [String: [GoogleTask]] = [:]
@@ -95,11 +95,11 @@ struct CalendarView: View {
     @State private var showingEventDetails = false
     
     // Account 1/Account 2 task divider widths for all views
-    @State private var weekTasksAccount1Width: CGFloat = UIScreen.main.bounds.width * 0.3
+    @State private var weekTasksAccount1Width: CGFloat = ScreenMetrics.width * 0.3
     @State private var isWeekTasksDividerDragging = false
     
     // Long layout adjustable sizes and drag states
-    @State private var longTopRowHeight: CGFloat = UIScreen.main.bounds.height * 0.35
+    @State private var longTopRowHeight: CGFloat = ScreenMetrics.height * 0.35
     @State private var isLongHorizontalDividerDragging: Bool = false
     @State private var longEventsLeftWidth: CGFloat
     @State private var isLongVerticalDividerDragging: Bool = false
@@ -170,13 +170,13 @@ struct CalendarView: View {
                 },
                 onMove: { updatedTask, targetListId in
                     Task {
-                        await tasksViewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
+                        _ = await tasksViewModel.moveTask(updatedTask, from: sel.listId, to: targetListId, for: sel.accountKind)
                         updateCachedTasks()
                     }
                 },
                 onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
                     Task {
-                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
+                        _ = await tasksViewModel.crossAccountMoveTask(updatedTask, from: (sel.accountKind, sel.listId), to: (targetAccountKind, targetListId))
                         updateCachedTasks()
                     }
                 }
@@ -191,7 +191,7 @@ struct CalendarView: View {
             Button("Complete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")") {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                    bulkEditManager.bulkComplete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
                         bulkEditManager.state.undoAction = .complete
                         bulkEditManager.state.undoData = undoData
                         bulkEditManager.state.showingUndoToast = true
@@ -217,7 +217,7 @@ struct CalendarView: View {
             Button("Delete \(bulkEditManager.state.selectedTaskIds.count) task\(bulkEditManager.state.selectedTaskIds.count == 1 ? "" : "s")", role: .destructive) {
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
+                    bulkEditManager.bulkDelete(tasks: allTasks, tasksVM: tasksViewModel) { undoData in
                         bulkEditManager.state.undoAction = .delete
                         bulkEditManager.state.undoData = undoData
                         bulkEditManager.state.showingUndoToast = true
@@ -247,7 +247,7 @@ struct CalendarView: View {
             BulkUpdateDueDatePicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { date, isAllDay, startTime, endTime in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkUpdateDueDate(
+                    bulkEditManager.bulkUpdateDueDate(
                         tasks: allTasks,
                         dueDate: date,
                         isAllDay: isAllDay,
@@ -283,7 +283,7 @@ struct CalendarView: View {
                 onSelect: { targetAccount, targetListId in
                     Task {
                         let allTasks = getAllTasksForBulkEdit()
-                        await bulkEditManager.bulkMove(
+                        bulkEditManager.bulkMove(
                             tasks: allTasks,
                             to: targetListId,
                             destinationAccountKind: targetAccount,
@@ -315,7 +315,7 @@ struct CalendarView: View {
             BulkUpdatePriorityPicker(selectedTaskIds: bulkEditManager.state.selectedTaskIds) { priority in
                 Task {
                     let allTasks = getAllTasksForBulkEdit()
-                    await bulkEditManager.bulkUpdatePriority(
+                    bulkEditManager.bulkUpdatePriority(
                         tasks: allTasks,
                         priority: priority,
                         tasksVM: tasksViewModel
@@ -638,13 +638,13 @@ struct CalendarView: View {
                     },
                     onMove: { updatedTask, targetListId in
                         Task {
-                            await tasksViewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: accountKind)
+                            _ = await tasksViewModel.moveTask(updatedTask, from: taskListId, to: targetListId, for: accountKind)
                             updateCachedTasks()
                         }
                     },
                     onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
                         Task {
-                            await tasksViewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (targetAccountKind, targetListId))
+                            _ = await tasksViewModel.crossAccountMoveTask(updatedTask, from: (accountKind, taskListId), to: (targetAccountKind, targetListId))
                             updateCachedTasks()
                         }
                     }
@@ -877,7 +877,7 @@ struct CalendarView: View {
             .id("yearView-\(currentDate)")
             .task {
                 // Load fresh data for the current year when view appears
-                let navDate = await navigationManager.currentDate
+                let navDate = navigationManager.currentDate
                 // Update local currentDate to match navigation manager
                 currentDate = navDate
                 await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
@@ -950,7 +950,7 @@ struct CalendarView: View {
                     .onChanged { value in
                         isDragging = true
                         let newHeight = topSectionHeight + value.translation.height
-                        topSectionHeight = max(300, min(UIScreen.main.bounds.height - 150, newHeight))
+                        topSectionHeight = max(300, min(ScreenMetrics.height - 150, newHeight))
                     }
                     .onEnded { _ in
                         isDragging = false
@@ -1333,7 +1333,7 @@ struct CalendarView: View {
                 .onChanged { value in
                     isWeekTasksDividerDragging = true
                     let newWidth = weekTasksAccount1Width + value.translation.width
-                    weekTasksAccount1Width = max(150, min(UIScreen.main.bounds.width * 0.6, newWidth))
+                    weekTasksAccount1Width = max(150, min(ScreenMetrics.width * 0.6, newWidth))
                 }
                 .onEnded { _ in
                     isWeekTasksDividerDragging = false
@@ -1387,7 +1387,7 @@ struct CalendarView: View {
         }
         .background(Color(.systemBackground))
         .task {
-            let navDate = await navigationManager.currentDate
+            let navDate = navigationManager.currentDate
             // Update local currentDate to match navigation manager
             currentDate = navDate
             // Load fresh data for the current month when view appears
@@ -1633,7 +1633,7 @@ struct CalendarView: View {
                 startCurrentTimeTimer()
                 // Sync currentDate with navigation manager's current date
                 Task {
-                    let navDate = await navigationManager.currentDate
+                    let navDate = navigationManager.currentDate
                     currentDate = navDate
                 }
                 // Ensure tasks are cached when view appears
@@ -1647,7 +1647,7 @@ struct CalendarView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .refreshCalendarData)) { _ in
                 Task {
-                    let navDate = await navigationManager.currentDate
+                    let navDate = navigationManager.currentDate
                     currentDate = navDate
                     await calendarViewModel.forceLoadCalendarDataForMonth(containing: navDate)
                     await MainActor.run {
@@ -1746,13 +1746,13 @@ struct CalendarView: View {
                 },
                 onMove: { updatedTask, targetListId in
                     Task {
-                        await tasksViewModel.moveTask(updatedTask, from: listId, to: targetListId, for: accountKind)
+                        _ = await tasksViewModel.moveTask(updatedTask, from: listId, to: targetListId, for: accountKind)
                         updateCachedTasks() // Refresh cached tasks after move
                     }
                 },
                 onCrossAccountMove: { updatedTask, targetAccountKind, targetListId in
                     Task {
-                        await tasksViewModel.crossAccountMoveTask(updatedTask, from: (accountKind, listId), to: (targetAccountKind, targetListId))
+                        _ = await tasksViewModel.crossAccountMoveTask(updatedTask, from: (accountKind, listId), to: (targetAccountKind, targetListId))
                         updateCachedTasks()
                     }
                 }
@@ -2062,7 +2062,7 @@ struct CalendarView: View {
                     .onChanged { value in
                         isRightDividerDragging = true
                         let newHeight = rightSectionTopHeight + value.translation.height
-                        rightSectionTopHeight = max(200, min(UIScreen.main.bounds.height - 300, newHeight))
+                        rightSectionTopHeight = max(200, min(ScreenMetrics.height - 300, newHeight))
                     }
                     .onEnded { _ in
                         isRightDividerDragging = false
@@ -2087,7 +2087,7 @@ struct CalendarView: View {
                     .onChanged { value in
                         isWeekDividerDragging = true
                         let newHeight = weekTopSectionHeight + value.translation.height
-                        weekTopSectionHeight = max(200, min(UIScreen.main.bounds.height - 200, newHeight))
+                        weekTopSectionHeight = max(200, min(ScreenMetrics.height - 200, newHeight))
                     }
                     .onEnded { _ in
                         isWeekDividerDragging = false
@@ -2112,7 +2112,7 @@ struct CalendarView: View {
                         isDayVerticalDividerDragging = true
                         let newWidth = dayLeftSectionWidth + value.translation.width
                         // Constrain to reasonable bounds: minimum 200pt, maximum 80% of screen width
-                        dayLeftSectionWidth = max(200, min(UIScreen.main.bounds.width * 0.8, newWidth))
+                        dayLeftSectionWidth = max(200, min(ScreenMetrics.width * 0.8, newWidth))
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
@@ -2150,7 +2150,7 @@ struct CalendarView: View {
                     isDayRightColumnDividerDragging = true
                     let newWidth = dayRightColumn2Width + value.translation.width
                     // Constrain to reasonable bounds: minimum 150pt, maximum to leave space for other columns
-                    dayRightColumn2Width = max(150, min(UIScreen.main.bounds.width * 0.4, newWidth))
+                    dayRightColumn2Width = max(150, min(ScreenMetrics.width * 0.4, newWidth))
                 }
                 .onEnded { _ in
                     isDayRightColumnDividerDragging = false
@@ -2705,7 +2705,6 @@ struct CalendarView: View {
             }
         }
         
-        let totalEventsInGrouped = eventsGroupedByDate.values.flatMap { $0 }.count
         
         return eventsGroupedByDate
     }
@@ -3291,7 +3290,6 @@ struct CalendarView: View {
                     let startOfDueDate = calendar.startOfDay(for: dueDate)
                     let startOfToday = calendar.startOfDay(for: Date())
                     
-                    let isDueOnViewedDate = calendar.isDate(dueDate, inSameDayAs: date)
                     let isViewingToday = calendar.isDate(date, inSameDayAs: Date())
                     let isViewingDueDate = startOfViewedDate == startOfDueDate
                     let isOverdue = startOfDueDate < startOfToday

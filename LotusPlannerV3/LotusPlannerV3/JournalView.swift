@@ -340,12 +340,12 @@ struct JournalView: View {
                             await saveToiCloud()
                         }
                     }
-        .onChange(of: currentDate) { newValue in
+        .onChange(of: currentDate) { _, newValue in
             Task { @MainActor in
                 await switchToDate(newValue)
             }
         }
-        .onChange(of: pickerItems) { newValue in
+        .onChange(of: pickerItems) { _, newValue in
             if !newValue.isEmpty {
                 loadSelectedPhotos()
             }
@@ -385,7 +385,7 @@ struct JournalView: View {
                                 await loadFromiCloud(for: currentDate)
                             }
                         }
-                        .onChange(of: currentDate) { newValue in
+                        .onChange(of: currentDate) { _, newValue in
                             Task { @MainActor in
                                 await switchToDate(newValue)
                             }
@@ -754,12 +754,12 @@ struct JournalView: View {
                     canvasSize = newSize
                 }
             }
-            .onChange(of: newSize) { size in
+            .onChange(of: newSize) { _, size in
                 // Update size and reflow when layout changes
                 canvasSize = size
             }
         }
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             Task { @MainActor in
                 switch newPhase {
                 case .inactive, .background:
@@ -1255,35 +1255,6 @@ struct JournalView: View {
         let message = "Operation timed out"
     }
     
-    /// Log all files in iCloud photos directory
-    private func logiCloudPhotoFiles() async {
-        // Debug function - no output needed
-        let photosDir = photosDirectory()
-        
-        do {
-            let contents = try FileManager.default.contentsOfDirectory(at: photosDir, includingPropertiesForKeys: [.fileSizeKey, .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey], options: [])
-            
-            for (index, url) in contents.enumerated() {
-                let fileName = url.lastPathComponent
-                let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-                
-                // Check if file is in iCloud
-                var isUbiquitous: AnyObject?
-                try? (url as NSURL).getResourceValue(&isUbiquitous, forKey: URLResourceKey.isUbiquitousItemKey)
-                let isInCloud = (isUbiquitous as? Bool) == true
-                
-                // Check download status
-                var downloadStatus: AnyObject?
-                try? (url as NSURL).getResourceValue(&downloadStatus, forKey: URLResourceKey.ubiquitousItemDownloadingStatusKey)
-                let status = downloadStatus as? URLUbiquitousItemDownloadingStatus
-            }
-            
-            // Directory contents processed silently
-        } catch {
-            // Error listing directory - silently fail
-        }
-    }
-    
     /// Ensure iCloud file is fully downloaded (optimized to prevent freezing)
     private func ensureFileDownloaded(url: URL) async {
         // Check if file is in iCloud
@@ -1448,7 +1419,7 @@ struct JournalView: View {
         Task {
             var loadedPhotos: [JournalPhoto] = []
             
-            for (index, item) in pickerItems.enumerated() {
+            for item in pickerItems {
                 if let data = try? await item.loadTransferable(type: Data.self), let uiImg = UIImage(data: data) {
                     let position = CGPoint(x: 150, y: 150)
                     let size = CGSize(width: 120, height: 120)
@@ -1586,7 +1557,6 @@ struct JournalView: View {
                         .onChanged { value in
                             let aspect = max(photo.size.width, 1) / max(photo.size.height, 1)
                             let dx = value.translation.width
-                            let dy = value.translation.height
                             var dw: CGFloat = 0
                             var dh: CGFloat = 0
 

@@ -808,7 +808,7 @@ struct AddItemView: View {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlannerCalendarError.invalidResponse
         }
@@ -882,7 +882,7 @@ struct AddItemView: View {
             endDict["date"] = NSNull()
         }
 
-        var body: [String: Any] = [
+        let body: [String: Any] = [
             "summary": itemTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             "start": startDict,
             "end": endDict,
@@ -892,7 +892,7 @@ struct AddItemView: View {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlannerCalendarError.invalidResponse
         }

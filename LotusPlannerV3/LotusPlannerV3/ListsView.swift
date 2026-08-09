@@ -64,7 +64,7 @@ struct ListsView: View {
         .onAppear {
             loadTaskLists()
         }
-        .onChange(of: shouldUseStackedLayout) { newValue in
+        .onChange(of: shouldUseStackedLayout) { _, newValue in
             // Reset drawer state when switching between stacked and split layouts
             if !newValue {
                 showingDetailView = false

@@ -211,7 +211,7 @@ struct AllTaskListsColumn: View {
         }
         
         Task {
-            await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
+            _ = await tasksVM.createTaskList(title: newListName.trimmingCharacters(in: .whitespacesAndNewlines), for: accountKind)
             await MainActor.run {
                 showingNewListSheet = false
                 newListName = ""
