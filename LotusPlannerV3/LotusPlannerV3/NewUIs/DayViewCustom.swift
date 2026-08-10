@@ -137,6 +137,7 @@ struct DayViewCustom: View {
                 pageView(pageConfig: page2).tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayHorizontalScrollID))
         } else {
             pageView(pageConfig: config.page1)
         }
@@ -341,6 +342,7 @@ struct DayViewCustom: View {
                         }
                     }
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
@@ -566,6 +568,7 @@ struct DayViewCustom: View {
                     }
                 )
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
         } else {
             notLinkedPlaceholder(for: account)
         }
@@ -611,6 +614,7 @@ struct DayViewCustom: View {
                     }
                 )
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
         } else {
             notLinkedPlaceholder(for: account)
         }
@@ -648,6 +652,7 @@ struct DayViewCustom: View {
                 )
                 .padding(8)
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
         } else {
             notLinkedPlaceholder(for: account)
         }

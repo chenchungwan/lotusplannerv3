@@ -199,6 +199,7 @@ struct DayViewMobile: View {
                     .padding(.vertical, adaptivePadding)
                     .safeAreaPadding(.horizontal, 8)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
             }
         }
         // Task details sheet

@@ -159,6 +159,7 @@ struct DayViewNewCompact: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 .frame(maxHeight: .infinity)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
@@ -282,6 +283,7 @@ struct DayViewNewCompact: View {
                                 date: navigationManager.currentDate
                             )
                         }
+                        .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                     }
                 } else {
                     // Show drag-to-reschedule timeline.
@@ -468,6 +470,7 @@ struct DayViewNewCompact: View {
                 }
                 .padding(8)
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
         }
         .background(Color(.systemBackground))
     }

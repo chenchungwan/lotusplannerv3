@@ -70,6 +70,7 @@ struct DayViewNewExpanded: View {
                         .padding(12)
                 }
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayHorizontalScrollID))
         }
         // Task details sheet
         .sheet(isPresented: Binding(
@@ -168,6 +169,7 @@ struct DayViewNewExpanded: View {
                             date: navigationManager.currentDate
                         )
                     }
+                    .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
@@ -241,6 +243,7 @@ struct DayViewNewExpanded: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                     }
+                    .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                     .frame(maxHeight: .infinity)
                     .background(Color(.systemBackground))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -304,6 +307,7 @@ struct DayViewNewExpanded: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 .frame(height: account1TasksHeight)
                 .background(Color(.systemBackground))
 
@@ -316,6 +320,7 @@ struct DayViewNewExpanded: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 .frame(maxHeight: .infinity)
                 .background(Color(.systemBackground))
             } else if auth.isLinked(kind: .account1) {
@@ -325,6 +330,7 @@ struct DayViewNewExpanded: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 .frame(maxHeight: .infinity)
                 .background(Color(.systemBackground))
             } else if auth.isLinked(kind: .account2) {
@@ -334,6 +340,7 @@ struct DayViewNewExpanded: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 .frame(maxHeight: .infinity)
                 .background(Color(.systemBackground))
             } else {

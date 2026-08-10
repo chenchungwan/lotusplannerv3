@@ -237,6 +237,7 @@ struct DraggableTimeboxComponent: View {
                     .coordinateSpace(name: timelineCoordSpace)
                 }
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
             .onAppear {
                 startCurrentTimeTimer()
                 scrollToCurrentHour(proxy: proxy)

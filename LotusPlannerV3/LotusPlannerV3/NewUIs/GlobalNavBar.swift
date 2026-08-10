@@ -148,25 +148,40 @@ struct GlobalNavBar: View {
         isCompact || verticalSizeClass == .compact
     }
 
+    /// Ideal width of the one-line bar (nav + gap + actions). `0` means not measured yet.
+    @State private var oneLineIdealWidth: CGFloat = 0
+    @State private var barContainerWidth: CGFloat = 0
+
+    private var usesTwoLineBar: Bool {
+        if prefersTwoLineBar { return true }
+        guard oneLineIdealWidth > 0, barContainerWidth > 0 else { return false }
+        return oneLineIdealWidth > barContainerWidth
+    }
+
     var body: some View {
         Group {
-            if prefersTwoLineBar {
+            if usesTwoLineBar {
                 twoLineBar
             } else {
-                ViewThatFits(in: .horizontal) {
-                    oneLineBar
-                    twoLineBar
-                }
+                oneLineBar
             }
         }
         .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: NavBarContainerWidthKey.self, value: geo.size.width)
+            }
+        }
+        .background(alignment: .leading) {
+            oneLineWidthProbe
+        }
+        .onPreferenceChange(NavBarContainerWidthKey.self) { barContainerWidth = $0 }
+        .onPreferenceChange(NavBarOneLineIdealWidthKey.self) { oneLineIdealWidth = $0 }
         .background(Color(.systemBackground))
         .buttonStyle(.borderless)
     }
 
-    /// Ideal-width one-line layout for ViewThatFits. A flexible Spacer would
-    /// make this report the full proposed width and always "fit" while clipping;
-    /// fixedSize + minLength keeps the measured width equal to real content.
+    /// Full-width one-line bar: hamburger/date/intervals leading, actions trailing.
     private var oneLineBar: some View {
         HStack(spacing: 12) {
             navigationControls
@@ -176,8 +191,28 @@ struct GlobalNavBar: View {
                 .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
         .frame(height: barHeight / 2)
+    }
+
+    /// Invisible ideal-width probe so we can fall back to two-line when content
+    /// would clip — without breaking the real one-line bar's leading/trailing layout.
+    private var oneLineWidthProbe: some View {
+        HStack(spacing: 12) {
+            navigationControls
+            Color.clear.frame(width: 12)
+            actionControls
+        }
+        .padding(.horizontal, 12)
         .fixedSize(horizontal: true, vertical: false)
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: NavBarOneLineIdealWidthKey.self, value: geo.size.width)
+            }
+        )
     }
 
     private var navigationControls: some View {
@@ -458,7 +493,7 @@ struct GlobalNavBar: View {
         } else {
             formatter.dateStyle = .medium
             let date = formatter.string(from: navigationManager.currentDate)
-            PrintDayHelper.saveCurrentWindowToPhotos(jobName: "Day — \(date)")
+            PrintDayHelper.saveExpandedDayToPhotos(jobName: "Day — \(date)")
         }
     }
 
@@ -767,6 +802,20 @@ struct GlobalNavBar: View {
         await MainActor.run { isSyncing = false }
     }
 
+}
+
+private struct NavBarContainerWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct NavBarOneLineIdealWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 #Preview {

@@ -150,6 +150,7 @@ struct DayViewNewClassic: View {
                             date: navigationManager.currentDate
                         )
                     }
+                    .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
@@ -223,6 +224,7 @@ struct DayViewNewClassic: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                     }
+                    .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
                     .frame(maxHeight: .infinity)
                     .background(Color(.systemBackground))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -256,6 +258,7 @@ struct DayViewNewClassic: View {
                         .padding(.horizontal, 2)
                         .padding(.vertical, 2)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayVerticalScrollID))
             }
             .frame(height: rightSectionTopHeight, alignment: .top)
             .padding(.all, 8)

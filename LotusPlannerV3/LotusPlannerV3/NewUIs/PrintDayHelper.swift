@@ -6,11 +6,47 @@ import UIKit
 enum PrintDayHelper {
     static let weekHorizontalScrollID = "lotus.week.export.horizontal"
     static let weekVerticalScrollID = "lotus.week.export.vertical"
+    static let dayVerticalScrollID = "lotus.day.export.vertical"
+    static let dayHorizontalScrollID = "lotus.day.export.horizontal"
 
     /// Snapshots the current visible window (including the nav bar) and writes it to the Photos library.
     static func saveCurrentWindowToPhotos(jobName: String) {
         guard let window = keyWindow(), let image = snapshotWindow(window) else { return }
         saveToPhotos(image, jobName: jobName)
+    }
+
+    /// Expands overflowing day-view content for Photos. When the day layout has a
+    /// second page (Custom 2-page TabView, or Expanded journal page), captures both
+    /// pages — combined side by side into one image when feasible, otherwise saved separately.
+    static func saveExpandedDayToPhotos(jobName: String) {
+        guard let window = keyWindow() else { return }
+
+        let pageScroll = findScrollView(in: window, accessibilityID: dayHorizontalScrollID)
+            ?? findDayPageHorizontalScroll(in: window)
+
+        if let pageScroll,
+           pageScroll.contentSize.width > pageScroll.bounds.width * 1.35 {
+            let pages = capturePagedDayImages(window: window, pageScroll: pageScroll)
+            finishDayExport(pages: pages, jobName: jobName)
+            return
+        }
+
+        if let image = captureVisibleDayPageExpanded(window: window) {
+            saveToPhotos(image, jobName: jobName)
+        }
+    }
+
+    private static func finishDayExport(pages: [UIImage], jobName: String) {
+        guard !pages.isEmpty else { return }
+        if pages.count == 1 {
+            saveToPhotos(pages[0], jobName: jobName)
+            return
+        }
+        if let combined = combineDayPageImages(pages) {
+            saveToPhotos(combined, jobName: jobName)
+        } else {
+            saveMultipleToPhotos(pages, jobName: jobName)
+        }
     }
 
     /// Expands overflowing week scroll views (horizontal and/or vertical) so the saved
@@ -48,16 +84,207 @@ enum PrintDayHelper {
     }
 
     private static func findScrollView(in root: UIView, accessibilityID: String) -> UIScrollView? {
+        findAllScrollViews(in: root, accessibilityID: accessibilityID).first
+    }
+
+    private static func findAllScrollViews(in root: UIView, accessibilityID: String) -> [UIScrollView] {
+        var matches: [UIScrollView] = []
         var queue: [UIView] = [root]
         while !queue.isEmpty {
             let view = queue.removeFirst()
             if let scrollView = view as? UIScrollView,
                scrollView.accessibilityIdentifier == accessibilityID {
-                return scrollView
+                matches.append(scrollView)
             }
             queue.append(contentsOf: view.subviews)
         }
-        return nil
+        return matches
+    }
+
+    /// Top-level vertical day columns: overflowing, not chrome, and not nested inside
+    /// another overflowing vertical scroller we're already capturing.
+    private static func findDayColumnScrollViews(
+        in window: UIWindow,
+        visibleIn visibleRect: CGRect? = nil
+    ) -> [UIScrollView] {
+        var candidates: [UIScrollView] = []
+        var queue: [UIView] = [window]
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if let scrollView = view as? UIScrollView,
+               !isLikelyChromeScrollView(scrollView, window: window),
+               !isPrimarilyHorizontalPager(scrollView),
+               scrollView.contentSize.height > scrollView.bounds.height + 0.5 {
+                if let visibleRect {
+                    let frame = scrollView.convert(scrollView.bounds, to: window)
+                    guard frame.intersects(visibleRect.insetBy(dx: -2, dy: -2)) else {
+                        queue.append(contentsOf: view.subviews)
+                        continue
+                    }
+                }
+                candidates.append(scrollView)
+            }
+            queue.append(contentsOf: view.subviews)
+        }
+
+        // Prefer outermost columns: drop scrollers nested inside another candidate.
+        return topLevelScrollViews(candidates)
+            .sorted { a, b in
+                a.convert(a.bounds, to: window).minX < b.convert(b.bounds, to: window).minX
+            }
+    }
+
+    private static func topLevelScrollViews(_ candidates: [UIScrollView]) -> [UIScrollView] {
+        candidates.filter { candidate in
+            !candidates.contains { other in
+                other !== candidate && candidate.isDescendant(of: other)
+            }
+        }
+    }
+
+    /// Horizontal pager used by 2-page Custom day layouts and Expanded (journal) day view.
+    private static func findDayPageHorizontalScroll(in window: UIWindow) -> UIScrollView? {
+        var best: UIScrollView?
+        var bestWidth: CGFloat = 0
+        var queue: [UIView] = [window]
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if let scrollView = view as? UIScrollView,
+               !isLikelyChromeScrollView(scrollView, window: window),
+               scrollView.contentSize.width > scrollView.bounds.width * 1.35,
+               scrollView.bounds.height > window.bounds.height * 0.4,
+               scrollView.contentSize.width > bestWidth {
+                best = scrollView
+                bestWidth = scrollView.contentSize.width
+            }
+            queue.append(contentsOf: view.subviews)
+        }
+        return best
+    }
+
+    private static func captureVisibleDayPageExpanded(window: UIWindow) -> UIImage? {
+        let visibleRect = window.bounds
+        let tagged = findAllScrollViews(in: window, accessibilityID: dayVerticalScrollID)
+            .filter { isMeaningfullyVisible($0, in: window) && !isPrimarilyHorizontalPager($0) }
+        let discovered = findDayColumnScrollViews(in: window, visibleIn: visibleRect)
+            .filter { isMeaningfullyVisible($0, in: window) }
+
+        // Union tagged + discovered. Using only tagged dropped sibling columns
+        // (e.g. tasks/logs) whenever the timebox was tagged.
+        var seen = Set<ObjectIdentifier>()
+        var merged: [UIScrollView] = []
+        for scrollView in tagged + discovered {
+            let id = ObjectIdentifier(scrollView)
+            guard !seen.contains(id) else { continue }
+            seen.insert(id)
+            merged.append(scrollView)
+        }
+        let columns = topLevelScrollViews(merged)
+
+        // Always use the multi-column stitcher (even for one column): it seeds the
+        // on-screen layout so non-overflowing siblings stay visible, then overlays
+        // expanded column content. The single-column stitcher alone paints only
+        // that scroller and leaves the rest of the page blank.
+        if !columns.isEmpty {
+            return stitchMultiColumnDay(window: window, columns: columns)
+        }
+        // No visible overflowing columns on this page (e.g. journal page) —
+        // never fall back to off-screen page-1 scrollers; snapshot what is on screen.
+        return snapshotWindow(window)
+    }
+
+    /// True when most of the scroller is actually on-screen. Off-page columns inside
+    /// a horizontal pager can still exist in the hierarchy; ignore those.
+    private static func isMeaningfullyVisible(_ scrollView: UIScrollView, in window: UIWindow) -> Bool {
+        let frame = scrollView.convert(scrollView.bounds, to: window)
+        let visible = frame.intersection(window.bounds)
+        guard !visible.isNull, visible.width > 1, visible.height > 1 else { return false }
+        let minVisibleWidth = max(40, scrollView.bounds.width * 0.5)
+        let minVisibleHeight = min(80, max(24, scrollView.bounds.height * 0.25))
+        return visible.width >= minVisibleWidth && visible.height >= minVisibleHeight
+    }
+
+    /// Day/week page pagers are horizontal; never treat them as expand-able day columns.
+    private static func isPrimarilyHorizontalPager(_ scrollView: UIScrollView) -> Bool {
+        scrollView.contentSize.width > scrollView.bounds.width + 0.5
+            && scrollView.contentSize.width > scrollView.contentSize.height
+    }
+
+    private static func capturePagedDayImages(window: UIWindow, pageScroll: UIScrollView) -> [UIImage] {
+        let chrome = prepareForSnapshot(pageScroll)
+        // prepareForSnapshot resets offset to zero — keep that for page 1.
+        pageScroll.layoutIfNeeded()
+        CATransaction.flush()
+
+        defer {
+            restore(pageScroll, chrome: chrome)
+            pageScroll.layoutIfNeeded()
+        }
+
+        let pageWidth = max(pageScroll.bounds.width, 1)
+        let maxX = max(0, pageScroll.contentSize.width - pageWidth)
+        var offsets: [CGFloat] = [0]
+        if maxX > pageWidth * 0.25 {
+            offsets.append(maxX)
+        }
+        let approxPages = max(2, Int(round(pageScroll.contentSize.width / pageWidth)))
+        if approxPages > 2 {
+            for index in 1..<(approxPages - 1) {
+                let mid = min(maxX, CGFloat(index) * pageWidth)
+                if mid > pageWidth * 0.25, mid < maxX - pageWidth * 0.25 {
+                    offsets.append(mid)
+                }
+            }
+        }
+        let uniqueOffsets = Array(Set(offsets.map { ($0 * 2).rounded() / 2 })).sorted()
+
+        var images: [UIImage] = []
+        for offsetX in uniqueOffsets {
+            pageScroll.setContentOffset(CGPoint(x: offsetX, y: pageScroll.contentOffset.y), animated: false)
+            pageScroll.layoutIfNeeded()
+            window.layoutIfNeeded()
+            CATransaction.flush()
+            // Ensure the newly revealed page has committed its layer tree before snapshot.
+            pageScroll.setNeedsLayout()
+            pageScroll.layoutIfNeeded()
+            CATransaction.flush()
+            if let image = captureVisibleDayPageExpanded(window: window) {
+                images.append(image)
+            }
+        }
+        return images
+    }
+
+    /// Places page images side by side (page 2 to the right of page 1).
+    /// Returns nil when the result would be too large for a single Photos asset.
+    private static func combineDayPageImages(_ pages: [UIImage]) -> UIImage? {
+        guard pages.count >= 2 else { return pages.first }
+        let scale = pages[0].scale
+        let totalWidth = pages.map(\.size.width).reduce(0, +)
+        let height = pages.map(\.size.height).max() ?? pages[0].size.height
+        let pixelArea = totalWidth * scale * height * scale
+        // Keep combined exports under a safe raster size; otherwise save separately.
+        if pixelArea > 36_000_000 || totalWidth * scale > 16_384 || height * scale > 16_384 {
+            return nil
+        }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = true
+        format.scale = scale
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: totalWidth, height: height),
+            format: format
+        )
+        return renderer.image { ctx in
+            UIColor.systemBackground.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: totalWidth, height: height))
+
+            var x: CGFloat = 0
+            for page in pages {
+                page.draw(in: CGRect(x: x, y: 0, width: page.size.width, height: page.size.height))
+                x += page.size.width
+            }
+        }
     }
 
     private static func findPreferredScrollView(in root: UIView, axis: ScrollAxis) -> UIScrollView? {
@@ -174,6 +401,76 @@ enum PrintDayHelper {
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in
             view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+        }
+    }
+
+    /// Side-by-side day columns: expand each vertical scroller to its full content
+    /// height and composite under the shared nav/chrome strip.
+    private static func stitchMultiColumnDay(window: UIWindow, columns: [UIScrollView]) -> UIImage? {
+        let sorted = columns.sorted {
+            $0.convert($0.bounds, to: window).minX < $1.convert($1.bounds, to: window).minX
+        }
+        guard !sorted.isEmpty else { return nil }
+
+        let chromes = sorted.map { prepareForSnapshot($0) }
+        sorted.forEach { $0.layoutIfNeeded() }
+        CATransaction.flush()
+
+        defer {
+            for (scrollView, chrome) in zip(sorted, chromes) {
+                restore(scrollView, chrome: chrome)
+                scrollView.layoutIfNeeded()
+            }
+        }
+
+        guard let baseline = snapshotWindow(window) else { return nil }
+
+        let frames = sorted.map { $0.convert($0.bounds, to: window) }
+        let topY = frames.map(\.minY).min() ?? 0
+        let aboveH = max(0, topY)
+        // Seed the full on-screen content under the nav (full window width), not just
+        // the union of overflowing column frames — otherwise sibling columns that
+        // don't overflow (tasks, journal) and stacked sections (logs) disappear.
+        let onScreenContentH = max(0, window.bounds.height - topY)
+
+        let expandedBottoms: [CGFloat] = zip(sorted, frames).map { scrollView, frame in
+            let localTop = frame.minY - topY
+            return localTop + scrollView.contentSize.height
+        }
+        let contentH = max(onScreenContentH, expandedBottoms.max() ?? 0)
+        let finalSize = CGSize(width: window.bounds.width, height: aboveH + contentH)
+
+        let renderer = UIGraphicsImageRenderer(size: finalSize)
+        return renderer.image { ctx in
+            UIColor.systemBackground.setFill()
+            ctx.fill(CGRect(origin: .zero, size: finalSize))
+
+            drawTopChrome(baseline: baseline, height: aboveH, finalWidth: finalSize.width)
+
+            if onScreenContentH > 0.5,
+               let cg = baseline.cgImage?.cropping(to: CGRect(
+                x: 0,
+                y: topY * baseline.scale,
+                width: baseline.size.width * baseline.scale,
+                height: onScreenContentH * baseline.scale
+               )) {
+                UIImage(cgImage: cg, scale: baseline.scale, orientation: .up)
+                    .draw(in: CGRect(x: 0, y: aboveH, width: baseline.size.width, height: onScreenContentH))
+            }
+
+            for (scrollView, frame) in zip(sorted, frames) {
+                let localTop = frame.minY - topY
+                let drawY = aboveH + localTop
+                if let contentView = primaryContentSubview(of: scrollView),
+                   let contentImage = renderView(contentView) {
+                    contentImage.draw(in: CGRect(
+                        x: frame.minX,
+                        y: drawY,
+                        width: frame.width,
+                        height: scrollView.contentSize.height
+                    ))
+                }
+            }
         }
     }
 
@@ -520,6 +817,31 @@ enum PrintDayHelper {
                     }, completionHandler: { success, error in
                         DispatchQueue.main.async {
                             presentResultAlert(success: success, error: error, jobName: jobName)
+                        }
+                    })
+                case .denied, .restricted:
+                    presentPermissionDeniedAlert()
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    private static func saveMultipleToPhotos(_ images: [UIImage], jobName: String) {
+        guard !images.isEmpty else { return }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                switch status {
+                case .authorized, .limited:
+                    PHPhotoLibrary.shared().performChanges({
+                        for image in images {
+                            PHAssetCreationRequest.creationRequestForAsset(from: image)
+                        }
+                    }, completionHandler: { success, error in
+                        DispatchQueue.main.async {
+                            let label = "\(jobName) (\(images.count) pages)"
+                            presentResultAlert(success: success, error: error, jobName: label)
                         }
                     })
                 case .denied, .restricted:
