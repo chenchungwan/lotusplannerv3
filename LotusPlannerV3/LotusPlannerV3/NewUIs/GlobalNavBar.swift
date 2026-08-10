@@ -142,24 +142,42 @@ struct GlobalNavBar: View {
         return isCurrentPeriod ? DateDisplayStyle.currentPeriodColor : .primary
     }
 
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            // Use one line only when both groups fit at their natural widths.
-            HStack(spacing: isCompact ? 8 : 12) {
-                navigationControls
-                    .fixedSize(horizontal: true, vertical: false)
-                Spacer(minLength: 0)
-                actionControls
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .padding(.horizontal, isCompact ? 8 : 12)
-            .frame(height: barHeight / 2)
+    /// Compact width (iPhone portrait / split view) or compact height
+    /// (iPhone landscape) should always use the scrollable two-line bar.
+    private var prefersTwoLineBar: Bool {
+        isCompact || verticalSizeClass == .compact
+    }
 
-            twoLineBar
+    var body: some View {
+        Group {
+            if prefersTwoLineBar {
+                twoLineBar
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    oneLineBar
+                    twoLineBar
+                }
+            }
         }
+        .frame(maxWidth: .infinity)
         .background(Color(.systemBackground))
         .buttonStyle(.borderless)
-        .simultaneousGesture(timeSwipeGesture)
+    }
+
+    /// Ideal-width one-line layout for ViewThatFits. A flexible Spacer would
+    /// make this report the full proposed width and always "fit" while clipping;
+    /// fixedSize + minLength keeps the measured width equal to real content.
+    private var oneLineBar: some View {
+        HStack(spacing: 12) {
+            navigationControls
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 12)
+            actionControls
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: barHeight / 2)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var navigationControls: some View {
@@ -177,6 +195,9 @@ struct GlobalNavBar: View {
                         .keyboardShortcut("]", modifiers: [])
                 }
             }
+            // Keep date swipe on the title cluster only so horizontal
+            // ScrollViews in the two-line bar can still receive drags.
+            .simultaneousGesture(timeSwipeGesture)
 
             intervalControls
         }
@@ -187,8 +208,10 @@ struct GlobalNavBar: View {
             // Top line: navigation — menu, date, interval selectors (left-aligned)
             ScrollView(.horizontal, showsIndicators: false) {
                 navigationControls
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, isCompact ? 8 : 12)
             }
+            .frame(maxWidth: .infinity)
             .frame(height: barHeight / 2)
 
             // Bottom line: editing/actions (right-aligned)
@@ -197,6 +220,7 @@ struct GlobalNavBar: View {
                     HStack(spacing: isCompact ? 4 : 8) {
                         Spacer(minLength: 0)
                         actionControls
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .padding(.horizontal, isCompact ? 8 : 12)
                     .frame(minWidth: geometry.size.width)
@@ -204,6 +228,7 @@ struct GlobalNavBar: View {
             }
             .frame(height: barHeight / 2)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: barHeight)
     }
 
