@@ -40,17 +40,28 @@ struct DayViewNewClassic: View {
     
     var body: some View {
         GeometryReader { geometry in
+            let availableWidth = geometry.size.width
+            let leftSectionWidth = clampedLeftSectionWidth(for: availableWidth)
+
             HStack(alignment: .top, spacing: 0) {
                 // Left section (dynamic width) - TimeboxComponent and Logs
                 leftDaySectionWithDivider(geometry: geometry)
-                    .frame(width: dayLeftSectionWidth)
+                    .frame(width: leftSectionWidth)
 
                 // Vertical divider
-                dayVerticalDivider
+                dayVerticalDivider(availableWidth: availableWidth)
 
                 // Right section - Tasks and Journal
                 rightDaySection(geometry: geometry)
                     .frame(maxWidth: .infinity)
+            }
+            .frame(width: availableWidth, height: geometry.size.height, alignment: .topLeading)
+            .clipped()
+            .onAppear {
+                dayLeftSectionWidth = leftSectionWidth
+            }
+            .onChange(of: availableWidth) { _, newWidth in
+                dayLeftSectionWidth = clampedLeftSectionWidth(for: newWidth)
             }
         }
         // Task details sheet
@@ -112,6 +123,26 @@ struct DayViewNewClassic: View {
                 showEventOnly: true
             )
         }
+    }
+
+    private func clampedLeftSectionWidth(for availableWidth: CGFloat) -> CGFloat {
+        clampedLeftSectionWidth(dayLeftSectionWidth, for: availableWidth)
+    }
+
+    private func clampedLeftSectionWidth(_ proposedWidth: CGFloat, for availableWidth: CGFloat) -> CGFloat {
+        let dividerWidth: CGFloat = 8
+        let preferredMinimum: CGFloat = 200
+        let remainingMinimum: CGFloat = 220
+        let usableWidth = max(0, availableWidth - dividerWidth)
+
+        guard usableWidth > 0 else { return 0 }
+
+        if usableWidth < preferredMinimum + remainingMinimum {
+            return usableWidth * 0.42
+        }
+
+        let maxWidth = min(500, usableWidth - remainingMinimum)
+        return min(max(proposedWidth, preferredMinimum), maxWidth)
     }
 
     // MARK: - Left Section (from Timebox)
@@ -398,7 +429,7 @@ struct DayViewNewClassic: View {
     }
     
     // MARK: - Dividers
-    private var dayVerticalDivider: some View {
+    private func dayVerticalDivider(availableWidth: CGFloat) -> some View {
         Rectangle()
             .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
@@ -413,9 +444,7 @@ struct DayViewNewClassic: View {
                     .onChanged { value in
                         isDayVerticalDividerDragging = true
                         let newWidth = dayLeftSectionWidth + value.translation.width
-                        let minWidth: CGFloat = 200
-                        let maxWidth: CGFloat = 500
-                        dayLeftSectionWidth = max(minWidth, min(maxWidth, newWidth))
+                        dayLeftSectionWidth = clampedLeftSectionWidth(newWidth, for: availableWidth)
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
@@ -423,6 +452,7 @@ struct DayViewNewClassic: View {
                     }
             )
     }
+
     
     private var rightSectionDivider: some View {
         Rectangle()

@@ -1664,10 +1664,14 @@ struct CalendarView: View {
     
     private var dayViewBase: some View {
         GeometryReader { outerGeometry in
-            ScrollView(.horizontal, showsIndicators: true) {
-                dayViewContent(geometry: outerGeometry)
-                    .frame(width: outerGeometry.size.width) // 100% of device width
-            }
+            let horizontalInset: CGFloat = 12
+            let contentWidth = max(0, outerGeometry.size.width - horizontalInset * 2)
+
+            dayViewContent(geometry: outerGeometry)
+                .frame(width: contentWidth, height: outerGeometry.size.height)
+                .padding(.horizontal, horizontalInset)
+                .frame(width: outerGeometry.size.width, height: outerGeometry.size.height)
+                .clipped()
         }
         .background(Color(.systemBackground))
         .overlay(loadingOverlay)
@@ -1847,18 +1851,49 @@ struct CalendarView: View {
     }
     
     private func dayViewContentCompact(geometry: GeometryProxy) -> some View {
-        HStack(alignment: .top, spacing: 0) {
+        let availableWidth = geometry.size.width
+        let leftSectionWidth = clampedDayLeftSectionWidth(for: availableWidth)
+
+        return HStack(alignment: .top, spacing: 0) {
             // Left section (dynamic width)
             leftDaySectionWithDivider(geometry: geometry)
-                .frame(width: dayLeftSectionWidth)
+                .frame(width: leftSectionWidth)
             
             // Vertical divider
-            dayVerticalDivider
+            dayVerticalDivider(availableWidth: availableWidth)
 
             // Right section expands to fill remaining space
             rightDaySection(geometry: geometry)
                 .frame(maxWidth: .infinity)
         }
+        .frame(width: availableWidth, height: geometry.size.height, alignment: .topLeading)
+        .clipped()
+        .onAppear {
+            dayLeftSectionWidth = leftSectionWidth
+        }
+        .onChange(of: availableWidth) { _, newWidth in
+            dayLeftSectionWidth = clampedDayLeftSectionWidth(for: newWidth)
+        }
+    }
+
+    private func clampedDayLeftSectionWidth(for availableWidth: CGFloat) -> CGFloat {
+        clampedDayLeftSectionWidth(dayLeftSectionWidth, for: availableWidth)
+    }
+
+    private func clampedDayLeftSectionWidth(_ proposedWidth: CGFloat, for availableWidth: CGFloat) -> CGFloat {
+        let dividerWidth: CGFloat = 8
+        let preferredMinimum: CGFloat = 200
+        let remainingMinimum: CGFloat = 220
+        let usableWidth = max(0, availableWidth - dividerWidth)
+
+        guard usableWidth > 0 else { return 0 }
+
+        if usableWidth < preferredMinimum + remainingMinimum {
+            return usableWidth * 0.42
+        }
+
+        let maxWidth = min(usableWidth * 0.8, usableWidth - remainingMinimum)
+        return min(max(proposedWidth, preferredMinimum), maxWidth)
     }
     
     private func rightDaySection(geometry: GeometryProxy) -> some View {
@@ -2096,7 +2131,7 @@ struct CalendarView: View {
             )
     }
     
-    private var dayVerticalDivider: some View {
+    private func dayVerticalDivider(availableWidth: CGFloat) -> some View {
         Rectangle()
             .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
@@ -2111,8 +2146,7 @@ struct CalendarView: View {
                     .onChanged { value in
                         isDayVerticalDividerDragging = true
                         let newWidth = dayLeftSectionWidth + value.translation.width
-                        // Constrain to reasonable bounds: minimum 200pt, maximum 80% of screen width
-                        dayLeftSectionWidth = max(200, min(ScreenMetrics.width * 0.8, newWidth))
+                        dayLeftSectionWidth = clampedDayLeftSectionWidth(newWidth, for: availableWidth)
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false

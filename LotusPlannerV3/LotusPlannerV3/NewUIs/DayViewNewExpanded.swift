@@ -45,32 +45,43 @@ struct DayViewNewExpanded: View {
     
     var body: some View {
         GeometryReader { geometry in
+            let availableWidth = geometry.size.width
+            let leftSectionWidth = clampedLeftSectionWidth(for: availableWidth)
+            let middleSectionWidth = max(0, availableWidth - leftSectionWidth - 8)
+
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(spacing: 0) {
                     // First column: Timeline + Tasks
                     HStack(alignment: .top, spacing: 0) {
                         // Left section (dynamic width) - TimeboxComponent and Logs
                         leftDaySectionWithDivider(geometry: geometry)
-                            .frame(width: dayLeftSectionWidth)
+                            .frame(width: leftSectionWidth)
 
                         // Vertical divider
-                        dayVerticalDivider
+                        dayVerticalDivider(availableWidth: availableWidth)
 
                         // Middle section (Tasks only, no journal)
                         middleDaySectionWithoutJournal(geometry: geometry)
-                            .frame(width: geometry.size.width - dayLeftSectionWidth - 8) // 8 for divider width
+                            .frame(width: middleSectionWidth)
                     }
-                    .frame(width: geometry.size.width)
+                    .frame(width: availableWidth)
 
                     // Second column: Journal (swipeable)
                     JournalView(currentDate: $navigationManager.currentDate, embedded: true, layoutType: .expanded)
                         .id(navigationManager.currentDate)
-                        .frame(width: geometry.size.width * 0.95)
+                        .frame(width: max(0, availableWidth - 24))
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(12)
                 }
             }
+            .frame(width: availableWidth, height: geometry.size.height)
             .background(WeekExportScrollTagger(identifier: PrintDayHelper.dayHorizontalScrollID))
+            .onAppear {
+                dayLeftSectionWidth = leftSectionWidth
+            }
+            .onChange(of: availableWidth) { _, newWidth in
+                dayLeftSectionWidth = clampedLeftSectionWidth(for: newWidth)
+            }
         }
         // Task details sheet
         .sheet(isPresented: Binding(
@@ -131,6 +142,26 @@ struct DayViewNewExpanded: View {
                 showEventOnly: true
             )
         }
+    }
+
+    private func clampedLeftSectionWidth(for availableWidth: CGFloat) -> CGFloat {
+        clampedLeftSectionWidth(dayLeftSectionWidth, for: availableWidth)
+    }
+
+    private func clampedLeftSectionWidth(_ proposedWidth: CGFloat, for availableWidth: CGFloat) -> CGFloat {
+        let dividerWidth: CGFloat = 8
+        let preferredMinimum: CGFloat = 200
+        let remainingMinimum: CGFloat = 220
+        let usableWidth = max(0, availableWidth - dividerWidth)
+
+        guard usableWidth > 0 else { return 0 }
+
+        if usableWidth < preferredMinimum + remainingMinimum {
+            return usableWidth * 0.42
+        }
+
+        let maxWidth = min(500, usableWidth - remainingMinimum)
+        return min(max(proposedWidth, preferredMinimum), maxWidth)
     }
 
     // MARK: - Left Section
@@ -467,7 +498,7 @@ struct DayViewNewExpanded: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
     
-    private var dayVerticalDivider: some View {
+    private func dayVerticalDivider(availableWidth: CGFloat) -> some View {
         Rectangle()
             .fill(isDayVerticalDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
@@ -482,9 +513,7 @@ struct DayViewNewExpanded: View {
                     .onChanged { value in
                         isDayVerticalDividerDragging = true
                         let newWidth = dayLeftSectionWidth + value.translation.width
-                        let minWidth: CGFloat = 200
-                        let maxWidth: CGFloat = 500
-                        dayLeftSectionWidth = max(minWidth, min(maxWidth, newWidth))
+                        dayLeftSectionWidth = clampedLeftSectionWidth(newWidth, for: availableWidth)
                     }
                     .onEnded { _ in
                         isDayVerticalDividerDragging = false
@@ -612,4 +641,3 @@ struct DayViewNewExpanded: View {
 #Preview {
     DayViewNewExpanded(bulkEditManager: BulkEditManager())
 }
-

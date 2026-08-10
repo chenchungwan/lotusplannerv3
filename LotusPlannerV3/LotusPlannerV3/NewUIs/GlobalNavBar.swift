@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct GlobalNavBar: View {
     @ObservedObject private var navigationManager = NavigationManager.shared
@@ -145,7 +148,17 @@ struct GlobalNavBar: View {
     /// Compact width (iPhone portrait / split view) or compact height
     /// (iPhone landscape) should always use the scrollable two-line bar.
     private var prefersTwoLineBar: Bool {
-        isCompact || verticalSizeClass == .compact
+        isCompact || verticalSizeClass == .compact || isPadDayView
+    }
+
+    private var isPadDayView: Bool {
+        #if canImport(UIKit)
+        return UIDevice.current.userInterfaceIdiom == .pad &&
+            isCalendarLikeView &&
+            navigationManager.currentInterval == .day
+        #else
+        return false
+        #endif
     }
 
     /// Ideal width of the one-line bar (nav + gap + actions). `0` means not measured yet.
@@ -155,7 +168,8 @@ struct GlobalNavBar: View {
     private var usesTwoLineBar: Bool {
         if prefersTwoLineBar { return true }
         guard oneLineIdealWidth > 0, barContainerWidth > 0 else { return false }
-        return oneLineIdealWidth > barContainerWidth
+        let effectiveContainerWidth = min(barContainerWidth, ScreenMetrics.width)
+        return oneLineIdealWidth > effectiveContainerWidth
     }
 
     var body: some View {

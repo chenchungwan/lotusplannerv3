@@ -51,18 +51,29 @@ struct DayViewNewCompact: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let availableWidth = geometry.size.width
+            let leftColumnWidth = clampedColumnDividerPosition(for: availableWidth)
+
             // Main Content: Events + Tasks (left) | Journal (right)
             HStack(spacing: 0) {
                 // Left Column: Events + Tasks + Logs with draggable divider
                 leftColumn(geometry: geometry)
-                    .frame(width: columnDividerPosition)
+                    .frame(width: leftColumnWidth)
 
                 // Draggable divider between columns
-                columnDivider(geometry: geometry)
+                columnDivider(availableWidth: availableWidth)
 
                 // Right Column: Journal
                 journalColumn
                     .frame(maxWidth: .infinity)
+            }
+            .frame(width: availableWidth, height: geometry.size.height, alignment: .topLeading)
+            .clipped()
+            .onAppear {
+                columnDividerPosition = leftColumnWidth
+            }
+            .onChange(of: availableWidth) { _, newWidth in
+                columnDividerPosition = clampedColumnDividerPosition(for: newWidth)
             }
         }
         .background(Color(.systemBackground))
@@ -202,7 +213,27 @@ struct DayViewNewCompact: View {
 
     // MARK: - Column Divider
 
-    private func columnDivider(geometry: GeometryProxy) -> some View {
+    private func clampedColumnDividerPosition(for availableWidth: CGFloat) -> CGFloat {
+        clampedColumnDividerPosition(columnDividerPosition, for: availableWidth)
+    }
+
+    private func clampedColumnDividerPosition(_ proposedWidth: CGFloat, for availableWidth: CGFloat) -> CGFloat {
+        let dividerWidth: CGFloat = 8
+        let preferredMinimum: CGFloat = 200
+        let remainingMinimum: CGFloat = 220
+        let usableWidth = max(0, availableWidth - dividerWidth)
+
+        guard usableWidth > 0 else { return 0 }
+
+        if usableWidth < preferredMinimum + remainingMinimum {
+            return usableWidth * 0.5
+        }
+
+        let maxWidth = usableWidth - remainingMinimum
+        return min(max(proposedWidth, preferredMinimum), maxWidth)
+    }
+
+    private func columnDivider(availableWidth: CGFloat) -> some View {
         Rectangle()
             .fill(isColumnDividerDragging ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
             .frame(width: 8)
@@ -215,10 +246,8 @@ struct DayViewNewCompact: View {
                 DragGesture()
                     .onChanged { value in
                         isColumnDividerDragging = true
-                        let minWidth: CGFloat = 200
-                        let maxWidth: CGFloat = geometry.size.width - 200
                         let newWidth = columnDividerPosition + value.translation.width
-                        columnDividerPosition = max(minWidth, min(maxWidth, newWidth))
+                        columnDividerPosition = clampedColumnDividerPosition(newWidth, for: availableWidth)
                     }
                     .onEnded { _ in
                         isColumnDividerDragging = false
