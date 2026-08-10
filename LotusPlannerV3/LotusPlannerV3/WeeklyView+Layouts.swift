@@ -354,6 +354,7 @@ extension WeeklyView {
                         }
                         .padding(.horizontal, 12)
                     }
+                    .background(WeekExportScrollTagger(identifier: PrintDayHelper.weekHorizontalScrollID))
                 }
                 .onAppear {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -364,6 +365,7 @@ extension WeeklyView {
                     scrollToCurrentDayRowWithProxy(proxy)
                 }
             }
+            .background(WeekExportScrollTagger(identifier: PrintDayHelper.weekVerticalScrollID))
         }
     }
 

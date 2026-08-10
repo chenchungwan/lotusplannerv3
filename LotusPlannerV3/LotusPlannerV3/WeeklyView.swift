@@ -553,11 +553,13 @@ struct WeeklyView: View {
                                 }
                             }
                         }
+                        .background(WeekExportScrollTagger(identifier: PrintDayHelper.weekVerticalScrollID))
                         .frame(maxHeight: .infinity)
                     }
                     .frame(width: contentWidth)
                     .padding(.horizontal, 12)
                 }
+                .background(WeekExportScrollTagger(identifier: PrintDayHelper.weekHorizontalScrollID))
                 .background(Color(.systemBackground))
             }
         }
