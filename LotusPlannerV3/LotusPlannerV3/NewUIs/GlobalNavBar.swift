@@ -148,14 +148,13 @@ struct GlobalNavBar: View {
     /// Compact width (iPhone portrait / split view) or compact height
     /// (iPhone landscape) should always use the scrollable two-line bar.
     private var prefersTwoLineBar: Bool {
-        isCompact || verticalSizeClass == .compact || isPadDayView
+        isCompact || verticalSizeClass == .compact || isPadWidthConstrainedNavigation
     }
 
-    private var isPadDayView: Bool {
+    private var isPadWidthConstrainedNavigation: Bool {
         #if canImport(UIKit)
         return UIDevice.current.userInterfaceIdiom == .pad &&
-            isCalendarLikeView &&
-            navigationManager.currentInterval == .day
+            (isCalendarLikeView || navigationManager.currentView == .timebox || navigationManager.currentView == .tasks)
         #else
         return false
         #endif

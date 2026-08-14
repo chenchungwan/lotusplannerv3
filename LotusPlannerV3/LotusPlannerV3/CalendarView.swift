@@ -1664,7 +1664,7 @@ struct CalendarView: View {
     
     private var dayViewBase: some View {
         GeometryReader { outerGeometry in
-            let horizontalInset: CGFloat = 12
+            let horizontalInset = dayViewHorizontalInset
             let contentWidth = max(0, outerGeometry.size.width - horizontalInset * 2)
 
             dayViewContent(geometry: outerGeometry)
@@ -1706,6 +1706,8 @@ struct CalendarView: View {
             }
         }
     }
+
+    private var dayViewHorizontalInset: CGFloat { 12 }
     
     @ViewBuilder
     private var loadingOverlay: some View {
@@ -1851,7 +1853,7 @@ struct CalendarView: View {
     }
     
     private func dayViewContentCompact(geometry: GeometryProxy) -> some View {
-        let availableWidth = geometry.size.width
+        let availableWidth = max(0, geometry.size.width - dayViewHorizontalInset * 2)
         let leftSectionWidth = clampedDayLeftSectionWidth(for: availableWidth)
 
         return HStack(alignment: .top, spacing: 0) {

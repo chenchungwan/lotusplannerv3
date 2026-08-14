@@ -685,15 +685,17 @@ struct TasksView: View {
                 stackedTasksView(geometry: geometry)
             } else if appPrefs.tasksLayoutHorizontal && !AppPreferences.isRunningOniPhone {
                 // Horizontal cards layout
-                horizontalTasksView
+                horizontalTasksView(geometry: geometry)
             } else {
                 // Vertical layout
                 verticalTasksView(geometry: geometry)
             }
         }
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+        .clipped()
     }
     
-    private var horizontalTasksView: some View {
+    private func horizontalTasksView(geometry: GeometryProxy) -> some View {
         VStack(spacing: 0) {
             // Account 1 Tasks
             if authManager.isLinked(kind: .account1) {
@@ -775,10 +777,14 @@ struct TasksView: View {
         }
         .padding(.horizontal, 0)
         .padding(.vertical, adaptivePadding)
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+        .clipped()
     }
     
     private func verticalTasksView(geometry: GeometryProxy) -> some View {
-        HStack(alignment: .top, spacing: 0) {
+        let layout = taskColumnLayout(for: geometry.size.width)
+
+        return HStack(alignment: .top, spacing: 0) {
             // Account 1 Tasks Column
             if authManager.isLinked(kind: .account1) {
                 TasksComponent(
@@ -816,7 +822,7 @@ struct TasksView: View {
                         }
                     }
                 )
-                .frame(width: authManager.isLinked(kind: .account2) ? tasksAccount1Width : geometry.size.width, alignment: .topLeading)
+                .frame(width: authManager.isLinked(kind: .account2) ? layout.account1Width : layout.singleAccountWidth, alignment: .topLeading)
             }
             
             // Vertical divider (only show if both accounts are linked and not on mobile)
@@ -861,11 +867,38 @@ struct TasksView: View {
                         }
                     }
                 )
-                .frame(width: authManager.isLinked(kind: .account1) ? (geometry.size.width - tasksAccount1Width - 8) : geometry.size.width, alignment: .topLeading)
+                .frame(width: authManager.isLinked(kind: .account1) ? layout.account2Width : layout.singleAccountWidth, alignment: .topLeading)
             }
         }
         .padding(.horizontal, 0)
         .padding(.vertical, adaptivePadding)
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+        .clipped()
+        .onAppear {
+            tasksAccount1Width = layout.account1Width
+        }
+        .onChange(of: geometry.size.width) { _, _ in
+            tasksAccount1Width = taskColumnLayout(for: geometry.size.width).account1Width
+        }
+    }
+
+    private func taskColumnLayout(for availableWidth: CGFloat) -> (account1Width: CGFloat, account2Width: CGFloat, singleAccountWidth: CGFloat) {
+        let dividerWidth: CGFloat = authManager.isLinked(kind: .account1) && authManager.isLinked(kind: .account2) && !shouldUseStackedLayout ? 4 : 0
+        let contentWidth = max(0, availableWidth - dividerWidth)
+
+        guard authManager.isLinked(kind: .account1), authManager.isLinked(kind: .account2) else {
+            return (contentWidth, 0, max(0, availableWidth))
+        }
+
+        if contentWidth < 400 {
+            let first = floor(contentWidth / 2)
+            return (first, max(0, contentWidth - first), max(0, availableWidth))
+        }
+
+        let minColumnWidth: CGFloat = 200
+        let maxFirstColumnWidth = max(minColumnWidth, contentWidth - minColumnWidth)
+        let first = min(max(tasksAccount1Width, minColumnWidth), maxFirstColumnWidth)
+        return (first, max(0, contentWidth - first), max(0, availableWidth))
     }
     
     private var noAccountsView: some View {
@@ -904,7 +937,12 @@ struct TasksView: View {
                     .onChanged { value in
                         isTasksDividerDragging = true
                         let newWidth = tasksAccount1Width + value.translation.width
-                        tasksAccount1Width = max(200, min(geometry.size.width - 200, newWidth))
+                        let contentWidth = max(0, geometry.size.width - 4)
+                        if contentWidth < 400 {
+                            tasksAccount1Width = floor(contentWidth / 2)
+                        } else {
+                            tasksAccount1Width = max(200, min(contentWidth - 200, newWidth))
+                        }
                     }
                     .onEnded { _ in
                         isTasksDividerDragging = false

@@ -73,10 +73,19 @@ struct MonthTimelineComponent: View {
     private func adaptivePadding(columnWidth: CGFloat) -> CGFloat {
         columnWidth < 50 ? 2 : 4
     }
+
+    private var horizontalGridInset: CGFloat {
+        horizontalSizeClass == .compact ? 2 : 4
+    }
     
     var body: some View {
         GeometryReader { geometry in
-            let columnWidth = geometry.size.width / 7
+            let safeWidth = max(
+                0,
+                geometry.size.width - geometry.safeAreaInsets.leading - geometry.safeAreaInsets.trailing
+            )
+            let columnWidth = max(1, floor(max(0, safeWidth - horizontalGridInset * 2) / 7))
+            let gridWidth = columnWidth * 7
             let config = adaptiveConfig(columnWidth: columnWidth)
             
             // Calculate weeks needed for this month
@@ -95,6 +104,10 @@ struct MonthTimelineComponent: View {
                     monthGrid(columnWidth: columnWidth, config: config, preferredCellHeight: preferredCellHeight)
                 }
             }
+            .frame(width: gridWidth, height: geometry.size.height, alignment: .top)
+            .padding(.horizontal, horizontalGridInset)
+            .clipped()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
     
@@ -181,7 +194,7 @@ struct MonthTimelineComponent: View {
         .overlay(
             // Red border for today
             isToday ? RoundedRectangle(cornerRadius: 0)
-                .stroke(Color.red, lineWidth: 2)
+                .strokeBorder(Color.red, lineWidth: 2)
                 : nil
         )
         .contentShape(Rectangle())

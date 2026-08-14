@@ -82,8 +82,11 @@ struct WeeklyView: View {
         return isLandscape ? 5 : 3
     }
     
+    private var horizontalContentPadding: CGFloat { 12 }
+
     func dayColumnWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
-        return availableWidth / CGFloat(visibleDays)
+        let paddedWidth = max(0, availableWidth - horizontalContentPadding * 2)
+        return max(1, paddedWidth / CGFloat(max(1, visibleDays)))
     }
     
     func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
@@ -557,7 +560,7 @@ struct WeeklyView: View {
                         .frame(maxHeight: .infinity)
                     }
                     .frame(width: contentWidth)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, horizontalContentPadding)
                 }
                 .background(WeekExportScrollTagger(identifier: PrintDayHelper.weekHorizontalScrollID))
                 .background(Color(.systemBackground))

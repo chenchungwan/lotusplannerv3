@@ -66,6 +66,9 @@ struct TimeboxView: View {
     private var isCompact: Bool {
         horizontalSizeClass == .compact
     }
+
+    private var horizontalContentPadding: CGFloat { 12 }
+    private var dayDividerCount: CGFloat { 6 }
     
     private func visibleDaysCount(for geometry: GeometryProxy) -> Int {
         let w = geometry.size.width
@@ -83,9 +86,10 @@ struct TimeboxView: View {
         }
 
 #if os(iOS)
-        // iPad: 4 columns in portrait (fit across width), 7 in landscape (full week fits)
+        // iPad: 3 columns in portrait, 7 in landscape. The full week still
+        // scrolls horizontally inside a clipped viewport.
         if UIDevice.current.userInterfaceIdiom == .pad {
-            return isLandscape ? 7 : 4
+            return isLandscape ? 7 : 3
         }
 #endif
 
@@ -96,13 +100,18 @@ struct TimeboxView: View {
     private func dayColumnWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
         // Account for padding (12 * 2 = 24) and the leading time-label
         // gutter that the timeline draws to host hour numbers.
-        let availableContentWidth = availableWidth - 24 - DraggableTimeboxWeekContent.timeColumnWidth
-        return availableContentWidth / CGFloat(visibleDays)
+        let availableContentWidth = availableWidth
+            - horizontalContentPadding * 2
+            - DraggableTimeboxWeekContent.timeColumnWidth
+            - dayDividerCount
+        return max(1, availableContentWidth / CGFloat(max(1, visibleDays)))
     }
 
     private func totalContentWidth(availableWidth: CGFloat, visibleDays: Int) -> CGFloat {
         // Total width = gutter + 7 day columns
-        return DraggableTimeboxWeekContent.timeColumnWidth + dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
+        return DraggableTimeboxWeekContent.timeColumnWidth
+            + dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays) * 7
+            + dayDividerCount
     }
     
     private func visibleOpenTaskIdsForWeek() -> Set<String> {
@@ -190,6 +199,7 @@ struct TimeboxView: View {
                 let visibleDays = visibleDaysCount(for: geometry)
                 let columnWidth = dayColumnWidth(availableWidth: availableWidth, visibleDays: visibleDays)
                 let contentWidth = totalContentWidth(availableWidth: availableWidth, visibleDays: visibleDays)
+                let timelineContentWidth = max(0, contentWidth - dayDividerCount)
                 
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: true) {
@@ -269,8 +279,8 @@ struct TimeboxView: View {
                                         // additional work to do.
                                         onCommit: { }
                                     )
-                                    .frame(width: contentWidth)
-                                    .padding(.horizontal, 12)
+                                    .frame(width: timelineContentWidth)
+                                    .padding(.horizontal, horizontalContentPadding)
                                 }
                             } else {
                                 // Fallback if week dates couldn't be calculated
@@ -281,6 +291,8 @@ struct TimeboxView: View {
                         }
                         .frame(width: contentWidth)
                     }
+                    .frame(width: availableWidth, height: geometry.size.height, alignment: .topLeading)
+                    .clipped()
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             // Scroll to today's position
@@ -295,6 +307,8 @@ struct TimeboxView: View {
                         }
                     }
                 }
+                .frame(width: availableWidth, height: geometry.size.height, alignment: .topLeading)
+                .clipped()
             }
         }
     }
