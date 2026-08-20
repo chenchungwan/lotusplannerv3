@@ -10,6 +10,17 @@ struct TaskPickerSheet: View {
 
     @State private var selectedAccount: GoogleAuthManager.AccountKind? = nil
     @State private var selectedListId: String? = nil
+    @State private var selectedTasks: [SelectedTask] = []
+
+    private struct SelectedTask: Identifiable, Equatable {
+        let task: GoogleTask
+        let listId: String
+        let accountKind: GoogleAuthManager.AccountKind
+
+        var id: String {
+            "\(accountKind.rawValue)|\(listId)|\(task.id)"
+        }
+    }
 
     private var availableAccounts: [GoogleAuthManager.AccountKind] {
         var accounts: [GoogleAuthManager.AccountKind] = []
@@ -27,6 +38,10 @@ struct TaskPickerSheet: View {
         guard let account = selectedAccount, let listId = selectedListId else { return [] }
         let dict = account == .account1 ? tasksVM.account1Tasks : tasksVM.account2Tasks
         return (dict[listId] ?? []).filter { !alreadyLinkedIds.contains($0.id) }
+    }
+
+    private var selectedCount: Int {
+        selectedTasks.count
     }
 
     var body: some View {
@@ -155,13 +170,12 @@ struct TaskPickerSheet: View {
                             VStack(spacing: 2) {
                                 ForEach(tasksForList) { task in
                                     Button {
-                                        onSelect(task, selectedListId!, selectedAccount!)
-                                        dismiss()
+                                        toggleSelection(task)
                                     } label: {
                                         HStack(spacing: 6) {
-                                            Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                                .foregroundColor(task.isCompleted ? .green : .secondary)
-                                                .font(.caption)
+                                            Image(systemName: isSelected(task) ? "checkmark.circle.fill" : "circle")
+                                                .foregroundColor(isSelected(task) ? .accentColor : .secondary)
+                                                .font(.title3)
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(task.title)
                                                     .font(.callout)
@@ -196,6 +210,22 @@ struct TaskPickerSheet: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .principal) {
+                    if selectedCount > 0 {
+                        Text("\(selectedCount) selected")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        for selection in selectedTasks {
+                            onSelect(selection.task, selection.listId, selection.accountKind)
+                        }
+                        dismiss()
+                    }
+                    .disabled(selectedTasks.isEmpty)
+                }
             }
         }
         .onAppear {
@@ -205,5 +235,20 @@ struct TaskPickerSheet: View {
             }
         }
     }
-}
 
+    private func isSelected(_ task: GoogleTask) -> Bool {
+        guard let selectedAccount, let selectedListId else { return false }
+        let id = "\(selectedAccount.rawValue)|\(selectedListId)|\(task.id)"
+        return selectedTasks.contains { $0.id == id }
+    }
+
+    private func toggleSelection(_ task: GoogleTask) {
+        guard let selectedAccount, let selectedListId else { return }
+        let selection = SelectedTask(task: task, listId: selectedListId, accountKind: selectedAccount)
+        if let index = selectedTasks.firstIndex(where: { $0.id == selection.id }) {
+            selectedTasks.remove(at: index)
+        } else {
+            selectedTasks.append(selection)
+        }
+    }
+}
