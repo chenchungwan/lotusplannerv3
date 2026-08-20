@@ -125,6 +125,14 @@ struct GlobalNavBar: View {
         navigationManager.currentView != .timebox
     }
 
+    private var placesTaskFilterWithIntervals: Bool {
+        navigationManager.currentView == .tasks || navigationManager.currentView == .goals
+    }
+
+    private var showsTaskFilterInActions: Bool {
+        showsTaskFilter && !placesTaskFilterWithIntervals
+    }
+
     private var showsCalendarBulkEdit: Bool {
         isCalendarLikeView || navigationManager.currentView == .yearlyCalendar || navigationManager.currentView == .journalDayViews
     }
@@ -428,6 +436,9 @@ struct GlobalNavBar: View {
                 }
                 intervalButton(.month, symbol: "m.circle")
                 intervalButton(.year, symbol: "y.circle")
+                if placesTaskFilterWithIntervals {
+                    taskFilterControl
+                }
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -436,7 +447,7 @@ struct GlobalNavBar: View {
     @ViewBuilder
     private var actionControls: some View {
         HStack(spacing: isCompact ? 2 : 4) {
-            if showsTaskFilter {
+            if showsTaskFilterInActions {
                 taskFilterControl
             }
 
@@ -466,7 +477,7 @@ struct GlobalNavBar: View {
     @ViewBuilder
     private var secondaryActionControls: some View {
         HStack(spacing: isCompact ? 2 : 4) {
-            if showsTaskFilter {
+            if showsTaskFilterInActions {
                 taskFilterControl
             }
 
@@ -499,7 +510,7 @@ struct GlobalNavBar: View {
 
     private var toolsMenu: some View {
         Menu {
-            if showsTaskFilter {
+            if showsTaskFilterInActions {
                 taskFilterMenuItems
                 Divider()
             }
@@ -681,6 +692,7 @@ struct GlobalNavBar: View {
                         .foregroundColor(navigationManager.showingAllTasks ? .accentColor : .secondary)
                 }
                 .help("Task filters")
+                .menuIndicator(.hidden)
             }
         }
     }
@@ -779,6 +791,7 @@ struct GlobalNavBar: View {
                 .font(iconFont)
                 .frame(width: buttonSize, height: buttonSize)
         }
+        .menuIndicator(.hidden)
         .help("Add")
     }
 

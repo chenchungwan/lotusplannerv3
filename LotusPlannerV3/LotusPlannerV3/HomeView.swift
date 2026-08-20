@@ -17,17 +17,20 @@ struct ContentView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var weeklyBulkEditManager = BulkEditManager()
     @StateObject private var timeboxBulkEditManager = BulkEditManager()
-    @State private var isDesktopDrawerExpanded = true
+    @State private var isDesktopDrawerExpanded = false
 
     var body: some View {
         NavigationStack {
             mainContent
         }
         .background(Color(.systemBackground))
-        .sheet(item: $navigationManager.activeSheet, onDismiss: {
+        .sheet(item: activeSheetBinding, onDismiss: {
             navigationManager.dismissActiveSheet()
         }) { sheet in
             globalSheet(for: sheet)
+        }
+        .fullScreenCover(isPresented: settingsFullPageBinding) {
+            SettingsView()
         }
         // Log edit sheet attached at ContentView scope so it presents
         // regardless of which subview (Day, Week, Tasks, Lists, Goals,
@@ -38,6 +41,28 @@ struct ContentView: View {
         .sheet(isPresented: $logsViewModel.showingEditLogSheet) {
             EditLogEntryView(viewModel: logsViewModel)
         }
+    }
+
+    private var activeSheetBinding: Binding<NavigationManager.AppSheet?> {
+        Binding(
+            get: {
+                navigationManager.activeSheet == .settings ? nil : navigationManager.activeSheet
+            },
+            set: { newValue in
+                navigationManager.activeSheet = newValue
+            }
+        )
+    }
+
+    private var settingsFullPageBinding: Binding<Bool> {
+        Binding(
+            get: { navigationManager.activeSheet == .settings },
+            set: { isPresented in
+                if !isPresented && navigationManager.activeSheet == .settings {
+                    navigationManager.dismissActiveSheet()
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -84,7 +109,7 @@ struct ContentView: View {
     private func otherGlobalSheet(for sheet: NavigationManager.AppSheet) -> some View {
         switch sheet {
         case .settings:
-            SettingsView()
+            EmptyView()
 
         case .integrations:
             IntegrationsView()
@@ -216,8 +241,6 @@ private struct DesktopNavigationDrawer: View {
         VStack(alignment: .leading, spacing: 0) {
             drawerHeader
 
-            Divider()
-
             VStack(spacing: 4) {
                 drawerButton(
                     title: "Calendar",
@@ -274,9 +297,7 @@ private struct DesktopNavigationDrawer: View {
             .padding(.horizontal, 8)
             .padding(.top, 10)
 
-            Divider()
-                .padding(.vertical, 10)
-                .padding(.horizontal, 8)
+            Spacer(minLength: 0)
 
             VStack(spacing: 4) {
                 drawerButton(title: "Settings", systemImage: "gearshape") {
@@ -308,8 +329,6 @@ private struct DesktopNavigationDrawer: View {
                 }
             }
             .padding(.horizontal, 8)
-
-            Spacer(minLength: 0)
         }
         .frame(maxHeight: .infinity)
         .background(Color(.secondarySystemBackground))

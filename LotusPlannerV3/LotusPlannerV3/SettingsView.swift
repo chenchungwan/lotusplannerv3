@@ -711,10 +711,12 @@ struct SettingsView: View {
                 Text("You will stop syncing data for this account. You can re-link anytime in Settings.")
             }
             #if !targetEnvironment(macCatalyst)
-            .fullScreenCover(item: $configuratorTarget, onDismiss: {
+            .sheet(item: $configuratorTarget, onDismiss: {
                 customConfigVersion &+= 1
             }) { target in
                 DayViewCustomConfigurator(versionId: target.id)
+                    .presentationDetents([.fraction(0.72), .large])
+                    .presentationDragIndicator(.visible)
             }
             .fullScreenCover(isPresented: $showingWeeklySummaryConfigurator) {
                 WeeklySummaryConfigurator()
