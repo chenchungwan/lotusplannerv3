@@ -9,8 +9,10 @@ struct GlobalNavBar: View {
     @ObservedObject private var tasksVM = TasksViewModel.shared
     @ObservedObject private var calendarVM = CalendarViewModel.shared
     @ObservedObject private var auth = GoogleAuthManager.shared
+    @ObservedObject private var screenSizeHelper = ScreenSizeHelper.shared
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var isSyncing = false
 
     private enum DeviceNavGroup {
@@ -63,8 +65,22 @@ struct GlobalNavBar: View {
         }
     }
 
+    private var phoneTwoLineBarHeight: CGFloat { 94 }
+
     private var usesTouchSingleLineBar: Bool {
         deviceNavGroup == .pad || deviceNavGroup == .phone
+    }
+
+    private var isTouchLandscape: Bool {
+        if deviceNavGroup == .phone && verticalSizeClass == .compact {
+            return true
+        }
+
+        return screenSizeHelper.screenWidth > screenSizeHelper.screenHeight
+    }
+
+    private var usesExpandedTouchTools: Bool {
+        usesTouchSingleLineBar && isTouchLandscape
     }
 
     private var isCalendarLikeView: Bool {
@@ -134,7 +150,7 @@ struct GlobalNavBar: View {
             case .month:
                 if usesTouchSingleLineBar {
                     let formatter = DateFormatter()
-                    formatter.dateFormat = "MMMM"
+                    formatter.dateFormat = deviceNavGroup == .pad ? "MMMM yyyy" : "MMMM"
                     return formatter.string(from: navigationManager.currentDate)
                 }
 
@@ -163,7 +179,7 @@ struct GlobalNavBar: View {
             let dayFormatter = DateFormatter()
             dayFormatter.dateFormat = isCompact ? "EEE" : "EEEE"
             let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = isCompact ? "M/d/yy" : "MMM d, yyyy"
+            dateFormatter.dateFormat = isCompact ? "M/d/yy" : "MMMM d, yyyy"
             return "\(dayFormatter.string(from: navigationManager.currentDate)) \(dateFormatter.string(from: navigationManager.currentDate))"
         case .week:
             if usesTouchSingleLineBar {
@@ -174,7 +190,7 @@ struct GlobalNavBar: View {
         case .month:
             if usesTouchSingleLineBar {
                 let formatter = DateFormatter()
-                formatter.dateFormat = "MMMM"
+                formatter.dateFormat = deviceNavGroup == .pad ? "MMMM yyyy" : "MMMM"
                 return formatter.string(from: navigationManager.currentDate)
             }
 
@@ -194,8 +210,10 @@ struct GlobalNavBar: View {
             switch deviceNavGroup {
             case .desktop:
                 oneLineBar
-            case .pad, .phone:
+            case .pad:
                 touchSingleLineBar
+            case .phone:
+                phoneAdaptiveBar
             }
         }
         .frame(maxWidth: .infinity)
@@ -219,9 +237,11 @@ struct GlobalNavBar: View {
 
     private var navigationControls: some View {
         HStack(spacing: isCompact ? 4 : 8) {
-            mainMenu
+            if deviceNavGroup != .desktop {
+                mainMenu
+            }
             dateNavigationControls
-            phoneViewFormatDropdown
+            intervalControls
         }
     }
 
@@ -232,17 +252,67 @@ struct GlobalNavBar: View {
             dateNavigationControls
                 .fixedSize(horizontal: true, vertical: false)
 
-            phoneViewFormatDropdown
+            intervalControls
 
             Spacer(minLength: deviceNavGroup == .phone ? 4 : 8)
 
-            toolsMenu
-            aiTaskButton
-            addMenu
+            if usesExpandedTouchTools {
+                actionControls
+                    .fixedSize(horizontal: true, vertical: false)
+            } else {
+                toolsMenu
+                aiTaskButton
+                addMenu
+            }
         }
         .padding(.horizontal, deviceNavGroup == .phone ? 4 : 12)
         .frame(maxWidth: .infinity)
         .frame(height: barHeight)
+    }
+
+    private var phoneAdaptiveBar: some View {
+        GeometryReader { proxy in
+            if proxy.size.width >= phoneSingleLineMinimumWidth {
+                touchSingleLineBar
+            } else {
+                phoneTwoLineBar
+            }
+        }
+        .frame(height: phoneUsesTwoLines ? phoneTwoLineBarHeight : barHeight)
+    }
+
+    private var phoneUsesTwoLines: Bool {
+        !isTouchLandscape && screenSizeHelper.screenWidth < phoneSingleLineMinimumWidth
+    }
+
+    private var phoneSingleLineMinimumWidth: CGFloat {
+        430
+    }
+
+    private var phoneTwoLineBar: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 2) {
+                mainMenu
+
+                dateNavigationControls
+                    .fixedSize(horizontal: true, vertical: false)
+
+                intervalControls
+
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 2) {
+                Spacer(minLength: 0)
+                toolsMenu
+                aiTaskButton
+                addMenu
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity)
+        .frame(height: phoneTwoLineBarHeight)
     }
 
     private var dateNavigationControls: some View {
@@ -344,171 +414,23 @@ struct GlobalNavBar: View {
     }
 
     @ViewBuilder
-    private var viewFormatSelector: some View {
+    private var intervalControls: some View {
         if showsIntervals {
-            HStack(spacing: 0) {
-                formatSegment(title: "Day", isSelected: isDaySelected) {
-                    handleIntervalSelection(.day)
+            HStack(spacing: isCompact ? 2 : 4) {
+                if navigationManager.currentView != .goals {
+                    intervalButton(.day, symbol: "d.circle")
                 }
-
-                Divider()
-                    .frame(height: viewFormatSelectorHeight)
-
-                formatSegment(title: "Week", isSelected: isWeekSelected) {
-                    handleIntervalSelection(.week)
+                if navigationManager.currentView != .tasks {
+                    intervalButton(.week, symbol: usesCalendarIntervalSymbols || navigationManager.currentView == .goals ? "w.circle" : "s.circle")
                 }
-
-                Divider()
-                    .frame(height: viewFormatSelectorHeight)
-
-                moreFormatSegment
+                if navigationManager.currentView != .goals {
+                    timeboxOrWeekButton
+                }
+                intervalButton(.month, symbol: "m.circle")
+                intervalButton(.year, symbol: "y.circle")
             }
             .fixedSize(horizontal: true, vertical: false)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.28), lineWidth: 1)
-            )
-            .help("View")
         }
-    }
-
-    @ViewBuilder
-    private var phoneViewFormatDropdown: some View {
-        if deviceNavGroup == .phone {
-            viewFormatDropdown
-        } else {
-            viewFormatSelector
-        }
-    }
-
-    @ViewBuilder
-    private var viewFormatDropdown: some View {
-        if showsIntervals {
-            Menu {
-                if navigationManager.currentView != .goals {
-                    Button {
-                        handleIntervalSelection(.day)
-                    } label: {
-                        Label("Day", systemImage: "d.circle")
-                    }
-                }
-
-                if navigationManager.currentView != .tasks {
-                    Button {
-                        handleIntervalSelection(.week)
-                    } label: {
-                        Label("Week", systemImage: usesCalendarIntervalSymbols || navigationManager.currentView == .goals ? "w.circle" : "s.circle")
-                    }
-                }
-
-                if navigationManager.currentView != .goals {
-                    Button {
-                        handleTimelineSelection()
-                    } label: {
-                        Label("Timeline", systemImage: usesCalendarIntervalSymbols ? "t.circle" : "w.circle")
-                    }
-                    .disabled(navigationManager.currentView == .timebox)
-                }
-
-                Button {
-                    handleIntervalSelection(.month)
-                } label: {
-                    Label("Month", systemImage: "m.circle")
-                }
-
-                Button {
-                    handleIntervalSelection(.year)
-                } label: {
-                    Label("Year", systemImage: "y.circle")
-                }
-            } label: {
-                Image(systemName: intervalMenuSymbol)
-                    .font(iconFont)
-                    .frame(width: buttonSize, height: buttonSize)
-                    .foregroundColor(.accentColor)
-            }
-            .help("View")
-        }
-    }
-
-    private var moreFormatSegment: some View {
-        Menu {
-            Button {
-                handleTimelineSelection()
-            } label: {
-                Label("Timeline", systemImage: usesCalendarIntervalSymbols ? "t.circle" : "w.circle")
-            }
-            .disabled(navigationManager.currentView == .timebox)
-
-            Button {
-                handleIntervalSelection(.month)
-            } label: {
-                Label("Month", systemImage: "m.circle")
-            }
-
-            Button {
-                handleIntervalSelection(.year)
-            } label: {
-                Label("Year", systemImage: "y.circle")
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(viewFormatSelectorFont.weight(.semibold))
-                .foregroundColor(isMoreFormatSelected ? .white : .primary)
-                .frame(width: viewFormatSegmentWidth, height: viewFormatSelectorHeight)
-                .background(isMoreFormatSelected ? Color.secondary : Color(.secondarySystemBackground))
-        }
-    }
-
-    private func formatSegment(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(viewFormatSelectorFont.weight(.semibold))
-                .foregroundColor(isSelected ? .white : .primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(width: viewFormatSegmentWidth, height: viewFormatSelectorHeight)
-                .background(isSelected ? Color.secondary : Color(.secondarySystemBackground))
-        }
-    }
-
-    private var viewFormatSelectorHeight: CGFloat {
-        deviceNavGroup == .desktop ? 30 : 32
-    }
-
-    private var viewFormatSegmentWidth: CGFloat {
-        switch deviceNavGroup {
-        case .desktop: return 74
-        case .pad: return 70
-        case .phone: return 48
-        }
-    }
-
-    private var viewFormatSelectorFont: Font {
-        switch deviceNavGroup {
-        case .desktop, .pad: return .callout
-        case .phone: return .caption
-        }
-    }
-
-    private var isDaySelected: Bool {
-        navigationManager.currentInterval == .day &&
-        navigationManager.currentView != .timebox &&
-        !navigationManager.isShowingTimebox
-    }
-
-    private var isWeekSelected: Bool {
-        navigationManager.currentInterval == .week &&
-        navigationManager.currentView != .timebox &&
-        !navigationManager.isShowingTimebox
-    }
-
-    private var isMoreFormatSelected: Bool {
-        navigationManager.currentView == .timebox ||
-        navigationManager.isShowingTimebox ||
-        navigationManager.currentInterval == .month ||
-        navigationManager.currentInterval == .year
     }
 
     @ViewBuilder
@@ -666,35 +588,6 @@ struct GlobalNavBar: View {
             } label: {
                 Label("Bulk edit", systemImage: "checkmark.rectangle.stack")
             }
-        }
-    }
-
-    private var intervalMenuSymbol: String {
-        if navigationManager.currentView == .timebox || navigationManager.isShowingTimebox {
-            return "t.circle"
-        }
-
-        switch navigationManager.currentInterval {
-        case .day: return "d.circle"
-        case .week:
-            return usesCalendarIntervalSymbols || navigationManager.currentView == .goals ? "w.circle" : "s.circle"
-        case .month: return "m.circle"
-        case .year: return "y.circle"
-        }
-    }
-
-    private func handleIntervalSelection(_ interval: TimelineInterval) {
-        if navigationManager.currentView == .tasks && navigationManager.showingAllTasks {
-            let notification: Notification.Name
-            switch interval {
-            case .day: notification = .filterTasksToCurrentDay
-            case .week: notification = .filterTasksToCurrentWeek
-            case .month: notification = .filterTasksToCurrentMonth
-            case .year: notification = .filterTasksToCurrentYear
-            }
-            NotificationCenter.default.post(name: notification, object: nil)
-        } else {
-            handleTimeIntervalChange(interval)
         }
     }
 

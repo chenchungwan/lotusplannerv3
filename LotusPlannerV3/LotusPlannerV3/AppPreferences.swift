@@ -650,13 +650,8 @@ class AppPreferences: ObservableObject {
         
         // Load day view layout preference (default to Classic layout)
         let layoutRaw = UserDefaults.standard.integer(forKey: "dayViewLayout")
-#if os(iOS)
-        let screenWidth = ScreenMetrics.width
-#else
-        let screenWidth: CGFloat = 1024
-#endif
         
-        if AppPreferences.isRunningOniPhone || screenWidth < 768 {
+        if AppPreferences.isRunningOniPhone {
             self.dayViewLayout = .mobile
         } else if UserDefaults.standard.object(forKey: "dayViewLayout") == nil {
             // If no layout has been explicitly chosen (key doesn't exist), use Classic Day in 1-page

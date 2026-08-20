@@ -17,12 +17,11 @@ struct ContentView: View {
     @ObservedObject private var auth = GoogleAuthManager.shared
     @StateObject private var weeklyBulkEditManager = BulkEditManager()
     @StateObject private var timeboxBulkEditManager = BulkEditManager()
+    @State private var isDesktopDrawerExpanded = true
 
     var body: some View {
         NavigationStack {
-            currentView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
+            mainContent
         }
         .background(Color(.systemBackground))
         .sheet(item: $navigationManager.activeSheet, onDismiss: {
@@ -39,6 +38,35 @@ struct ContentView: View {
         .sheet(isPresented: $logsViewModel.showingEditLogSheet) {
             EditLogEntryView(viewModel: logsViewModel)
         }
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if usesDesktopDrawer {
+            HStack(spacing: 0) {
+                DesktopNavigationDrawer(isExpanded: $isDesktopDrawerExpanded)
+                    .frame(width: isDesktopDrawerExpanded ? 232 : 56)
+
+                currentView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+            }
+            .animation(.easeInOut(duration: 0.18), value: isDesktopDrawerExpanded)
+        } else {
+            currentView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemBackground))
+        }
+    }
+
+    private var usesDesktopDrawer: Bool {
+        #if targetEnvironment(macCatalyst)
+        return true
+        #elseif canImport(UIKit)
+        return ProcessInfo.processInfo.isiOSAppOnMac
+        #else
+        return true
+        #endif
     }
 
     @ViewBuilder
@@ -177,4 +205,179 @@ struct ContentView: View {
 // MARK: - Preview
 #Preview {
     ContentView()
+}
+
+private struct DesktopNavigationDrawer: View {
+    @Binding var isExpanded: Bool
+    @ObservedObject private var navigationManager = NavigationManager.shared
+    @ObservedObject private var appPrefs = AppPreferences.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            drawerHeader
+
+            Divider()
+
+            VStack(spacing: 4) {
+                drawerButton(
+                    title: "Calendar",
+                    systemImage: "calendar",
+                    isSelected: isCalendarSelected
+                ) {
+                    navigationManager.switchToCalendar()
+                }
+
+                drawerButton(
+                    title: "Tasks",
+                    systemImage: "checklist",
+                    isSelected: navigationManager.currentView == .tasks
+                ) {
+                    navigationManager.switchToTasks()
+                }
+
+                drawerButton(
+                    title: "Lists",
+                    systemImage: "list.bullet",
+                    isSelected: navigationManager.currentView == .lists
+                ) {
+                    navigationManager.switchToLists()
+                }
+
+                drawerButton(
+                    title: "Journals",
+                    systemImage: "book",
+                    isSelected: navigationManager.currentView == .journalDayViews
+                ) {
+                    navigationManager.switchToJournalDayViews()
+                }
+
+                if !appPrefs.hideBookView {
+                    drawerButton(
+                        title: "Book View (Beta)",
+                        systemImage: "book.pages",
+                        isSelected: navigationManager.currentView == .bookView
+                    ) {
+                        navigationManager.switchToBookView()
+                    }
+                }
+
+                if !appPrefs.hideGoals {
+                    drawerButton(
+                        title: "Goals",
+                        systemImage: "target",
+                        isSelected: navigationManager.currentView == .goals
+                    ) {
+                        navigationManager.switchToGoals()
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 10)
+
+            Divider()
+                .padding(.vertical, 10)
+                .padding(.horizontal, 8)
+
+            VStack(spacing: 4) {
+                drawerButton(title: "Settings", systemImage: "gearshape") {
+                    navigationManager.present(.settings)
+                }
+
+                drawerButton(title: "Integrations", systemImage: "puzzlepiece.extension") {
+                    navigationManager.present(.integrations)
+                }
+
+                drawerButton(title: "About", systemImage: "info.circle") {
+                    navigationManager.present(.about)
+                }
+
+                drawerButton(title: "Diagnostics", systemImage: "stethoscope") {
+                    navigationManager.present(.diagnostics)
+                }
+
+                drawerButton(title: "Report Issue / Request Features", systemImage: "exclamationmark.bubble") {
+                    navigationManager.present(.reportIssues)
+                }
+
+                if let url = URL(string: "https://apps.apple.com/us/app/lotus-planner/id6749281062?action=write-review") {
+                    Link(destination: url) {
+                        drawerLabel(title: "Rate the App", systemImage: "star", isSelected: false)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Rate the App")
+                }
+            }
+            .padding(.horizontal, 8)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxHeight: .infinity)
+        .background(Color(.secondarySystemBackground))
+    }
+
+    private var drawerHeader: some View {
+        HStack(spacing: 10) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .font(.title3)
+                    .frame(width: 34, height: 34)
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse Sidebar" : "Expand Sidebar")
+        }
+        .padding(.horizontal, 11)
+        .frame(height: 56)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var isCalendarSelected: Bool {
+        navigationManager.currentView == .calendar ||
+        navigationManager.currentView == .weeklyView ||
+        navigationManager.currentView == .yearlyCalendar ||
+        navigationManager.currentView == .timebox
+    }
+
+    private func drawerButton(
+        title: String,
+        systemImage: String,
+        isSelected: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            drawerLabel(title: title, systemImage: systemImage, isSelected: isSelected)
+        }
+        .buttonStyle(.plain)
+        .help(title)
+    }
+
+    private func drawerLabel(title: String, systemImage: String, isSelected: Bool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.medium))
+                .frame(width: 24, height: 28)
+
+            if isExpanded {
+                Text(title)
+                    .font(.callout)
+                    .lineLimit(1)
+                    .transition(.opacity)
+
+                Spacer(minLength: 0)
+            }
+        }
+        .foregroundColor(isSelected ? .accentColor : .primary)
+        .padding(.horizontal, isExpanded ? 10 : 8)
+        .frame(height: 36)
+        .frame(maxWidth: .infinity, alignment: isExpanded ? .leading : .center)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+            }
+        }
+        .contentShape(Rectangle())
+    }
 }
