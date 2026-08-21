@@ -6,18 +6,16 @@ import Foundation
 /// Settings. Raw values are persisted, so existing assignments must not
 /// change. New layouts append a new case + raw value.
 enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
-    case compact = 0
     case mobile = 4
     case timebox = 6
     case newClassic = 8
     case custom = 10
 
     var id: Int { rawValue }
-    static var allCases: [DayViewLayoutOption] { [.newClassic, .compact, .timebox, .mobile, .custom] }
+    static var allCases: [DayViewLayoutOption] { [.newClassic, .timebox, .mobile, .custom] }
 
     var displayName: String {
         switch self {
-        case .compact: "Compact"
         case .mobile: "Mobile"
         case .timebox: "Expanded"
         case .newClassic: "Classic"
@@ -27,7 +25,6 @@ enum DayViewLayoutOption: Int, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .compact: "Events and Tasks on left with collapsible logs, Journal on right"
         case .mobile: "Single column: Events, then tasks for each linked account, then Logs"
         case .timebox: "Timebox timeline on left with collapsible logs, Journal on right (swipe for 2nd page)"
         case .newClassic: "Timebox timeline with collapsible logs on left, Tasks and Journal on right (1 page)"

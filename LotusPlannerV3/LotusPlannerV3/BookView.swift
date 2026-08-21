@@ -851,11 +851,6 @@ struct BookDayPage: View {
     @ViewBuilder
     private var dayViewContent: some View {
         switch appPrefs.dayViewLayout {
-        case .compact:
-            DayViewNewCompact(
-                bulkEditManager: bulkEditManager,
-                onEventTap: { ev in selectedEvent = ev }
-            )
         case .mobile:
             DayViewMobile(
                 bulkEditManager: bulkEditManager,

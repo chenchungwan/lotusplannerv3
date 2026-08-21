@@ -40,6 +40,8 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
     case workoutStreakGraphWeek
     case workoutStreakGraphMonth
     case workoutStreakGraphYear
+    case horizontalDivider
+    case verticalDivider
 
     var id: String { rawValue }
 
@@ -78,6 +80,8 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
         case .workoutStreakGraphWeek:    return "Weekly Workout Streak"
         case .workoutStreakGraphMonth:   return "Monthly Workout Streak"
         case .workoutStreakGraphYear:    return "Yearly Workout Streak"
+        case .horizontalDivider:          return "Horizontal Divider"
+        case .verticalDivider:            return "Vertical Divider"
         }
     }
 
@@ -112,7 +116,13 @@ enum CustomComponent: String, Codable, Identifiable, Hashable, CaseIterable {
              .workoutStreakGraphWeek,
              .workoutStreakGraphMonth,
              .workoutStreakGraphYear:                           return "chart.line.uptrend.xyaxis"
+        case .horizontalDivider:                                 return "line.3.horizontal"
+        case .verticalDivider:                                   return "line.3.vertical"
         }
+    }
+
+    var isCustomDivider: Bool {
+        self == .horizontalDivider || self == .verticalDivider
     }
 }
 
@@ -637,13 +647,28 @@ struct DayViewCustomConfigurator: View {
 
             Spacer()
 
-            Button { performMerge() } label: {
-                Label("Merge", systemImage: "rectangle.on.rectangle.angled")
+            Button { performDirectionalMerge(.down) } label: {
+                Label("Merge Down", systemImage: "arrow.down.to.line.compact")
             }
-            .disabled(!canMerge)
+            .disabled(!canDirectionalMerge(.down))
+
+            Button { performDirectionalMerge(.right) } label: {
+                Label("Merge Right", systemImage: "arrow.right.to.line.compact")
+            }
+            .disabled(!canDirectionalMerge(.right))
+
+            Button { performDirectionalUnmerge(.up) } label: {
+                Label("Unmerge Up", systemImage: "arrow.up.to.line.compact")
+            }
+            .disabled(!canDirectionalUnmerge(.up))
+
+            Button { performDirectionalUnmerge(.left) } label: {
+                Label("Unmerge Left", systemImage: "arrow.left.to.line.compact")
+            }
+            .disabled(!canDirectionalUnmerge(.left))
 
             Button { performUnmerge() } label: {
-                Label("Unmerge", systemImage: "rectangle.split.2x1")
+                Label("Unmerge Everything", systemImage: "rectangle.split.2x1")
             }
             .disabled(!canUnmerge)
 
@@ -1058,6 +1083,8 @@ struct DayViewCustomConfigurator: View {
             items.append(.goalsPicker)
             items.append(.weeklyGoalsBar)
         }
+        items.append(.horizontalDivider)
+        items.append(.verticalDivider)
         items.append(.journal)
 
         let placed = Set(placements.values)
@@ -1299,48 +1326,191 @@ struct DayViewCustomConfigurator: View {
         return pages.count == 1 ? pages.first : nil
     }
 
-    private var canMerge: Bool {
-        guard let page = selectionPage else { return false }
-        let cells = selectedCells.filter { $0.page == page }
-        guard cells.count >= 2 else { return false }
+    private enum MergeDirection {
+        case down
+        case right
+    }
 
-        let rows = cells.map { $0.row }
-        let cols = cells.map { $0.col }
-        guard let minR = rows.min(), let maxR = rows.max(),
-              let minC = cols.min(), let maxC = cols.max() else { return false }
-        let rowSpan = maxR - minR + 1
-        let colSpan = maxC - minC + 1
+    private enum UnmergeDirection {
+        case up
+        case left
+    }
 
-        // Bounding box must be fully selected (forms a solid rectangle).
-        guard cells.count == rowSpan * colSpan else { return false }
+    private var directionalMergeTarget: (page: Int, region: MergedRegion?)? {
+        guard let page = selectionPage else { return nil }
+        let selectedOnPage = selectedCells.filter { $0.page == page }
+        guard !selectedOnPage.isEmpty else { return nil }
 
-        // Must not overlap any existing merged region.
-        let existing = merges(for: page)
-        for r in minR...maxR {
-            for c in minC...maxC {
-                if existing.contains(where: { $0.contains(row: r, col: c) }) {
-                    return false
-                }
+        for region in merges(for: page) {
+            let regionCells = Set(region.cellPositions.map { CellPos(page: page, row: $0.row, col: $0.col) })
+            if regionCells == selectedOnPage {
+                return (page, region)
             }
         }
+
+        guard selectedOnPage.count == 1,
+              let cell = selectedOnPage.first,
+              mergedRegion(page: page, row: cell.row, col: cell.col) == nil,
+              groupContaining(page: page, row: cell.row, col: cell.col) == nil else {
+            return nil
+        }
+
+        return (page, nil)
+    }
+
+    private func directionalMergeBounds(
+        for direction: MergeDirection
+    ) -> (page: Int, topRow: Int, leftCol: Int, rowSpan: Int, colSpan: Int)? {
+        guard let target = directionalMergeTarget else { return nil }
+        let page = target.page
+
+        let topRow: Int
+        let leftCol: Int
+        let rowSpan: Int
+        let colSpan: Int
+        if let region = target.region {
+            topRow = region.topRow
+            leftCol = region.leftCol
+            rowSpan = region.rowSpan
+            colSpan = region.colSpan
+        } else if let cell = selectedCells.first(where: { $0.page == page }) {
+            topRow = cell.row
+            leftCol = cell.col
+            rowSpan = 1
+            colSpan = 1
+        } else {
+            return nil
+        }
+
+        switch direction {
+        case .down:
+            guard topRow + rowSpan < rows(for: page) else { return nil }
+            return (page, topRow, leftCol, rowSpan + 1, colSpan)
+        case .right:
+            guard leftCol + colSpan < columns(for: page) else { return nil }
+            return (page, topRow, leftCol, rowSpan, colSpan + 1)
+        }
+    }
+
+    private func addedCells(
+        for direction: MergeDirection,
+        target: MergedRegion?,
+        bounds: (page: Int, topRow: Int, leftCol: Int, rowSpan: Int, colSpan: Int)
+    ) -> [CellPos] {
+        let currentTop = target?.topRow ?? bounds.topRow
+        let currentLeft = target?.leftCol ?? bounds.leftCol
+        let currentRowSpan = target?.rowSpan ?? 1
+        let currentColSpan = target?.colSpan ?? 1
+
+        switch direction {
+        case .down:
+            let row = currentTop + currentRowSpan
+            return (currentLeft..<(currentLeft + currentColSpan)).map {
+                CellPos(page: bounds.page, row: row, col: $0)
+            }
+        case .right:
+            let col = currentLeft + currentColSpan
+            return (currentTop..<(currentTop + currentRowSpan)).map {
+                CellPos(page: bounds.page, row: $0, col: col)
+            }
+        }
+    }
+
+    private func canDirectionalMerge(_ direction: MergeDirection) -> Bool {
+        guard let target = directionalMergeTarget,
+              let bounds = directionalMergeBounds(for: direction) else {
+            return false
+        }
+
+        let added = addedCells(for: direction, target: target.region, bounds: bounds)
+        let currentAnchor = target.region.map {
+            CellPos(page: target.page, row: $0.topRow, col: $0.leftCol)
+        } ?? selectedCells.first(where: { $0.page == target.page })
+
+        for cell in added {
+            if let existing = placementAnchor(page: cell.page, row: cell.row, col: cell.col),
+               existing != currentAnchor {
+                return false
+            }
+            if let region = mergedRegion(page: cell.page, row: cell.row, col: cell.col),
+               region != target.region {
+                return false
+            }
+            if groupContaining(page: cell.page, row: cell.row, col: cell.col) != nil {
+                return false
+            }
+        }
+
         return true
     }
 
-    private func performMerge() {
-        guard canMerge, let page = selectionPage else { return }
-        let cells = selectedCells.filter { $0.page == page }
-        let rows = cells.map { $0.row }
-        let cols = cells.map { $0.col }
-        guard let minR = rows.min(), let maxR = rows.max(),
-              let minC = cols.min(), let maxC = cols.max() else { return }
-        let region = MergedRegion(
-            topRow: minR,
-            leftCol: minC,
-            rowSpan: maxR - minR + 1,
-            colSpan: maxC - minC + 1
+    private func performDirectionalMerge(_ direction: MergeDirection) {
+        guard canDirectionalMerge(direction),
+              let target = directionalMergeTarget,
+              let bounds = directionalMergeBounds(for: direction) else {
+            return
+        }
+
+        if let region = target.region {
+            mergesByPage[target.page]?.removeAll { $0 == region }
+        }
+
+        let expanded = MergedRegion(
+            topRow: bounds.topRow,
+            leftCol: bounds.leftCol,
+            rowSpan: bounds.rowSpan,
+            colSpan: bounds.colSpan
         )
-        mergesByPage[page, default: []].append(region)
-        selectedCells.removeAll()
+        mergesByPage[target.page, default: []].append(expanded)
+        selectedCells = Set(expanded.cellPositions.map {
+            CellPos(page: target.page, row: $0.row, col: $0.col)
+        })
+    }
+
+    private func canDirectionalUnmerge(_ direction: UnmergeDirection) -> Bool {
+        guard let info = mergedRegionForUnmerge else { return false }
+
+        switch direction {
+        case .up:
+            return info.region.rowSpan > 1
+        case .left:
+            return info.region.colSpan > 1
+        }
+    }
+
+    private func performDirectionalUnmerge(_ direction: UnmergeDirection) {
+        guard canDirectionalUnmerge(direction),
+              let info = mergedRegionForUnmerge else {
+            return
+        }
+
+        mergesByPage[info.page]?.removeAll { $0 == info.region }
+
+        let newRowSpan: Int
+        let newColSpan: Int
+        switch direction {
+        case .up:
+            newRowSpan = info.region.rowSpan - 1
+            newColSpan = info.region.colSpan
+        case .left:
+            newRowSpan = info.region.rowSpan
+            newColSpan = info.region.colSpan - 1
+        }
+
+        if newRowSpan > 1 || newColSpan > 1 {
+            let shrunken = MergedRegion(
+                topRow: info.region.topRow,
+                leftCol: info.region.leftCol,
+                rowSpan: newRowSpan,
+                colSpan: newColSpan
+            )
+            mergesByPage[info.page, default: []].append(shrunken)
+            selectedCells = Set(shrunken.cellPositions.map {
+                CellPos(page: info.page, row: $0.row, col: $0.col)
+            })
+        } else {
+            selectedCells = [CellPos(page: info.page, row: info.region.topRow, col: info.region.leftCol)]
+        }
     }
 
     /// Returns the merged region whose cells exactly equal the current selection,
@@ -1674,6 +1844,39 @@ struct DayViewCustomConfigurator: View {
     // MARK: - Drag-and-drop placement
 
     private func applyDrop(payload: ComponentDragPayload, targetPage: Int, targetRow: Int, targetCol: Int) {
+        if payload.component.isCustomDivider,
+           placements.contains(where: { pos, component in
+               component == payload.component &&
+               !(pos.page == payload.sourcePage && pos.row == payload.sourceRow && pos.col == payload.sourceCol)
+           }) {
+            dropError = "Each custom layout can only use one \(payload.component.displayName(account1: appPrefs.account1Name, account2: appPrefs.account2Name).lowercased())."
+            return
+        }
+
+        if payload.component == .horizontalDivider,
+           (targetRow == 0 || targetRow + 1 >= rows(for: targetPage)) {
+            dropError = "Place a horizontal divider between two rows of components."
+            return
+        }
+
+        if payload.component == .verticalDivider,
+           (targetCol == 0 || targetCol + 1 >= columns(for: targetPage)) {
+            dropError = "Place a vertical divider between two columns of components."
+            return
+        }
+
+        if payload.component == .horizontalDivider,
+           !hasComponentOnBothSidesOfHorizontalDivider(page: targetPage, row: targetRow, col: targetCol) {
+            dropError = "Place a horizontal divider between two components."
+            return
+        }
+
+        if payload.component == .verticalDivider,
+           !hasComponentOnBothSidesOfVerticalDivider(page: targetPage, row: targetRow, col: targetCol) {
+            dropError = "Place a vertical divider between two components."
+            return
+        }
+
         let (sourceRowSpan, sourceColSpan) = sourceSpan(payload: payload)
 
         // Anchor the drop at the target cell's merge anchor (if any).
@@ -1809,6 +2012,24 @@ struct DayViewCustomConfigurator: View {
         }
         let pos = CellPos(page: page, row: row, col: col)
         return placements[pos] != nil ? pos : nil
+    }
+
+    private func hasPlacedNonDividerComponent(page: Int, row: Int, col: Int) -> Bool {
+        guard let anchor = placementAnchor(page: page, row: row, col: col),
+              let component = placements[anchor] else {
+            return false
+        }
+        return !component.isCustomDivider
+    }
+
+    private func hasComponentOnBothSidesOfHorizontalDivider(page: Int, row: Int, col: Int) -> Bool {
+        hasPlacedNonDividerComponent(page: page, row: row - 1, col: col) &&
+        hasPlacedNonDividerComponent(page: page, row: row + 1, col: col)
+    }
+
+    private func hasComponentOnBothSidesOfVerticalDivider(page: Int, row: Int, col: Int) -> Bool {
+        hasPlacedNonDividerComponent(page: page, row: row, col: col - 1) &&
+        hasPlacedNonDividerComponent(page: page, row: row, col: col + 1)
     }
 }
 

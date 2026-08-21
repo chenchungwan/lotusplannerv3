@@ -1807,14 +1807,6 @@ struct CalendarView: View {
     @ViewBuilder
     private func dayViewContent(geometry: GeometryProxy) -> some View {
         switch appPrefs.dayViewLayout {
-        case .compact:
-            DayViewNewCompact(
-                bulkEditManager: bulkEditManager,
-                onEventTap: { ev in
-                    selectedCalendarEvent = ev
-                    showingEventDetails = true
-                }
-            )
         case .mobile:
             DayViewMobile(
                 bulkEditManager: bulkEditManager,
@@ -1847,8 +1839,6 @@ struct CalendarView: View {
                     showingEventDetails = true
                 }
             )
-        default:
-            dayViewContentCompact(geometry: geometry)
         }
     }
     
